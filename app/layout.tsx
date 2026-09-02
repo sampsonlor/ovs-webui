@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OVS WebUI · P0 Low-Fidelity Prototype',
-  description: 'Clickable P0 prototype for the OVS WebUI golden-path workflow.',
+  title: 'OVS WebUI · P0 UX Baseline v0.1',
+  description: 'Approved P0 low-fidelity UX baseline for the OVS WebUI golden-path workflow.',
 };
 
 export default function RootLayout({
