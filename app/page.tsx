@@ -54,16 +54,20 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { P1DiagnosticsView } from './p1-diagnostics';
+import { P1OpenFlowView } from './p1-openflow';
 import { P1SwitchingView } from './p1-switching';
 import {
   diagnosticJobLabels,
+  openFlowReviewLabels,
   p1DiagnosticsPages,
+  p1OpenFlowPages,
   p1Steps,
   p1SwitchingPages,
   p1Views,
   type ChangeIntent,
   type DiagnosticInputState,
   type DiagnosticJobState,
+  type OpenFlowReviewState,
   type P1DiagnosticsPage,
   type P1SwitchingPage,
   type P1View,
@@ -1983,6 +1987,8 @@ function ResponsivePage({
 function MobilePanel({
   applyState,
   diagnosticState,
+  openFlowState = 'fresh',
+  showOpenFlow = false,
   onConfirm,
   onRollback,
   onOpenEvidence,
@@ -1990,6 +1996,8 @@ function MobilePanel({
 }: {
   applyState: ApplyState;
   diagnosticState: DiagnosticJobState;
+  openFlowState?: OpenFlowReviewState;
+  showOpenFlow?: boolean;
   onConfirm: () => void;
   onRollback: () => void;
   onOpenEvidence: () => void;
@@ -1999,6 +2007,70 @@ function MobilePanel({
     'overview',
   );
   const active = applyState === 'countdown' || applyState === 'outcome-unknown';
+
+  if (showOpenFlow)
+    return (
+      <section
+        className={`${framed ? 'border-8 border-slate-800 shadow-xl' : ''} mx-auto w-full max-w-[380px] self-start overflow-hidden bg-[#f5f7fa]`}
+        aria-label="Mobile OpenFlow incident summary"
+      >
+        <div className="flex items-center justify-between bg-[#122f4e] px-4 py-3 text-white">
+          <div className="flex items-center gap-2">
+            <div className="grid size-7 place-items-center border border-white text-[9px] font-black">
+              OVS
+            </div>
+            <div>
+              <p className="text-xs font-semibold">sw-edge-01</p>
+              <p className="font-mono text-[9px] text-sky-100">
+                incident companion
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="outline"
+            className="border-slate-300 bg-slate-50 text-slate-700"
+          >
+            Observe
+          </Badge>
+        </div>
+        <div className="p-4">
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            <Smartphone className="size-3.5" /> OpenFlow summary
+          </div>
+          <h2 className="mt-2 text-lg font-semibold">Bridge / br-fabric</h2>
+          <div className="mt-4 space-y-3 border bg-white p-4 text-xs">
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-muted-foreground">Authority</span>
+              <span className="text-right font-semibold">
+                External controller
+              </span>
+            </div>
+            <div className="flex items-start justify-between gap-3 border-t pt-3">
+              <span className="text-muted-foreground">Freshness</span>
+              <span className="font-mono">
+                {openFlowState === 'stale'
+                  ? '12:47:03 UTC · stale'
+                  : openFlowState === 'provider-unavailable' ||
+                      openFlowState === 'permission-denied'
+                    ? 'Unavailable'
+                    : '12:54:27 UTC'}
+              </span>
+            </div>
+            <div className="flex items-start justify-between gap-3 border-t pt-3">
+              <span className="text-muted-foreground">Completeness</span>
+              <span className="text-right font-semibold">
+                {openFlowReviewLabels[openFlowState]}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 border border-dashed border-slate-300 bg-white p-3 text-xs leading-5 text-muted-foreground">
+            Mobile shows authority, freshness, and incident context only. Large
+            flow tables, new queries, and exports remain on tablet or desktop.
+          </div>
+        </div>
+      </section>
+    );
+
   return (
     <section
       className={`${framed ? 'border-8 border-slate-800 shadow-xl' : ''} mx-auto w-full max-w-[380px] self-start overflow-hidden bg-[#f5f7fa]`}
@@ -2224,7 +2296,7 @@ function P1Stepper({ view, go }: { view: P1View; go: (view: P1View) => void }) {
 }
 
 export default function Home() {
-  const [view, setView] = useState<View>('diagnostics-hub');
+  const [view, setView] = useState<View>('openflow-viewer');
   const [mode, setMode] = useState<Mode>('standard');
   const [scenario, setScenario] = useState<Scenario>('normal');
   const [staged, setStaged] = useState(false);
@@ -2243,6 +2315,8 @@ export default function Home() {
     'System Health / member degradation',
   );
   const [diagnosticAutoAdvance, setDiagnosticAutoAdvance] = useState(false);
+  const [openFlowReviewState, setOpenFlowReviewState] =
+    useState<OpenFlowReviewState>('fresh');
   const [evidenceContext, setEvidenceContext] =
     useState<EvidenceContext>('change');
   const [search, setSearch] = useState('');
@@ -2267,6 +2341,7 @@ export default function Home() {
     diagnosticInputState,
     diagnosticJobState,
     diagnosticScope,
+    openFlowReviewState,
   });
 
   const port = ports.find((item) => item.name === selectedPort) ?? ports[1];
@@ -2283,6 +2358,7 @@ export default function Home() {
       diagnosticInputState,
       diagnosticJobState,
       diagnosticScope,
+      openFlowReviewState,
     };
   }, [
     view,
@@ -2295,6 +2371,7 @@ export default function Home() {
     diagnosticInputState,
     diagnosticJobState,
     diagnosticScope,
+    openFlowReviewState,
   ]);
 
   useEffect(() => {
@@ -2495,7 +2572,7 @@ export default function Home() {
       name: 'read_prototype_state',
       title: 'Read prototype state',
       description:
-        'Read the current P0/P1 view, mode, scenario, candidate intent, and Safe Apply state.',
+        'Read the current P0/P1 view, mode, scenario, OpenFlow collection state, candidate intent, and Safe Apply state.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -2855,6 +2932,37 @@ export default function Home() {
       },
     });
     register({
+      name: 'set_openflow_review_state',
+      title: 'Set OpenFlow review state',
+      description:
+        'Open the read-only OpenFlow viewer in one predefined collection state for review.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          state: {
+            type: 'string',
+            enum: Object.keys(openFlowReviewLabels),
+          },
+        },
+        required: ['state'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: async (input) => {
+        const next = (input as { state?: OpenFlowReviewState }).state;
+        if (!next || !(next in openFlowReviewLabels))
+          throw new Error('Unknown OpenFlow review state');
+        setOpenFlowReviewState(next);
+        setView('openflow-viewer');
+        await flush();
+        return {
+          view: 'openflow-viewer',
+          state: next,
+          capability: 'Observe',
+        };
+      },
+    });
+    register({
       name: 'set_review_scenario',
       title: 'Set review scenario',
       description:
@@ -2898,8 +3006,17 @@ export default function Home() {
   const diagnosticsVisible =
     p1DiagnosticsPages.includes(view as P1DiagnosticsPage) ||
     (evidenceContext !== 'change' && view === 'evidence');
-  const status =
-    diagnosticsVisible && diagnosticInProgress
+  const openFlowVisible = view === 'openflow-viewer';
+  const status = openFlowVisible
+    ? openFlowReviewState === 'fresh' ||
+      openFlowReviewState === 'external-authority' ||
+      openFlowReviewState === 'empty'
+      ? ['Observe only', 'border-sky-300 bg-sky-50 text-sky-800']
+      : openFlowReviewState === 'provider-unavailable' ||
+          openFlowReviewState === 'permission-denied'
+        ? ['Collection issue', 'border-rose-300 bg-rose-50 text-rose-800']
+        : ['Collection issue', 'border-amber-300 bg-amber-50 text-amber-800']
+    : diagnosticsVisible && diagnosticInProgress
       ? ['Job running', 'border-sky-300 bg-sky-50 text-sky-800']
       : scenario === 'normal'
         ? ['Healthy', 'border-emerald-300 bg-emerald-50 text-emerald-800']
@@ -2925,6 +3042,7 @@ export default function Home() {
         'port-detail',
         'vlan-edit',
         ...p1SwitchingPages,
+        ...p1OpenFlowPages,
       ].includes(view as P1View),
     },
     {
@@ -2988,6 +3106,32 @@ export default function Home() {
         cancelDiagnostic={cancelDiagnostic}
         retryDiagnostic={retryDiagnostic}
         openEvidence={openDiagnosticEvidence}
+        go={(next) => go(next)}
+        notify={setToast}
+      />
+    );
+  else if (view === 'openflow-viewer')
+    content = (
+      <P1OpenFlowView
+        mode={mode}
+        reviewState={openFlowReviewState}
+        setReviewState={setOpenFlowReviewState}
+        openBridge={(bridge) => {
+          setSelectedBridge(bridge);
+          setToast(`Opened related Bridge · ${bridge}`);
+          go('bridge-detail');
+        }}
+        openPort={(relatedObject) => {
+          if (relatedObject.startsWith('br-')) {
+            setSelectedBridge(relatedObject);
+            setToast(`Opened related Bridge · ${relatedObject}`);
+            go('bridge-detail');
+            return;
+          }
+          setSelectedPort(relatedObject);
+          setToast(`Opened related Port · ${relatedObject}`);
+          go('port-detail');
+        }}
         go={(next) => go(next)}
         notify={setToast}
       />
@@ -3108,39 +3252,41 @@ export default function Home() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <div className="hidden items-center gap-2 xl:flex">
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-              Global review state
-            </span>
-            <NativeSelect
-              value={scenario}
-              onChange={(event) => {
-                const next = event.target.value as Scenario;
-                setScenario(next);
-                if (next === 'member-down') {
-                  setSelectedBond('bond-storage');
-                  setSelectedBridge('br-storage');
-                } else if (next === 'provider-degraded') {
-                  setSelectedBond('bond-provider');
-                  setSelectedBridge('br-offload');
-                } else if (
-                  next === 'lacp-mismatch' ||
-                  next === 'advanced-config'
-                ) {
-                  setSelectedBond('bond-uplink');
-                  setSelectedBridge('br-fabric');
-                }
-                setToast(`Scenario · ${scenarioLabels[next]}`);
-              }}
-              size="sm"
-            >
-              {Object.entries(scenarioLabels).map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
+          {!openFlowVisible && (
+            <div className="hidden items-center gap-2 xl:flex">
+              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                Global review state
+              </span>
+              <NativeSelect
+                value={scenario}
+                onChange={(event) => {
+                  const next = event.target.value as Scenario;
+                  setScenario(next);
+                  if (next === 'member-down') {
+                    setSelectedBond('bond-storage');
+                    setSelectedBridge('br-storage');
+                  } else if (next === 'provider-degraded') {
+                    setSelectedBond('bond-provider');
+                    setSelectedBridge('br-offload');
+                  } else if (
+                    next === 'lacp-mismatch' ||
+                    next === 'advanced-config'
+                  ) {
+                    setSelectedBond('bond-uplink');
+                    setSelectedBridge('br-fabric');
+                  }
+                  setToast(`Scenario · ${scenarioLabels[next]}`);
+                }}
+                size="sm"
+              >
+                {Object.entries(scenarioLabels).map(([value, label]) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+          )}
           <Badge variant="outline" className={`h-7 rounded-sm ${status[1]}`}>
             <CircleDot data-icon="inline-start" />
             {status[0]}
@@ -3193,6 +3339,7 @@ export default function Home() {
               ['Switching overview', 'switching-overview'],
               ['Bridges', 'bridges'],
               ['Bond / LACP', 'bonds'],
+              ['OpenFlow', 'openflow-viewer'],
               ['Ports', 'ports'],
               ['Diagnostics', 'diagnostics-hub'],
               ['Jobs', 'diagnostic-run'],
@@ -3220,6 +3367,8 @@ export default function Home() {
         <MobilePanel
           applyState={applyState}
           diagnosticState={diagnosticJobState}
+          openFlowState={openFlowReviewState}
+          showOpenFlow={openFlowVisible}
           onConfirm={confirmApply}
           onRollback={rollbackApply}
           onOpenEvidence={() => {
@@ -3255,6 +3404,7 @@ export default function Home() {
               ['VLAN', 'ports'],
               ['Bond / LACP', 'bonds'],
               ['STP / RSTP', 'switching-overview'],
+              ['OpenFlow', 'openflow-viewer'],
             ].map(([label, target]) => (
               <button
                 key={label}
@@ -3323,11 +3473,14 @@ export default function Home() {
                 Tablet · Standard responsibility
               </Badge>
               <span className="text-xs text-muted-foreground">
-                Recommended diagnostics allowed · Apply commit remains
-                desktop-only
+                {openFlowVisible
+                  ? 'Bounded query and summary-card review · large tables stay desktop-first'
+                  : 'Recommended diagnostics allowed · Apply commit remains desktop-only'}
               </span>
             </div>
-            <ScenarioBanner scenario={scenario} onResolve={resolveScenario} />
+            {!openFlowVisible && (
+              <ScenarioBanner scenario={scenario} onResolve={resolveScenario} />
+            )}
             {content}
             {p1Views.includes(view as P1View) ? (
               <P1Stepper view={view as P1View} go={(next) => go(next)} />
@@ -3337,11 +3490,13 @@ export default function Home() {
             <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3 font-mono text-[10px] text-muted-foreground">
               <span>OVS 3.4.1 · datapath system · schema 8.3.1</span>
               <span>
-                {diagnosticsVisible
-                  ? 'P1 Batch 02 · Diagnostics · Draft for review'
-                  : p1Views.includes(view as P1View)
-                    ? 'P1 Batch 01 · Accepted review gate'
-                    : 'P0 Low-Fidelity UX Baseline v0.1 · Frozen'}
+                {openFlowVisible
+                  ? 'P1 Batch 03 · OpenFlow Viewer · Draft for review'
+                  : diagnosticsVisible
+                    ? 'P1 Batch 02 · Diagnostics · Accepted review gate'
+                    : p1Views.includes(view as P1View)
+                      ? 'P1 Batch 01 · Accepted review gate'
+                      : 'P0 Low-Fidelity UX Baseline v0.1 · Frozen'}
               </span>
             </footer>
           </div>

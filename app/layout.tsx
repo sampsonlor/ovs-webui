@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OVS WebUI · P1 Batch 02 Diagnostics Prototype',
+  title: 'OVS WebUI · P1 Batch 03 OpenFlow Viewer Prototype',
   description:
-    'Low-fidelity Diagnostics prototype with bounded inputs, asynchronous Jobs, structured results, and correlated evidence.',
+    'Low-fidelity OpenFlow viewer with explicit authority, freshness, bounded queries, responsive results, and read-only flow inspection.',
 };
 
 export default function RootLayout({

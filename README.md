@@ -14,7 +14,8 @@ This repository contains the approved P0 low-fidelity UX baseline and the active
 | P0 Low-Fidelity UX Baseline v0.1                  | Frozen                             |
 | P1 Low-Fidelity Prototype Plan v0.1               | Draft for Review                   |
 | P1 Batch 01 · Bridge + Bond/LACP                  | Implemented · Review gate accepted |
-| P1 Batch 02 · Diagnostics                         | Implemented · Draft for Review     |
+| P1 Batch 02 · Diagnostics                         | Implemented · Review gate accepted |
+| P1 Batch 03 · OpenFlow Viewer                     | Implemented · Draft for Review     |
 
 The accepted Batch 01 path remains available:
 
@@ -22,11 +23,17 @@ The accepted Batch 01 path remains available:
 
 Batch 01 also exposes the required review states for drift, member down, LACP mismatch, validation failure, provider degradation, advanced native configuration, network loss, and unknown Apply outcome.
 
-The current Batch 02 review path is:
+The accepted Batch 02 review path is:
 
 `System Health or object deep link → Diagnostics catalog → bounded input → Job progress → structured result / export → Event / Audit evidence`
 
 Batch 02 exposes catalog availability and permission states; valid, invalid, and over-broad input; queued, running, cancel-requested, cancelled, failed, partial, truncated, expired, unavailable, no-finding, no-data, provider-unavailable, operation-failed, and evidence-unavailable Job/result states. Every diagnostic remains predefined, scope-bounded, time-bounded, and output-bounded.
+
+The current Batch 03 review path is:
+
+`Switching → OpenFlow → authority / freshness context → bounded query → paginated flow snapshot → parsed or raw detail → bounded export`
+
+Batch 03 keeps OpenFlow at Observe scope. It distinguishes a fresh complete result, external authority, stale data, truncation, a successful 0-row result, provider failure, permission denial, and query timeout. Standard Mode summarizes the pipeline; Expert Mode adds exact cookie, duration, raw output, and collection metadata without adding any write authority.
 
 ## P1 delivery order
 
