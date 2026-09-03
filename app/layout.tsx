@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OVS WebUI · P1 Batch 01 Prototype',
-  description: 'Low-fidelity Bridge and Bond/LACP prototype built on the approved OVS WebUI architecture and P0 workflow.',
+  title: 'OVS WebUI · P1 Batch 02 Diagnostics Prototype',
+  description:
+    'Low-fidelity Diagnostics prototype with bounded inputs, asynchronous Jobs, structured results, and correlated evidence.',
 };
 
 export default function RootLayout({

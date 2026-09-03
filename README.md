@@ -6,20 +6,27 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
-| Baseline | Status |
-| --- | --- |
-| Architecture Baseline v1.0.1 | Approved upstream reference |
-| Phase 1 Scope v1.0 | Approved upstream reference |
-| UI Information Architecture + Page Inventory v1.0 | Approved Baseline |
-| P0 Low-Fidelity UX Baseline v0.1 | Frozen |
-| P1 Low-Fidelity Prototype Plan v0.1 | Draft for Review |
-| P1 Batch 01 · Bridge + Bond/LACP | Implemented · Draft for Review |
+| Baseline                                          | Status                             |
+| ------------------------------------------------- | ---------------------------------- |
+| Architecture Baseline v1.0.1                      | Approved upstream reference        |
+| Phase 1 Scope v1.0                                | Approved upstream reference        |
+| UI Information Architecture + Page Inventory v1.0 | Approved Baseline                  |
+| P0 Low-Fidelity UX Baseline v0.1                  | Frozen                             |
+| P1 Low-Fidelity Prototype Plan v0.1               | Draft for Review                   |
+| P1 Batch 01 · Bridge + Bond/LACP                  | Implemented · Review gate accepted |
+| P1 Batch 02 · Diagnostics                         | Implemented · Draft for Review     |
 
-The current P1 review path is:
+The accepted Batch 01 path remains available:
 
 `Switching overview → Bridges → Bridge detail → Add Bond → Candidate Workspace → Diff & Validation → Safe Apply → Evidence`
 
 Batch 01 also exposes the required review states for drift, member down, LACP mismatch, validation failure, provider degradation, advanced native configuration, network loss, and unknown Apply outcome.
+
+The current Batch 02 review path is:
+
+`System Health or object deep link → Diagnostics catalog → bounded input → Job progress → structured result / export → Event / Audit evidence`
+
+Batch 02 exposes catalog availability and permission states; valid, invalid, and over-broad input; queued, running, cancel-requested, cancelled, failed, partial, truncated, expired, unavailable, no-finding, no-data, provider-unavailable, operation-failed, and evidence-unavailable Job/result states. Every diagnostic remains predefined, scope-bounded, time-bounded, and output-bounded.
 
 ## P1 delivery order
 
