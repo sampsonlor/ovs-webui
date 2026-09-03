@@ -4,7 +4,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 
 ## Project status
 
-This repository currently contains the approved P0 low-fidelity UX baseline and the planning baseline for P1 prototype work. It is a product and interaction prototype, not production-ready switch-management software.
+This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
 | Baseline | Status |
 | --- | --- |
@@ -13,6 +13,13 @@ This repository currently contains the approved P0 low-fidelity UX baseline and 
 | UI Information Architecture + Page Inventory v1.0 | Approved Baseline |
 | P0 Low-Fidelity UX Baseline v0.1 | Frozen |
 | P1 Low-Fidelity Prototype Plan v0.1 | Draft for Review |
+| P1 Batch 01 · Bridge + Bond/LACP | Implemented · Draft for Review |
+
+The current P1 review path is:
+
+`Switching overview → Bridges → Bridge detail → Add Bond → Candidate Workspace → Diff & Validation → Safe Apply → Evidence`
+
+Batch 01 also exposes the required review states for drift, member down, LACP mismatch, validation failure, provider degradation, advanced native configuration, network loss, and unknown Apply outcome.
 
 ## P1 delivery order
 
