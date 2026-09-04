@@ -82,6 +82,11 @@ and [acceptance scope](docs/reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md).
 The UI continues to use synthetic session state; these interfaces do not enable
 real switch operations or server persistence.
 
+The next integration branch adds the [core HTTP adapter](docs/contracts/HTTP_ADAPTER_v0.1.md)
+for Ports, Candidate and original-request recovery. It requires an authenticated
+same-origin service and contract validator; the prototype UI does not enable a
+live connection by default.
+
 ```bash
 pnpm test
 pnpm contracts:generate
