@@ -1,5 +1,20 @@
 # Documentation index
 
+## Core workflow and integration contract v0.1
+
+- `reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md` — state-level acceptance evidence and remaining browser/backend gates
+- `contracts/CORE_API_CONTRACT_v0.1.md` — API semantics, state mapping, recovery and integration sequence
+- `../contracts/openapi.v0.1.json` — generated OpenAPI contract for the first Ports/VLAN integration slice
+
+The contract is a review proposal. Production persistence, authentication, HTTP adapters and OVS operations are not enabled by these artifacts.
+
+## Design System v0.1 review
+
+- `reviews/CODE_BASELINE_AUDIT_v0.1.md` — code inventory, architecture alignment, exception coverage, validation and remaining gaps
+- `design-system/DESIGN_SYSTEM_v0.1.md` — Ports foundations, shared change-control components and review paths
+
+These are review drafts extending the P0 code baseline; they do not approve a new Architecture/Phase 1 baseline or a P1 batch gate.
+
 ## Baselines
 
 - `baselines/OVS_WebUI_UI_Information_Architecture_Page_Inventory_v1.0.docx` — Approved Baseline

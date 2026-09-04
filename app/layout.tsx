@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OVS WebUI · P0 UX Baseline v0.1',
-  description: 'Approved P0 low-fidelity UX baseline for the OVS WebUI golden-path workflow.',
+  title: 'OVS WebUI · Integrated Prototype v0.1',
+  description:
+    'Switching, bounded diagnostics and read-only OpenFlow with shared Candidate, validation and Safe Apply workflows.',
 };
 
 export default function RootLayout({
