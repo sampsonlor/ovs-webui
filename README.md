@@ -6,13 +6,13 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 
 This repository currently contains the approved P0 low-fidelity UX baseline and the planning baseline for P1 prototype work. It is a product and interaction prototype, not production-ready switch-management software.
 
-| Baseline | Status |
-| --- | --- |
-| Architecture Baseline v1.0.1 | Approved upstream reference |
-| Phase 1 Scope v1.0 | Approved upstream reference |
-| UI Information Architecture + Page Inventory v1.0 | Approved Baseline |
-| P0 Low-Fidelity UX Baseline v0.1 | Frozen |
-| P1 Low-Fidelity Prototype Plan v0.1 | Draft for Review |
+| Baseline                                          | Status                      |
+| ------------------------------------------------- | --------------------------- |
+| Architecture Baseline v1.0.1                      | Approved upstream reference |
+| Phase 1 Scope v1.0                                | Approved upstream reference |
+| UI Information Architecture + Page Inventory v1.0 | Approved Baseline           |
+| P0 Low-Fidelity UX Baseline v0.1                  | Frozen                      |
+| P1 Low-Fidelity Prototype Plan v0.1               | Draft for Review            |
 
 ## P1 delivery order
 
@@ -45,6 +45,24 @@ pnpm build
 - `docs/baselines/` — approved UX baseline documents
 - `docs/plans/` — prototype delivery plans under review
 - `.openai/hosting.json` — existing private review deployment configuration
+
+## Core workflow integration preparation
+
+The current Design System and P0 workflow have state-level checks and a draft
+Ports/VLAN API contract. See [the contract guide](docs/contracts/CORE_API_CONTRACT_v0.1.md)
+and [acceptance scope](docs/reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md).
+The UI continues to use synthetic session state; these interfaces do not enable
+real switch operations or server persistence.
+
+```bash
+pnpm test
+pnpm contracts:generate
+pnpm contracts:check
+```
+
+Edit `contracts/core-v0.1.mjs`, then regenerate the OpenAPI document and TypeScript
+types. The test command rejects stale generated files and checks response fixtures,
+lost acknowledgements, safe confirmation, rollback conflicts and out-of-order reads.
 
 ## Safety and scope
 

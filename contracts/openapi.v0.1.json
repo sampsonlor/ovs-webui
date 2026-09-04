@@ -1,0 +1,2446 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "OVS WebUI core workflow contract",
+    "version": "0.1.0-draft",
+    "description": "Review proposal for the Ports/VLAN integration slice on one node. Candidate and request ledger are server-persistent and per authenticated principal. Standard/Expert is a presentation preference and is not an authorization input. No implementation endpoints are enabled by this document."
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Proposed same-origin application API; not the Sites publishing API and not an OVSDB endpoint."
+    }
+  ],
+  "security": [
+    {
+      "sessionCookie": []
+    }
+  ],
+  "x-review-status": "Draft for integration review; not an approved Architecture / Phase 1 / P1 gate.",
+  "paths": {
+    "/workspace": {
+      "get": {
+        "operationId": "readWorkspace",
+        "description": "Consistent bootstrap after login, reload or reconnect. Resolve active/unresolved requests before enabling any new write. Other users' private candidates are never disclosed; nodeWriteBlocked represents any remaining node admission lock.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSnapshot"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ports": {
+      "get": {
+        "operationId": "listPorts",
+        "description": "Cursors pin a snapshot. Complete with zero items means empty; degraded is partial evidence; provider unavailable returns a Problem, never a fabricated empty list.",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ports/{portId}": {
+      "get": {
+        "operationId": "readPort",
+        "description": "",
+        "parameters": [
+          {
+            "name": "portId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/candidate": {
+      "get": {
+        "operationId": "readCandidate",
+        "description": "Current principal's durable candidate, including an empty intent list.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateResource"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong quoted entity tag for the entire candidate representation. Changes whenever represented freshness or intent changes."
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "mutateCandidate",
+        "description": "Typed candidate command; no running OVS write. If-Match is the strong ETag read from this same /candidate resource. Stale tag: 412; missing tag: 428. Rebase checks the current generation and conflict snapshot atomically, invalidates validation, and never applies.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Must equal body.requestId. Durable per-principal/node/method/path/body binding. Do not rotate after a timeout."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Validated against the authenticated session; exact authentication integration remains an upstream review item."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[^\"\\r\\n]+\"$"
+            },
+            "description": "No wildcard and no weak tag."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateMutation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateResource"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/validations": {
+      "post": {
+        "operationId": "validateCandidate",
+        "description": "Validation captures candidate revision, config generation, policy revision and expiry. A previous passed result is not permission to apply a different snapshot.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Must equal body.requestId. Durable per-principal/node/method/path/body binding. Do not rotate after a timeout."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Validated against the authenticated session; exact authentication integration remains an upstream review item."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous processing. This is not a success/confirmation verdict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/validations/{validationId}": {
+      "get": {
+        "operationId": "readValidation",
+        "description": "",
+        "parameters": [
+          {
+            "name": "validationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions": {
+      "post": {
+        "operationId": "startSafeApply",
+        "description": "Atomically persist request admission, immutable candidate snapshot and node admission lock before any OVS mutation. Recheck authorization, ownership, revision, generation, validation, reauthentication and actual safety resources. The server owns the confirmation deadline and rollback scheduler.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Must equal body.requestId. Durable per-principal/node/method/path/body binding. Do not rotate after a timeout."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Validated against the authenticated session; exact authentication integration remains an upstream review item."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSafeApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous processing. This is not a success/confirmation verdict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions/{transactionId}": {
+      "get": {
+        "operationId": "readTransaction",
+        "description": "Database commit, daemon apply, health and user confirmation are separate facts. GET never resubmits the configuration.",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions/{transactionId}/decisions": {
+      "post": {
+        "operationId": "decideSafeApply",
+        "description": "Compare expectedTransactionSequence, state and server deadline atomically. A late confirm loses to expiry. Protected rollback compares only the owned write set with this transaction's after-image and never overwrites an external change.",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Must equal body.requestId. Durable per-principal/node/method/path/body binding. Do not rotate after a timeout."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Validated against the authenticated session; exact authentication integration remains an upstream review item."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous processing. This is not a success/confirmation verdict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions/{transactionId}/reconciliations": {
+      "post": {
+        "operationId": "reconcileTransaction",
+        "description": "Create an observation job referencing the original transaction. May update evidence/metadata; must not replay configuration or invent a new apply transaction. The client cannot select an outcome.",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Must equal body.requestId. Durable per-principal/node/method/path/body binding. Do not rotate after a timeout."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Validated against the authenticated session; exact authentication integration remains an upstream review item."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous processing. This is not a success/confirmation verdict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{requestId}": {
+      "get": {
+        "operationId": "readRequest",
+        "description": "Recover a lost acceptance reply before a transaction ID is known. 404 means the ledger cannot currently provide a record; it does NOT prove Not Applied. Unresolved admissions must survive restarts and must not expire out of the ledger.",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRecord"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}": {
+      "get": {
+        "operationId": "readJob",
+        "description": "Job success describes completion of the job task, not necessarily applied configuration, healthy traffic, or confirmed Safe Apply.",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/drift": {
+      "get": {
+        "operationId": "readDrift",
+        "description": "Desired-versus-observed evidence. Distinct from candidate freshness.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftReport"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/drift-observations": {
+      "post": {
+        "operationId": "observeDrift",
+        "description": "Refresh observations only. No apply, overwrite, or candidate rebase.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Must equal body.requestId. Durable per-principal/node/method/path/body binding. Do not rotate after a timeout."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Validated against the authenticated session; exact authentication integration remains an upstream review item."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted for asynchronous processing. This is not a success/confirmation verdict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evidence": {
+      "get": {
+        "operationId": "readEvidence",
+        "description": "Authorization-scoped evidence for the original transaction. Never expose credentials, reauthentication proofs or unrestricted native dumps.",
+        "parameters": [
+          {
+            "name": "transactionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem. A failed transport or unknown commandEffect never proves that a write was not accepted.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+      },
+      "Revision": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "Opaque equality token. Never increment, sort, or interpret as next_cfg / cur_cfg."
+      },
+      "VlanIntent": {
+        "description": "Narrow editable subset. Explicit allowed VLANs only. An empty OVS trunks set means ALL VLANs, never none; existing unsupported/all-VLAN configuration remains observable but is not silently normalized into this editor.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "access"
+                ]
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4094
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "mode",
+              "tag",
+              "trunks"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "trunk"
+                ]
+              },
+              "tag": {
+                "type": "null"
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 1,
+                "maxItems": 4094,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "mode",
+              "tag",
+              "trunks"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "native-tagged"
+                ]
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4094
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 1,
+                "maxItems": 4094,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "mode",
+              "tag",
+              "trunks"
+            ]
+          }
+        ]
+      },
+      "NativeVlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4095
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trunks": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4095
+            },
+            "uniqueItems": true,
+            "maxItems": 4096
+          }
+        },
+        "required": [
+          "mode",
+          "tag",
+          "trunks"
+        ]
+      },
+      "VlanObservation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availability": {
+                "type": "string",
+                "enum": [
+                  "known"
+                ]
+              },
+              "value": {
+                "$ref": "#/components/schemas/VlanIntent"
+              },
+              "native": {
+                "$ref": "#/components/schemas/NativeVlan"
+              }
+            },
+            "required": [
+              "availability",
+              "value",
+              "native"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availability": {
+                "type": "string",
+                "enum": [
+                  "unsupported"
+                ]
+              },
+              "value": {
+                "type": "null"
+              },
+              "native": {
+                "$ref": "#/components/schemas/NativeVlan"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "availability",
+              "value",
+              "native",
+              "reason"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availability": {
+                "type": "string",
+                "enum": [
+                  "unknown",
+                  "unavailable"
+                ]
+              },
+              "value": {
+                "type": "null"
+              },
+              "native": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "availability",
+              "value",
+              "native",
+              "reason"
+            ]
+          }
+        ]
+      },
+      "PortResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string"
+          },
+          "bridgeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/Id"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            },
+            "minItems": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "bond"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "manage",
+              "basic-manage",
+              "observe"
+            ]
+          },
+          "authority": {
+            "type": "string",
+            "enum": [
+              "ovs",
+              "external",
+              "unknown"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/VlanObservation"
+          },
+          "linkState": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "linkReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "speedMbps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "writableFields": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "vlan"
+              ]
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "name",
+          "bridgeId",
+          "interfaces",
+          "kind",
+          "scope",
+          "authority",
+          "provider",
+          "configuration",
+          "linkState",
+          "linkReason",
+          "speedMbps",
+          "observedAt",
+          "generation",
+          "writableFields"
+        ]
+      },
+      "PortsPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "degraded"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortResource"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "nodeId",
+          "generation",
+          "observedAt",
+          "snapshotId",
+          "availability",
+          "items",
+          "warnings",
+          "nextCursor"
+        ]
+      },
+      "VlanChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "portId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "base": {
+            "$ref": "#/components/schemas/VlanIntent"
+          },
+          "mine": {
+            "$ref": "#/components/schemas/VlanIntent"
+          }
+        },
+        "required": [
+          "id",
+          "portId",
+          "base",
+          "mine"
+        ]
+      },
+      "VlanConflict": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intentId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "portId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "vlan"
+            ]
+          },
+          "base": {
+            "$ref": "#/components/schemas/VlanIntent"
+          },
+          "current": {
+            "$ref": "#/components/schemas/VlanIntent"
+          },
+          "mine": {
+            "$ref": "#/components/schemas/VlanIntent"
+          }
+        },
+        "required": [
+          "intentId",
+          "portId",
+          "field",
+          "base",
+          "current",
+          "mine"
+        ]
+      },
+      "CandidateResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "baseGeneration": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "currentGeneration": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "current",
+              "stale",
+              "conflict"
+            ]
+          },
+          "intents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VlanChange"
+            },
+            "maxItems": 1
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VlanConflict"
+            }
+          },
+          "conflictSnapshotId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lockedByTransactionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "revision",
+          "baseGeneration",
+          "currentGeneration",
+          "freshness",
+          "intents",
+          "conflicts",
+          "conflictSnapshotId",
+          "lockedByTransactionId",
+          "updatedAt"
+        ]
+      },
+      "CandidateMutation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "requestId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "set-vlan"
+                ]
+              },
+              "portId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "mine": {
+                "$ref": "#/components/schemas/VlanIntent"
+              },
+              "expectedGeneration": {
+                "$ref": "#/components/schemas/Revision"
+              }
+            },
+            "required": [
+              "requestId",
+              "operation",
+              "portId",
+              "mine",
+              "expectedGeneration"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "requestId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "discard"
+                ]
+              }
+            },
+            "required": [
+              "requestId",
+              "operation"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "requestId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "rebase"
+                ]
+              },
+              "currentGeneration": {
+                "$ref": "#/components/schemas/Revision"
+              },
+              "conflictSnapshotId": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resolutions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "intentId": {
+                      "$ref": "#/components/schemas/Id"
+                    },
+                    "choice": {
+                      "type": "string",
+                      "enum": [
+                        "current",
+                        "mine"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "intentId",
+                    "choice"
+                  ]
+                },
+                "maxItems": 1
+              }
+            },
+            "required": [
+              "requestId",
+              "operation",
+              "currentGeneration",
+              "conflictSnapshotId",
+              "resolutions"
+            ]
+          }
+        ]
+      },
+      "ValidationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidateId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "expectedCandidateRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "expectedGeneration": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "requestId",
+          "candidateId",
+          "expectedCandidateRevision",
+          "expectedGeneration"
+        ]
+      },
+      "ValidationCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "block",
+              "unknown"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "portId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "state",
+          "message",
+          "portId"
+        ]
+      },
+      "SafetyPlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "unknown"
+            ]
+          },
+          "connectivityProbe": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "unknown"
+            ]
+          },
+          "compareBeforeRollback": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "unknown"
+            ]
+          },
+          "confirmationWindowSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "reauthenticationRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "checkpoint",
+          "connectivityProbe",
+          "compareBeforeRollback",
+          "confirmationWindowSeconds",
+          "reauthenticationRequired"
+        ]
+      },
+      "ValidationResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidateId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidateRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "policyRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "passed",
+              "blocked",
+              "expired"
+            ]
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationCheck"
+            }
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VlanChange"
+            }
+          },
+          "safetyPlan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SafetyPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "jobId",
+          "candidateId",
+          "candidateRevision",
+          "generation",
+          "policyRevision",
+          "status",
+          "expiresAt",
+          "checks",
+          "diff",
+          "safetyPlan"
+        ]
+      },
+      "StartSafeApplyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidateId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "expectedCandidateRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "expectedGeneration": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "validationId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          },
+          "reauthenticationProof": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "writeOnly": true,
+            "description": "Opaque, short-lived proof from the existing authentication service. Never log or persist in a recovery hint."
+          }
+        },
+        "required": [
+          "requestId",
+          "candidateId",
+          "expectedCandidateRevision",
+          "expectedGeneration",
+          "validationId",
+          "reason"
+        ]
+      },
+      "TransactionEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "databaseCommit": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "committed",
+              "not-committed",
+              "unknown"
+            ]
+          },
+          "daemonApply": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "applied",
+              "failed",
+              "unknown"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "passed",
+              "failed",
+              "unknown"
+            ]
+          },
+          "checkpoint": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "ready",
+              "unavailable",
+              "unknown"
+            ]
+          },
+          "desiredGeneration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observedGeneration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextCfg": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "curCfg": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "databaseCommit",
+          "daemonApply",
+          "health",
+          "checkpoint",
+          "desiredGeneration",
+          "observedGeneration",
+          "nextCfg",
+          "curCfg"
+        ]
+      },
+      "TransactionResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidateId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidateRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "jobId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "knowledge": {
+            "type": "string",
+            "enum": [
+              "current",
+              "outcome-unknown"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "preflight",
+              "committing",
+              "applying",
+              "awaiting-confirmation",
+              "rolling-back",
+              "settled"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "applied",
+              "not-applied",
+              "degraded",
+              "needs-attention"
+            ]
+          },
+          "safeApply": {
+            "type": "string",
+            "enum": [
+              "not-started",
+              "armed",
+              "awaiting-confirmation",
+              "confirming",
+              "confirmed",
+              "rollback-requested",
+              "rolled-back",
+              "rollback-conflict"
+            ]
+          },
+          "confirmationDeadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locksCandidate": {
+            "type": "boolean"
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "read",
+                "reconcile",
+                "confirm",
+                "rollback"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/TransactionEvidence"
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "requestId",
+          "candidateId",
+          "candidateRevision",
+          "jobId",
+          "correlationId",
+          "sequence",
+          "serverTime",
+          "knowledge",
+          "phase",
+          "outcome",
+          "safeApply",
+          "confirmationDeadline",
+          "locksCandidate",
+          "allowedActions",
+          "evidence"
+        ]
+      },
+      "DecisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "expectedTransactionSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "rollback"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          },
+          "reauthenticationProof": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "requestId",
+          "expectedTransactionSequence",
+          "decision",
+          "reason"
+        ]
+      },
+      "ReconciliationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "requestId"
+        ]
+      },
+      "JobResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "safe-apply",
+              "reconciliation",
+              "drift-read"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "unknown"
+            ]
+          },
+          "transactionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "kind",
+          "state",
+          "transactionId",
+          "correlationId",
+          "updatedAt",
+          "message"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "REAUTH_REQUIRED",
+              "ETAG_MISMATCH",
+              "PRECONDITION_REQUIRED",
+              "CANDIDATE_STALE",
+              "FIELD_CONFLICT",
+              "VALIDATION_EXPIRED",
+              "VALIDATION_BLOCKED",
+              "TRANSACTION_ACTIVE",
+              "DECISION_EXPIRED",
+              "TRANSACTION_VERSION_CHANGED",
+              "IDEMPOTENCY_MISMATCH",
+              "UNSUPPORTED_CONFIGURATION",
+              "INVALID_INTENT",
+              "PROVIDER_UNAVAILABLE",
+              "OUTCOME_UNKNOWN",
+              "NOT_FOUND",
+              "INTERNAL_ERROR"
+            ]
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "commandEffect": {
+            "type": "string",
+            "enum": [
+              "not-started",
+              "unknown"
+            ]
+          },
+          "transactionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidateRevision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "requestId",
+          "correlationId",
+          "commandEffect",
+          "transactionId",
+          "candidateRevision"
+        ]
+      },
+      "RequestRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "candidate",
+              "validation",
+              "safe-apply",
+              "decision",
+              "reconciliation",
+              "drift-read"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "recorded",
+              "accepted",
+              "rejected"
+            ]
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "transactionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "jobId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validationId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidateRevision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Problem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "requestId",
+          "nodeId",
+          "operation",
+          "state",
+          "recordedAt",
+          "transactionId",
+          "jobId",
+          "validationId",
+          "candidateRevision",
+          "problem"
+        ]
+      },
+      "WorkspaceSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/CandidateResource"
+          },
+          "activeTransactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionResource"
+            }
+          },
+          "pendingRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestRecord"
+            }
+          },
+          "nodeWriteBlocked": {
+            "type": "boolean"
+          },
+          "permissions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "editCandidate": {
+                "type": "boolean"
+              },
+              "validate": {
+                "type": "boolean"
+              },
+              "startSafeApply": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "editCandidate",
+              "validate",
+              "startSafeApply"
+            ]
+          }
+        },
+        "required": [
+          "nodeId",
+          "serverTime",
+          "candidate",
+          "activeTransactions",
+          "pendingRequests",
+          "nodeWriteBlocked",
+          "permissions"
+        ]
+      },
+      "DriftReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "desiredGeneration": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "observedGeneration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "in-sync",
+              "drift",
+              "unknown"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "portId": {
+                  "$ref": "#/components/schemas/Id"
+                },
+                "desired": {
+                  "$ref": "#/components/schemas/VlanIntent"
+                },
+                "observed": {
+                  "$ref": "#/components/schemas/VlanObservation"
+                }
+              },
+              "required": [
+                "portId",
+                "desired",
+                "observed"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "nodeId",
+          "observedAt",
+          "desiredGeneration",
+          "observedGeneration",
+          "status",
+          "items"
+        ]
+      },
+      "EvidenceEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "audit",
+              "event",
+              "job",
+              "health"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "transactionId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "objectId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "code": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "occurredAt",
+          "nodeId",
+          "transactionId",
+          "requestId",
+          "correlationId",
+          "objectId",
+          "code",
+          "summary"
+        ]
+      },
+      "EvidencePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceEntry"
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ovs_session",
+        "description": "Provisional same-origin session binding, requiring Secure/HttpOnly/SameSite and CSRF checks on writes. Cookie name, issuer, login and reauthentication endpoints must align with the approved auth service before a live adapter is enabled. This is not a replacement authentication implementation."
+      }
+    }
+  }
+}
