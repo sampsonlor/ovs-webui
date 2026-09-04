@@ -38,10 +38,28 @@ import {
   transition,
   transactionLocked,
   scenarioLabels,
+  candidateName,
   type ControlAction,
   type ControlState,
   type Scenario,
 } from '@/lib/change-control';
+import {
+  p1Steps,
+  diagnosticJobLabels,
+  openFlowReviewLabels,
+  type DiagnosticJobState,
+  type OpenFlowReviewState,
+} from './prototype-model';
+import {
+  P1Surface,
+  P1MobileSummary,
+  isP1View,
+  useP1Controller,
+} from '@/components/ovs/p1-surface';
+import {
+  representativeBondIntent,
+  runnableDiagnostics,
+} from '@/lib/p1-control';
 
 import { PortsPage } from '@/components/ovs/ports-page';
 import {
@@ -110,10 +128,12 @@ function Dashboard({
   state,
   go,
   openPort,
+  onDiagnose,
 }: {
   state: ControlState;
   go: (view: View) => void;
   openPort: (name: string) => void;
+  onDiagnose: () => void;
 }) {
   const staged = Boolean(state.candidate);
   const scenario = state.scenario;
@@ -127,12 +147,17 @@ function Dashboard({
         description="Operational posture, pending intent, and evidence entry points—without hiding uncertainty."
         scope="Observe"
         actions={
-          <Button
-            onClick={() => go('ports')}
-            className="gap-2 bg-[#157a9e] hover:bg-[#11627f]"
-          >
-            Open ports <ChevronRight />
-          </Button>
+          <>
+            <Button variant="outline" onClick={onDiagnose}>
+              Diagnose health
+            </Button>
+            <Button
+              onClick={() => go('ports')}
+              className="gap-2 bg-[#157a9e] hover:bg-[#11627f]"
+            >
+              Open ports <ChevronRight />
+            </Button>
+          </>
         }
       />
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -255,12 +280,14 @@ function Dashboard({
             <div className="mt-4 border border-[#c8dbe9] bg-white p-3">
               <p className="text-sm font-medium">
                 {staged
-                  ? `${state.candidate!.port.name} · VLAN`
+                  ? `${candidateName(state.candidate)} · ${state.candidate!.kind.toUpperCase()}`
                   : 'No pending intent'}
               </p>
               <p className="mt-1 font-mono text-xs text-muted-foreground">
-                {staged
-                  ? `${vlanLabel(state.candidate!.base)} → ${vlanLabel(state.candidate!.mine)}`
+                {state.candidate
+                  ? state.candidate.kind === 'vlan'
+                    ? `${vlanLabel(state.candidate.base)} → ${vlanLabel(state.candidate.mine)}`
+                    : state.candidate.intent.summary
                   : 'Start from a managed object.'}
               </p>
             </div>
@@ -308,11 +335,13 @@ function PortDetail({
   generation,
   mode,
   go,
+  onDiagnose,
 }: {
   port: Port;
   generation: number;
   mode: Mode;
   go: (view: View) => void;
+  onDiagnose: () => void;
 }) {
   const editable = port.scope !== 'Observe' && port.authority === 'OVS';
   return (
@@ -327,6 +356,9 @@ function PortDetail({
           <>
             <Button variant="outline" onClick={() => go('ports')}>
               <ArrowLeft /> Ports
+            </Button>
+            <Button variant="outline" onClick={onDiagnose}>
+              Diagnose
             </Button>
             {editable && (
               <Button
@@ -581,7 +613,7 @@ function MobilePanel({
             {outcomeLabels[state.transaction.status]}
           </StatusBadge>
           <p className="mt-3 text-sm">
-            {state.transaction.id} · {state.transaction.snapshot?.port.name}
+            {state.transaction.id} · {candidateName(state.transaction.snapshot)}
           </p>
           <Button className="mt-4 w-full" onClick={() => go('safe-apply')}>
             Handle active transaction
@@ -619,11 +651,11 @@ function MobilePanel({
 function P0Stepper({ view, go }: { view: View; go: (view: View) => void }) {
   return (
     <nav
-      aria-label="P0 prototype steps"
+      aria-label="P0 and P1 prototype steps"
       className="mt-5 overflow-x-auto border-t pt-3"
     >
       <ol className="flex min-w-max items-center gap-1">
-        {steps.map((step, index) => (
+        {[...steps, ...p1Steps].map((step, index) => (
           <li key={step.id} className="flex items-center">
             <button
               type="button"
@@ -634,7 +666,7 @@ function P0Stepper({ view, go }: { view: View; go: (view: View) => void }) {
               <span className="block font-mono text-xs">{step.id}</span>
               <span className="block text-xs font-medium">{step.label}</span>
             </button>
-            {index < steps.length - 1 && (
+            {index < steps.length + p1Steps.length - 1 && (
               <ChevronRight className="size-3 text-slate-300" />
             )}
           </li>
@@ -687,7 +719,8 @@ export default function Home() {
         ports.find((item) => item.name === selectedRef.current) ?? ports[1];
       const current = controlRef.current;
       const value =
-        current.candidate?.port.name === original.name
+        current.candidate?.kind === 'vlan' &&
+        current.candidate.port.name === original.name
           ? current.candidate.mine
           : (current.live[original.name] ?? original.config);
       setVlanMode(value.mode);
@@ -737,9 +770,23 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const interactionRef = useRef({ act, go });
+  const p1 = useP1Controller({
+    act,
+    go,
+    notify: setToast,
+    scenario: control.scenario,
+    openPort: (name) => {
+      if (!ports.some((item) => item.name === name)) {
+        setToast(`Port/${name} is outside the representative inventory.`);
+        return;
+      }
+      selectPort(name);
+      go('port-detail');
+    },
+  });
+  const interactionRef = useRef({ act, go, p1 });
   useEffect(() => {
-    interactionRef.current = { act, go };
+    interactionRef.current = { act, go, p1 };
   });
   useEffect(() => {
     const context = (document as WebMcpDocument).modelContext;
@@ -779,6 +826,12 @@ export default function Home() {
       execute: () => ({
         ...presentationRef.current,
         ...controlRef.current,
+        diagnostic: {
+          job: 'job-3114',
+          state: interactionRef.current.p1.jobState,
+          scope: interactionRef.current.p1.scope,
+        },
+        openFlowReviewState: interactionRef.current.p1.openFlowState,
         prototype: true,
       }),
     });
@@ -945,15 +998,176 @@ export default function Home() {
         }).scenario;
       },
     });
+    register({
+      name: 'navigate_prototype_view',
+      title: 'Navigate prototype view',
+      description: 'Open an existing P0 or P1 view without changing intent.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          view: {
+            type: 'string',
+            enum: [...steps, ...p1Steps].map((step) => step.view),
+          },
+        },
+        required: ['view'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: (input) => {
+        const next = inputObject(input).view;
+        if (
+          typeof next !== 'string' ||
+          ![...steps, ...p1Steps].some((step) => step.view === next)
+        )
+          throw new Error('Unknown prototype view');
+        interactionRef.current.go(next as View);
+        return { view: next };
+      },
+    });
+    register({
+      name: 'stage_bond_change',
+      title: 'Stage Bond change',
+      description:
+        'Stage a representative Bond Port intent through the shared Candidate safety gates.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          bridge: { type: 'string' },
+          mode: {
+            type: 'string',
+            enum: ['balance-tcp', 'active-backup', 'balance-slb'],
+          },
+          lacp: { type: 'string', enum: ['active', 'passive', 'off'] },
+        },
+        required: ['name', 'bridge', 'mode', 'lacp'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: (input) => {
+        const next = interactionRef.current.p1.stageIntent(
+          representativeBondIntent(inputObject(input)),
+        );
+        if (next.error) throw new Error(next.error);
+        return {
+          workspace: 'ws-183',
+          candidate: next.candidate,
+          prototype: true,
+        };
+      },
+    });
+    register({
+      name: 'run_bounded_diagnostic',
+      title: 'Run bounded diagnostic',
+      description: 'Start a predefined, bounded synthetic diagnostic Job.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          diagnostic: { type: 'string', enum: runnableDiagnostics },
+          scope: { type: 'string' },
+        },
+        required: ['diagnostic', 'scope'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: (input) => {
+        const data = inputObject(input);
+        if (
+          typeof data.diagnostic !== 'string' ||
+          typeof data.scope !== 'string'
+        )
+          throw new Error('Diagnostic and one object scope are required.');
+        const blocked = interactionRef.current.p1.runDiagnostic(
+          data.diagnostic,
+          data.scope,
+        );
+        if (blocked) throw new Error(blocked);
+        return {
+          job: 'job-3114',
+          state: 'queued',
+          correlationId: 'corr-DIAG-91C4',
+          prototype: true,
+        };
+      },
+    });
+    register({
+      name: 'cancel_diagnostic_job',
+      title: 'Cancel diagnostic Job',
+      description: 'Request cancellation at an advertised safe checkpoint.',
+      inputSchema: emptySchema,
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: () => {
+        const blocked = interactionRef.current.p1.cancelDiagnostic();
+        if (blocked) throw new Error(blocked);
+        return { job: 'job-3114', state: 'cancel-requested' };
+      },
+    });
+    register({
+      name: 'set_diagnostic_review_state',
+      title: 'Set diagnostic review state',
+      description: 'Select a synthetic Job or result state for review.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', enum: Object.keys(diagnosticJobLabels) },
+        },
+        required: ['state'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: (input) => {
+        const next = inputObject(input).state;
+        if (
+          typeof next !== 'string' ||
+          !Object.hasOwn(diagnosticJobLabels, next)
+        )
+          throw new Error('Unknown diagnostic review state');
+        interactionRef.current.p1.reviewDiagnostic(next as DiagnosticJobState);
+        return { job: 'job-3114', state: next };
+      },
+    });
+    register({
+      name: 'set_openflow_review_state',
+      title: 'Set OpenFlow review state',
+      description: 'Open the read-only viewer in a synthetic collection state.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', enum: Object.keys(openFlowReviewLabels) },
+        },
+        required: ['state'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: (input) => {
+        const next = inputObject(input).state;
+        if (
+          typeof next !== 'string' ||
+          !Object.hasOwn(openFlowReviewLabels, next)
+        )
+          throw new Error('Unknown OpenFlow review state');
+        interactionRef.current.p1.reviewOpenFlow(next as OpenFlowReviewState);
+        return { view: 'openflow-viewer', state: next, capability: 'Observe' };
+      },
+    });
     return () => lifecycle.abort();
   }, []);
 
   const nav = [
     { label: 'Overview', icon: Gauge, target: 'dashboard' as View },
-    { label: 'Switching', icon: Network, target: 'ports' as View },
-    { label: 'Operations', icon: Activity, target: 'safe-apply' as View },
+    { label: 'Switching', icon: Network, target: 'switching-overview' as View },
+    { label: 'Operations', icon: Activity, target: 'diagnostics-hub' as View },
     { label: 'Evidence', icon: FileClock, target: 'evidence' as View },
     { label: 'System', icon: Settings, target: 'responsive' as View },
+  ];
+  const switchingNav: Array<{ label: string; target: View }> = [
+    { label: 'Bridges', target: 'bridges' },
+    { label: 'Ports', target: 'ports' },
+    { label: 'VLAN', target: 'ports' },
+    { label: 'Bond / LACP', target: 'bonds' },
+    { label: 'STP / RSTP', target: 'bridge-detail' },
+    { label: 'OpenFlow', target: 'openflow-viewer' },
   ];
   const common = { state: control, mode, act, go };
   const refreshInventory = () => {
@@ -970,11 +1184,28 @@ export default function Home() {
     setToast('Synthetic inventory refreshed. Transaction state retained.');
   };
   let content: ReactNode;
-  if (view === 'dashboard')
+  if (isP1View(view))
+    content = (
+      <P1Surface
+        view={view}
+        mode={mode}
+        scenario={control.scenario}
+        controller={p1}
+        go={go}
+        notify={setToast}
+      />
+    );
+  else if (view === 'dashboard')
     content = (
       <Dashboard
         state={control}
         go={go}
+        onDiagnose={() =>
+          p1.openDiagnostics(
+            'Port/bond-storage',
+            'System Health / member degradation',
+          )
+        }
         openPort={(name) => {
           selectPort(name);
           go('port-detail');
@@ -1002,6 +1233,7 @@ export default function Home() {
         generation={control.generation}
         mode={mode}
         go={go}
+        onDiagnose={() => p1.openDiagnostics(`Port/${port.name}`)}
       />
     );
   else if (view === 'vlan-edit')
@@ -1078,12 +1310,22 @@ export default function Home() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => go(locked ? 'safe-apply' : 'evidence')}
+              onClick={() =>
+                go(
+                  locked
+                    ? 'safe-apply'
+                    : p1.jobState !== 'not-started'
+                      ? 'diagnostic-run'
+                      : 'diagnostics-hub',
+                )
+              }
             >
               <Clock3 />
               <span className="hidden sm:inline">Jobs</span>
               <span className="sr-only sm:hidden">Jobs</span>
-              {locked ? ' · 1' : ''}
+              {locked || p1.busy
+                ? ` · ${Number(locked) + Number(p1.busy)}`
+                : ''}
             </Button>
             <Button size="sm" onClick={() => go('workspace')}>
               <GitCompareArrows />
@@ -1143,7 +1385,7 @@ export default function Home() {
           aria-label="Compact navigation"
           className="grid grid-cols-2 gap-2 border-b bg-card p-3 lg:hidden"
         >
-          {nav.map((item) => (
+          {[...nav, ...switchingNav].map((item) => (
             <Button
               key={item.label}
               variant="ghost"
@@ -1160,8 +1402,18 @@ export default function Home() {
             {nav.map(({ label, icon: Icon, target }) => {
               const active =
                 target === view ||
-                (target === 'ports' &&
-                  ['port-detail', 'vlan-edit'].includes(view));
+                (target === 'switching-overview' &&
+                  [
+                    'ports',
+                    'port-detail',
+                    'vlan-edit',
+                    'bridges',
+                    'bridge-detail',
+                    'bonds',
+                    'bond-detail',
+                    'bond-edit',
+                    'openflow-viewer',
+                  ].includes(view));
               return (
                 <button
                   key={label}
@@ -1179,31 +1431,17 @@ export default function Home() {
             <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Switching
             </p>
-            {['Bridges', 'Ports', 'VLAN', 'Bond / LACP', 'STP / RSTP'].map(
-              (label) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    if (label === 'Ports') go('ports');
-                    else
-                      setToast(
-                        `${label} retains its approved IA position; its dedicated page is outside the P0 repository snapshot.`,
-                      );
-                  }}
-                  aria-current={
-                    label === 'Ports' && view === 'ports' ? 'page' : undefined
-                  }
-                  className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm ${label === 'Ports' && view === 'ports' ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-card'}`}
-                >
-                  <span>{label}</span>
-                  {label === 'Ports' ? (
-                    <ChevronRight className="size-4" />
-                  ) : (
-                    <span className="text-xs">P1</span>
-                  )}
-                </button>
-              ),
-            )}
+            {switchingNav.map(({ label, target }) => (
+              <button
+                key={label}
+                onClick={() => go(target)}
+                aria-current={target === view ? 'page' : undefined}
+                className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm ${target === view ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-card'}`}
+              >
+                <span>{label}</span>
+                <ChevronRight className="size-4" />
+              </button>
+            ))}
           </div>
           <div className="mt-8 border-t px-3 pt-4">
             <p className="text-xs font-medium text-muted-foreground">
@@ -1243,12 +1481,16 @@ export default function Home() {
             </div>
             {!['safe-apply', 'evidence'].includes(view) && (
               <div className="md:hidden">
-                <MobilePanel state={control} go={go} />
+                {isP1View(view) && control.scenario !== 'permission-denied' ? (
+                  <P1MobileSummary view={view} controller={p1} go={go} />
+                ) : (
+                  <MobilePanel state={control} go={go} />
+                )}
               </div>
             )}
             <details className="mt-8 border-t pt-3">
               <summary className="cursor-pointer text-xs text-muted-foreground">
-                P0 review path · Design System v0.1
+                P0 + P1 review paths · Design System v0.1
               </summary>
               <P0Stepper view={view} go={go} />
             </details>
@@ -1257,7 +1499,7 @@ export default function Home() {
                 OVS 3.4.1 · schema 8.3.1 · fixture generation{' '}
                 {control.generation}
               </span>
-              <span>Ports / DS v0.1 · review draft</span>
+              <span>Integrated prototype · DS v0.1</span>
             </footer>
           </div>
         </section>

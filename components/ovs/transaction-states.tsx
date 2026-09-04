@@ -16,6 +16,8 @@ import {
 import { Notice, StatusBadge } from './foundation';
 import {
   conflictCurrent,
+  candidateName,
+  candidateObject,
   remainingSeconds,
   type ApplyState,
   type Candidate,
@@ -53,10 +55,12 @@ export function CandidateChangeCard({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
         <div>
           <p className="font-mono text-sm font-semibold">
-            Port / {candidate.port.name}
+            {candidateObject(candidate)}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            VLAN configuration
+            {candidate.kind === 'vlan'
+              ? 'VLAN configuration'
+              : candidate.intent.title}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -73,7 +77,11 @@ export function CandidateChangeCard({
           <p className="text-xs text-muted-foreground">
             Base · generation {candidate.baseGeneration}
           </p>
-          <p className="mt-2 text-sm">{vlanLabel(candidate.base)}</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm">
+            {candidate.kind === 'vlan'
+              ? vlanLabel(candidate.base)
+              : candidate.intent.current}
+          </p>
         </div>
         <GitCompareArrows
           aria-hidden="true"
@@ -83,24 +91,30 @@ export function CandidateChangeCard({
           <p className="text-xs text-muted-foreground">
             Your change · revision {candidate.revision}
           </p>
-          <p className="mt-2 text-sm font-medium text-primary">
-            {vlanLabel(candidate.mine)}
+          <p className="mt-2 whitespace-pre-wrap text-sm font-medium text-primary">
+            {candidate.kind === 'vlan'
+              ? vlanLabel(candidate.mine)
+              : candidate.intent.candidate}
           </p>
         </div>
       </div>
       {mode === 'expert' && (
         <details className="border-t p-5 text-sm">
           <summary className="cursor-pointer font-medium">
-            OVS native mapping
+            {candidate.kind === 'vlan'
+              ? 'OVS native mapping'
+              : 'Native intent preview · prototype'}
           </summary>
           <pre className="mt-3 overflow-auto rounded border bg-muted p-3 font-mono text-xs">
-            {JSON.stringify(
-              {
-                Port: nativeVlanFields(candidate.mine),
-              },
-              null,
-              2,
-            )}
+            {candidate.kind === 'vlan'
+              ? JSON.stringify(
+                  {
+                    Port: nativeVlanFields(candidate.mine),
+                  },
+                  null,
+                  2,
+                )
+              : candidate.intent.candidate}
           </pre>
           <p className="mt-2 text-xs text-muted-foreground">
             Identity and opaque provider fields are retained. This is a mapping
@@ -123,6 +137,29 @@ export function ConflictViewer({
   onChoose: (choice: 'current' | 'mine') => void;
   onCancel: () => void;
 }) {
+  if (candidate.kind !== 'vlan')
+    return (
+      <Notice
+        tone="danger"
+        title="Fresh native snapshot required"
+        urgent
+        actions={
+          <>
+            <Button variant="outline" onClick={() => onChoose('current')}>
+              Keep current system configuration
+            </Button>
+            <Button variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        {candidateObject(candidate)} has a conflicting native change. The
+        prototype has no authoritative three-way Bridge/Bond snapshot. Retaining
+        your value requires a fresh backend snapshot; no force overwrite is
+        available.
+      </Notice>
+    );
   return (
     <section
       aria-label="Three-way candidate conflict"
@@ -204,7 +241,7 @@ export function GenerationWarning({
       {kind === 'stale' ? (
         <>
           Base generation {base} · current generation {current}. The fixture
-          changed MTU 1500 → 9000; your VLAN intent does not overlap. Rebase
+          changed MTU 1500 → 9000; the reviewed intent does not overlap. Rebase
           preserves that external change and requires fresh validation.
         </>
       ) : (
@@ -357,7 +394,7 @@ export function TransactionBanner({
       <div className="flex flex-wrap items-center gap-2">
         <ShieldCheck aria-hidden="true" className="size-4" />
         <strong>{outcomeLabels[status]}</strong>
-        <span>· {state.transaction.snapshot?.port.name}</span>
+        <span>· {candidateName(state.transaction.snapshot)}</span>
         {status === 'countdown' && (
           <span className="inline-flex items-center gap-1 font-mono">
             <Clock3 aria-hidden="true" className="size-4" />

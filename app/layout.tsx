@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OVS WebUI · Design System v0.1',
+  title: 'OVS WebUI · Integrated Prototype v0.1',
   description:
-    'Ports and shared change-control components, built on the frozen OVS WebUI P0 prototype.',
+    'Switching, bounded diagnostics and read-only OpenFlow with shared Candidate, validation and Safe Apply workflows.',
 };
 
 export default function RootLayout({

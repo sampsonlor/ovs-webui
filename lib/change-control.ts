@@ -1,4 +1,5 @@
 import type { Port, VlanValue } from './ovs-model';
+import type { ChangeIntent } from '../app/prototype-model';
 
 export const scenarioLabels = {
   normal: 'Normal path',
@@ -15,6 +16,10 @@ export const scenarioLabels = {
   'outcome-unknown': 'Outcome unknown',
   'network-loss': 'Network loss',
   'rollback-conflict': 'Rollback conflict',
+  'member-down': 'Bond member down',
+  'lacp-mismatch': 'LACP mismatch',
+  'provider-degraded': 'P1 provider degraded',
+  'advanced-config': 'Advanced native configuration',
 } as const;
 export type Scenario = keyof typeof scenarioLabels;
 export type ApplyState =
@@ -33,13 +38,46 @@ export type ReconciliationResult =
   | 'not-applied'
   | 'degraded'
   | 'needs-attention';
-export type Candidate = {
+export type VlanCandidate = {
+  kind: 'vlan';
   port: Port;
   base: VlanValue;
   mine: VlanValue;
   baseGeneration: number;
   revision: number;
 };
+export type TopologyCandidate = {
+  kind: 'bridge' | 'bond';
+  intent: ChangeIntent;
+  baseGeneration: number;
+  revision: number;
+};
+export type Candidate = VlanCandidate | TopologyCandidate;
+
+export function candidateName(candidate: Candidate | null): string {
+  return !candidate
+    ? '—'
+    : candidate.kind === 'vlan'
+      ? candidate.port.name
+      : candidate.intent.objectName;
+}
+export function candidateObject(candidate: Candidate | null): string {
+  return !candidate
+    ? 'Workspace/ws-183'
+    : candidate.kind === 'vlan'
+      ? `Port/${candidate.port.name}`
+      : candidate.intent.evidenceObject;
+}
+export function candidateBridge(candidate: Candidate | null): string {
+  return !candidate
+    ? '—'
+    : candidate.kind === 'vlan'
+      ? candidate.port.bridge
+      : (candidate.intent.bridgeName ??
+        (candidate.kind === 'bridge'
+          ? candidate.intent.objectName
+          : 'See native intent'));
+}
 export type EvidenceEntry = {
   at: number;
   kind: 'Audit' | 'Event' | 'Job' | 'Health';
@@ -90,6 +128,20 @@ export const initialControlState: ControlState = {
 
 export type ControlAction =
   | { type: 'scenario'; scenario: Scenario; now: number }
+  | {
+      type: 'stage-topology';
+      intent: ChangeIntent;
+      desktop: boolean;
+      now: number;
+    }
+  | {
+      type: 'record-evidence';
+      kind: EvidenceEntry['kind'];
+      text: string;
+      object: string;
+      correlation: string;
+      now: number;
+    }
   | {
       type: 'stage';
       port: Port;
@@ -170,7 +222,7 @@ export function sameVlan(a: VlanValue, b: VlanValue): boolean {
   return a.mode === b.mode && a.tag === b.tag && expand(a) === expand(b);
 }
 
-export function conflictCurrent(candidate: Candidate): VlanValue {
+export function conflictCurrent(candidate: VlanCandidate): VlanValue {
   return {
     mode: 'access',
     tag: candidate.base.tag === 130 ? 140 : 130,
@@ -186,7 +238,9 @@ export function validationBlock(state: ControlState): string | null {
     return `Resolve ${scenarioLabels[state.scenario].toLowerCase()} before validation.`;
   if (state.candidate.baseGeneration !== state.generation)
     return 'The candidate base generation is stale.';
-  return validateVlan(state.candidate.mine);
+  return state.candidate.kind === 'vlan'
+    ? validateVlan(state.candidate.mine)
+    : null;
 }
 
 export function applyBlock(state: ControlState): string | null {
@@ -221,7 +275,7 @@ function log(
         at: now,
         kind,
         text,
-        object: candidate ? `Port/${candidate.port.name}` : 'Workspace/ws-183',
+        object: candidateObject(candidate),
         correlation: state.transaction.id
           ? state.transaction.correlation
           : 'workspace/ws-183',
@@ -277,6 +331,85 @@ export function transition(
   action: ControlAction,
 ): ControlState {
   switch (action.type) {
+    case 'record-evidence':
+      return {
+        ...state,
+        evidence: [
+          ...state.evidence,
+          {
+            at: action.now,
+            kind: action.kind,
+            text: action.text,
+            object: action.object,
+            correlation: action.correlation,
+          },
+        ],
+      };
+    case 'stage-topology': {
+      if (!action.desktop)
+        return reject(state, 'New configuration intent requires desktop.');
+      if (transactionLocked(state.transaction.status))
+        return reject(
+          state,
+          'An active transaction owns this workspace. Resolve it first.',
+        );
+      if (
+        [
+          'permission-denied',
+          'provider-unavailable',
+          'provider-degraded',
+          'error',
+          'network-loss',
+        ].includes(state.scenario)
+      )
+        return reject(
+          state,
+          'Current authority or connectivity is unavailable.',
+        );
+      const intent = action.intent;
+      if (
+        !['bridge', 'bond'].includes(intent.kind) ||
+        intent.objectType !== (intent.kind === 'bridge' ? 'Bridge' : 'Port') ||
+        !/^[A-Za-z0-9_.-]{1,63}$/.test(intent.objectName) ||
+        intent.evidenceObject !== `${intent.objectType}/${intent.objectName}` ||
+        !intent.current.trim() ||
+        !intent.candidate.trim() ||
+        intent.current === intent.candidate
+      )
+        return reject(state, 'Invalid Bridge or Bond prototype intent.');
+      if (
+        intent.objectName === 'bond-provider' ||
+        intent.objectName === 'br-offload' ||
+        intent.bridgeName === 'br-offload'
+      )
+        return reject(state, 'This object is Observe-only.');
+      if (
+        state.candidate &&
+        (state.candidate.kind !== intent.kind ||
+          candidateName(state.candidate) !== intent.objectName)
+      )
+        return reject(
+          state,
+          'Review or discard the existing change before staging another object.',
+        );
+      const candidate: TopologyCandidate = {
+        kind: intent.kind as 'bridge' | 'bond',
+        intent: structuredClone(intent),
+        baseGeneration: state.candidate?.baseGeneration ?? state.generation,
+        revision: (state.candidate?.revision ?? 0) + 1,
+      };
+      return log(
+        {
+          ...state,
+          candidate,
+          validatedRevision: null,
+          transaction: { ...initialControlState.transaction },
+        },
+        action.now,
+        'Audit',
+        `Staged ${intent.kind} intent for ${intent.objectName}. Running configuration is unchanged.`,
+      );
+    }
     case 'note':
       return { ...state, note: action.note, error: null };
     case 'scenario': {
@@ -321,18 +454,23 @@ export function transition(
         return reject(state, 'This port is Observe-only.');
       const invalid = validateVlan(action.mine);
       if (invalid) return reject(state, invalid);
-      if (state.candidate && state.candidate.port.name !== action.port.name)
+      if (
+        state.candidate &&
+        (state.candidate.kind !== 'vlan' ||
+          state.candidate.port.name !== action.port.name)
+      )
         return reject(
           state,
           'This P0 workspace supports one intent. Review or discard the existing change first.',
         );
       const base =
-        state.candidate?.base ??
+        (state.candidate?.kind === 'vlan' ? state.candidate.base : undefined) ??
         state.live[action.port.name] ??
         action.port.config;
       if (sameVlan(base, action.mine))
         return reject(state, 'No VLAN changes to stage.');
-      const candidate = {
+      const candidate: VlanCandidate = {
+        kind: 'vlan',
         port: action.port,
         base,
         mine: action.mine,
@@ -383,6 +521,35 @@ export function transition(
       if (state.scenario === 'stale' && action.choice !== 'non-overlapping')
         return reject(state, 'Review the non-overlapping generation change.');
       const generation = state.generation + 1;
+      if (state.candidate.kind !== 'vlan') {
+        if (state.scenario === 'conflict' && action.choice !== 'current')
+          return reject(
+            state,
+            'A fresh native Bridge/Bond snapshot is required. No force overwrite is available.',
+          );
+        const candidate =
+          action.choice === 'current'
+            ? null
+            : {
+                ...state.candidate,
+                baseGeneration: generation,
+                revision: state.candidate.revision + 1,
+              };
+        return log(
+          {
+            ...state,
+            candidate,
+            generation,
+            scenario: 'normal',
+            validatedRevision: null,
+          },
+          action.now,
+          'Audit',
+          candidate
+            ? 'Non-overlapping topology intent rebased. Validate again before applying.'
+            : 'Kept current native configuration; candidate intent removed.',
+        );
+      }
       const base =
         state.scenario === 'conflict'
           ? conflictCurrent(state.candidate)
@@ -466,7 +633,10 @@ export function transition(
           candidate: null,
           generation: state.generation + 1,
           validatedRevision: null,
-          live: { ...state.live, [candidate.port.name]: candidate.mine },
+          live:
+            candidate.kind === 'vlan'
+              ? { ...state.live, [candidate.port.name]: candidate.mine }
+              : state.live,
           transaction: {
             ...state.transaction,
             status: 'confirmed',
@@ -546,9 +716,10 @@ export function transition(
           validatedRevision: null,
           candidate: applied ? null : state.candidate,
           generation: applied ? state.generation + 1 : state.generation,
-          live: applied
-            ? { ...state.live, [candidate.port.name]: candidate.mine }
-            : state.live,
+          live:
+            applied && candidate.kind === 'vlan'
+              ? { ...state.live, [candidate.port.name]: candidate.mine }
+              : state.live,
           transaction: {
             ...state.transaction,
             status: action.result,

@@ -30,6 +30,9 @@ import {
 } from './transaction-states';
 import {
   applyBlock,
+  candidateName,
+  candidateObject,
+  candidateBridge,
   validationBlock,
   remainingSeconds,
   transactionLocked,
@@ -65,7 +68,7 @@ export function ScenarioBanner({ state, act, go }: Omit<Props, 'mode'>) {
   const messages: Partial<Record<Scenario, [string, string]>> = {
     conflict: [
       'Candidate conflict',
-      'An external change overlaps the candidate VLAN field. Review all three values in Changes.',
+      'An external change overlaps a candidate field. Review the conflict and available native evidence in Changes.',
     ],
     stale: [
       'Candidate needs a newer base',
@@ -90,6 +93,22 @@ export function ScenarioBanner({ state, act, go }: Omit<Props, 'mode'>) {
     'rollback-conflict': [
       'Compare-before-rollback fixture',
       'An external writer changed a touched field. Rollback must stop without overwriting that value.',
+    ],
+    'member-down': [
+      'Bond member degraded',
+      'Read member health and repair redundancy before validating a new configuration.',
+    ],
+    'lacp-mismatch': [
+      'LACP policy mismatch',
+      'Review peer and local LACP settings. Expert mode does not bypass validation.',
+    ],
+    'provider-degraded': [
+      'Partial provider data',
+      'Known inventory remains available; missing native state blocks new configuration.',
+    ],
+    'advanced-config': [
+      'Advanced native configuration',
+      'Review preserved native fields in Expert mode. Return to a current, healthy observation before validation.',
     ],
   };
   const item = messages[scenario];
@@ -328,8 +347,8 @@ export function DiffPage({ state, mode, act, go }: Props) {
                   ['Strategy', 'Safe Apply'],
                   ['Confirmation window', '90 seconds'],
                   ['Fallback', 'Compare before rollback'],
-                  ['Affected object', candidate.port.name],
-                  ['Bridge', candidate.port.bridge],
+                  ['Affected object', candidateObject(candidate)],
+                  ['Bridge', candidateBridge(candidate)],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">{label}</dt>
@@ -387,12 +406,13 @@ export function DiffPage({ state, mode, act, go }: Props) {
           <Notice
             tone="warning"
             title={
-              candidate?.port.name === 'mgmt0'
+              candidateName(candidate) === 'mgmt0' ||
+              candidateBridge(candidate) === 'br-mgmt'
                 ? 'Management path change'
                 : 'Connectivity may be affected'
             }
           >
-            {candidate?.port.name} · {candidate?.port.bridge}
+            {candidateName(candidate)} · {candidateBridge(candidate)}
           </Notice>
           <ul className="space-y-3 text-sm">
             {[
@@ -492,7 +512,7 @@ export function SafeApply({
         <>
           <div className="my-5 flex flex-wrap items-center gap-3 text-sm">
             <span className="font-mono">{transaction.id}</span>
-            <span>Port / {transaction.snapshot?.port.name}</span>
+            <span>{candidateObject(transaction.snapshot)}</span>
             <span className="text-muted-foreground">
               {transaction.correlation}
             </span>
@@ -509,7 +529,7 @@ export function SafeApply({
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     Check the management session and traffic on{' '}
-                    {transaction.snapshot?.port.name}.
+                    {candidateName(transaction.snapshot)}.
                   </p>
                 </div>
                 <RollbackTimer seconds={seconds} />

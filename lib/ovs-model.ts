@@ -1,3 +1,5 @@
+import type { P1View } from '../app/prototype-model';
+
 export type Mode = 'standard' | 'expert';
 export type View =
   | 'dashboard'
@@ -8,7 +10,8 @@ export type View =
   | 'diff'
   | 'safe-apply'
   | 'evidence'
-  | 'responsive';
+  | 'responsive'
+  | P1View;
 export type VlanMode = 'access' | 'trunk' | 'native-tagged';
 export type VlanValue = { mode: VlanMode; tag: number | null; trunks: string };
 export type Port = {
