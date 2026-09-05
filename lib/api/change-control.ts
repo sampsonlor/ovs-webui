@@ -6,8 +6,8 @@ import type {
 } from './types.generated';
 
 // Integration boundary only. The current UI still uses its explicit prototype
-// reducer. A future HTTP adapter must validate JSON against the OpenAPI schemas
-// and bind this gateway to the authenticated node; it must not auto-retry writes.
+// reducer. CoreHttpClient implements this gateway with required schema validation
+// and a configured node/session boundary; it never auto-retries writes.
 export interface ChangeControlGateway {
   startSafeApply(
     command: StartSafeApplyRequest,

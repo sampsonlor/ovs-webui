@@ -1582,6 +1582,12 @@
           "id": {
             "$ref": "#/components/schemas/Id"
           },
+          "nodeId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/Id"
+          },
           "jobId": {
             "$ref": "#/components/schemas/Id"
           },
@@ -1643,6 +1649,8 @@
         },
         "required": [
           "id",
+          "nodeId",
+          "requestId",
           "jobId",
           "candidateId",
           "candidateRevision",
@@ -2237,6 +2245,16 @@
           "candidate": {
             "$ref": "#/components/schemas/CandidateResource"
           },
+          "latestValidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationResource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "activeTransactions": {
             "type": "array",
             "items": {
@@ -2277,6 +2295,7 @@
           "nodeId",
           "serverTime",
           "candidate",
+          "latestValidation",
           "activeTransactions",
           "pendingRequests",
           "nodeWriteBlocked",

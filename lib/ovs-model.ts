@@ -24,7 +24,7 @@ export type Port = {
   interfaceName: string;
   members?: string[];
   provider: string;
-  authority: 'OVS' | 'External';
+  authority: 'OVS' | 'External' | 'Unknown';
   scope: 'Manage' | 'Basic Manage' | 'Observe';
   uuid: string;
 };

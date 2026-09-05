@@ -133,6 +133,8 @@ export const conflictCandidate = {
 };
 export const validation = {
   id: 'validation-001',
+  nodeId: candidate.nodeId,
+  requestId: 'request-validation-001',
   jobId: 'job-validation-001',
   candidateId: candidate.id,
   candidateRevision: candidate.revision,
@@ -160,6 +162,7 @@ export const validation = {
 export const workspace = {
   nodeId: provisional.nodeId,
   serverTime: at,
+  latestValidation: null,
   candidate: { ...candidate, lockedByTransactionId: provisional.id },
   activeTransactions: [provisional],
   pendingRequests: [requestRecord],

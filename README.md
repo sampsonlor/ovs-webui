@@ -79,8 +79,37 @@ pnpm build
 The current Design System and P0 workflow have state-level checks and a draft
 Ports/VLAN API contract. See [the contract guide](docs/contracts/CORE_API_CONTRACT_v0.1.md)
 and [acceptance scope](docs/reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md).
-The UI continues to use synthetic session state; these interfaces do not enable
-real switch operations or server persistence.
+The default UI uses synthetic session state. The opt-in local persistence lab
+connects Ports, Candidate and server Diff/Validation to a disk-backed development service; no OVS write
+or live transaction execution is enabled.
+
+The integration branch includes the [core HTTP adapter](docs/contracts/HTTP_ADAPTER_v0.1.md)
+for Ports, Candidate and original-request recovery. It requires an authenticated
+same-origin service and contract validator. The lab supplies a development-only
+session provider and the generated runtime validator; production identity remains
+a separate integration gate.
+
+### Local Candidate persistence lab
+
+```bash
+pnpm dev:lab --port 3001
+```
+
+Use Editor A or Editor B to stage a VLAN change, then refresh or restart the
+service to restore that user's Candidate. Read-only cannot stage. The observation
+selector exercises stale/conflicting snapshots, provider loss and a node lock.
+In Changes / Diff, run server validation and review its captured diff, checks and
+job. Results survive restarts and expire when the Candidate, generation or policy
+changes. Safety capabilities default to unavailable; the explicit synthetic
+available fixture supports the passed review path without enabling Safe Apply.
+Data is stored in ignored `.ovs-lab/state.sqlite`, relative to this checkout.
+The lab uses Node's SQLite support (Node 22.13+; verified on Node 24), binds to
+loopback, and is absent from the hosted production build.
+
+See [the local integration guide](docs/contracts/LOCAL_PERSISTENCE_v0.1.md) for
+review steps, automatic checks and the remaining backend scope.
+See [server validation review](docs/contracts/LOCAL_VALIDATION_v0.1.md) for
+expiry, permission changes, request recovery and safety prerequisites.
 
 ```bash
 pnpm test
@@ -91,6 +120,17 @@ pnpm contracts:check
 Edit `contracts/core-v0.1.mjs`, then regenerate the OpenAPI document and TypeScript
 types. The test command rejects stale generated files and checks response fixtures,
 lost acknowledgements, safe confirmation, rollback conflicts and out-of-order reads.
+
+## GitHub CI and isolated testing
+
+Pull requests and main updates run the pinned toolchain, contract checks, product
+lint, TypeScript, regression tests, process-recovery integration tests and production
+build. `CI Gate` requires both jobs to succeed. JUnit reports are retained for 7 days.
+The `ci-integration` environment uses disposable Linux runners and per-test SQLite
+databases; it has no production credentials or real OVS executor.
+
+See [the GitHub CI guide](docs/contracts/GITHUB_CI_v0.1.md) for local commands,
+lint scope, environment isolation and remaining Staging/browser/provider gates.
 
 ## Safety and scope
 

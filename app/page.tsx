@@ -60,6 +60,14 @@ import {
   representativeBondIntent,
   runnableDiagnostics,
 } from '@/lib/p1-control';
+import { useCoreLab } from '@/hooks/use-core-lab';
+import {
+  CoreLabSession,
+  CoreLabSurface,
+  coreLabViews,
+} from '@/components/ovs/core-lab-surface';
+
+declare const __OVS_CORE_LAB__: boolean;
 
 import { PortsPage } from '@/components/ovs/ports-page';
 import {
@@ -677,7 +685,9 @@ function P0Stepper({ view, go }: { view: View; go: (view: View) => void }) {
 }
 
 export default function Home() {
+  const labEnabled = __OVS_CORE_LAB__;
   const [view, setView] = useState<View>('ports');
+  const lab = useCoreLab(labEnabled, view !== 'vlan-edit');
   const [mode, setMode] = useState<Mode>('standard');
   const [selectedPort, setSelectedPort] = useState('server-07');
   const [search, setSearch] = useState('');
@@ -698,6 +708,12 @@ export default function Home() {
   }, [view, mode]);
 
   const act = (action: ControlAction) => {
+    if (labEnabled && !['note', 'record-evidence'].includes(action.type)) {
+      const error =
+        'Local integration uses the saved server Candidate. Open Ports or Changes; other configuration APIs are not connected yet.';
+      setToast(error);
+      return { ...controlRef.current, error };
+    }
     if ('now' in action) setCurrentTime(action.now);
     const next = transition(controlRef.current, action);
     if (next !== controlRef.current) {
@@ -789,6 +805,7 @@ export default function Home() {
     interactionRef.current = { act, go, p1 };
   });
   useEffect(() => {
+    if (labEnabled) return;
     const context = (document as WebMcpDocument).modelContext;
     if (!context?.registerTool) return;
     const lifecycle = new AbortController();
@@ -1152,7 +1169,7 @@ export default function Home() {
       },
     });
     return () => lifecycle.abort();
-  }, []);
+  }, [labEnabled]);
 
   const nav = [
     { label: 'Overview', icon: Gauge, target: 'dashboard' as View },
@@ -1184,7 +1201,18 @@ export default function Home() {
     setToast('Synthetic inventory refreshed. Transaction state retained.');
   };
   let content: ReactNode;
-  if (isP1View(view))
+  if (labEnabled && coreLabViews.includes(view))
+    content = (
+      <CoreLabSurface
+        connection={lab}
+        view={view}
+        mode={mode}
+        selected={selectedPort}
+        setSelected={selectPort}
+        go={go}
+      />
+    );
+  else if (isP1View(view))
     content = (
       <P1Surface
         view={view}
@@ -1329,7 +1357,12 @@ export default function Home() {
             </Button>
             <Button size="sm" onClick={() => go('workspace')}>
               <GitCompareArrows />
-              Changes · {control.candidate ? 1 : 0}
+              Changes ·{' '}
+              {labEnabled
+                ? (lab.state.snapshot?.candidate.intents.length ?? '—')
+                : control.candidate
+                  ? 1
+                  : 0}
             </Button>
           </div>
           <div
@@ -1354,14 +1387,20 @@ export default function Home() {
           onOpen={() => go('safe-apply')}
         />
       </header>
+      {labEnabled && <CoreLabSession connection={lab} />}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/60 px-4 py-2 lg:px-6">
         <p className="text-xs text-muted-foreground">
-          Prototype · synthetic data · session resets on reload
+          {labEnabled
+            ? coreLabViews.includes(view)
+              ? 'Ports / Candidate integration · synthetic inventory · durable local storage'
+              : 'P1 review fixtures · configuration uses the connected Ports / Candidate workflow'
+            : 'Prototype · synthetic data · session resets on reload'}
         </p>
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           Review state
           <NativeSelect
             aria-label="Review state"
+            disabled={labEnabled}
             size="sm"
             value={control.scenario}
             onChange={(event) =>
@@ -1465,29 +1504,32 @@ export default function Home() {
         >
           <div className="mx-auto max-w-[1480px]">
             <ScenarioBanner state={control} act={act} go={go} />
-            {control.error && (
+            {!labEnabled && control.error && (
               <Notice tone="danger" title="Action unavailable" urgent>
                 {control.error}
               </Notice>
             )}
             <div
               className={
-                ['safe-apply', 'evidence'].includes(view)
+                ['safe-apply', 'evidence'].includes(view) ||
+                (labEnabled && coreLabViews.includes(view))
                   ? ''
                   : 'hidden md:block'
               }
             >
               {content}
             </div>
-            {!['safe-apply', 'evidence'].includes(view) && (
-              <div className="md:hidden">
-                {isP1View(view) && control.scenario !== 'permission-denied' ? (
-                  <P1MobileSummary view={view} controller={p1} go={go} />
-                ) : (
-                  <MobilePanel state={control} go={go} />
-                )}
-              </div>
-            )}
+            {!['safe-apply', 'evidence'].includes(view) &&
+              !(labEnabled && coreLabViews.includes(view)) && (
+                <div className="md:hidden">
+                  {isP1View(view) &&
+                  control.scenario !== 'permission-denied' ? (
+                    <P1MobileSummary view={view} controller={p1} go={go} />
+                  ) : (
+                    <MobilePanel state={control} go={go} />
+                  )}
+                </div>
+              )}
             <details className="mt-8 border-t pt-3">
               <summary className="cursor-pointer text-xs text-muted-foreground">
                 P0 + P1 review paths · Design System v0.1

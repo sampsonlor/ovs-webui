@@ -4,7 +4,7 @@
 
 本轮把已有 Ports → VLAN → Candidate → Validate → Safe Apply → Evidence 链路转成可验证的接口约定。页面布局、按钮、图标和 IA 沿用 Design System v0.1；后端返回的状态仍使用现有 Conflict、OutcomeUnknown、Stale、Drift 和 Safe Apply 组件表达。
 
-当前应用仍是合成数据原型。以下接口、持久化、鉴权和真实 OVS 操作尚未接入。新增的恢复与状态映射代码是可测试的接入边界，不是已运行的后端。
+当前应用使用合成数据。显式本地联调模式已接入 Ports、持久化 Candidate、Diff/Validation、Job 和请求账本；普通原型模式保持原有演示。生产鉴权与真实 OVS 操作尚未接入，详见 [本地持久化](LOCAL_PERSISTENCE_v0.1.md) 和 [验证联调](LOCAL_VALIDATION_v0.1.md)。
 
 ## 范围与依据
 
@@ -69,6 +69,8 @@ POST 返回 202 表示接受异步工作，前端随后读对应资源。验证 
 ## Validation 与 Apply 入场检查
 
 Validation 绑定 Candidate ID/revision、配置 generation、策略 revision 和过期时间；返回规范化 diff、逐项检查与 SafetyPlan。SafetyPlan 的 available 表示资源准备条件可满足，不表示真实 checkpoint 已经创建或探测已通过。
+
+Validation 的 `nodeId` / `requestId` 必须与原请求相符；`WorkspaceSnapshot.latestValidation` 为当前用户最新验证或 null，供刷新/重新登录恢复。已失效的历史 diff 保留并显示 Expired，不替换为新 Candidate 的内容。验证 Job 的完成与验证是否通过分别呈现。
 
 提交时由服务端重新检查：身份和对象权限、provider/ownership、候选版本、当前 generation、未过期的对应验证、审计原因、必要的再认证、真实 checkpoint/probe/compare-before-rollback 能力。任何过期验证或 unknown/block 检查都不能产生可执行的通过令牌。期间 generation 变化需要重新核对，不能仅靠客户端缓存的绿色状态启动事务。
 
