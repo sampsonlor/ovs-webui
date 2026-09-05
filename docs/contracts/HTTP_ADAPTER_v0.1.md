@@ -1,14 +1,16 @@
 # Core HTTP adapter v0.1
 
 本轮在已合并的 `integrated-prototype-v0.1` 之上实现第一段 HTTP 接口边界，入口为
-`lib/api/http-client.ts`。它可以调用真实的同源应用 API，但当前原型页面尚未启用此连接。
+`lib/api/http-client.ts`。默认原型保持演示模式；`pnpm dev:lab` 已将 Ports / Candidate
+接到本地持久化服务，见 [本地联调说明](LOCAL_PERSISTENCE_v0.1.md)。
 
 ## 已实现
 
 - Workspace 启动读取；Ports 分页、搜索、单对象读取；Candidate 读取及强 ETag 更新。
 - 接受必填 JSON Schema 校验器，每个入站响应和出站命令按现有生成契约校验。
   调用方必须将 schema 名绑定到 `contracts/core-v0.1.mjs` 的对应 schema；不能以
-  TypeScript 强制转换或恒真函数替代运行时校验。生产校验器的构建打包属于接线门禁。
+  TypeScript 强制转换或恒真函数替代运行时校验。已生成不使用运行时 eval 的浏览器
+  校验器，并在本地模式接入。校验器随契约生成和一致性检查更新。
 - 固定同源 `/api/v1`、会话 Cookie、CSRF、`no-store` 和禁止跳转；不接受客户端
   `userId`、Expert 权限、任意 OVS 命令或隐式替换后的 ETag。
 - 校验节点、对象身份和单页 generation 一致性；保留空、部分可用、权限失败和
@@ -27,7 +29,7 @@
 这些测试没有连接真实 OVS，也没有实现或证明用户身份系统、磁盘持久化或服务重启恢复。
 测试服务器和响应仅是合成数据。执行 `pnpm test`、类型检查及构建以复核这一边界。
 
-本切片验证结果：46 项测试通过，TypeScript、范围内 lint 与生产构建通过。
+原 HTTP 切片验证结果为 46 项测试；本地持久化切片的新增验证记录见联调说明。
 
 ## 下一接线门禁
 

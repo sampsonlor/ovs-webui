@@ -11,10 +11,11 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "test:state": "node --experimental-strip-types --test tests/change-control.test.mjs",
-    "test:contracts": "node scripts/generate-core-contract.mjs --check && node --experimental-strip-types --test tests/api-*.test.mjs",
-    "test": "node scripts/generate-core-contract.mjs --check && node --experimental-strip-types --test tests/*.test.mjs",
-    "contracts:generate": "node scripts/generate-core-contract.mjs",
-    "contracts:check": "node scripts/generate-core-contract.mjs --check",
+    "test:contracts": "node scripts/generate-core-contract.mjs --check && node scripts/generate-core-validator.mjs --check && node --experimental-strip-types --test tests/api-*.test.mjs",
+    "test": "node scripts/generate-core-contract.mjs --check && node scripts/generate-core-validator.mjs --check && node --experimental-strip-types --test tests/*.test.mjs",
+    "contracts:generate": "node scripts/generate-core-contract.mjs && node scripts/generate-core-validator.mjs",
+    "contracts:check": "node scripts/generate-core-contract.mjs --check && node scripts/generate-core-validator.mjs --check",
+    "dev:lab": "node --experimental-strip-types scripts/start-core-lab.mjs",
     "format": "oxfmt"
   },
   "dependencies": {

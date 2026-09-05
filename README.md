@@ -79,13 +79,31 @@ pnpm build
 The current Design System and P0 workflow have state-level checks and a draft
 Ports/VLAN API contract. See [the contract guide](docs/contracts/CORE_API_CONTRACT_v0.1.md)
 and [acceptance scope](docs/reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md).
-The UI continues to use synthetic session state; these interfaces do not enable
-real switch operations or server persistence.
+The default UI uses synthetic session state. The opt-in local persistence lab
+connects Ports and Candidate to a disk-backed development service; no OVS write
+or live transaction execution is enabled.
 
 The next integration branch adds the [core HTTP adapter](docs/contracts/HTTP_ADAPTER_v0.1.md)
 for Ports, Candidate and original-request recovery. It requires an authenticated
-same-origin service and contract validator; the prototype UI does not enable a
-live connection by default.
+same-origin service and contract validator. The lab supplies a development-only
+session provider and the generated runtime validator; production identity remains
+a separate integration gate.
+
+### Local Candidate persistence lab
+
+```bash
+pnpm dev:lab --port 3001
+```
+
+Use Editor A or Editor B to stage a VLAN change, then refresh or restart the
+service to restore that user's Candidate. Read-only cannot stage. The observation
+selector exercises stale/conflicting snapshots, provider loss and a node lock.
+Data is stored in ignored `.ovs-lab/state.sqlite`, relative to this checkout.
+The lab uses Node's SQLite support (Node 22.13+; verified on Node 24), binds to
+loopback, and is absent from the hosted production build.
+
+See [the local integration guide](docs/contracts/LOCAL_PERSISTENCE_v0.1.md) for
+review steps, automatic checks and the remaining backend scope.
 
 ```bash
 pnpm test

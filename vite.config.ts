@@ -34,7 +34,11 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
+  const labEnabled = command === 'serve' && process.env.OVS_CORE_LAB === '1';
+  const labPlugin = labEnabled
+    ? (await import('./dev/core-lab-plugin.mjs')).coreLabPlugin()
+    : null;
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
@@ -45,11 +49,16 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
+    define: { __OVS_CORE_LAB__: JSON.stringify(labEnabled) },
     css: { postcss: { plugins: [tailwindcss()] } },
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: {
+      ...(labEnabled ? { host: '127.0.0.1' } : {}),
+      ...(isCodexSeatbeltSandbox
+        ? { watch: { useFsEvents: false, usePolling: true } }
+        : {}),
+    },
     plugins: [
+      ...(labPlugin ? [labPlugin] : []),
       vinext(),
       sites(),
       cloudflare({

@@ -35,6 +35,7 @@ import {
   ports,
   vlanLabel,
   type Mode,
+  type Port,
   type View,
   type VlanValue,
 } from '@/lib/ovs-model';
@@ -49,6 +50,9 @@ export function PortsPage({
   scenario = 'normal',
   onRefresh,
   live = {},
+  inventory = ports,
+  snapshotLabel = 'Snapshot · synthetic inventory',
+  identityLabel = 'Port UUID',
 }: {
   mode: Mode;
   search: string;
@@ -59,6 +63,9 @@ export function PortsPage({
   scenario?: string;
   onRefresh?: () => void;
   live?: Record<string, VlanValue>;
+  inventory?: Port[];
+  snapshotLabel?: string;
+  identityLabel?: string;
 }) {
   const [stateFilter, setStateFilter] = useState('all');
   const [scopeFilter, setScopeFilter] = useState('all');
@@ -68,7 +75,7 @@ export function PortsPage({
     () =>
       scenario === 'empty'
         ? []
-        : ports
+        : inventory
             .map((port) =>
               live[port.name]
                 ? { ...port, vlan: vlanLabel(live[port.name]) }
@@ -82,7 +89,7 @@ export function PortsPage({
                 (stateFilter === 'all' || port.state === stateFilter) &&
                 (scopeFilter === 'all' || port.scope === scopeFilter),
             ),
-    [search, stateFilter, scopeFilter, scenario, live],
+    [search, stateFilter, scopeFilter, scenario, live, inventory],
   );
   const filtered = Boolean(
     search || stateFilter !== 'all' || scopeFilter !== 'all',
@@ -128,23 +135,27 @@ export function PortsPage({
               ? '0'
               : unavailable || scenario === 'loading'
                 ? '—'
-                : ports.length}
+                : inventory.length}
           </strong>{' '}
           ports
         </span>
         {!unavailable && scenario !== 'loading' && scenario !== 'empty' && (
           <>
             <span>
-              <StateDot state="Up" /> 4 up
+              <StateDot state="Up" />{' '}
+              {inventory.filter((port) => port.state === 'Up').length} up
             </span>
             <span>
-              <StateDot state="Down" /> 1 down
+              <StateDot state="Down" />{' '}
+              {inventory.filter((port) => port.state === 'Down').length} down
             </span>
             <span>
-              <StateDot state="Unknown" /> 1 unknown
+              <StateDot state="Unknown" />{' '}
+              {inventory.filter((port) => port.state === 'Unknown').length}{' '}
+              unknown
             </span>
             <span className="ml-auto text-muted-foreground">
-              Snapshot · synthetic inventory
+              {snapshotLabel}
             </span>
           </>
         )}
@@ -315,7 +326,7 @@ export function PortsPage({
                       {mode === 'expert' && (
                         <>
                           <TableHead>Authority / provider</TableHead>
-                          <TableHead>Port UUID</TableHead>
+                          <TableHead>{identityLabel}</TableHead>
                         </>
                       )}
                       <TableHead>
