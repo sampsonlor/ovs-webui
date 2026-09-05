@@ -258,6 +258,7 @@ export type WorkspaceSnapshot = {
   "serverTime": string;
   "candidate": CandidateResource;
   "latestValidation": (ValidationResource) | (null);
+  "latestTransaction"?: (TransactionResource) | (null);
   "activeTransactions": Array<TransactionResource>;
   "pendingRequests": Array<RequestRecord>;
   "nodeWriteBlocked": boolean;

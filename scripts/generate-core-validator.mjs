@@ -14,6 +14,9 @@ const names = [
   'JobResource',
   'StartSafeApplyRequest',
   'TransactionResource',
+  'DecisionRequest',
+  'ReconciliationRequest',
+  'EvidencePage',
   'RequestRecord',
   'Problem',
 ];

@@ -4,8 +4,8 @@ const id = (prefix) => `${prefix}-${randomUUID()}`;
 const terminal = (status) => !['pending', 'running'].includes(status);
 const safetyKeys = ['checkpoint', 'connectivityProbe', 'compareBeforeRollback'];
 
-// Durable, synthetic validation only. No OVS command, checkpoint or rollback
-// executor exists here. Even the available-capabilities fixture cannot apply.
+// Validation performs no configuration write. Safe Apply separately captures its
+// own synthetic checkpoint and rechecks these capabilities at admission and commit.
 export class CoreLabValidation {
   constructor(store, { clock = Date.now } = {}) {
     this.store = store;
@@ -320,7 +320,7 @@ export class CoreLabValidation {
         );
         check(
           'NODE_ADMISSION',
-          !s.meta('nodeBlocked') && !candidate.lockedByTransactionId,
+          !s.transactions.blocked() && !candidate.lockedByTransactionId,
           'No unresolved node operation or Candidate owner may block admission.',
         );
         for (const intent of resource.diff) {
@@ -351,7 +351,7 @@ export class CoreLabValidation {
           checkpoint: safety,
           connectivityProbe: safety,
           compareBeforeRollback: safety,
-          confirmationWindowSeconds: 90,
+          confirmationWindowSeconds: s.transactions.windowSeconds,
           reauthenticationRequired: false,
         };
         for (const key of safetyKeys)
@@ -365,7 +365,7 @@ export class CoreLabValidation {
                   : 'block',
             message:
               safety === 'available'
-                ? `${key}: available in the synthetic review fixture only.`
+                ? `${key}: available for the local synthetic executor.`
                 : `${key}: ${safety}; Safe Apply prerequisites are not satisfied.`,
             portId: null,
           });

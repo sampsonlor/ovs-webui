@@ -80,8 +80,8 @@ The current Design System and P0 workflow have state-level checks and a draft
 Ports/VLAN API contract. See [the contract guide](docs/contracts/CORE_API_CONTRACT_v0.1.md)
 and [acceptance scope](docs/reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md).
 The default UI uses synthetic session state. The opt-in local persistence lab
-connects Ports, Candidate and server Diff/Validation to a disk-backed development service; no OVS write
-or live transaction execution is enabled.
+connects Ports, Candidate, server Diff/Validation and synthetic Safe Apply to a
+disk-backed development service. Real OVS writes remain a separate provider gate.
 
 The integration branch includes the [core HTTP adapter](docs/contracts/HTTP_ADAPTER_v0.1.md)
 for Ports, Candidate and original-request recovery. It requires an authenticated
@@ -101,7 +101,8 @@ selector exercises stale/conflicting snapshots, provider loss and a node lock.
 In Changes / Diff, run server validation and review its captured diff, checks and
 job. Results survive restarts and expire when the Candidate, generation or policy
 changes. Safety capabilities default to unavailable; the explicit synthetic
-available fixture supports the passed review path without enabling Safe Apply.
+available fixture enables a reviewed local Safe Apply with a persisted checkpoint,
+server deadline, confirmation, protected rollback and Event/Audit evidence.
 Data is stored in ignored `.ovs-lab/state.sqlite`, relative to this checkout.
 The lab uses Node's SQLite support (Node 22.13+; verified on Node 24), binds to
 loopback, and is absent from the hosted production build.
@@ -110,6 +111,8 @@ See [the local integration guide](docs/contracts/LOCAL_PERSISTENCE_v0.1.md) for
 review steps, automatic checks and the remaining backend scope.
 See [server validation review](docs/contracts/LOCAL_VALIDATION_v0.1.md) for
 expiry, permission changes, request recovery and safety prerequisites.
+See [Safe Apply review](docs/contracts/LOCAL_SAFE_APPLY_v0.1.md) for confirmation,
+crash recovery, rollback conflicts and the synthetic executor boundary.
 
 ```bash
 pnpm test
@@ -122,6 +125,9 @@ types. The test command rejects stale generated files and checks response fixtur
 lost acknowledgements, safe confirmation, rollback conflicts and out-of-order reads.
 
 ## GitHub CI and isolated testing
+
+Track accepted work and upcoming slices on the public
+[OVS WebUI Phase 1 board](https://github.com/users/sampsonlor/projects/2/views/1).
 
 Pull requests and main updates run the pinned toolchain, contract checks, product
 lint, TypeScript, regression tests, process-recovery integration tests and production

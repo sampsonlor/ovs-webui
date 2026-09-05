@@ -24,8 +24,8 @@ Node 需支持内置 SQLite，项目最低版本为 22.13；本轮使用 Node 24
    Restore provider / permissions / node 恢复观察条件，不撤销外部 VLAN 修改。
 
 页面保存成功只表示 Candidate 写入本地服务。后续已接入的服务端 Diff/Validation 见
-[验证联调](LOCAL_VALIDATION_v0.1.md)。本地模式仍不提供真实 OVS 修改、Safe Apply 调度
-或确认/回滚；联调模式在相应入口明确显示未接入，且禁用原型
+[验证联调](LOCAL_VALIDATION_v0.1.md)，合成 Safe Apply、确认/回滚及证据见
+[Safe Apply 联调](LOCAL_SAFE_APPLY_v0.1.md)。本地模式不修改真实 OVS，且禁用原型
 WebMCP 配置工具，避免服务端 Candidate 与内存模拟事务混用。其他 P1 页面保留演示数据。
 
 ## 实现边界

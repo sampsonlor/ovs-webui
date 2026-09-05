@@ -11,11 +11,13 @@ export function CoreLabValidationPanel({
   mode,
   canValidate,
   onValidate,
+  onSafeApply,
 }: {
   state: WorkspaceState;
   mode: Mode;
   canValidate: boolean;
   onValidate: () => void;
+  onSafeApply: () => void;
 }) {
   const validation = state.workspace?.latestValidation;
   const unavailable = ['error', 'unknown'].includes(state.phase);
@@ -189,11 +191,13 @@ export function CoreLabValidationPanel({
         </>
       )}
       <Notice tone="info" title="Safe Apply prerequisites">
-        This local lab validates synthetic observations. Available safety
-        capabilities in a review fixture do not create a checkpoint or run a
-        probe. Safe Apply remains unavailable until its executor and rollback
-        protection are connected.
+        Validation checks the synthetic safety capabilities. Safe Apply rechecks
+        this snapshot, creates its own checkpoint and starts a server-owned
+        protection window. Passing validation does not apply configuration.
       </Notice>
+      <Button className="mt-4" variant="outline" onClick={onSafeApply}>
+        Review Safe Apply
+      </Button>
       <p className="mt-3 text-sm text-muted-foreground lg:hidden">
         Use desktop to request a new validation. Saved results remain available
         for review here.

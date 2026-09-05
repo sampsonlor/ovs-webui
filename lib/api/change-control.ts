@@ -5,9 +5,9 @@ import type {
   TransactionResource,
 } from './types.generated';
 
-// Integration boundary only. The current UI still uses its explicit prototype
-// reducer. CoreHttpClient implements this gateway with required schema validation
-// and a configured node/session boundary; it never auto-retries writes.
+// The opt-in local lab uses this gateway and recovery protocol. The default
+// prototype retains its explicit reducer. CoreHttpClient validates the node and
+// session boundary and never automatically retries a write.
 export interface ChangeControlGateway {
   startSafeApply(
     command: StartSafeApplyRequest,

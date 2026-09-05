@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { CoreHttpClient } from '../../lib/api/http-client.ts';
 import { validateContract } from '../../lib/api/validator.generated.mjs';
 
-async function environment(t, paused = false) {
+async function environment(t, paused = false, shortWindow = false) {
   const root = resolve(tmpdir());
   const directory = mkdtempSync(join(root, 'ovs-ci-'));
   const children = [];
@@ -42,6 +42,7 @@ async function environment(t, paused = false) {
         '--experimental-strip-types',
         'scripts/start-core-test-server.mjs',
         ...(pause ? ['--pause-validation'] : []),
+        ...(shortWindow ? ['--short-window'] : []),
       ],
       {
         cwd: resolve('.'),
@@ -230,7 +231,7 @@ test(
     );
     assert.equal(
       (await restoredApi.readWorkspace()).permissions.startSafeApply,
-      false,
+      true,
     );
     // A fresh second server/database represents another CI run, not a shared staging database.
     const other = await environment(t);
@@ -238,5 +239,85 @@ test(
     assert.equal((await otherApi.readCandidate()).candidate.intents.length, 0);
     assert.equal(await otherApi.readRequest(requestId), null);
     await env.stop(restarted.child);
+  },
+);
+
+test(
+  'a killed server retains the original Safe Apply deadline and rolls back after restarting without a browser',
+  { timeout: 25_000 },
+  async (t) => {
+    const env = await environment(t, false, true);
+    const identity = await login(env.origin);
+    const api = client(env.origin, identity);
+    const before = await api.readPort('port-2');
+    const candidate = await stage(api);
+    const response = await fetch(`${env.origin}/__ovs_lab/observations`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        Origin: env.origin,
+        Cookie: identity.cookie,
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': identity.session.csrfToken,
+        'X-OVS-Lab-Epoch': identity.session.epoch,
+      },
+      body: JSON.stringify({ scenario: 'safety-available' }),
+    });
+    assert.equal(response.status, 200);
+    const validation = await api.validateCandidate({
+      requestId: randomUUID(),
+      candidateId: candidate.id,
+      expectedCandidateRevision: candidate.revision,
+      expectedGeneration: candidate.currentGeneration,
+    });
+    assert.equal(validation.kind, 'accepted');
+    assert.equal(
+      (await terminalValidation(api, validation.validation.id)).status,
+      'passed',
+    );
+    const command = {
+      requestId: randomUUID(),
+      candidateId: candidate.id,
+      expectedCandidateRevision: candidate.revision,
+      expectedGeneration: candidate.currentGeneration,
+      validationId: validation.validation.id,
+      reason: 'Test server-owned recovery.',
+    };
+    const accepted = await api.startSafeApply(command);
+    assert.equal(accepted.kind, 'accepted');
+    let tx = accepted.transaction;
+    for (let i = 0; i < 40 && tx.safeApply !== 'awaiting-confirmation'; i++) {
+      await delay(50);
+      tx = await api.readTransaction(tx.id);
+    }
+    assert.equal(tx.safeApply, 'awaiting-confirmation');
+    const deadline = tx.confirmationDeadline;
+    await env.stop(env.child, 'SIGKILL');
+    await delay(2200);
+    const restarted = await env.start();
+    const restored = client(restarted.origin, identity);
+    for (let i = 0; i < 40 && tx.safeApply !== 'rolled-back'; i++) {
+      await delay(50);
+      tx = await restored.readTransaction(tx.id);
+    }
+    assert.equal(tx.safeApply, 'rolled-back');
+    assert.equal(tx.confirmationDeadline, deadline);
+    assert.deepEqual(
+      (await restored.readPort('port-2')).configuration,
+      before.configuration,
+    );
+    assert.equal((await restored.readCandidate()).candidate.intents.length, 1);
+    assert.equal((await restored.readWorkspace()).nodeWriteBlocked, false);
+    assert.equal(
+      (await restored.readRequest(command.requestId)).transactionId,
+      tx.id,
+    );
+    assert.equal(
+      (await restored.readEvidence(tx.id)).items.filter(
+        (entry) => entry.code === 'SYNTHETIC_COMMIT',
+      ).length,
+      1,
+    );
+    assert.equal((await restored.readTransactionJob(tx)).state, 'succeeded');
   },
 );

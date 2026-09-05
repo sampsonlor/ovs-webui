@@ -5,6 +5,7 @@ import type { useCoreLab } from '@/hooks/use-core-lab';
 import { PortsPage } from './ports-page';
 import { VlanEdit } from './vlan-editor';
 import { CoreLabValidationPanel } from './core-lab-validation';
+import { CoreLabSafeApplyPanel } from './core-lab-safe-apply';
 import { Notice, PageHeader, StatusBadge, ScopeBadge } from './foundation';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,8 +44,8 @@ export function CoreLabSession({
   return (
     <div className="flex flex-wrap items-center gap-2 border-b bg-muted/60 px-4 py-2 text-sm">
       <span className="mr-auto">
-        Local integration · synthetic Ports · Candidate / Validation saved on
-        server {lab.session ? `· ${lab.session.label}` : ''}
+        Local integration · synthetic Ports · server-owned change control
+        {lab.session ? ` · ${lab.session.label}` : ''}
       </span>
       {(['alice', 'bob', 'observer'] as const).map((principal) => (
         <Button
@@ -222,9 +223,11 @@ export function CoreLabSurface({
           }
           title={
             state.phase === 'unknown'
-              ? state.pendingValidation
-                ? 'Validation request outcome unknown'
-                : 'Candidate save outcome unknown'
+              ? state.pendingTransaction
+                ? 'Transaction request outcome unknown'
+                : state.pendingValidation
+                  ? 'Validation request outcome unknown'
+                  : 'Candidate save outcome unknown'
               : 'Workspace status'
           }
           actions={
@@ -574,6 +577,7 @@ export function CoreLabSurface({
           state={state}
           mode={mode}
           canValidate={lab.canValidate}
+          onSafeApply={() => go('safe-apply')}
           onValidate={() => {
             if (window.matchMedia('(min-width: 1024px)').matches)
               void lab.controller?.validate(crypto.randomUUID());
@@ -590,19 +594,7 @@ export function CoreLabSurface({
         title={view === 'safe-apply' ? 'Safe Apply' : 'Request evidence'}
         description="Authoritative server operation state."
       />
-      <Notice
-        tone="info"
-        title={
-          state.workspace?.activeTransactions.length
-            ? 'Existing server operation'
-            : 'No apply operation started'
-        }
-      >
-        The persistence lab does not execute OVS mutations. Its request ledger
-        can recover Candidate saves and validation requests; transaction
-        execution and Event/Audit views will be connected in the next server
-        slice.
-      </Notice>
+      <CoreLabSafeApplyPanel connection={lab} mode={mode} view={view} go={go} />
       {state.validationJob && (
         <section className="ovs-surface mt-4 p-4">
           <h2 className="font-semibold">Latest validation job</h2>
@@ -615,14 +607,6 @@ export function CoreLabSurface({
           </Button>
         </section>
       )}
-      {state.workspace?.activeTransactions.map((transaction) => (
-        <div key={transaction.id} className="ovs-surface mt-3 p-4">
-          <p className="font-mono">{transaction.id}</p>
-          <StatusBadge tone="uncertain">
-            {transaction.knowledge} · {transaction.safeApply}
-          </StatusBadge>
-        </div>
-      ))}
       <Button variant="outline" onClick={() => go('workspace')}>
         Review saved Candidate
       </Button>
