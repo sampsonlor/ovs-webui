@@ -12,6 +12,9 @@ import type {
   ValidationRequest,
   ValidationResource,
   JobResource,
+  DecisionRequest,
+  ReconciliationRequest,
+  EvidencePage,
 } from './types.generated';
 
 export type HttpSchemas = {
@@ -28,6 +31,9 @@ export type HttpSchemas = {
   TransactionResource: TransactionResource;
   RequestRecord: RequestRecord;
   Problem: Problem;
+  DecisionRequest: DecisionRequest;
+  ReconciliationRequest: ReconciliationRequest;
+  EvidencePage: EvidencePage;
 };
 
 // Required: the caller must bind these names to the generated contract schemas.
@@ -45,6 +51,11 @@ export type ValidationWriteResult =
   | { kind: 'accepted'; validation: ValidationResource }
   | { kind: 'rejected'; problem: Problem }
   | { kind: 'unknown'; requestId: string; nodeId: string };
+
+export type TransactionWriteResult<T> =
+  | { kind: 'accepted'; resource: T }
+  | { kind: 'rejected'; problem: Problem }
+  | { kind: 'unknown' };
 
 export class HttpContractError extends Error {
   constructor(message: string) {
@@ -242,6 +253,13 @@ export class CoreHttpClient implements ChangeControlGateway {
         );
     }
     data.activeTransactions.forEach((item) => this.sameNode(item));
+    if (data.latestTransaction) {
+      this.sameNode(data.latestTransaction);
+      if (data.latestTransaction.candidateId !== data.candidate.id)
+        throw new HttpContractError(
+          'Latest transaction belongs to another Candidate.',
+        );
+    }
     data.pendingRequests.forEach((item) => this.sameNode(item));
     return data;
   }
@@ -451,5 +469,102 @@ export class CoreHttpClient implements ChangeControlGateway {
     if (data.id !== transactionId)
       throw new HttpContractError('Response belongs to another transaction.');
     return this.sameNode(data);
+  }
+
+  async decideSafeApply(
+    transactionId: string,
+    command: DecisionRequest,
+  ): Promise<TransactionWriteResult<TransactionResource>> {
+    const submitted = this.check('DecisionRequest', structuredClone(command));
+    try {
+      const { data } = await this.request(
+        `/transactions/${this.id(transactionId)}/decisions`,
+        'TransactionResource',
+        { method: 'POST', command: submitted, status: 202 },
+      );
+      this.sameNode(data);
+      if (
+        data.id !== transactionId ||
+        data.sequence < submitted.expectedTransactionSequence
+      )
+        throw new HttpContractError(
+          'Decision response belongs to another transaction or version.',
+        );
+      return { kind: 'accepted', resource: data };
+    } catch (error) {
+      if (
+        error instanceof ApiProblemError &&
+        error.problem.commandEffect === 'not-started'
+      )
+        return { kind: 'rejected', problem: error.problem };
+      return { kind: 'unknown' };
+    }
+  }
+  async reconcileTransaction(
+    transactionId: string,
+    command: ReconciliationRequest,
+  ): Promise<TransactionWriteResult<JobResource>> {
+    const submitted = this.check(
+      'ReconciliationRequest',
+      structuredClone(command),
+    );
+    try {
+      const { data } = await this.request(
+        `/transactions/${this.id(transactionId)}/reconciliations`,
+        'JobResource',
+        { method: 'POST', command: submitted, status: 202 },
+      );
+      this.sameNode(data);
+      if (
+        data.transactionId !== transactionId ||
+        data.correlationId !== submitted.requestId ||
+        data.kind !== 'reconciliation'
+      )
+        throw new HttpContractError('Mismatched reconciliation job.');
+      return { kind: 'accepted', resource: data };
+    } catch (error) {
+      if (
+        error instanceof ApiProblemError &&
+        error.problem.commandEffect === 'not-started'
+      )
+        return { kind: 'rejected', problem: error.problem };
+      return { kind: 'unknown' };
+    }
+  }
+  async readJob(jobId: string): Promise<JobResource> {
+    const { data } = await this.request(
+      `/jobs/${this.id(jobId)}`,
+      'JobResource',
+    );
+    if (data.id !== jobId) throw new HttpContractError('Mismatched job.');
+    return this.sameNode(data);
+  }
+  async readTransactionJob(
+    transaction: TransactionResource,
+  ): Promise<JobResource> {
+    const data = await this.readJob(transaction.jobId);
+    if (
+      data.kind !== 'safe-apply' ||
+      data.transactionId !== transaction.id ||
+      data.correlationId !== transaction.correlationId
+    )
+      throw new HttpContractError('Mismatched Safe Apply job.');
+    return data;
+  }
+  async readEvidence(
+    transactionId: string,
+    cursor?: string,
+  ): Promise<EvidencePage> {
+    const query = new URLSearchParams({
+      transactionId: this.check('Id', transactionId),
+    });
+    if (cursor) query.set('cursor', cursor);
+    const { data } = await this.request(`/evidence?${query}`, 'EvidencePage');
+    for (const item of data.items) {
+      this.sameNode(item);
+      if (item.transactionId !== transactionId)
+        throw new HttpContractError('Evidence belongs to another transaction.');
+    }
+    return data;
   }
 }

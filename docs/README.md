@@ -6,6 +6,7 @@
 - `contracts/CORE_API_CONTRACT_v0.1.md` — API semantics, state mapping, recovery and integration sequence
 - `contracts/LOCAL_PERSISTENCE_v0.1.md` — local Ports/Candidate persistence and session review
 - `contracts/LOCAL_VALIDATION_v0.1.md` — durable server diff, validation jobs, expiry and exception review
+- `contracts/LOCAL_SAFE_APPLY_v0.1.md` — synthetic transactions, protected rollback, recovery and evidence
 - `contracts/GITHUB_CI_v0.1.md` — CI gates, isolated Linux testing and project workflow
 - `../contracts/openapi.v0.1.json` — generated OpenAPI contract for the first Ports/VLAN integration slice
 

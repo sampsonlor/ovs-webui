@@ -61,6 +61,7 @@ import {
   runnableDiagnostics,
 } from '@/lib/p1-control';
 import { useCoreLab } from '@/hooks/use-core-lab';
+import { CoreLabTransactionBanner } from '@/components/ovs/core-lab-safe-apply';
 import {
   CoreLabSession,
   CoreLabSurface,
@@ -1340,20 +1341,26 @@ export default function Home() {
               size="sm"
               onClick={() =>
                 go(
-                  locked
-                    ? 'safe-apply'
-                    : p1.jobState !== 'not-started'
-                      ? 'diagnostic-run'
-                      : 'diagnostics-hub',
+                  labEnabled
+                    ? 'evidence'
+                    : locked
+                      ? 'safe-apply'
+                      : p1.jobState !== 'not-started'
+                        ? 'diagnostic-run'
+                        : 'diagnostics-hub',
                 )
               }
             >
               <Clock3 />
               <span className="hidden sm:inline">Jobs</span>
               <span className="sr-only sm:hidden">Jobs</span>
-              {locked || p1.busy
-                ? ` · ${Number(locked) + Number(p1.busy)}`
-                : ''}
+              {labEnabled
+                ? lab.state.transaction?.locksCandidate
+                  ? ' · 1'
+                  : ''
+                : locked || p1.busy
+                  ? ` · ${Number(locked) + Number(p1.busy)}`
+                  : ''}
             </Button>
             <Button size="sm" onClick={() => go('workspace')}>
               <GitCompareArrows />
@@ -1381,11 +1388,18 @@ export default function Home() {
             ))}
           </div>
         </div>
-        <TransactionBanner
-          state={control}
-          now={currentTime}
-          onOpen={() => go('safe-apply')}
-        />
+        {labEnabled ? (
+          <CoreLabTransactionBanner
+            connection={lab}
+            onOpen={() => go('safe-apply')}
+          />
+        ) : (
+          <TransactionBanner
+            state={control}
+            now={currentTime}
+            onOpen={() => go('safe-apply')}
+          />
+        )}
       </header>
       {labEnabled && <CoreLabSession connection={lab} />}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/60 px-4 py-2 lg:px-6">

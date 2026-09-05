@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { CoreLabStore, labUsers } from './core-lab-store.mjs';
 import { startValidationWorker } from './core-lab-validation.mjs';
+import { startTransactionWorker } from './core-lab-transactions.mjs';
 
 const cookieName = 'ovs_lab_session';
 const loopbackHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -350,12 +351,56 @@ export function coreLabMiddleware(store) {
       if (req.method === 'GET' && url.pathname.startsWith('/api/v1/jobs/'))
         return send(
           res,
-          store.validations.job(
+          store.transactions.job(
             session.principal,
             decodeURIComponent(url.pathname.slice('/api/v1/jobs/'.length)),
+          ) ??
+            store.validations.job(
+              session.principal,
+              decodeURIComponent(url.pathname.slice('/api/v1/jobs/'.length)),
+            ),
+        );
+      if (req.method === 'POST' && url.pathname === '/api/v1/transactions')
+        return send(
+          res,
+          store.transactions.start(
+            session,
+            await readBody(req),
+            req.headers['idempotency-key'],
           ),
         );
-      // This development slice has no OVS provider, apply or watchdog implementation.
+      const transactionRoute = url.pathname.match(
+        /^\/api\/v1\/transactions\/([^/]+)(?:\/(decisions|reconciliations))?$/,
+      );
+      if (transactionRoute) {
+        const transactionId = decodeURIComponent(transactionRoute[1]);
+        if (req.method === 'GET' && !transactionRoute[2])
+          return send(
+            res,
+            store.transactions.read(session.principal, transactionId),
+          );
+        if (req.method === 'POST' && transactionRoute[2])
+          return send(
+            res,
+            store.transactions[
+              transactionRoute[2] === 'decisions' ? 'decide' : 'reconcile'
+            ](
+              session,
+              transactionId,
+              await readBody(req),
+              req.headers['idempotency-key'],
+            ),
+          );
+      }
+      if (req.method === 'GET' && url.pathname === '/api/v1/evidence')
+        return send(
+          res,
+          store.transactions.evidence(
+            session.principal,
+            url.searchParams.get('transactionId'),
+            url.searchParams.get('cursor'),
+          ),
+        );
       return send(
         res,
         store.problem(
@@ -386,9 +431,11 @@ export function coreLabPlugin(path = resolve('.ovs-lab/state.sqlite')) {
       mkdirSync(dirname(path), { recursive: true });
       store = new CoreLabStore(path);
       const stopWorker = startValidationWorker(store);
+      const stopTransactions = startTransactionWorker(store);
       server.middlewares.use(coreLabMiddleware(store));
       server.httpServer?.once('close', () => {
         stopWorker();
+        stopTransactions();
         store?.close();
         store = undefined;
       });

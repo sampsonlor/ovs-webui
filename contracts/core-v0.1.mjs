@@ -346,20 +346,24 @@ export const schemas = {
     candidateRevision: nullable(revision()),
     problem: nullable(ref('Problem')),
   }),
-  WorkspaceSnapshot: object({
-    nodeId: id(),
-    serverTime: date(),
-    candidate: ref('CandidateResource'),
-    latestValidation: nullable(ref('ValidationResource')),
-    activeTransactions: array(ref('TransactionResource')),
-    pendingRequests: array(ref('RequestRecord')),
-    nodeWriteBlocked: { type: 'boolean' },
-    permissions: object({
-      editCandidate: { type: 'boolean' },
-      validate: { type: 'boolean' },
-      startSafeApply: { type: 'boolean' },
-    }),
-  }),
+  WorkspaceSnapshot: object(
+    {
+      nodeId: id(),
+      serverTime: date(),
+      candidate: ref('CandidateResource'),
+      latestValidation: nullable(ref('ValidationResource')),
+      latestTransaction: nullable(ref('TransactionResource')),
+      activeTransactions: array(ref('TransactionResource')),
+      pendingRequests: array(ref('RequestRecord')),
+      nodeWriteBlocked: { type: 'boolean' },
+      permissions: object({
+        editCandidate: { type: 'boolean' },
+        validate: { type: 'boolean' },
+        startSafeApply: { type: 'boolean' },
+      }),
+    },
+    ['latestTransaction'],
+  ),
   DriftReport: object({
     id: id(),
     nodeId: id(),

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { CoreLabStore } from '../dev/core-lab-store.mjs';
 import { coreLabMiddleware } from '../dev/core-lab-plugin.mjs';
 import { startValidationWorker } from '../dev/core-lab-validation.mjs';
+import { startTransactionWorker } from '../dev/core-lab-transactions.mjs';
 
 const directory = process.env.OVS_TEST_DATA_DIR;
 if (
@@ -17,10 +18,15 @@ if (
     'Test server requires its own ovs-ci-* directory directly under the system temporary root.',
   );
 
-const store = new CoreLabStore(resolve(directory, 'state.sqlite'));
+const store = new CoreLabStore(resolve(directory, 'state.sqlite'), {
+  confirmationWindowSeconds: process.argv.includes('--short-window') ? 2 : 90,
+});
 const stopWorker = process.argv.includes('--pause-validation')
   ? () => {}
   : startValidationWorker(store);
+const stopTransactions = process.argv.includes('--pause-transactions')
+  ? () => {}
+  : startTransactionWorker(store);
 const server = createServer(coreLabMiddleware(store));
 server.listen(0, '127.0.0.1', () => {
   const address = server.address();
@@ -36,6 +42,7 @@ for (const signal of ['SIGINT', 'SIGTERM'])
     if (stopping) return;
     stopping = true;
     stopWorker();
+    stopTransactions();
     server.closeAllConnections();
     server.close(() => store.close());
   });

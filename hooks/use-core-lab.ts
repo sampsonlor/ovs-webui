@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CoreHttpClient } from '@/lib/api/http-client';
 import {
   WorkspaceController,
+  parseTransactionRecoveryHint,
   type WorkspaceState,
 } from '@/lib/api/workspace-controller';
 
@@ -23,6 +24,12 @@ const initial: WorkspaceState = {
   pendingRequestId: null,
   pendingValidation: null,
   validationJob: null,
+  transaction: null,
+  transactionJob: null,
+  evidence: null,
+  pendingTransaction: null,
+  receivedAt: 0,
+  transactionReceivedAt: 0,
   message: '',
   permissionError: false,
 };
@@ -98,7 +105,18 @@ export function useCoreLab(enabled: boolean, pollValidation = true) {
           return fetch(url, { ...options, headers });
         },
       });
-      const controller = new WorkspaceController(client);
+      const recoveryKey = `ovs-core-recovery:${next.nodeId}:${next.principal}`;
+      const controller = new WorkspaceController(client, {
+        read: () =>
+          parseTransactionRecoveryHint(
+            localStorage.getItem(recoveryKey),
+            next.nodeId,
+          ),
+        write: (hint) => {
+          if (hint) localStorage.setItem(recoveryKey, JSON.stringify(hint));
+          else localStorage.removeItem(recoveryKey);
+        },
+      });
       active.current = { session: next, controller };
       setSession(next);
       setController(controller);
@@ -179,7 +197,7 @@ export function useCoreLab(enabled: boolean, pollValidation = true) {
   };
   useEffect(() => {
     if (
-      !pollValidation ||
+      (!pollValidation && !state.transaction?.locksCandidate) ||
       !controller ||
       checking ||
       state.phase !== 'ready' ||
@@ -190,7 +208,10 @@ export function useCoreLab(enabled: boolean, pollValidation = true) {
     // Server observations own completion and expiry; no browser countdown marks a result passed.
     const timer = setTimeout(
       () => void controller.pollValidation(),
-      ['pending', 'running'].includes(status) ? 500 : 5000,
+      state.transaction?.locksCandidate ||
+        ['pending', 'running'].includes(status)
+        ? 500
+        : 5000,
     );
     return () => clearTimeout(timer);
   }, [controller, checking, state, pollValidation]);
@@ -204,5 +225,6 @@ export function useCoreLab(enabled: boolean, pollValidation = true) {
     observe,
     canWrite: !checking && Boolean(controller?.canWrite()),
     canValidate: !checking && Boolean(controller?.canValidate()),
+    canStartSafeApply: !checking && Boolean(controller?.canStartSafeApply()),
   };
 }

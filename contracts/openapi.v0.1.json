@@ -2255,6 +2255,16 @@
               }
             ]
           },
+          "latestTransaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionResource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "activeTransactions": {
             "type": "array",
             "items": {

@@ -2,7 +2,8 @@
 
 本轮继续已批准的本地联调方向，在现有 Ports → VLAN → Candidate → Diff 页面接入
 持久化验证任务。导航、Standard / Expert、按钮和状态组件沿用现有设计系统。
-这是合成数据开发服务；生产认证、真实 OVS provider 和 Safe Apply 执行器尚未接入。
+这是合成数据开发服务；生产认证和真实 OVS provider 尚未接入。后续已增加
+[本地 Safe Apply 执行器](LOCAL_SAFE_APPLY_v0.1.md)，验证本身不执行配置修改。
 
 ## 可审查路径
 
@@ -15,7 +16,7 @@
    compare-before-rollback 阻塞。**Job succeeded 表示检查完成，不等于验证 Passed。**
 3. 用 **Simulate observation → Safety available (synthetic fixture)**，重新验证，
    审查 Passed 路径。这个选项只模拟准备能力，既不创建 checkpoint，也不修改 OVS。
-   `startSafeApply` 权限始终为 false，不能把模拟通过当作真实事务入场许可。
+   在本地 Safe Apply 切片中，通过有效验证后可进入合成事务；真实设备仍未接入。
 4. 保存新的 Candidate、模拟 Generation change / VLAN conflict / Validation policy
    change / Expire latest validation，旧结果应变为 Expired，原始 diff 保持不变。
    Stale / Conflict 继续使用现有三方选择与 rebase，再运行新验证。
@@ -51,7 +52,7 @@
 
 ## 验证与下一步
 
-71 项自动测试通过，其中本轮增加 13 项验证持久化/HTTP 检查。覆盖排队和执行期间数据库
+验证切片交付时 71 项自动测试通过，其中该轮增加 13 项验证持久化/HTTP 检查。覆盖排队和执行期间数据库
 关闭重开、原始 diff 保留、幂等与用户隔离、服务端过期、Candidate/世代/策略变化、
 Stale/Conflict/rebase、原生写权限、provider/安全能力阻塞、权限撤销、真实 loopback HTTP
 工作器、丢失接受应答且没有第二次 POST、错版本与错 Job 拒绝。
@@ -59,6 +60,6 @@ Stale/Conflict/rebase、原生写权限、provider/安全能力阻塞、权限�
 生成文件一致性、TypeScript、修改范围 lint、生产构建与本地页面编译检查通过。
 这些检查不替代浏览器交互验收、强杀进程的恢复测试、生产身份集成或真实 OVS 验证。
 
-下一切片为持久化 Safe Apply 事务与服务端确认/回滚调度；继续本地合成执行器联调，
-再通过 provider 边界接真实 checkpoint、probe、compare-before-rollback 与再认证。
+持久化 Safe Apply 事务与服务端确认/回滚调度已在后续本地切片接入，见上方联调说明。
+后续通过 provider 边界接真实 checkpoint、probe、compare-before-rollback 与再认证。
 真实安全资源接入之前，不能开放对真实设备的 Apply。

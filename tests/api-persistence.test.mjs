@@ -124,7 +124,7 @@ test('validation admission, captured diff, job and request survive restart; serv
     completed.id,
   );
   assert.deepEqual(third.workspace(session).latestValidation, completed);
-  assert.equal(third.workspace(session).permissions.startSafeApply, false);
+  assert.equal(third.workspace(session).permissions.startSafeApply, true);
   assert.equal(
     third.meta('inventory').items[1].configuration.value.mode,
     'access',
@@ -665,7 +665,7 @@ test('HTTP validation completes on the server and restores its exact result and 
   assert.equal(state.workspace.latestValidation.id, validationId);
   assert.equal(state.workspace.latestValidation.status, 'passed');
   assert.equal(state.validationJob.state, 'succeeded');
-  assert.equal(state.workspace.permissions.startSafeApply, false);
+  assert.equal(state.workspace.permissions.startSafeApply, true);
   store.setMeta('providerAvailable', false);
   await restored.pollValidation();
   assert.equal(

@@ -36,4 +36,6 @@
 需由已批准的服务端提供会话和 CSRF 来源、节点绑定、每用户持久 Candidate、强 ETag
 语义与持久请求账本。随后将 Ports 和 Candidate 页面切换到该客户端，处理启动未决请求、
 退出登录后的缓存清理、分页快照、并发读取与真实权限变化；后端未就绪时继续清楚标注原型。
-Bridge/Bond 原生写入类型以及服务端 Safe Apply watchdog 不在本 HTTP 切片内。
+以上基础接线已在后续本地切片完成；Safe Apply 决策、核对 Job、证据和恢复见
+[Safe Apply 联调](LOCAL_SAFE_APPLY_v0.1.md)。Bridge/Bond 原生写入类型与真实设备 watchdog
+仍需后续 provider 集成。

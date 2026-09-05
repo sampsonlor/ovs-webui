@@ -4,7 +4,7 @@
 
 本轮把已有 Ports → VLAN → Candidate → Validate → Safe Apply → Evidence 链路转成可验证的接口约定。页面布局、按钮、图标和 IA 沿用 Design System v0.1；后端返回的状态仍使用现有 Conflict、OutcomeUnknown、Stale、Drift 和 Safe Apply 组件表达。
 
-当前应用使用合成数据。显式本地联调模式已接入 Ports、持久化 Candidate、Diff/Validation、Job 和请求账本；普通原型模式保持原有演示。生产鉴权与真实 OVS 操作尚未接入，详见 [本地持久化](LOCAL_PERSISTENCE_v0.1.md) 和 [验证联调](LOCAL_VALIDATION_v0.1.md)。
+当前应用使用合成数据。显式本地联调模式已接入 Ports、持久化 Candidate、Diff/Validation、合成 Safe Apply、确认/回滚、Job 和请求账本；普通原型模式保持原有演示。生产鉴权与真实 OVS 操作尚未接入，详见 [本地持久化](LOCAL_PERSISTENCE_v0.1.md)、[验证联调](LOCAL_VALIDATION_v0.1.md) 和 [Safe Apply 联调](LOCAL_SAFE_APPLY_v0.1.md)。
 
 ## 范围与依据
 
@@ -98,7 +98,7 @@ Standard / Expert 不进入授权判断。桌面发起配置、平板/手机处�
 
 没有收到应答不证明没有提交。HTTP 也不允许客户端在无法证明幂等或未执行时随意自动重试非幂等请求。[HTTP 重试语义](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2)
 
-`submitSafeApplyOnce` / `recoverSafeApply` 已用“后端接受后丢失应答”的模拟传输测试：恢复只读取原账本和原事务。它们不会生成新 ID、自动重发、把找不到记录说成 Not Applied。接入方仍需实现并验证传输和恢复提示存储；当前原型尚未使用这些函数。
+`submitSafeApplyOnce` / `recoverSafeApply` 的恢复协议已接入本地 HTTP 联调：恢复只读取原账本和原事务，不自动重发、不把找不到记录说成 Not Applied。WorkspaceController 在发送 Apply、Decision 或 Reconciliation 前保存按用户/节点隔离的非秘密恢复提示，页面重新打开后先核对原请求。Workspace 的可选 `latestTransaction` 保留最近终态的恢复入口；生产身份与真实设备仍需独立集成。
 
 ## Safe Apply 状态映射
 

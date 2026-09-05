@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { createContractValidator } from '../scripts/core-validator.mjs';
 import { CoreLabValidation } from './core-lab-validation.mjs';
+import { CoreLabTransactions } from './core-lab-transactions.mjs';
 import { ports as prototypePorts, nativeVlanFields } from '../lib/ovs-model.ts';
 
 const now = () => new Date().toISOString();
@@ -102,6 +103,7 @@ export class CoreLabStore {
       this.setMeta('providerAvailable', true);
     }
     this.validations = new CoreLabValidation(this, options);
+    this.transactions = new CoreLabTransactions(this, options);
   }
   close() {
     this.db.close();
@@ -232,10 +234,19 @@ export class CoreLabStore {
       };
       this.saveCandidate(principal, candidate);
     }
+    const owner = candidate.lockedByTransactionId
+      ? this.transactions?.row(principal, candidate.lockedByTransactionId)
+      : null;
+    const ownGeneration = Boolean(
+      owner?.plan.commitGeneration &&
+      owner.plan.commitGeneration === inventory.generation,
+    );
     const conflicts = candidate.intents.flatMap((intent) => {
       const current = inventory.items.find((port) => port.id === intent.portId)
         ?.configuration.value;
-      return current && !same(intent.base, current)
+      return current &&
+        !same(intent.base, current) &&
+        !(ownGeneration && same(intent.mine, current))
         ? [
             {
               intentId: intent.id,
@@ -252,7 +263,8 @@ export class CoreLabStore {
     candidate.freshness = conflicts.length
       ? 'conflict'
       : candidate.intents.length &&
-          candidate.baseGeneration !== inventory.generation
+          candidate.baseGeneration !== inventory.generation &&
+          !ownGeneration
         ? 'stale'
         : 'current';
     candidate.conflicts = conflicts;
@@ -266,18 +278,25 @@ export class CoreLabStore {
     return { candidate, etag: `"${hash(canonical(candidate))}"` };
   }
   workspace(session) {
+    const latestValidation = this.validations.latest(session.principal);
     return {
       nodeId: session.nodeId,
       serverTime: new Date(this.validations.clock()).toISOString(),
       candidate: this.candidate(session.principal),
-      latestValidation: this.validations.latest(session.principal),
-      activeTransactions: [],
+      latestValidation,
+      activeTransactions: this.transactions.active(session.principal),
+      latestTransaction: this.transactions.latest(session.principal),
       pendingRequests: [],
-      nodeWriteBlocked: Boolean(this.meta('nodeBlocked')),
+      nodeWriteBlocked: this.transactions.blocked(),
       permissions: {
         editCandidate: this.canEdit(session.principal),
         validate: this.canEdit(session.principal),
-        startSafeApply: false,
+        startSafeApply:
+          this.canEdit(session.principal) &&
+          !this.transactions.blocked() &&
+          this.meta('providerAvailable') &&
+          this.meta('validationPolicy').safety === 'available' &&
+          latestValidation?.status === 'passed',
       },
     };
   }
@@ -405,7 +424,7 @@ export class CoreLabStore {
           412,
           'Candidate changed. Read and review the latest version.',
         );
-      else if (candidate.lockedByTransactionId || this.meta('nodeBlocked'))
+      else if (candidate.lockedByTransactionId || this.transactions.blocked())
         result = reject(
           'TRANSACTION_ACTIVE',
           409,

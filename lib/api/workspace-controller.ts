@@ -10,7 +10,51 @@ import type {
   WorkspaceSnapshot,
   ValidationRequest,
   JobResource,
+  TransactionResource,
+  EvidencePage,
+  Problem,
 } from './types.generated';
+import {
+  acceptTransactionSnapshot,
+  presentTransaction,
+  submitSafeApplyOnce,
+} from './change-control.ts';
+
+export type TransactionRecoveryHint = {
+  nodeId: string;
+  requestId: string;
+  operation: 'safe-apply' | 'decision' | 'reconciliation';
+  transactionId?: string;
+};
+export type RecoveryHintStore = {
+  read: () => TransactionRecoveryHint | null;
+  write: (hint: TransactionRecoveryHint | null) => void;
+};
+export function parseTransactionRecoveryHint(
+  raw: string | null,
+  nodeId: string,
+): TransactionRecoveryHint | null {
+  if (!raw) return null;
+  const hint = JSON.parse(raw);
+  const validId = (value: unknown) =>
+    typeof value === 'string' &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+  if (
+    !hint ||
+    hint.nodeId !== nodeId ||
+    !validId(hint.requestId) ||
+    !['safe-apply', 'decision', 'reconciliation'].includes(hint.operation) ||
+    (hint.operation !== 'safe-apply' && !validId(hint.transactionId)) ||
+    Object.keys(hint).some(
+      (key) =>
+        !['nodeId', 'requestId', 'operation', 'transactionId'].includes(key),
+    )
+  )
+    throw new HttpContractError(
+      'Saved request hint is invalid. Check the server workspace before starting another operation.',
+    );
+  return hint;
+}
 
 export type WorkspaceState = {
   phase:
@@ -27,6 +71,12 @@ export type WorkspaceState = {
   pendingRequestId: string | null;
   pendingValidation: ValidationRequest | null;
   validationJob: JobResource | null;
+  transaction: TransactionResource | null;
+  transactionJob: JobResource | null;
+  evidence: EvidencePage | null;
+  pendingTransaction: TransactionRecoveryHint | null;
+  receivedAt: number;
+  transactionReceivedAt: number;
   message: string;
   permissionError: boolean;
 };
@@ -38,6 +88,12 @@ const empty = (): WorkspaceState => ({
   pendingRequestId: null,
   pendingValidation: null,
   validationJob: null,
+  transaction: null,
+  transactionJob: null,
+  evidence: null,
+  pendingTransaction: null,
+  receivedAt: 0,
+  transactionReceivedAt: 0,
   message: '',
   permissionError: false,
 });
@@ -88,8 +144,23 @@ export class WorkspaceController {
   private disposed = false;
   private listeners = new Set<() => void>();
   private readonly client: CoreHttpClient;
-  constructor(client: CoreHttpClient) {
+  private readonly hints?: RecoveryHintStore;
+  constructor(client: CoreHttpClient, hints?: RecoveryHintStore) {
     this.client = client;
+    this.hints = hints;
+    const pending = hints?.read();
+    if (pending) {
+      if (pending.nodeId !== client.nodeId)
+        throw new HttpContractError('Request hint belongs to another node.');
+      this.state = {
+        ...empty(),
+        phase: 'unknown',
+        pendingRequestId: pending.requestId,
+        pendingTransaction: pending,
+        message:
+          'Restoring the original transaction request before enabling new commands.',
+      };
+    }
   }
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => {
@@ -166,8 +237,40 @@ export class WorkspaceController {
       )
     );
   }
+  transactionPresentation(now = performance.now()) {
+    return this.state.transaction
+      ? presentTransaction(this.state.transaction, {
+          connected: this.state.phase === 'ready',
+          fresh: this.state.phase === 'ready',
+          receivedAtMonotonicMs: this.state.transactionReceivedAt,
+          nowMonotonicMs: now,
+        })
+      : null;
+  }
+  canStartSafeApply() {
+    const { workspace, snapshot, transaction } = this.state;
+    const validation = workspace?.latestValidation;
+    const serverNow =
+      Date.parse(workspace?.serverTime ?? '') +
+      performance.now() -
+      this.state.receivedAt;
+    return (
+      this.canWrite() &&
+      Boolean(
+        workspace?.permissions.startSafeApply &&
+        !transaction?.locksCandidate &&
+        validation?.status === 'passed' &&
+        validation.expiresAt &&
+        Date.parse(validation.expiresAt) > serverNow &&
+        validation.candidateRevision === snapshot?.candidate.revision &&
+        validation.generation === snapshot?.candidate.currentGeneration &&
+        snapshot?.candidate.freshness === 'current',
+      )
+    );
+  }
   private async load() {
     const workspace = await this.client.readWorkspace();
+    const receivedAt = performance.now();
     const [snapshot, inventory] = await Promise.all([
       this.client.readCandidate(),
       readPinnedInventory(this.client).catch((error: unknown) => {
@@ -184,6 +287,8 @@ export class WorkspaceController {
       workspace.candidate.revision !== snapshot.candidate.revision ||
       workspace.candidate.currentGeneration !==
         snapshot.candidate.currentGeneration ||
+      workspace.candidate.lockedByTransactionId !==
+        snapshot.candidate.lockedByTransactionId ||
       (inventory &&
         inventory.generation !== snapshot.candidate.currentGeneration)
     )
@@ -193,7 +298,37 @@ export class WorkspaceController {
     const validationJob = workspace.latestValidation
       ? await this.client.readValidationJob(workspace.latestValidation)
       : null;
-    return { workspace, snapshot, inventory, validationJob };
+    let incoming =
+      workspace.latestTransaction ?? workspace.activeTransactions[0] ?? null;
+    let transactionReceivedAt = receivedAt;
+    if (!incoming && this.state.transaction) {
+      incoming = await this.client.readTransaction(this.state.transaction.id);
+      transactionReceivedAt = performance.now();
+    }
+    const previous = this.state.transaction;
+    const transaction =
+      previous && incoming?.id === previous.id
+        ? acceptTransactionSnapshot(previous, incoming)
+        : incoming;
+    if (transaction === previous)
+      transactionReceivedAt = this.state.transactionReceivedAt;
+    const [transactionJob, evidence] = transaction
+      ? await Promise.all([
+          this.client.readTransactionJob(transaction),
+          this.client.readEvidence(transaction.id),
+        ])
+      : [null, null];
+    return {
+      workspace,
+      snapshot,
+      inventory,
+      validationJob,
+      transaction,
+      transactionJob,
+      evidence,
+      receivedAt,
+      transactionReceivedAt,
+    };
   }
   async refresh() {
     if (this.disposed || this.state.phase === 'writing') return;
@@ -339,6 +474,7 @@ export class WorkspaceController {
     }
   }
   async recover() {
+    if (this.state.pendingTransaction) return this.recoverTransaction();
     const requestId = this.state.pendingRequestId;
     const validation = this.state.pendingValidation;
     if (!requestId || this.disposed || this.state.phase === 'writing') return;
@@ -405,6 +541,235 @@ export class WorkspaceController {
         });
     } catch (error) {
       if (version === this.version) this.fail(error, requestId);
+    }
+  }
+
+  private async transactionWrite(
+    hint: TransactionRecoveryHint,
+    send: () => Promise<
+      | { kind: 'accepted' }
+      | { kind: 'rejected'; problem: Problem }
+      | { kind: 'unknown' }
+    >,
+  ) {
+    const version = ++this.version;
+    try {
+      this.hints?.write(hint);
+    } catch {
+      this.set({
+        ...this.state,
+        phase: 'error',
+        message: 'Unable to save the recovery identifier. No command was sent.',
+      });
+      return false;
+    }
+    this.set({
+      ...this.state,
+      phase: 'writing',
+      pendingRequestId: hint.requestId,
+      pendingTransaction: hint,
+      message: 'Submitting one protected command…',
+    });
+    try {
+      const result = await send();
+      if (this.disposed || version !== this.version) return false;
+      if (result.kind === 'unknown') {
+        this.set({
+          ...this.state,
+          phase: 'unknown',
+          message:
+            'OutcomeUnknown: read the original request before sending any new command.',
+        });
+        return false;
+      }
+      if (result.kind === 'rejected') {
+        this.hints?.write(null);
+        this.set({
+          ...this.state,
+          phase: 'error',
+          pendingRequestId: null,
+          pendingTransaction: null,
+          message: result.problem.detail,
+        });
+        if ([401, 403].includes(result.problem.status))
+          this.fail(new ApiProblemError(result.problem), null);
+        return false;
+      }
+      const loaded = await this.load();
+      if (this.disposed || version !== this.version) return false;
+      this.hints?.write(null);
+      this.set({
+        ...empty(),
+        ...loaded,
+        phase: 'ready',
+        message:
+          'Command accepted. The server owns the transaction and recovery window.',
+      });
+      return true;
+    } catch (error) {
+      if (version === this.version) this.fail(error, hint.requestId);
+      return false;
+    }
+  }
+  async startSafeApply(reason: string, requestId: string) {
+    if (!this.canStartSafeApply() || !reason.trim() || reason.length > 2000)
+      return false;
+    const candidate = this.state.snapshot!.candidate;
+    const command = {
+      requestId,
+      candidateId: candidate.id,
+      expectedCandidateRevision: candidate.revision,
+      expectedGeneration: candidate.currentGeneration,
+      validationId: this.state.workspace!.latestValidation!.id,
+      reason,
+    };
+    return this.transactionWrite(
+      { operation: 'safe-apply', nodeId: this.client.nodeId, requestId },
+      () => submitSafeApplyOnce(this.client, this.client.nodeId, command),
+    );
+  }
+  async decideSafeApply(
+    decision: 'confirm' | 'rollback',
+    reason: string,
+    requestId: string,
+  ) {
+    const presentation = this.transactionPresentation();
+    const tx = this.state.transaction;
+    if (
+      !tx ||
+      this.state.pendingRequestId ||
+      !this.state.workspace?.permissions.editCandidate ||
+      !(decision === 'confirm'
+        ? presentation?.canConfirm
+        : presentation?.canRollback) ||
+      !reason.trim() ||
+      reason.length > 2000
+    )
+      return false;
+    return this.transactionWrite(
+      {
+        operation: 'decision',
+        nodeId: this.client.nodeId,
+        requestId,
+        transactionId: tx.id,
+      },
+      () =>
+        this.client.decideSafeApply(tx.id, {
+          requestId,
+          decision,
+          reason,
+          expectedTransactionSequence: tx.sequence,
+        }),
+    );
+  }
+  async reconcileTransaction(requestId: string) {
+    const tx = this.state.transaction;
+    if (
+      !tx ||
+      this.state.pendingRequestId ||
+      !this.transactionPresentation()?.canReconcile ||
+      !this.state.workspace?.permissions.editCandidate
+    )
+      return false;
+    return this.transactionWrite(
+      {
+        operation: 'reconciliation',
+        nodeId: this.client.nodeId,
+        requestId,
+        transactionId: tx.id,
+      },
+      () => this.client.reconcileTransaction(tx.id, { requestId }),
+    );
+  }
+  private async recoverTransaction() {
+    const hint = this.state.pendingTransaction;
+    if (!hint || this.disposed || this.state.phase === 'writing') return;
+    const version = ++this.version;
+    this.set({
+      ...this.state,
+      phase: 'loading',
+      message: 'Reading the original transaction request…',
+    });
+    try {
+      const record = await this.client.readRequest(hint.requestId);
+      if (
+        !record ||
+        record.nodeId !== hint.nodeId ||
+        record.requestId !== hint.requestId ||
+        record.operation !== hint.operation ||
+        record.state === 'recorded' ||
+        (record.state === 'rejected' &&
+          (!record.problem ||
+            record.problem.requestId !== hint.requestId ||
+            record.problem.commandEffect !== 'not-started'))
+      )
+        throw new HttpContractError(
+          'The original request still has no conclusive result. No command was retried.',
+        );
+      if (record.state === 'accepted') {
+        if (
+          !record.transactionId ||
+          (hint.transactionId && hint.transactionId !== record.transactionId)
+        )
+          throw new HttpContractError(
+            'Original transaction identity does not match.',
+          );
+        const tx = await this.client.readTransaction(record.transactionId);
+        if (
+          tx.candidateRevision !== record.candidateRevision ||
+          (hint.operation === 'safe-apply' && tx.requestId !== hint.requestId)
+        )
+          throw new HttpContractError(
+            'The request ledger does not match the original transaction.',
+          );
+        if (hint.operation === 'reconciliation') {
+          if (!record.jobId)
+            throw new HttpContractError('Missing reconciliation job.');
+          const job = await this.client.readJob(record.jobId);
+          if (
+            job.kind !== 'reconciliation' ||
+            job.transactionId !== tx.id ||
+            job.correlationId !== hint.requestId
+          )
+            throw new HttpContractError(
+              'Reconciliation evidence does not match.',
+            );
+        }
+      }
+      const loaded = await this.load();
+      if (this.disposed || version !== this.version) return;
+      this.hints?.write(null);
+      this.set({
+        ...empty(),
+        ...loaded,
+        phase: 'ready',
+        message:
+          'Original request checked. Authoritative transaction and evidence restored.',
+      });
+    } catch (error) {
+      if (version === this.version) this.fail(error, hint.requestId);
+    }
+  }
+  async loadMoreEvidence() {
+    const tx = this.state.transaction;
+    const evidence = this.state.evidence;
+    if (
+      this.disposed ||
+      this.state.phase !== 'ready' ||
+      !tx ||
+      !evidence?.nextCursor
+    )
+      return;
+    const version = this.version;
+    try {
+      const next = await this.client.readEvidence(tx.id, evidence.nextCursor);
+      if (version === this.version && !this.disposed)
+        this.set({
+          ...this.state,
+          evidence: { ...next, items: [...evidence.items, ...next.items] },
+        });
+    } catch (error) {
+      if (version === this.version) this.fail(error, null);
     }
   }
 }
