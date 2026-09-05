@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { createContractValidator } from '../scripts/core-validator.mjs';
+import { CoreLabValidation } from './core-lab-validation.mjs';
 import { ports as prototypePorts, nativeVlanFields } from '../lib/ovs-model.ts';
 
 const now = () => new Date().toISOString();
@@ -24,7 +25,7 @@ export const labUsers = {
 };
 
 export class CoreLabStore {
-  constructor(path) {
+  constructor(path, options = {}) {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -100,6 +101,7 @@ export class CoreLabStore {
       this.setMeta('nodeBlocked', false);
       this.setMeta('providerAvailable', true);
     }
+    this.validations = new CoreLabValidation(this, options);
   }
   close() {
     this.db.close();
@@ -111,6 +113,15 @@ export class CoreLabStore {
     return row ? JSON.parse(row.value) : null;
   }
   setMeta(key, value) {
+    // Invalidate old observations even if a capability is later restored.
+    if (
+      ['nodeBlocked', 'providerAvailable', 'revokedEditors'].includes(key) &&
+      this.meta('validationPolicy') &&
+      !same(this.meta(key), value)
+    ) {
+      const policy = this.meta('validationPolicy');
+      this.setMeta('validationPolicy', { ...policy, revision: id('policy') });
+    }
     this.db
       .prepare(
         'INSERT INTO metadata VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -140,7 +151,7 @@ export class CoreLabStore {
       epoch: row.epoch,
       nodeId: this.meta('inventory').nodeId,
       label: labUsers[row.principal],
-      editable: row.principal !== 'observer',
+      editable: this.canEdit(row.principal),
     };
   }
   login(principal, oldToken) {
@@ -166,6 +177,13 @@ export class CoreLabStore {
       this.db
         .prepare('DELETE FROM sessions WHERE token_hash = ?')
         .run(hash(token));
+  }
+  canEdit(principal) {
+    return (
+      Object.hasOwn(labUsers, principal) &&
+      principal !== 'observer' &&
+      !(this.meta('revokedEditors') ?? []).includes(principal)
+    );
   }
   problem(code, status, detail, requestId = id('request')) {
     return {
@@ -250,14 +268,15 @@ export class CoreLabStore {
   workspace(session) {
     return {
       nodeId: session.nodeId,
-      serverTime: now(),
+      serverTime: new Date(this.validations.clock()).toISOString(),
       candidate: this.candidate(session.principal),
+      latestValidation: this.validations.latest(session.principal),
       activeTransactions: [],
       pendingRequests: [],
       nodeWriteBlocked: Boolean(this.meta('nodeBlocked')),
       permissions: {
-        editCandidate: session.editable,
-        validate: false,
+        editCandidate: this.canEdit(session.principal),
+        validate: this.canEdit(session.principal),
         startSafeApply: false,
       },
     };
@@ -327,7 +346,7 @@ export class CoreLabStore {
         'Use a typed Candidate command.',
       );
     const requestId = command.requestId;
-    if (!session.editable)
+    if (!this.canEdit(session.principal))
       return this.problem(
         'FORBIDDEN',
         403,

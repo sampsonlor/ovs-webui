@@ -8,12 +8,14 @@ import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { CoreLabStore } from '../dev/core-lab-store.mjs';
 import { coreLabMiddleware } from '../dev/core-lab-plugin.mjs';
+import { startValidationWorker } from '../dev/core-lab-validation.mjs';
 import { CoreHttpClient } from '../lib/api/http-client.ts';
 import {
   WorkspaceController,
   readPinnedInventory,
 } from '../lib/api/workspace-controller.ts';
 import { validateContract } from '../lib/api/validator.generated.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const freshCommand = () => ({
   requestId: randomUUID(),
@@ -26,8 +28,8 @@ function fixture(t) {
   const dir = mkdtempSync(join(root, 'ovs-candidate-test-'));
   const file = join(dir, 'state.sqlite');
   const stores = [];
-  const open = () => {
-    const s = new CoreLabStore(file);
+  const open = (options) => {
+    const s = new CoreLabStore(file, options);
     stores.push(s);
     return s;
   };
@@ -64,6 +66,334 @@ function stage(store, principal, requestId = randomUUID()) {
     session,
   };
 }
+
+function validationCommand(store, principal = 'alice') {
+  const candidate = store.candidate(principal);
+  return {
+    requestId: randomUUID(),
+    candidateId: candidate.id,
+    expectedCandidateRevision: candidate.revision,
+    expectedGeneration: candidate.currentGeneration,
+  };
+}
+function validateStaged(
+  store,
+  session,
+  command = validationCommand(store, session.principal),
+) {
+  const accepted = store.validations.start(session, command, command.requestId);
+  assert.equal(accepted.status, 202);
+  store.validations.tick();
+  store.validations.tick();
+  return {
+    accepted,
+    command,
+    result: store.validations.read(session.principal, accepted.body.id).body,
+  };
+}
+
+test('validation admission, captured diff, job and request survive restart; server worker needs no browser', (t) => {
+  const f = fixture(t);
+  const first = f.open();
+  const { session } = stage(first, 'alice');
+  first.validations.policyChange('available');
+  const command = validationCommand(first);
+  const accepted = first.validations.start(session, command, command.requestId);
+  assert.equal(accepted.status, 202);
+  assert.equal(accepted.body.status, 'pending');
+  assert.equal(validateContract('ValidationResource', accepted.body), true);
+  first.close();
+  const second = f.open();
+  second.validations.tick();
+  assert.equal(
+    second.validations.read('alice', accepted.body.id).body.status,
+    'running',
+  );
+  second.close();
+  const third = f.open();
+  third.validations.tick();
+  const completed = third.validations.read('alice', accepted.body.id).body;
+  assert.equal(completed.status, 'passed');
+  assert.deepEqual(completed.diff, accepted.body.diff);
+  assert.equal(
+    third.validations.job('alice', completed.jobId).body.state,
+    'succeeded',
+  );
+  assert.equal(
+    third.readRequest('alice', command.requestId).body.validationId,
+    completed.id,
+  );
+  assert.deepEqual(third.workspace(session).latestValidation, completed);
+  assert.equal(third.workspace(session).permissions.startSafeApply, false);
+  assert.equal(
+    third.meta('inventory').items[1].configuration.value.mode,
+    'access',
+  );
+});
+
+test('validation replay preserves original acceptance after completion and expiry; keys cannot cross operations', (t) => {
+  const store = fixture(t).open();
+  const staged = stage(store, 'alice');
+  const v = validateStaged(store, staged.session);
+  store.validations.expireLatest('alice');
+  assert.deepEqual(
+    store.validations.start(staged.session, v.command, v.command.requestId),
+    v.accepted,
+  );
+  assert.equal(
+    store.validations.start(
+      staged.session,
+      { ...v.command, expectedGeneration: 'different' },
+      v.command.requestId,
+    ).body.code,
+    'IDEMPOTENCY_MISMATCH',
+  );
+  const reused = {
+    ...validationCommand(store),
+    requestId: staged.command.requestId,
+  };
+  assert.equal(
+    store.validations.start(staged.session, reused, reused.requestId).body.code,
+    'IDEMPOTENCY_MISMATCH',
+  );
+  const candidate = store.snapshot('alice');
+  assert.equal(
+    store.mutate(
+      staged.session,
+      { requestId: v.command.requestId, operation: 'discard' },
+      candidate.etag,
+      v.command.requestId,
+    ).body.code,
+    'IDEMPOTENCY_MISMATCH',
+  );
+  assert.equal(
+    store.db.prepare('SELECT COUNT(*) AS n FROM validations').get().n,
+    1,
+  );
+});
+
+test('server clock expiry is persisted, scoped, and never resurrected by a later read', (t) => {
+  let time = Date.parse('2026-09-05T01:00:00.000Z');
+  const store = fixture(t).open({ clock: () => time });
+  const { session } = stage(store, 'alice');
+  store.validations.policyChange('available');
+  const { result } = validateStaged(store, session);
+  assert.equal(result.status, 'passed');
+  time += 120_001;
+  const expired = store.validations.read('alice', result.id).body;
+  assert.equal(expired.status, 'expired');
+  assert.equal(expired.checks.at(-1).code, 'VALIDATION_EXPIRED');
+  time -= 120_001;
+  assert.equal(
+    store.validations.read('alice', result.id).body.status,
+    'expired',
+  );
+  assert.equal(store.validations.read('bob', result.id).status, 404);
+  assert.equal(store.validations.job('bob', result.jobId).status, 404);
+  assert.equal(store.readRequest('bob', result.requestId).status, 404);
+});
+
+test('Candidate edits and external generation changes invalidate validation without rewriting its diff', (t) => {
+  const store = fixture(t).open();
+  const { session } = stage(store, 'alice');
+  store.validations.policyChange('available');
+  const original = validateStaged(store, session).result;
+  const snapshot = store.snapshot('alice');
+  const update = {
+    ...freshCommand(),
+    mine: { mode: 'access', tag: 241, trunks: [] },
+    expectedGeneration: snapshot.candidate.currentGeneration,
+  };
+  assert.equal(
+    store.mutate(session, update, snapshot.etag, update.requestId).status,
+    200,
+  );
+  assert.equal(
+    store.validations.read('alice', original.id).body.status,
+    'expired',
+  );
+  assert.deepEqual(
+    store.validations.read('alice', original.id).body.diff,
+    original.diff,
+  );
+  const next = validateStaged(store, session).result;
+  store.externalChange(null, null);
+  assert.equal(store.validations.read('alice', next.id).body.status, 'expired');
+  const stale = validateStaged(store, session).result;
+  assert.equal(stale.status, 'blocked');
+  assert.equal(
+    stale.checks.find((c) => c.code === 'CANDIDATE_CURRENT').state,
+    'block',
+  );
+  store.externalChange('port-2', { mode: 'access', tag: 333, trunks: [] });
+  assert.equal(store.candidate('alice').freshness, 'conflict');
+  assert.equal(validateStaged(store, session).result.status, 'blocked');
+  const current = store.candidate('alice');
+  const rebase = {
+    requestId: randomUUID(),
+    operation: 'rebase',
+    currentGeneration: current.currentGeneration,
+    conflictSnapshotId: current.conflictSnapshotId,
+    resolutions: [{ intentId: current.intents[0].id, choice: 'mine' }],
+  };
+  assert.equal(
+    store.mutate(
+      session,
+      rebase,
+      store.snapshot('alice').etag,
+      rebase.requestId,
+    ).status,
+    200,
+  );
+  assert.equal(validateStaged(store, session).result.status, 'passed');
+});
+
+test('admission races are rejected and queued work expires when revision, generation or policy changes', (t) => {
+  const store = fixture(t).open();
+  const { session } = stage(store, 'alice');
+  const old = validationCommand(store);
+  store.externalChange(null, null);
+  assert.equal(
+    store.validations.start(session, old, old.requestId).body.code,
+    'CANDIDATE_STALE',
+  );
+  assert.equal(
+    store.readRequest('alice', old.requestId).body.state,
+    'rejected',
+  );
+  const oldRevision = {
+    ...validationCommand(store),
+    expectedCandidateRevision: 'other-revision',
+  };
+  assert.equal(
+    store.validations.start(session, oldRevision, oldRevision.requestId).status,
+    412,
+  );
+  const command = validationCommand(store);
+  const pending = store.validations.start(
+    session,
+    command,
+    command.requestId,
+  ).body;
+  store.validations.policyChange('available');
+  store.validations.tick();
+  assert.equal(
+    store.validations.read('alice', pending.id).body.status,
+    'expired',
+  );
+  assert.equal(
+    store.validations.job('alice', pending.jobId).body.state,
+    'cancelled',
+  );
+});
+
+test('provider, safety and node checks block explicitly; job success never means validation passed', (t) => {
+  const store = fixture(t).open();
+  const { session } = stage(store, 'alice');
+  const defaults = validateStaged(store, session).result;
+  assert.equal(defaults.status, 'blocked');
+  assert.equal(defaults.safetyPlan.checkpoint, 'unavailable');
+  assert.equal(
+    store.validations.job('alice', defaults.jobId).body.state,
+    'succeeded',
+  );
+  store.validations.policyChange('unknown');
+  assert.equal(
+    store.validations.read('alice', defaults.id).body.status,
+    'expired',
+  );
+  assert.ok(
+    validateStaged(store, session).result.checks.some(
+      (c) => c.state === 'unknown',
+    ),
+  );
+  store.validations.policyChange('available');
+  store.setMeta('providerAvailable', false);
+  const provider = validateStaged(store, session).result;
+  assert.equal(provider.status, 'blocked');
+  assert.equal(
+    provider.checks.find((c) => c.code === 'PROVIDER_AVAILABLE').state,
+    'block',
+  );
+  store.setMeta('providerAvailable', true);
+  store.setMeta('nodeBlocked', true);
+  const locked = validateStaged(store, session).result;
+  assert.equal(
+    locked.checks.find((c) => c.code === 'NODE_ADMISSION').state,
+    'block',
+  );
+  store.setMeta('nodeBlocked', false);
+  assert.equal(
+    store.validations.read('alice', locked.id).body.status,
+    'expired',
+  );
+  assert.equal(store.workspace(session).permissions.startSafeApply, false);
+});
+
+test('read-only and revoked permissions cannot validate; restored permission cannot revive old validation', (t) => {
+  const store = fixture(t).open();
+  const { session } = stage(store, 'alice');
+  store.validations.policyChange('available');
+  const result = validateStaged(store, session).result;
+  store.setMeta('revokedEditors', ['alice']);
+  const command = validationCommand(store);
+  assert.equal(
+    store.validations.start(session, command, command.requestId).status,
+    403,
+  );
+  assert.equal(store.workspace(session).permissions.validate, false);
+  assert.equal(
+    store.validations.read('alice', result.id).body.status,
+    'expired',
+  );
+  store.setMeta('revokedEditors', []);
+  assert.equal(
+    store.validations.read('alice', result.id).body.status,
+    'expired',
+  );
+  const observer = store.login('observer').session;
+  const readonly = validationCommand(store, 'observer');
+  assert.equal(
+    store.validations.start(observer, readonly, readonly.requestId).status,
+    403,
+  );
+});
+
+test('queued checks cannot pass after a Candidate edit and current native write authority is checked on execution', (t) => {
+  const store = fixture(t).open();
+  const { session } = stage(store, 'alice');
+  store.validations.policyChange('available');
+  const command = validationCommand(store);
+  const queued = store.validations.start(
+    session,
+    command,
+    command.requestId,
+  ).body;
+  const discard = { requestId: randomUUID(), operation: 'discard' };
+  store.mutate(
+    session,
+    discard,
+    store.snapshot('alice').etag,
+    discard.requestId,
+  );
+  store.validations.tick();
+  assert.equal(
+    store.validations.read('alice', queued.id).body.status,
+    'expired',
+  );
+  stage(store, 'alice');
+  const inventory = store.meta('inventory');
+  inventory.items[1].authority = 'external';
+  inventory.items[1].scope = 'observe';
+  inventory.items[1].writableFields = [];
+  store.setMeta('inventory', inventory);
+  const blocked = validateStaged(store, session).result;
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(
+    blocked.checks.find((check) => check.code === 'PORT_WRITABLE').state,
+    'block',
+  );
+});
 
 test('Candidate, session and request evidence survive closing and reopening the database', (t) => {
   const f = fixture(t);
@@ -243,12 +573,14 @@ test('Observe-only Ports, provider failure and node admission lock cannot create
 
 async function httpFixture(t) {
   const store = fixture(t).open();
+  const stopWorker = startValidationWorker(store);
   const handler = coreLabMiddleware(store);
   const server = createServer(handler);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;
   t.after(() => {
+    stopWorker();
     server.closeAllConnections();
     server.close();
   });
@@ -312,6 +644,162 @@ test('HTTP bootstrap, paginated Ports, persisted save and read-only identity use
   await readonly.refresh();
   assert.equal(readonly.canWrite(), false);
   assert.equal(await readonly.mutate(command), false);
+});
+
+test('HTTP validation completes on the server and restores its exact result and job in a new controller', async (t) => {
+  const { login, store } = await httpFixture(t);
+  const alice = await login('alice');
+  stage(store, 'alice');
+  store.validations.policyChange('available');
+  const controller = new WorkspaceController(alice.client);
+  await controller.refresh();
+  assert.equal(controller.canValidate(), true);
+  assert.equal(await controller.validate(randomUUID()), true);
+  const validationId = controller.getSnapshot().workspace.latestValidation.id;
+  controller.dispose();
+  // The worker keeps going after the requesting client has gone away.
+  await delay(550);
+  const restored = new WorkspaceController(alice.client);
+  await restored.refresh();
+  const state = restored.getSnapshot();
+  assert.equal(state.workspace.latestValidation.id, validationId);
+  assert.equal(state.workspace.latestValidation.status, 'passed');
+  assert.equal(state.validationJob.state, 'succeeded');
+  assert.equal(state.workspace.permissions.startSafeApply, false);
+  store.setMeta('providerAvailable', false);
+  await restored.pollValidation();
+  assert.equal(
+    restored.getSnapshot().workspace.latestValidation.status,
+    'expired',
+  );
+  assert.equal(restored.getSnapshot().inventory, null);
+  assert.ok(restored.getSnapshot().snapshot.candidate.intents.length);
+});
+
+test('lost validation response recovers original request by GET without a duplicate POST', async (t) => {
+  const { login, origin, store } = await httpFixture(t);
+  const alice = await login('alice');
+  stage(store, 'alice');
+  const client = new CoreHttpClient({
+    origin,
+    nodeId: alice.session.nodeId,
+    csrfToken: () => alice.session.csrfToken,
+    validate: validateContract,
+    fetch: async (url, options) => {
+      const response = await alice.transport(url, options);
+      if (options.method === 'POST') {
+        await response.text();
+        throw new TypeError('Accepted reply lost.');
+      }
+      return response;
+    },
+  });
+  const controller = new WorkspaceController(client);
+  await controller.refresh();
+  const requestId = randomUUID();
+  assert.equal(await controller.validate(requestId), false);
+  assert.equal(controller.getSnapshot().phase, 'unknown');
+  assert.equal(controller.getSnapshot().pendingValidation.requestId, requestId);
+  assert.equal(controller.canWrite(), false);
+  assert.equal(controller.canValidate(), false);
+  await controller.recover();
+  assert.equal(controller.getSnapshot().phase, 'ready');
+  assert.equal(
+    controller.getSnapshot().workspace.latestValidation.requestId,
+    requestId,
+  );
+  assert.equal(alice.calls.filter((method) => method === 'POST').length, 1);
+});
+
+test('wrong-snapshot validation acceptance remains unknown and recovery refuses unrelated ledger evidence', async (t) => {
+  const { login, origin, store } = await httpFixture(t);
+  const alice = await login('alice');
+  stage(store, 'alice');
+  const client = new CoreHttpClient({
+    origin,
+    nodeId: alice.session.nodeId,
+    csrfToken: () => alice.session.csrfToken,
+    validate: validateContract,
+    fetch: async (url, options) => {
+      const response = await alice.transport(url, options);
+      const address =
+        typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+      if (address.endsWith('/validations')) {
+        const data = await response.json();
+        data.candidateRevision = 'wrong-revision';
+        return new Response(JSON.stringify(data), {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (address.includes('/requests/')) {
+        const data = await response.json();
+        data.operation = 'candidate';
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return response;
+    },
+  });
+  const controller = new WorkspaceController(client);
+  await controller.refresh();
+  assert.equal(await controller.validate(randomUUID()), false);
+  await controller.recover();
+  assert.equal(controller.getSnapshot().phase, 'unknown');
+  assert.equal(alice.calls.filter((method) => method === 'POST').length, 1);
+});
+
+test('revocation between browser review and HTTP validation clears private state and closes controls', async (t) => {
+  const { login, store } = await httpFixture(t);
+  const alice = await login('alice');
+  stage(store, 'alice');
+  const controller = new WorkspaceController(alice.client);
+  await controller.refresh();
+  assert.equal(controller.canValidate(), true);
+  store.setMeta('revokedEditors', ['alice']);
+  assert.equal(await controller.validate(randomUUID()), false);
+  assert.equal(controller.getSnapshot().permissionError, true);
+  assert.equal(controller.getSnapshot().snapshot, null);
+  assert.equal(controller.getSnapshot().workspace, null);
+  assert.equal(controller.canValidate(), false);
+  assert.equal(
+    store.db.prepare('SELECT COUNT(*) AS n FROM validations').get().n,
+    0,
+  );
+});
+
+test('HTTP reads reject passed validation with unknown checks and unrelated job evidence', async (t) => {
+  const { login, origin, store } = await httpFixture(t);
+  const alice = await login('alice');
+  stage(store, 'alice');
+  store.validations.policyChange('available');
+  const validation = validateStaged(store, alice.session).result;
+  const client = new CoreHttpClient({
+    origin,
+    nodeId: alice.session.nodeId,
+    csrfToken: () => alice.session.csrfToken,
+    validate: validateContract,
+    fetch: async (url, options) => {
+      const response = await alice.transport(url, options);
+      const data = await response.json();
+      if (data.checks) data.checks[0].state = 'unknown';
+      if (data.kind === 'validation') data.correlationId = 'unrelated-request';
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+  await assert.rejects(
+    client.readValidation(validation.id),
+    /blocking evidence/,
+  );
+  await assert.rejects(
+    client.readValidationJob(validation),
+    /another validation job/,
+  );
 });
 
 test('an accepted save with a lost HTTP reply recovers by GET without another PATCH', async (t) => {

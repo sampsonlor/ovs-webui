@@ -177,6 +177,8 @@ export const schemas = {
   }),
   ValidationResource: object({
     id: id(),
+    nodeId: id(),
+    requestId: id(),
     jobId: id(),
     candidateId: id(),
     candidateRevision: revision(),
@@ -348,6 +350,7 @@ export const schemas = {
     nodeId: id(),
     serverTime: date(),
     candidate: ref('CandidateResource'),
+    latestValidation: nullable(ref('ValidationResource')),
     activeTransactions: array(ref('TransactionResource')),
     pendingRequests: array(ref('RequestRecord')),
     nodeWriteBlocked: { type: 'boolean' },

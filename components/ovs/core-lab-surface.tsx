@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { useCoreLab } from '@/hooks/use-core-lab';
 import { PortsPage } from './ports-page';
 import { VlanEdit } from './vlan-editor';
+import { CoreLabValidationPanel } from './core-lab-validation';
 import { Notice, PageHeader, StatusBadge, ScopeBadge } from './foundation';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,8 +43,8 @@ export function CoreLabSession({
   return (
     <div className="flex flex-wrap items-center gap-2 border-b bg-muted/60 px-4 py-2 text-sm">
       <span className="mr-auto">
-        Local integration · synthetic Ports · Candidate saved on server{' '}
-        {lab.session ? `· ${lab.session.label}` : ''}
+        Local integration · synthetic Ports · Candidate / Validation saved on
+        server {lab.session ? `· ${lab.session.label}` : ''}
       </span>
       {(['alice', 'bob', 'observer'] as const).map((principal) => (
         <Button
@@ -89,7 +90,13 @@ export function CoreLabSession({
               ['conflict', 'VLAN conflict'],
               ['provider-unavailable', 'Provider unavailable'],
               ['node-blocked', 'Unresolved node operation'],
-              ['healthy', 'Restore provider / release node lock'],
+              ['validation-expired', 'Expire latest validation'],
+              ['policy-changed', 'Validation policy change'],
+              ['permission-revoked', 'Revoke current editor permission'],
+              ['safety-available', 'Safety available (synthetic fixture)'],
+              ['safety-unavailable', 'Safety unavailable'],
+              ['safety-unknown', 'Safety unknown'],
+              ['healthy', 'Restore provider / permissions / node'],
             ].map(([value, label]) => (
               <NativeSelectOption key={value} value={value}>
                 {label}
@@ -215,7 +222,9 @@ export function CoreLabSurface({
           }
           title={
             state.phase === 'unknown'
-              ? 'Candidate save outcome unknown'
+              ? state.pendingValidation
+                ? 'Validation request outcome unknown'
+                : 'Candidate save outcome unknown'
               : 'Workspace status'
           }
           actions={
@@ -248,6 +257,13 @@ export function CoreLabSurface({
           operation.
         </Notice>
       )}
+      {state.workspace && !state.inventory && (
+        <Notice tone="warning" title="Port provider unavailable">
+          Current inventory could not be read. Saved Candidate and validation
+          evidence remain available; the empty inventory is not a claim that no
+          Ports exist.
+        </Notice>
+      )}
     </>
   );
   if (state.permissionError || !candidate)
@@ -267,7 +283,11 @@ export function CoreLabSurface({
         <PortsPage
           identityLabel="Port ID"
           inventory={ports.map(portPresentation)}
-          snapshotLabel={`Server snapshot · ${state.inventory?.observedAt}`}
+          snapshotLabel={
+            state.inventory
+              ? `Server snapshot · ${state.inventory.observedAt}`
+              : 'Provider unavailable'
+          }
           mode={mode}
           search={search}
           setSearch={setSearch}
@@ -276,7 +296,7 @@ export function CoreLabSurface({
           go={go}
           onRefresh={refresh}
           scenario={
-            state.phase === 'error'
+            state.phase === 'error' || !state.inventory
               ? 'error'
               : state.inventory?.availability === 'degraded'
                 ? 'degraded'
@@ -550,11 +570,15 @@ export function CoreLabSurface({
             {view === 'workspace' ? 'Review diff' : 'Workspace'}
           </Button>
         </div>
-        <Notice tone="info" title="Validation service pending">
-          This local slice saves and restores Candidate only. Safe Apply becomes
-          available after the server supplies validation, checkpoint and
-          rollback protection.
-        </Notice>
+        <CoreLabValidationPanel
+          state={state}
+          mode={mode}
+          canValidate={lab.canValidate}
+          onValidate={() => {
+            if (window.matchMedia('(min-width: 1024px)').matches)
+              void lab.controller?.validate(crypto.randomUUID());
+          }}
+        />
       </>
     );
   return (
@@ -575,9 +599,22 @@ export function CoreLabSurface({
         }
       >
         The persistence lab does not execute OVS mutations. Its request ledger
-        can recover Candidate saves; transaction execution and Event/Audit views
-        will be connected in the next server slice.
+        can recover Candidate saves and validation requests; transaction
+        execution and Event/Audit views will be connected in the next server
+        slice.
       </Notice>
+      {state.validationJob && (
+        <section className="ovs-surface mt-4 p-4">
+          <h2 className="font-semibold">Latest validation job</h2>
+          <p className="mt-2 break-all font-mono text-xs">
+            {state.validationJob.id}
+          </p>
+          <p className="mt-2 text-sm">{state.validationJob.message}</p>
+          <Button className="mt-3" variant="outline" onClick={() => go('diff')}>
+            Read validation result
+          </Button>
+        </section>
+      )}
       {state.workspace?.activeTransactions.map((transaction) => (
         <div key={transaction.id} className="ovs-surface mt-3 p-4">
           <p className="font-mono">{transaction.id}</p>

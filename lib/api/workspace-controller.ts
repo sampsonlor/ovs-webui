@@ -8,6 +8,8 @@ import type {
   CandidateMutation,
   PortsPage,
   WorkspaceSnapshot,
+  ValidationRequest,
+  JobResource,
 } from './types.generated';
 
 export type WorkspaceState = {
@@ -23,6 +25,8 @@ export type WorkspaceState = {
   workspace: WorkspaceSnapshot | null;
   inventory: PortsPage | null;
   pendingRequestId: string | null;
+  pendingValidation: ValidationRequest | null;
+  validationJob: JobResource | null;
   message: string;
   permissionError: boolean;
 };
@@ -32,6 +36,8 @@ const empty = (): WorkspaceState => ({
   workspace: null,
   inventory: null,
   pendingRequestId: null,
+  pendingValidation: null,
+  validationJob: null,
   message: '',
   permissionError: false,
 });
@@ -141,23 +147,53 @@ export class WorkspaceController {
       )
     );
   }
+  canValidate() {
+    const { phase, workspace, snapshot, pendingRequestId } = this.state;
+    return (
+      phase === 'ready' &&
+      !pendingRequestId &&
+      Boolean(
+        workspace?.permissions.validate &&
+        snapshot?.candidate.intents.length &&
+        snapshot.candidate.freshness === 'current' &&
+        !workspace.nodeWriteBlocked &&
+        !snapshot.candidate.lockedByTransactionId &&
+        !workspace.activeTransactions.some((item) => item.locksCandidate) &&
+        !workspace.pendingRequests.some((item) => item.state === 'recorded') &&
+        !['pending', 'running'].includes(
+          workspace.latestValidation?.status ?? '',
+        ),
+      )
+    );
+  }
   private async load() {
     const workspace = await this.client.readWorkspace();
     const [snapshot, inventory] = await Promise.all([
       this.client.readCandidate(),
-      readPinnedInventory(this.client),
+      readPinnedInventory(this.client).catch((error: unknown) => {
+        if (
+          error instanceof ApiProblemError &&
+          error.problem.code === 'PROVIDER_UNAVAILABLE'
+        )
+          return null;
+        throw error;
+      }),
     ]);
     if (
       workspace.candidate.id !== snapshot.candidate.id ||
       workspace.candidate.revision !== snapshot.candidate.revision ||
       workspace.candidate.currentGeneration !==
         snapshot.candidate.currentGeneration ||
-      inventory.generation !== snapshot.candidate.currentGeneration
+      (inventory &&
+        inventory.generation !== snapshot.candidate.currentGeneration)
     )
       throw new HttpContractError(
         'Workspace changed while loading. Refresh and review again.',
       );
-    return { workspace, snapshot, inventory };
+    const validationJob = workspace.latestValidation
+      ? await this.client.readValidationJob(workspace.latestValidation)
+      : null;
+    return { workspace, snapshot, inventory, validationJob };
   }
   async refresh() {
     if (this.disposed || this.state.phase === 'writing') return;
@@ -229,8 +265,82 @@ export class WorkspaceController {
       return false;
     }
   }
+  async validate(requestId: string) {
+    if (!this.canValidate() || !this.state.snapshot) return false;
+    const candidate = this.state.snapshot.candidate;
+    const command: ValidationRequest = {
+      requestId,
+      candidateId: candidate.id,
+      expectedCandidateRevision: candidate.revision,
+      expectedGeneration: candidate.currentGeneration,
+    };
+    const version = ++this.version;
+    this.set({
+      ...this.state,
+      phase: 'writing',
+      pendingRequestId: requestId,
+      pendingValidation: command,
+      message: 'Requesting server validation…',
+    });
+    try {
+      const reply = await this.client.validateCandidate(command);
+      if (version !== this.version || this.disposed) return false;
+      if (reply.kind === 'unknown') {
+        this.set({
+          ...this.state,
+          phase: 'unknown',
+          message:
+            'The validation response was lost. Check the original request before submitting another validation.',
+        });
+        return false;
+      }
+      if (reply.kind === 'rejected') {
+        if ([401, 403].includes(reply.problem.status))
+          this.fail(new ApiProblemError(reply.problem), null);
+        else
+          this.set({
+            ...this.state,
+            phase: 'error',
+            pendingRequestId: null,
+            pendingValidation: null,
+            message: reply.problem.detail,
+          });
+        return false;
+      }
+      const loaded = await this.load();
+      if (version !== this.version || this.disposed) return false;
+      this.set({
+        ...empty(),
+        ...loaded,
+        phase: 'ready',
+        message:
+          'Validation accepted. Its server job continues if this page closes.',
+      });
+      return true;
+    } catch (error) {
+      if (version === this.version) this.fail(error, requestId);
+      return false;
+    }
+  }
+  async pollValidation() {
+    if (
+      this.disposed ||
+      this.state.phase !== 'ready' ||
+      !this.state.workspace?.latestValidation
+    )
+      return;
+    const version = ++this.version;
+    try {
+      const loaded = await this.load();
+      if (version === this.version && !this.disposed)
+        this.set({ ...this.state, ...loaded });
+    } catch (error) {
+      if (version === this.version) this.fail(error, null);
+    }
+  }
   async recover() {
     const requestId = this.state.pendingRequestId;
+    const validation = this.state.pendingValidation;
     if (!requestId || this.disposed || this.state.phase === 'writing') return;
     const version = ++this.version;
     this.set({
@@ -243,7 +353,7 @@ export class WorkspaceController {
       if (version !== this.version || this.disposed) return;
       if (
         !record ||
-        record.operation !== 'candidate' ||
+        record.operation !== (validation ? 'validation' : 'candidate') ||
         record.nodeId !== this.client.nodeId ||
         record.requestId !== requestId ||
         record.state === 'recorded' ||
@@ -260,14 +370,36 @@ export class WorkspaceController {
         });
         return;
       }
+      if (validation && record.state === 'accepted') {
+        if (
+          !record.validationId ||
+          !record.jobId ||
+          record.candidateRevision !== validation.expectedCandidateRevision
+        )
+          throw new HttpContractError(
+            'Original validation evidence is incomplete.',
+          );
+        const restored = await this.client.readValidation(record.validationId);
+        if (
+          restored.requestId !== requestId ||
+          restored.jobId !== record.jobId ||
+          restored.candidateId !== validation.candidateId ||
+          restored.candidateRevision !== validation.expectedCandidateRevision ||
+          restored.generation !== validation.expectedGeneration
+        )
+          throw new HttpContractError(
+            'Original validation evidence does not match the submitted snapshot.',
+          );
+      }
       const loaded = await this.load();
       if (version === this.version)
         this.set({
           ...empty(),
           ...loaded,
           phase: 'ready',
-          message:
-            record.state === 'accepted'
+          message: validation
+            ? 'Original validation request checked. Latest server diff and result restored.'
+            : record.state === 'accepted'
               ? 'The original save was accepted. Latest Candidate restored.'
               : 'The original save was rejected. Latest Candidate restored for review.',
         });

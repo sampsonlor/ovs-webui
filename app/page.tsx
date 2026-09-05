@@ -686,8 +686,8 @@ function P0Stepper({ view, go }: { view: View; go: (view: View) => void }) {
 
 export default function Home() {
   const labEnabled = __OVS_CORE_LAB__;
-  const lab = useCoreLab(labEnabled);
   const [view, setView] = useState<View>('ports');
+  const lab = useCoreLab(labEnabled, view !== 'vlan-edit');
   const [mode, setMode] = useState<Mode>('standard');
   const [selectedPort, setSelectedPort] = useState('server-07');
   const [search, setSearch] = useState('');

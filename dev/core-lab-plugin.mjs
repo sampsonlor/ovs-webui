@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { CoreLabStore, labUsers } from './core-lab-store.mjs';
+import { startValidationWorker } from './core-lab-validation.mjs';
 
 const cookieName = 'ovs_lab_session';
 const loopbackHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -187,6 +188,12 @@ export function coreLabMiddleware(store) {
             'provider-unavailable',
             'node-blocked',
             'healthy',
+            'validation-expired',
+            'policy-changed',
+            'permission-revoked',
+            'safety-available',
+            'safety-unavailable',
+            'safety-unknown',
           ].includes(body.scenario) ||
           Object.keys(body).length !== 1
         )
@@ -222,6 +229,28 @@ export function coreLabMiddleware(store) {
         } else if (body.scenario === 'healthy') {
           store.setMeta('providerAvailable', true);
           store.setMeta('nodeBlocked', false);
+          store.setMeta('revokedEditors', []);
+        } else if (body.scenario === 'validation-expired') {
+          if (!store.validations.expireLatest(session.principal))
+            return send(
+              res,
+              store.problem(
+                'INVALID_INTENT',
+                422,
+                'Complete a validation before simulating expiry.',
+              ),
+            );
+        } else if (body.scenario === 'policy-changed') {
+          store.validations.policyChange();
+        } else if (body.scenario === 'permission-revoked') {
+          store.setMeta('revokedEditors', [
+            ...new Set([
+              ...(store.meta('revokedEditors') ?? []),
+              session.principal,
+            ]),
+          ]);
+        } else if (body.scenario.startsWith('safety-')) {
+          store.validations.policyChange(body.scenario.slice('safety-'.length));
         } else
           store.setMeta(
             body.scenario === 'node-blocked'
@@ -296,6 +325,36 @@ export function coreLabMiddleware(store) {
             decodeURIComponent(url.pathname.slice('/api/v1/requests/'.length)),
           ),
         );
+      if (req.method === 'POST' && url.pathname === '/api/v1/validations')
+        return send(
+          res,
+          store.validations.start(
+            session,
+            await readBody(req),
+            req.headers['idempotency-key'],
+          ),
+        );
+      if (
+        req.method === 'GET' &&
+        url.pathname.startsWith('/api/v1/validations/')
+      )
+        return send(
+          res,
+          store.validations.read(
+            session.principal,
+            decodeURIComponent(
+              url.pathname.slice('/api/v1/validations/'.length),
+            ),
+          ),
+        );
+      if (req.method === 'GET' && url.pathname.startsWith('/api/v1/jobs/'))
+        return send(
+          res,
+          store.validations.job(
+            session.principal,
+            decodeURIComponent(url.pathname.slice('/api/v1/jobs/'.length)),
+          ),
+        );
       // This development slice has no OVS provider, apply or watchdog implementation.
       return send(
         res,
@@ -326,8 +385,10 @@ export function coreLabPlugin(path = resolve('.ovs-lab/state.sqlite')) {
     configureServer(server) {
       mkdirSync(dirname(path), { recursive: true });
       store = new CoreLabStore(path);
+      const stopWorker = startValidationWorker(store);
       server.middlewares.use(coreLabMiddleware(store));
       server.httpServer?.once('close', () => {
+        stopWorker();
         store?.close();
         store = undefined;
       });

@@ -21,12 +21,14 @@ const initial: WorkspaceState = {
   workspace: null,
   inventory: null,
   pendingRequestId: null,
+  pendingValidation: null,
+  validationJob: null,
   message: '',
   permissionError: false,
 };
 const emptySubscribe = () => () => undefined;
 
-export function useCoreLab(enabled: boolean) {
+export function useCoreLab(enabled: boolean, pollValidation = true) {
   const [session, setSession] = useState<Session | null>(null);
   const [controller, setController] = useState<WorkspaceController | null>(
     null,
@@ -175,6 +177,23 @@ export function useCoreLab(enabled: boolean) {
       if (version === requestVersion.current) setChecking(false);
     }
   };
+  useEffect(() => {
+    if (
+      !pollValidation ||
+      !controller ||
+      checking ||
+      state.phase !== 'ready' ||
+      !state.workspace?.latestValidation
+    )
+      return;
+    const status = state.workspace.latestValidation.status;
+    // Server observations own completion and expiry; no browser countdown marks a result passed.
+    const timer = setTimeout(
+      () => void controller.pollValidation(),
+      ['pending', 'running'].includes(status) ? 500 : 5000,
+    );
+    return () => clearTimeout(timer);
+  }, [controller, checking, state, pollValidation]);
   return {
     session,
     controller,
@@ -184,5 +203,6 @@ export function useCoreLab(enabled: boolean) {
     connect,
     observe,
     canWrite: !checking && Boolean(controller?.canWrite()),
+    canValidate: !checking && Boolean(controller?.canValidate()),
   };
 }

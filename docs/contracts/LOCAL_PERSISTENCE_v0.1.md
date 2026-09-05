@@ -21,10 +21,11 @@ Node 需支持内置 SQLite，项目最低版本为 22.13；本轮使用 Node 24
    conflict。Stale 必须 rebase；Conflict 展示 base/current/mine 并要求明确选择。
    若选择后外部 generation 又变化，提交会再次被拒绝。
 6. Provider unavailable 保留错误与未知语义；Unresolved node operation 阻止新写入。
-   Restore provider / release node lock 只恢复这两项场景，不撤销外部 VLAN 修改。
+   Restore provider / permissions / node 恢复观察条件，不撤销外部 VLAN 修改。
 
-页面保存成功只表示 Candidate 写入本地服务。当前切片不提供真实 OVS 修改、Validation
-令牌、Safe Apply 调度或确认/回滚；联调模式在相应入口明确显示未接入，且禁用原型
+页面保存成功只表示 Candidate 写入本地服务。后续已接入的服务端 Diff/Validation 见
+[验证联调](LOCAL_VALIDATION_v0.1.md)。本地模式仍不提供真实 OVS 修改、Safe Apply 调度
+或确认/回滚；联调模式在相应入口明确显示未接入，且禁用原型
 WebMCP 配置工具，避免服务端 Candidate 与内存模拟事务混用。其他 P1 页面保留演示数据。
 
 ## 实现边界
@@ -55,5 +56,5 @@ WebMCP 配置工具，避免服务端 Candidate 与内存模拟事务混用。�
 这证明本地 SQLite/HTTP 链路的行为，尚未执行浏览器交互验收、进程强杀故障恢复、真实
 认证集成或真实 OVS 测试。预览只做了页面编译和 HTTP 成功响应检查。
 
-下一阶段接服务端 Diff/Validation：版本/世代/策略绑定、验证过期及原生能力检查；
-随后接持久事务、真实 checkpoint/probe、服务端 watchdog 和 Safe Apply 确认/回滚。
+本页保留 Candidate 持久化切片的验收记录。下一切片的版本/世代/策略绑定、验证过期
+及原生能力检查已记录在 [LOCAL_VALIDATION_v0.1.md](LOCAL_VALIDATION_v0.1.md)。

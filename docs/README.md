@@ -4,9 +4,11 @@
 
 - `reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md` — state-level acceptance evidence and remaining browser/backend gates
 - `contracts/CORE_API_CONTRACT_v0.1.md` — API semantics, state mapping, recovery and integration sequence
+- `contracts/LOCAL_PERSISTENCE_v0.1.md` — local Ports/Candidate persistence and session review
+- `contracts/LOCAL_VALIDATION_v0.1.md` — durable server diff, validation jobs, expiry and exception review
 - `../contracts/openapi.v0.1.json` — generated OpenAPI contract for the first Ports/VLAN integration slice
 
-The contract is a review proposal. Production persistence, authentication, HTTP adapters and OVS operations are not enabled by these artifacts.
+The contract is a review proposal. The opt-in local lab connects HTTP adapters to synthetic persistent resources. Production persistence, authentication and OVS operations remain separate integration gates.
 
 ## Design System v0.1 review
 

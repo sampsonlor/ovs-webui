@@ -148,6 +148,8 @@ export type SafetyPlan = {
 
 export type ValidationResource = {
   "id": Id;
+  "nodeId": Id;
+  "requestId": Id;
   "jobId": Id;
   "candidateId": Id;
   "candidateRevision": Revision;
@@ -255,6 +257,7 @@ export type WorkspaceSnapshot = {
   "nodeId": Id;
   "serverTime": string;
   "candidate": CandidateResource;
+  "latestValidation": (ValidationResource) | (null);
   "activeTransactions": Array<TransactionResource>;
   "pendingRequests": Array<RequestRecord>;
   "nodeWriteBlocked": boolean;

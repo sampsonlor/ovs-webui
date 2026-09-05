@@ -9,6 +9,9 @@ import type {
   StartSafeApplyRequest,
   TransactionResource,
   WorkspaceSnapshot,
+  ValidationRequest,
+  ValidationResource,
+  JobResource,
 } from './types.generated';
 
 export type HttpSchemas = {
@@ -18,6 +21,9 @@ export type HttpSchemas = {
   CandidateResource: CandidateResource;
   CandidateMutation: CandidateMutation;
   WorkspaceSnapshot: WorkspaceSnapshot;
+  ValidationRequest: ValidationRequest;
+  ValidationResource: ValidationResource;
+  JobResource: JobResource;
   StartSafeApplyRequest: StartSafeApplyRequest;
   TransactionResource: TransactionResource;
   RequestRecord: RequestRecord;
@@ -33,6 +39,10 @@ export type ValidateContract = (
 export type CandidateSnapshot = { candidate: CandidateResource; etag: string };
 export type CandidateWriteResult =
   | { kind: 'accepted'; snapshot: CandidateSnapshot }
+  | { kind: 'rejected'; problem: Problem }
+  | { kind: 'unknown'; requestId: string; nodeId: string };
+export type ValidationWriteResult =
+  | { kind: 'accepted'; validation: ValidationResource }
   | { kind: 'rejected'; problem: Problem }
   | { kind: 'unknown'; requestId: string; nodeId: string };
 
@@ -121,6 +131,28 @@ export class CoreHttpClient implements ChangeControlGateway {
   private id(value: string): string {
     return encodeURIComponent(this.check('Id', value));
   }
+  private validationResource(resource: ValidationResource): ValidationResource {
+    this.sameNode(resource);
+    if (
+      resource.status === 'passed' &&
+      (!resource.expiresAt ||
+        !resource.diff.length ||
+        !resource.checks.length ||
+        !resource.safetyPlan ||
+        resource.checks.some((check) =>
+          ['block', 'unknown'].includes(check.state),
+        ) ||
+        [
+          resource.safetyPlan.checkpoint,
+          resource.safetyPlan.connectivityProbe,
+          resource.safetyPlan.compareBeforeRollback,
+        ].some((availability) => availability !== 'available'))
+    )
+      throw new HttpContractError(
+        'Passed validation has incomplete or blocking evidence.',
+      );
+    return resource;
+  }
 
   private async request<K extends keyof HttpSchemas>(
     path: string,
@@ -195,6 +227,20 @@ export class CoreHttpClient implements ChangeControlGateway {
     const { data } = await this.request('/workspace', 'WorkspaceSnapshot');
     this.sameNode(data);
     this.sameNode(data.candidate);
+    if (data.latestValidation) {
+      this.validationResource(data.latestValidation);
+      if (
+        data.latestValidation.candidateId !== data.candidate.id ||
+        (data.latestValidation.status !== 'expired' &&
+          (data.latestValidation.candidateRevision !==
+            data.candidate.revision ||
+            data.latestValidation.generation !==
+              data.candidate.currentGeneration))
+      )
+        throw new HttpContractError(
+          'Validation does not match the workspace snapshot.',
+        );
+    }
     data.activeTransactions.forEach((item) => this.sameNode(item));
     data.pendingRequests.forEach((item) => this.sameNode(item));
     return data;
@@ -282,6 +328,71 @@ export class CoreHttpClient implements ChangeControlGateway {
       // Keep this requestId, read its ledger and refresh Candidate; never retry here.
       return { kind: 'unknown', requestId, nodeId: this.nodeId };
     }
+  }
+
+  async validateCandidate(
+    command: ValidationRequest,
+  ): Promise<ValidationWriteResult> {
+    const submitted = this.check('ValidationRequest', structuredClone(command));
+    try {
+      const { data } = await this.request(
+        '/validations',
+        'ValidationResource',
+        {
+          method: 'POST',
+          command: submitted,
+          status: 202,
+        },
+      );
+      this.validationResource(data);
+      if (
+        data.requestId !== submitted.requestId ||
+        data.candidateId !== submitted.candidateId ||
+        data.candidateRevision !== submitted.expectedCandidateRevision ||
+        data.generation !== submitted.expectedGeneration
+      )
+        throw new HttpContractError('Mismatched accepted validation.');
+      return { kind: 'accepted', validation: data };
+    } catch (error) {
+      if (
+        error instanceof ApiProblemError &&
+        error.problem.commandEffect === 'not-started'
+      )
+        return { kind: 'rejected', problem: error.problem };
+      return {
+        kind: 'unknown',
+        requestId: submitted.requestId,
+        nodeId: this.nodeId,
+      };
+    }
+  }
+
+  async readValidation(validationId: string): Promise<ValidationResource> {
+    const { data } = await this.request(
+      `/validations/${this.id(validationId)}`,
+      'ValidationResource',
+    );
+    if (data.id !== validationId)
+      throw new HttpContractError('Response belongs to another validation.');
+    return this.validationResource(data);
+  }
+
+  async readValidationJob(
+    validation: ValidationResource,
+  ): Promise<JobResource> {
+    const { data } = await this.request(
+      `/jobs/${this.id(validation.jobId)}`,
+      'JobResource',
+    );
+    if (
+      data.id !== validation.jobId ||
+      data.kind !== 'validation' ||
+      data.correlationId !== validation.requestId
+    )
+      throw new HttpContractError(
+        'Response belongs to another validation job.',
+      );
+    return this.sameNode(data);
   }
 
   async startSafeApply(
