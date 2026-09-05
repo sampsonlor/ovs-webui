@@ -121,6 +121,17 @@ Edit `contracts/core-v0.1.mjs`, then regenerate the OpenAPI document and TypeScr
 types. The test command rejects stale generated files and checks response fixtures,
 lost acknowledgements, safe confirmation, rollback conflicts and out-of-order reads.
 
+## GitHub CI and isolated testing
+
+Pull requests and main updates run the pinned toolchain, contract checks, product
+lint, TypeScript, regression tests, process-recovery integration tests and production
+build. `CI Gate` requires both jobs to succeed. JUnit reports are retained for 7 days.
+The `ci-integration` environment uses disposable Linux runners and per-test SQLite
+databases; it has no production credentials or real OVS executor.
+
+See [the GitHub CI guide](docs/contracts/GITHUB_CI_v0.1.md) for local commands,
+lint scope, environment isolation and remaining Staging/browser/provider gates.
+
 ## Safety and scope
 
 - Prototype data is synthetic.

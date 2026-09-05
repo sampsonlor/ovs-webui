@@ -2,6 +2,7 @@
   "name": "sites-project",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -10,6 +11,10 @@
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
+    "lint:ci": "oxlint app components/ovs lib hooks/use-core-lab.ts scripts dev contracts tests --ignore-pattern '**/*.generated.*'",
+    "typecheck": "tsc --noEmit",
+    "test:ci": "pnpm contracts:check && node scripts/run-ci-tests.mjs unit",
+    "test:integration": "node scripts/run-ci-tests.mjs integration",
     "test:state": "node --experimental-strip-types --test tests/change-control.test.mjs",
     "test:contracts": "node scripts/generate-core-contract.mjs --check && node scripts/generate-core-validator.mjs --check && node --experimental-strip-types --test tests/api-*.test.mjs",
     "test": "node scripts/generate-core-contract.mjs --check && node scripts/generate-core-validator.mjs --check && node --experimental-strip-types --test tests/*.test.mjs",
