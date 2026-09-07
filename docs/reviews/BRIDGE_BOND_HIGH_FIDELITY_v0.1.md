@@ -2,7 +2,7 @@
 
 日期：2026-09-07（Asia/Shanghai）。起点：`f5f6619`，分支：`codex/feat-p1-bridge-bond-polish`。
 
-Disposition：**实现与下列检查完成，待用户审阅本轮高保真结果。** 这是已接受的 P1 Batch 01 六页的组件统一，不是新的批次验收，也不提升 Architecture、Phase 1 或生产验收状态。
+Disposition 更新：**2026-09-07 用户确认继续 Diagnostics 后，PR #11 合并至 `5218641`，注释标签 `prototype-bridge-bond-v0.1` 保留接受基线。** 这是已接受的 P1 Batch 01 六页的组件统一，不是新的批次验收，也不提升 Architecture、Phase 1 或生产验收状态。以下保留当次审阅范围，后续进度以 [STATUS](../STATUS.md) 为准。
 
 ## 范围与变更
 

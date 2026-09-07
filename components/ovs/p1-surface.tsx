@@ -18,12 +18,19 @@ import {
   type P1View,
 } from '@/app/prototype-model';
 import { captureDiagnosticRequest, diagnosticRunBlock } from '@/lib/p1-control';
+import {
+  diagnosticActive,
+  diagnosticCancelBlock,
+  diagnosticServiceBlock,
+} from '@/lib/diagnostics-model';
 import type {
   ControlAction,
   ControlState,
   Scenario,
 } from '@/lib/change-control';
 import type { Mode, View } from '@/lib/ovs-model';
+import { ports } from '@/lib/ovs-model';
+import { bridges, bonds } from '@/lib/switching-model';
 import { Notice, StatusBadge } from './foundation';
 import { Button } from '@/components/ui/button';
 
@@ -37,12 +44,14 @@ export function useP1Controller({
   go,
   notify,
   scenario,
+  getScenario,
   openPort,
 }: {
   act: (action: ControlAction) => ControlState;
   go: (view: View) => void;
   notify: (message: string) => void;
   scenario: Scenario;
+  getScenario: () => Scenario;
   openPort: (name: string) => void;
 }) {
   const [selectedBridge, setSelectedBridge] = useState('br-fabric');
@@ -58,6 +67,12 @@ export function useP1Controller({
     detail: 'structured',
   });
   const [request, setRequest] = useState<DiagnosticRequest | null>(null);
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const reviewOnlyRef = useRef(false);
+  const updateReviewOnly = (next: boolean) => {
+    reviewOnlyRef.current = next;
+    setReviewOnly(next);
+  };
   const requestRef = useRef<DiagnosticRequest | null>(null);
   const saveRequest = (next: DiagnosticRequest) => {
     requestRef.current = next;
@@ -68,9 +83,9 @@ export function useP1Controller({
   const [openFlowState, setOpenFlowState] =
     useState<OpenFlowReviewState>('fresh');
   const jobRef = useRef(jobState);
-  const handlers = useRef({ act, notify });
+  const handlers = useRef({ act, notify, getScenario });
   useEffect(() => {
-    handlers.current = { act, notify };
+    handlers.current = { act, notify, getScenario };
   });
   const updateJob = (next: DiagnosticJobState) => {
     jobRef.current = next;
@@ -115,25 +130,20 @@ export function useP1Controller({
     id = selectedDiagnostic,
     target = scope,
     options = parameters,
+    requestInput: DiagnosticInputState = inputState,
   ) => {
     const blocked = diagnosticRunBlock(
       id,
       target,
-      inputState,
+      requestInput,
       ['queued', 'running', 'cancel-requested'].includes(jobRef.current),
       window.innerWidth,
+      options,
+      getScenario(),
     );
     if (blocked) {
       notify(blocked);
       return blocked;
-    }
-    if (
-      ['permission-denied', 'provider-unavailable', 'network-loss'].includes(
-        scenario,
-      )
-    ) {
-      notify('Diagnostic service is unavailable in this review state.');
-      return 'Diagnostic service unavailable.';
     }
     let submitted: DiagnosticRequest;
     try {
@@ -147,6 +157,7 @@ export function useP1Controller({
       return message;
     }
     saveRequest(submitted);
+    updateReviewOnly(false);
     setSelectedDiagnostic(id);
     setScope(target);
     setParameters({
@@ -167,12 +178,20 @@ export function useP1Controller({
     return null;
   };
   const cancelDiagnostic = () => {
-    if (
-      !['queued', 'running'].includes(jobRef.current) ||
-      requestRef.current?.id === 'diag.openflow.collection'
-    ) {
-      notify('No safe cancellation checkpoint is available.');
-      return 'No safe cancellation checkpoint.';
+    if (reviewOnlyRef.current) {
+      const message = 'This result preview has no submitted Job to cancel.';
+      notify(message);
+      return message;
+    }
+    const blocked = diagnosticCancelBlock(
+      requestRef.current?.id ?? '',
+      jobRef.current,
+      getScenario(),
+      window.innerWidth,
+    );
+    if (blocked) {
+      notify(blocked);
+      return blocked;
     }
     updateJob('cancel-requested');
     setAutoAdvance(true);
@@ -180,47 +199,104 @@ export function useP1Controller({
     return null;
   };
   const reviewDiagnostic = (next: DiagnosticJobState) => {
-    if (!requestRef.current)
-      saveRequest({ id: selectedDiagnostic, scope, ...parameters });
+    const currentScenario = getScenario();
+    const blocked =
+      window.innerWidth < 768
+        ? 'Review diagnostic cases on tablet or desktop.'
+        : diagnosticServiceBlock(currentScenario);
+    if (blocked) {
+      notify(blocked);
+      return blocked;
+    }
+    if (next === 'not-started') {
+      requestRef.current = null;
+      setRequest(null);
+      updateReviewOnly(false);
+      setAutoAdvance(false);
+      updateJob(next);
+      go('diagnostic-run');
+      return null;
+    }
+    if (!requestRef.current) {
+      if (currentScenario === 'empty') {
+        const message =
+          'No diagnostic templates are available in the current catalog.';
+        notify(message);
+        return message;
+      }
+      try {
+        saveRequest(
+          captureDiagnosticRequest(selectedDiagnostic, scope, parameters),
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Review a valid bounded input first.';
+        notify(message);
+        return message;
+      }
+    }
+    updateReviewOnly(true);
     setAutoAdvance(false);
     updateJob(next);
     go('diagnostic-run');
+    return null;
   };
   const reviewOpenFlow = (next: OpenFlowReviewState) => {
     setOpenFlowState(next);
     go('openflow-viewer');
   };
   const openEvidence = (kind: 'event' | 'audit') => {
-    record(
-      kind === 'event' ? 'Event' : 'Audit',
-      `Diagnostic review fixture · job-3114 · ${diagnosticJobLabels[jobRef.current]} · ${kind}`,
+    if (reviewOnlyRef.current || !requestRef.current) {
+      notify('A result preview does not create Event or Audit evidence.');
+      return;
+    }
+    if (kind === 'event' && diagnosticActive(jobRef.current)) {
+      notify(
+        'The completion Event is pending. Inspect the request Audit instead.',
+      );
+      return;
+    }
+    notify(
+      `Showing shared ${kind === 'event' ? 'Event' : 'Audit'} evidence · corr-DIAG-91C4`,
     );
     go('evidence');
   };
   const openObject = (target: string) => {
     const [kind, name] = target.split('/');
-    if (kind === 'Bridge') {
+    if (kind === 'Bridge' && bridges.some((item) => item.name === name)) {
       setSelectedBridge(name);
       go('bridge-detail');
-    } else if (name.startsWith('bond-')) {
+    } else if (kind === 'Port' && bonds.some((item) => item.name === name)) {
       setSelectedBond(name);
       go('bond-detail');
-    } else openPort(name);
+    } else if (kind === 'Port' && ports.some((item) => item.name === name))
+      openPort(name);
+    else
+      notify(
+        `No detail sample is available for ${target}. The captured target is preserved.`,
+      );
   };
   useEffect(() => {
     if (
       !autoAdvance ||
+      diagnosticServiceBlock(scenario) ||
       !['queued', 'running', 'cancel-requested'].includes(jobState)
     )
       return;
-    const next =
-      jobState === 'queued'
-        ? 'running'
-        : jobState === 'cancel-requested'
-          ? 'cancelled'
-          : 'complete';
     const timer = window.setTimeout(
       () => {
+        const currentScenario = handlers.current.getScenario();
+        if (diagnosticServiceBlock(currentScenario)) return;
+        const next =
+          jobState === 'queued'
+            ? 'running'
+            : jobState === 'cancel-requested'
+              ? 'cancelled'
+              : ['degraded', 'provider-degraded'].includes(currentScenario)
+                ? 'partial'
+                : 'complete';
         jobRef.current = next;
         setJobState(next);
         handlers.current.act({
@@ -238,7 +314,7 @@ export function useP1Controller({
       jobState === 'running' ? (request?.sampleSeconds ?? 10) * 1000 : 800,
     );
     return () => window.clearTimeout(timer);
-  }, [autoAdvance, jobState, request, scope]);
+  }, [autoAdvance, jobState, request, scope, scenario]);
 
   const updateInput = (update: () => void) => {
     if (['queued', 'running', 'cancel-requested'].includes(jobRef.current)) {
@@ -271,6 +347,7 @@ export function useP1Controller({
     setParameters: (next: DiagnosticParameters) =>
       updateInput(() => setParameters(next)),
     request,
+    reviewOnly,
     origin,
     clearOrigin: () => setOrigin(null),
     openFlowState,
@@ -278,12 +355,18 @@ export function useP1Controller({
     stageIntent,
     openDiagnostics,
     runDiagnostic,
+    retryDiagnostic: () => {
+      const original = requestRef.current;
+      return original
+        ? runDiagnostic(original.id, original.scope, original, 'valid')
+        : 'No captured diagnostic request.';
+    },
     cancelDiagnostic,
     reviewDiagnostic,
     reviewOpenFlow,
     openEvidence,
     openObject,
-    busy: ['queued', 'running', 'cancel-requested'].includes(jobState),
+    busy: diagnosticActive(jobState),
   };
 }
 
@@ -325,6 +408,7 @@ export function P1Surface({
       />
     );
   if (
+    view === 'openflow-viewer' &&
     [
       'loading',
       'empty',
@@ -361,6 +445,7 @@ export function P1Surface({
       <P1DiagnosticsView
         view={view}
         mode={mode}
+        scenario={scenario}
         selectedDiagnostic={p1.selectedDiagnostic}
         setSelectedDiagnostic={p1.setSelectedDiagnostic}
         inputState={p1.inputState}
@@ -372,15 +457,13 @@ export function P1Surface({
         parameters={p1.parameters}
         setParameters={p1.setParameters}
         request={p1.request}
+        reviewOnly={p1.reviewOnly}
         busy={p1.busy}
         origin={p1.origin}
         clearOrigin={p1.clearOrigin}
         runDiagnostic={() => p1.runDiagnostic()}
         cancelDiagnostic={p1.cancelDiagnostic}
-        retryDiagnostic={() =>
-          p1.request &&
-          p1.runDiagnostic(p1.request.id, p1.request.scope, p1.request)
-        }
+        retryDiagnostic={p1.retryDiagnostic}
         openEvidence={p1.openEvidence}
         openObject={() => p1.openObject(p1.request?.scope ?? p1.scope)}
         go={go}
@@ -423,6 +506,11 @@ export function P1MobileSummary({
           ? (p1.request?.scope ?? p1.scope)
           : p1.selectedBridge}
       </p>
+      {view.startsWith('diagnostic') && p1.reviewOnly && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Result preview only · no new Event or Audit records.
+        </p>
+      )}
       <p className="mt-3 text-sm text-muted-foreground">
         Review incident evidence here. New configuration requires desktop;
         bounded diagnostics and OpenFlow queries require tablet or desktop.

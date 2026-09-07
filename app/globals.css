@@ -280,6 +280,24 @@ body {
 .ovs-switching-pages :where(input, select) {
   min-height: var(--ovs-control-height);
 }
+.ovs-diagnostic-row[data-selected='true'] {
+  background: var(--ovs-info-bg);
+}
+.ovs-diagnostics-pages .ovs-data-table th {
+  font-size: 0.875rem;
+}
+.ovs-diagnostics-pages :where(input, select) {
+  min-height: var(--ovs-control-height);
+}
+.ovs-diagnostic-progress [data-slot='progress-indicator'] {
+  width: 35%;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ovs-diagnostic-progress [data-slot='progress-indicator'] {
+    animation: none;
+  }
+}
 .ovs-inventory-summary > span {
   display: flex;
   align-items: center;

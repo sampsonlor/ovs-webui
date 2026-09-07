@@ -3,6 +3,11 @@ import type {
   DiagnosticParameters,
   DiagnosticRequest,
 } from '../app/prototype-model';
+import {
+  diagnosticParameterErrors,
+  diagnosticScopeError,
+  diagnosticServiceBlock,
+} from './diagnostics-model.ts';
 
 export const runnableDiagnostics = [
   'diag.net.link-lacp',
@@ -16,14 +21,24 @@ export function diagnosticRunBlock(
   input: string,
   busy: boolean,
   width: number,
+  parameters?: DiagnosticParameters,
+  scenario = 'normal',
 ): string | null {
   if (width < 768) return 'Start bounded diagnostics on tablet or desktop.';
   if (busy) return 'The current diagnostic Job is still active.';
+  const serviceBlocked = diagnosticServiceBlock(scenario);
+  if (serviceBlocked) return serviceBlocked;
+  if (scenario === 'empty')
+    return 'No diagnostic templates are available in the current catalog.';
   if (input !== 'valid') return 'Resolve diagnostic input validation first.';
   if (!runnableDiagnostics.some((item) => item === id))
     return 'Diagnostic permission or provider is unavailable.';
-  if (!/^(Port|Bridge)\/[a-zA-Z0-9_.-]{1,63}$/.test(scope))
-    return 'Choose one explicit Port or Bridge scope.';
+  const scopeError = diagnosticScopeError(id, scope);
+  if (scopeError) return scopeError;
+  if (parameters) {
+    const errors = diagnosticParameterErrors(id, parameters);
+    if (errors.sample || errors.detail) return errors.sample || errors.detail;
+  }
   return null;
 }
 
@@ -34,13 +49,11 @@ export function captureDiagnosticRequest(
 ): DiagnosticRequest {
   if (!runnableDiagnostics.some((item) => item === id))
     throw new Error('Choose an available diagnostic template.');
-  if (!/^(Port|Bridge)\/[a-zA-Z0-9_.-]{1,63}$/.test(scope))
-    throw new Error('Choose one explicit Port or Bridge scope.');
-  if (
-    ![5, 10, 15].includes(parameters.sampleSeconds) ||
-    !['structured', 'bounded'].includes(parameters.detail)
-  )
-    throw new Error('Choose a bounded sampling budget and output detail.');
+  const scopeError = diagnosticScopeError(id, scope);
+  if (scopeError) throw new Error(scopeError);
+  const errors = diagnosticParameterErrors(id, parameters);
+  if (errors.sample || errors.detail)
+    throw new Error(errors.sample || errors.detail!);
   return {
     id,
     scope,
