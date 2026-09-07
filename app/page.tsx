@@ -35,6 +35,7 @@ import {
   initialControlState,
   transition,
   transactionLocked,
+  topologyStageBlock,
   scenarioLabels,
   candidateName,
   type ControlAction,
@@ -1205,6 +1206,11 @@ export default function Home() {
         view={view}
         mode={mode}
         scenario={control.scenario}
+        stageBlock={
+          labEnabled
+            ? 'Bridge and Bond configuration is not connected to the local lab. Review the saved Candidate in Changes.'
+            : topologyStageBlock(control, true)
+        }
         controller={p1}
         go={go}
         notify={setToast}

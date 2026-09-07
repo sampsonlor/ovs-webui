@@ -304,7 +304,11 @@ export function DiffPage({ state, mode, act, go }: Props) {
               </div>
               <ul className="mt-4 divide-y">
                 {[
-                  'VLAN schema and ranges',
+                  candidate.kind === 'vlan'
+                    ? 'VLAN schema and ranges'
+                    : candidate.kind === 'bond'
+                      ? 'Bond intent and Interface membership'
+                      : 'Bridge configuration intent',
                   'Capability and OVS authority',
                   'Permission and management-path policy',
                   `Generation ${candidate.baseGeneration} · candidate revision ${candidate.revision}`,

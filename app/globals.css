@@ -270,6 +270,16 @@ body {
   padding-block: 1rem;
   font-size: 0.875rem;
 }
+.ovs-native-object[data-current='true'] {
+  background: var(--ovs-info-bg);
+  border-color: var(--ovs-info-border);
+}
+.ovs-switching-pages .ovs-data-table th {
+  font-size: 0.875rem;
+}
+.ovs-switching-pages :where(input, select) {
+  min-height: var(--ovs-control-height);
+}
 .ovs-inventory-summary > span {
   display: flex;
   align-items: center;
