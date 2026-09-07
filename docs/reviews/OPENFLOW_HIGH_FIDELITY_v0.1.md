@@ -2,7 +2,7 @@
 
 日期：2026-09-07（Asia/Shanghai）。起点：`ea48136`，分支：`codex/feat-p1-openflow-polish`。Diagnostics 已获用户接受，PR #12 已合并，注释标签 `prototype-diagnostics-v0.1` 保留接受基线。
 
-**Disposition：实现与本轮验证完成，等待用户审阅。** 范围是已接受 P1 Batch 03 的单个 Observe Viewer，不新增批次，不扩大 OpenFlow 写权限，也不代表真实 provider 或生产验收完成。后续进度以 [STATUS](../STATUS.md) 为准。
+**Disposition 更新：2026-09-07 用户接受本轮结果并要求继续下一批；PR #13 合并到 main 后以注释标签 `prototype-openflow-v0.1` 保留接受基线。** 范围是已接受 P1 Batch 03 的单个 Observe Viewer，不扩大 OpenFlow 写权限，也不代表真实 provider 或生产验收完成。以下保留当次审阅证据，后续进度以 [STATUS](../STATUS.md) 为准。
 
 ## 页面与快照语义
 
@@ -57,4 +57,4 @@
 
 独立 Phase 1 Scope 批准原文仍缺失，范围沿 Architecture §11 和已接受的 Batch 03 Observe 切片。完整原生拓扑库存仍待接入；隔离审阅也观察到既有 Bond WebMCP 创建入口使用固定的 absent / member fixture，重名输入与表单校验未完全统一，需要后续修正，本轮不把该入口算作生产创建能力。
 
-无新增依赖，`pnpm-lock.yaml`、`.openai/hosting.json` 与站点访问不变，未部署。浏览器 CI [#7](https://github.com/sampsonlor/ovs-webui/issues/7) 和通用模板 lint [#6](https://github.com/sampsonlor/ovs-webui/issues/6) 继续开放。当前高保真审阅接受后再记录新基线；新增页面仍按 DPDK/Offload Observe → System Health → Capabilities 逐批推进。
+无新增依赖，`pnpm-lock.yaml`、`.openai/hosting.json` 与站点访问不变，未部署。浏览器 CI [#7](https://github.com/sampsonlor/ovs-webui/issues/7) 和通用模板 lint [#6](https://github.com/sampsonlor/ovs-webui/issues/6) 继续开放。本轮已接受；新增页面仍按 DPDK/Offload Observe → System Health → Capabilities 逐批推进。
