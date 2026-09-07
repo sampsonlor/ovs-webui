@@ -11,11 +11,13 @@ import {
   type ChangeIntent,
   type DiagnosticInputState,
   type DiagnosticJobState,
+  type DiagnosticParameters,
+  type DiagnosticRequest,
   type OpenFlowReviewState,
   type P1View,
   type ReviewScenario,
 } from '@/app/prototype-model';
-import { diagnosticRunBlock } from '@/lib/p1-control';
+import { captureDiagnosticRequest, diagnosticRunBlock } from '@/lib/p1-control';
 import type {
   ControlAction,
   ControlState,
@@ -72,6 +74,16 @@ export function useP1Controller({
   const [inputState, setInputState] = useState<DiagnosticInputState>('valid');
   const [jobState, setJobState] = useState<DiagnosticJobState>('not-started');
   const [scope, setScope] = useState('Port/bond-storage');
+  const [parameters, setParameters] = useState<DiagnosticParameters>({
+    sampleSeconds: 10,
+    detail: 'structured',
+  });
+  const [request, setRequest] = useState<DiagnosticRequest | null>(null);
+  const requestRef = useRef<DiagnosticRequest | null>(null);
+  const saveRequest = (next: DiagnosticRequest) => {
+    requestRef.current = next;
+    setRequest(next);
+  };
   const [origin, setOrigin] = useState<string | null>(null);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [openFlowState, setOpenFlowState] =
@@ -90,7 +102,7 @@ export function useP1Controller({
       type: 'record-evidence',
       kind,
       text,
-      object: scope,
+      object: requestRef.current?.scope ?? scope,
       correlation: 'corr-DIAG-91C4',
       now: Date.now(),
     });
@@ -120,7 +132,11 @@ export function useP1Controller({
     setOrigin(source);
     go('diagnostics-hub');
   };
-  const runDiagnostic = (id = selectedDiagnostic, target = scope) => {
+  const runDiagnostic = (
+    id = selectedDiagnostic,
+    target = scope,
+    options = parameters,
+  ) => {
     const blocked = diagnosticRunBlock(
       id,
       target,
@@ -140,14 +156,30 @@ export function useP1Controller({
       notify('Diagnostic service is unavailable in this review state.');
       return 'Diagnostic service unavailable.';
     }
+    let submitted: DiagnosticRequest;
+    try {
+      submitted = captureDiagnosticRequest(id, target, options);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Invalid diagnostic parameters.';
+      notify(message);
+      return message;
+    }
+    saveRequest(submitted);
     setSelectedDiagnostic(id);
     setScope(target);
+    setParameters({
+      sampleSeconds: submitted.sampleSeconds,
+      detail: submitted.detail,
+    });
     updateJob('queued');
     setAutoAdvance(true);
     act({
       type: 'record-evidence',
       kind: 'Audit',
-      text: `Synthetic bounded diagnostic requested · ${id} · job-3114`,
+      text: `Synthetic bounded diagnostic requested · ${id} · ${submitted.sampleSeconds}s · ${submitted.detail} · job-3114`,
       object: target,
       correlation: 'corr-DIAG-91C4',
       now: Date.now(),
@@ -158,7 +190,7 @@ export function useP1Controller({
   const cancelDiagnostic = () => {
     if (
       !['queued', 'running'].includes(jobRef.current) ||
-      selectedDiagnostic === 'diag.openflow.collection'
+      requestRef.current?.id === 'diag.openflow.collection'
     ) {
       notify('No safe cancellation checkpoint is available.');
       return 'No safe cancellation checkpoint.';
@@ -169,6 +201,8 @@ export function useP1Controller({
     return null;
   };
   const reviewDiagnostic = (next: DiagnosticJobState) => {
+    if (!requestRef.current)
+      saveRequest({ id: selectedDiagnostic, scope, ...parameters });
     setAutoAdvance(false);
     updateJob(next);
     go('diagnostic-run');
@@ -214,7 +248,7 @@ export function useP1Controller({
           type: 'record-evidence',
           kind: next === 'running' ? 'Job' : 'Event',
           text: `Synthetic diagnostic · job-3114 · ${diagnosticJobLabels[next]}`,
-          object: scope,
+          object: request?.scope ?? scope,
           correlation: 'corr-DIAG-91C4',
           now: Date.now(),
         });
@@ -222,10 +256,18 @@ export function useP1Controller({
           `Diagnostic fixture · ${diagnosticJobLabels[next]}`,
         );
       },
-      jobState === 'running' ? 2800 : 800,
+      jobState === 'running' ? (request?.sampleSeconds ?? 10) * 1000 : 800,
     );
     return () => window.clearTimeout(timer);
-  }, [autoAdvance, jobState, scope]);
+  }, [autoAdvance, jobState, request, scope]);
+
+  const updateInput = (update: () => void) => {
+    if (['queued', 'running', 'cancel-requested'].includes(jobRef.current)) {
+      notify('Wait for the active diagnostic Job before changing its input.');
+      return;
+    }
+    update();
+  };
 
   return {
     selectedBridge,
@@ -235,11 +277,21 @@ export function useP1Controller({
     setSelectedBridge,
     setSelectedBond,
     selectedDiagnostic,
-    setSelectedDiagnostic,
+    setSelectedDiagnostic: (id: string) =>
+      updateInput(() => setSelectedDiagnostic(id)),
     inputState,
     setInputState,
     jobState,
     scope,
+    setScope: (target: string) =>
+      updateInput(() => {
+        setScope(target);
+        setOrigin(null);
+      }),
+    parameters,
+    setParameters: (next: DiagnosticParameters) =>
+      updateInput(() => setParameters(next)),
+    request,
     origin,
     clearOrigin: () => setOrigin(null),
     openFlowState,
@@ -317,13 +369,21 @@ export function P1Surface({
         jobState={p1.jobState}
         setJobState={p1.reviewDiagnostic}
         scope={p1.scope}
+        setScope={p1.setScope}
+        parameters={p1.parameters}
+        setParameters={p1.setParameters}
+        request={p1.request}
+        busy={p1.busy}
         origin={p1.origin}
         clearOrigin={p1.clearOrigin}
         runDiagnostic={() => p1.runDiagnostic()}
         cancelDiagnostic={p1.cancelDiagnostic}
-        retryDiagnostic={() => p1.runDiagnostic()}
+        retryDiagnostic={() =>
+          p1.request &&
+          p1.runDiagnostic(p1.request.id, p1.request.scope, p1.request)
+        }
         openEvidence={p1.openEvidence}
-        openObject={() => p1.openObject(p1.scope)}
+        openObject={() => p1.openObject(p1.request?.scope ?? p1.scope)}
         go={go}
         notify={notify}
       />
@@ -375,7 +435,9 @@ export function P1MobileSummary({
         </StatusBadge>
       </div>
       <p className="mt-3 text-sm">
-        {view.startsWith('diagnostic') ? p1.scope : p1.selectedBridge}
+        {view.startsWith('diagnostic')
+          ? (p1.request?.scope ?? p1.scope)
+          : p1.selectedBridge}
       </p>
       <p className="mt-3 text-sm text-muted-foreground">
         Review incident evidence here. New configuration requires desktop;

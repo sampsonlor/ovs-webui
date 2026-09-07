@@ -23,6 +23,7 @@
     "typeCheck": true
   },
   "ignorePatterns": [
+    "**/*.generated.*",
     ".next/**",
     ".vinext/**",
     "out/**",

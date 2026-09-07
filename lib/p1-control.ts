@@ -1,4 +1,8 @@
-import type { ChangeIntent } from '../app/prototype-model';
+import type {
+  ChangeIntent,
+  DiagnosticParameters,
+  DiagnosticRequest,
+} from '../app/prototype-model';
 
 export const runnableDiagnostics = [
   'diag.net.link-lacp',
@@ -21,6 +25,28 @@ export function diagnosticRunBlock(
   if (!/^(Port|Bridge)\/[a-zA-Z0-9_.-]{1,63}$/.test(scope))
     return 'Choose one explicit Port or Bridge scope.';
   return null;
+}
+
+export function captureDiagnosticRequest(
+  id: string,
+  scope: string,
+  parameters: DiagnosticParameters,
+): DiagnosticRequest {
+  if (!runnableDiagnostics.some((item) => item === id))
+    throw new Error('Choose an available diagnostic template.');
+  if (!/^(Port|Bridge)\/[a-zA-Z0-9_.-]{1,63}$/.test(scope))
+    throw new Error('Choose one explicit Port or Bridge scope.');
+  if (
+    ![5, 10, 15].includes(parameters.sampleSeconds) ||
+    !['structured', 'bounded'].includes(parameters.detail)
+  )
+    throw new Error('Choose a bounded sampling budget and output detail.');
+  return {
+    id,
+    scope,
+    sampleSeconds: parameters.sampleSeconds,
+    detail: parameters.detail,
+  };
 }
 
 export function representativeBondIntent(

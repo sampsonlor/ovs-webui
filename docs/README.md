@@ -1,5 +1,9 @@
 # Documentation index
 
+Start with [current status](STATUS.md) and the
+[2026-09-07 interaction review](reviews/UI_WORKFLOW_REVIEW_v0.2.md).
+Older records below describe their own review date and implementation slice.
+
 ## Core workflow and integration contract v0.1
 
 - `reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md` — state-level acceptance evidence and remaining browser/backend gates
@@ -21,10 +25,14 @@ These are review drafts extending the P0 code baseline; they do not approve a ne
 
 ## Baselines
 
+- `baselines/OVS_WebUI_Architecture_Baseline_v1.0.1.docx` — Approved Baseline; original received on 2026-09-07
 - `baselines/OVS_WebUI_UI_Information_Architecture_Page_Inventory_v1.0.docx` — Approved Baseline
 
 ## Plans
 
 - `plans/OVS_WebUI_P1_Low_Fidelity_Prototype_Plan_v0.1.docx` — Draft for Review
 
-The Architecture Baseline v1.0.1 and Phase 1 Scope v1.0 remain authoritative upstream references. Add their approved source artifacts here when they are available for repository publication.
+Phase 1 Scope v1.0 remains an authoritative upstream reference whose standalone
+approved source is still missing. Architecture §11 supplies scope constraints
+while that original is being recovered. A Draft for Review IA file supplied at
+the repository root does not supersede the retained Approved Baseline.

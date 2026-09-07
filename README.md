@@ -4,11 +4,18 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 
 ## Project status
 
+See [current status and architecture alignment](docs/STATUS.md) for the
+2026-09-07 inventory, source baselines, interaction fixes and review scope.
+
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
+
+The approved production architecture specifies Go (`ovs-webd` / `ovs-mgrd`) and
+a Svelte 5 static SPA. This React/Vinext prototype and Node-based local lab remain
+interaction and contract review tools; they do not change that architecture.
 
 | Baseline                                          | Status                             |
 | ------------------------------------------------- | ---------------------------------- |
-| Architecture Baseline v1.0.1                      | Approved upstream reference        |
+| Architecture Baseline v1.0.1                      | Approved source retained           |
 | Phase 1 Scope v1.0                                | Approved upstream reference        |
 | UI Information Architecture + Page Inventory v1.0 | Approved Baseline                  |
 | P0 Low-Fidelity UX Baseline v0.1                  | Frozen                             |

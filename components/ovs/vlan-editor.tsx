@@ -129,11 +129,8 @@ export function VlanEdit({
                 </label>
               )}
               {vlanMode !== 'access' && (
-                <label
-                  htmlFor="vlan-trunks"
-                  className="grid gap-2 text-sm sm:col-span-2"
-                >
-                  Allowed VLANs
+                <div className="grid gap-2 text-sm sm:col-span-2">
+                  <label htmlFor="vlan-trunks">Allowed VLANs</label>
                   <Input
                     id="vlan-trunks"
                     required
@@ -148,7 +145,7 @@ export function VlanEdit({
                   >
                     Comma-separated IDs or ascending ranges, from 1 to 4094.
                   </span>
-                </label>
+                </div>
               )}
             </div>
             {error && (

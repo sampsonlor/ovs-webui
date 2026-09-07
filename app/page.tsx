@@ -19,6 +19,7 @@ import {
   Network,
   Settings,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 
 import { VlanEdit } from '@/components/ovs/vlan-editor';
@@ -847,7 +848,10 @@ export default function Home() {
         diagnostic: {
           job: 'job-3114',
           state: interactionRef.current.p1.jobState,
-          scope: interactionRef.current.p1.scope,
+          scope:
+            interactionRef.current.p1.request?.scope ??
+            interactionRef.current.p1.scope,
+          request: interactionRef.current.p1.request,
         },
         openFlowReviewState: interactionRef.current.p1.openFlowState,
         prototype: true,
@@ -1179,12 +1183,24 @@ export default function Home() {
     { label: 'Evidence', icon: FileClock, target: 'evidence' as View },
     { label: 'System', icon: Settings, target: 'responsive' as View },
   ];
-  const switchingNav: Array<{ label: string; target: View }> = [
-    { label: 'Bridges', target: 'bridges' },
-    { label: 'Ports', target: 'ports' },
-    { label: 'VLAN', target: 'ports' },
-    { label: 'Bond / LACP', target: 'bonds' },
-    { label: 'STP / RSTP', target: 'bridge-detail' },
+  const switchingNav: Array<{
+    label: string;
+    target: View;
+    activeViews?: View[];
+  }> = [
+    {
+      label: 'Bridges',
+      target: 'bridges',
+      activeViews: ['bridges', 'bridge-detail'],
+    },
+    { label: 'Ports', target: 'ports', activeViews: ['ports', 'port-detail'] },
+    { label: 'VLAN', target: 'ports', activeViews: ['vlan-edit'] },
+    {
+      label: 'Bond / LACP',
+      target: 'bonds',
+      activeViews: ['bonds', 'bond-edit', 'bond-detail'],
+    },
+    { label: 'STP / RSTP', target: 'bridge-detail', activeViews: [] },
     { label: 'OpenFlow', target: 'openflow-viewer' },
   ];
   const common = { state: control, mode, act, go };
@@ -1484,17 +1500,20 @@ export default function Home() {
             <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Switching
             </p>
-            {switchingNav.map(({ label, target }) => (
-              <button
-                key={label}
-                onClick={() => go(target)}
-                aria-current={target === view ? 'page' : undefined}
-                className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm ${target === view ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-card'}`}
-              >
-                <span>{label}</span>
-                <ChevronRight className="size-4" />
-              </button>
-            ))}
+            {switchingNav.map(({ label, target, activeViews }) => {
+              const active = (activeViews ?? [target]).includes(view);
+              return (
+                <button
+                  key={label}
+                  onClick={() => go(target)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm ${active ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-card'}`}
+                >
+                  <span>{label}</span>
+                  <ChevronRight className="size-4" />
+                </button>
+              );
+            })}
           </div>
           <div className="mt-8 border-t px-3 pt-4">
             <p className="text-xs font-medium text-muted-foreground">
@@ -1560,13 +1579,27 @@ export default function Home() {
           </div>
         </section>
       </div>
-      <output
-        aria-live="polite"
-        aria-atomic="true"
-        className="fixed bottom-3 right-3 z-40 max-w-[min(28rem,calc(100vw-1.5rem))] rounded border bg-card px-4 py-3 text-sm shadow-sm"
+      <div
+        className={
+          toast
+            ? 'fixed bottom-3 right-3 z-40 flex max-w-[min(28rem,calc(100vw-1.5rem))] items-start gap-2 rounded border bg-card px-4 py-3 text-sm shadow-sm'
+            : 'sr-only'
+        }
       >
-        {toast}
-      </output>
+        <output aria-live="polite" aria-atomic="true">
+          {toast}
+        </output>
+        {toast && (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Dismiss notification"
+            onClick={() => setToast('')}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        )}
+      </div>
     </main>
   );
 }
