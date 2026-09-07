@@ -42,8 +42,9 @@ The 2026-09-07 [Diagnostics high-fidelity review](docs/reviews/DIAGNOSTICS_HIGH_
 unifies the catalog and Job/result pages. One template definition governs scope,
 sampling budgets, structured/text output and cancellation. Review-only results
 are explicitly labelled; opening evidence does not append another record.
-This visual and interaction slice is pending review after the accepted
-`prototype-bridge-bond-v0.1` checkpoint.
+This visual and interaction slice was accepted on 2026-09-07 for merge through
+PR #12, following `prototype-bridge-bond-v0.1`. Its accepted checkpoint is
+`prototype-diagnostics-v0.1`.
 
 The current Batch 03 review path is:
 

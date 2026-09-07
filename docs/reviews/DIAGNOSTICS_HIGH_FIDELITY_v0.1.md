@@ -2,7 +2,7 @@
 
 日期：2026-09-07（Asia/Shanghai）。起点：`5218641`，分支：`codex/feat-p1-diagnostics-polish`。上轮 Bridge / Bond 已获用户确认，PR #11 合并并以注释标签 `prototype-bridge-bond-v0.1` 保留。
 
-Disposition：**实现与下列检查完成，待用户审阅本轮高保真结果。** 范围是已接受的 P1 Batch 02 两页组件统一，不新增 P1 批次，不提升正式后端或生产验收状态。
+Disposition 更新：**2026-09-07 用户已接受本轮高保真结果，并授权将 PR #12 合并到 `main`；接受基线为注释标签 `prototype-diagnostics-v0.1`。** 范围是已接受的 P1 Batch 02 两页组件统一，不新增 P1 批次，不提升正式后端或生产验收状态。以下保留当次审阅范围，后续进度以 [STATUS](../STATUS.md) 为准。
 
 ## 页面与交互
 
@@ -50,4 +50,4 @@ Disposition：**实现与下列检查完成，待用户审阅本轮高保真结�
 
 Job 与 correlation ID 沿用已接受的固定 review fixture，刷新重置会话；不是正式持久化 Job 服务。采样、timeout、输出 ceiling 和 safe checkpoint 目前是模板契约与合成演示，正式执行器必须再次执行限额和授权。未接入真实 OVS / OpenFlow 采集、manager Audit 或 Go 双进程管理平面。导出按钮的本机下载完成、完整拓扑库存与正式 provider 故障恢复仍需后续验证。
 
-无新增依赖，`pnpm-lock.yaml` 与 `.openai/hosting.json` 未修改，未部署或改变站点访问。浏览器 CI [#7](https://github.com/sampsonlor/ovs-webui/issues/7) 和通用模板 lint [#6](https://github.com/sampsonlor/ovs-webui/issues/6) 继续开放。接受本轮后，下一步是现有 OpenFlow Viewer 的组件统一；新增 Batch 04–06 仍遵守既定顺序与 review gate。
+无新增依赖，`pnpm-lock.yaml` 与 `.openai/hosting.json` 未修改，未部署或改变站点访问。浏览器 CI [#7](https://github.com/sampsonlor/ovs-webui/issues/7) 和通用模板 lint [#6](https://github.com/sampsonlor/ovs-webui/issues/6) 继续开放。本轮已接受，下一步是现有 OpenFlow Viewer 的组件统一；新增 Batch 04–06 仍遵守既定顺序与 review gate。
