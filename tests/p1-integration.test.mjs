@@ -10,8 +10,48 @@ import {
 import {
   representativeBondIntent,
   diagnosticRunBlock,
+  captureDiagnosticRequest,
 } from '../lib/p1-control.ts';
 import { ports } from '../lib/ovs-model.ts';
+
+test('diagnostic request captures its original scope and bounded options independently of later edits', () => {
+  const draft = { sampleSeconds: 5, detail: 'bounded' };
+  const request = captureDiagnosticRequest(
+    'diag.net.link-lacp',
+    'Port/bond-uplink',
+    draft,
+  );
+  draft.sampleSeconds = 15;
+  draft.detail = 'structured';
+  assert.deepEqual(request, {
+    id: 'diag.net.link-lacp',
+    scope: 'Port/bond-uplink',
+    sampleSeconds: 5,
+    detail: 'bounded',
+  });
+});
+
+test('diagnostic request rejects unbounded durations, unknown output formats and unavailable templates', () => {
+  for (const parameters of [
+    { sampleSeconds: 0, detail: 'structured' },
+    { sampleSeconds: 20, detail: 'bounded' },
+    { sampleSeconds: 10, detail: 'raw-shell' },
+  ])
+    assert.throws(() =>
+      captureDiagnosticRequest(
+        'diag.net.link-lacp',
+        'Port/bond-uplink',
+        parameters,
+      ),
+    );
+  assert.throws(() =>
+    captureDiagnosticRequest(
+      'diag.host.interface-counters',
+      'Port/bond-uplink',
+      { sampleSeconds: 5, detail: 'structured' },
+    ),
+  );
+});
 
 const bond = representativeBondIntent({
   name: 'bond-review',

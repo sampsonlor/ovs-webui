@@ -10,18 +10,16 @@ import {
   ChevronRight,
   Clock3,
   Code2,
-  FileClock,
-  Gauge,
   GitCompareArrows,
   Info,
   Layers3,
   Menu,
-  Network,
-  Settings,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 
 import { VlanEdit } from '@/components/ovs/vlan-editor';
+import { PrototypeNavigation } from '@/components/ovs/prototype-navigation';
 import {
   Workspace,
   DiffPage,
@@ -847,7 +845,10 @@ export default function Home() {
         diagnostic: {
           job: 'job-3114',
           state: interactionRef.current.p1.jobState,
-          scope: interactionRef.current.p1.scope,
+          scope:
+            interactionRef.current.p1.request?.scope ??
+            interactionRef.current.p1.scope,
+          request: interactionRef.current.p1.request,
         },
         openFlowReviewState: interactionRef.current.p1.openFlowState,
         prototype: true,
@@ -1172,21 +1173,6 @@ export default function Home() {
     return () => lifecycle.abort();
   }, [labEnabled]);
 
-  const nav = [
-    { label: 'Overview', icon: Gauge, target: 'dashboard' as View },
-    { label: 'Switching', icon: Network, target: 'switching-overview' as View },
-    { label: 'Operations', icon: Activity, target: 'diagnostics-hub' as View },
-    { label: 'Evidence', icon: FileClock, target: 'evidence' as View },
-    { label: 'System', icon: Settings, target: 'responsive' as View },
-  ];
-  const switchingNav: Array<{ label: string; target: View }> = [
-    { label: 'Bridges', target: 'bridges' },
-    { label: 'Ports', target: 'ports' },
-    { label: 'VLAN', target: 'ports' },
-    { label: 'Bond / LACP', target: 'bonds' },
-    { label: 'STP / RSTP', target: 'bridge-detail' },
-    { label: 'OpenFlow', target: 'openflow-viewer' },
-  ];
   const common = { state: control, mode, act, go };
   const refreshInventory = () => {
     if (
@@ -1434,68 +1420,11 @@ export default function Home() {
         </label>
       </div>
       {navigationOpen && (
-        <nav
-          aria-label="Compact navigation"
-          className="grid grid-cols-2 gap-2 border-b bg-card p-3 lg:hidden"
-        >
-          {[...nav, ...switchingNav].map((item) => (
-            <Button
-              key={item.label}
-              variant="ghost"
-              onClick={() => go(item.target)}
-            >
-              {item.label}
-            </Button>
-          ))}
-        </nav>
+        <PrototypeNavigation view={view} mode={mode} go={go} compact />
       )}
       <div className="min-h-[calc(100vh-7rem)] lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
         <aside className="hidden border-r bg-sidebar p-3 lg:block">
-          <nav aria-label="Primary navigation" className="space-y-1">
-            {nav.map(({ label, icon: Icon, target }) => {
-              const active =
-                target === view ||
-                (target === 'switching-overview' &&
-                  [
-                    'ports',
-                    'port-detail',
-                    'vlan-edit',
-                    'bridges',
-                    'bridge-detail',
-                    'bonds',
-                    'bond-detail',
-                    'bond-edit',
-                    'openflow-viewer',
-                  ].includes(view));
-              return (
-                <button
-                  key={label}
-                  onClick={() => go(target)}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex w-full items-center gap-3 rounded px-3 py-2.5 text-left text-sm ${active ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-card'}`}
-                >
-                  <Icon aria-hidden="true" className="size-4" />
-                  {label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="mt-6 border-t pt-4">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Switching
-            </p>
-            {switchingNav.map(({ label, target }) => (
-              <button
-                key={label}
-                onClick={() => go(target)}
-                aria-current={target === view ? 'page' : undefined}
-                className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm ${target === view ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-card'}`}
-              >
-                <span>{label}</span>
-                <ChevronRight className="size-4" />
-              </button>
-            ))}
-          </div>
+          <PrototypeNavigation view={view} mode={mode} go={go} />
           <div className="mt-8 border-t px-3 pt-4">
             <p className="text-xs font-medium text-muted-foreground">
               Object model
@@ -1560,13 +1489,27 @@ export default function Home() {
           </div>
         </section>
       </div>
-      <output
-        aria-live="polite"
-        aria-atomic="true"
-        className="fixed bottom-3 right-3 z-40 max-w-[min(28rem,calc(100vw-1.5rem))] rounded border bg-card px-4 py-3 text-sm shadow-sm"
+      <div
+        className={
+          toast
+            ? 'fixed bottom-3 right-3 z-40 flex max-w-[min(28rem,calc(100vw-1.5rem))] items-start gap-2 rounded border bg-card px-4 py-3 text-sm shadow-sm'
+            : 'sr-only'
+        }
       >
-        {toast}
-      </output>
+        <output aria-live="polite" aria-atomic="true">
+          {toast}
+        </output>
+        {toast && (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Dismiss notification"
+            onClick={() => setToast('')}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        )}
+      </div>
     </main>
   );
 }

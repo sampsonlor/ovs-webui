@@ -469,14 +469,18 @@ function BridgeList({
   go: (view: P1View) => void;
   onStageBridge: (intent: ChangeIntent) => void;
 }) {
+  const [authority, setAuthority] = useState('all');
   const shown = useMemo(
     () =>
-      bridges.filter((bridge) =>
-        `${bridge.name} ${bridge.datapath} ${bridge.vlans}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
+      bridges.filter(
+        (bridge) =>
+          (authority === 'all' ||
+            bridge.authority.toLowerCase() === authority) &&
+          `${bridge.name} ${bridge.datapath} ${bridge.vlans}`
+            .toLowerCase()
+            .includes(search.toLowerCase()),
       ),
-    [search],
+    [authority, search],
   );
   const stageNewBridge = () =>
     onStageBridge({
@@ -522,7 +526,11 @@ function BridgeList({
             aria-label="Search bridges"
           />
         </div>
-        <NativeSelect defaultValue="all" aria-label="Filter bridge authority">
+        <NativeSelect
+          value={authority}
+          onChange={(event) => setAuthority(event.target.value)}
+          aria-label="Filter bridge authority"
+        >
           <NativeSelectOption value="all">All authorities</NativeSelectOption>
           <NativeSelectOption value="ovs">OVS managed</NativeSelectOption>
           <NativeSelectOption value="external">External</NativeSelectOption>
@@ -530,6 +538,9 @@ function BridgeList({
         <Badge variant="outline" className="rounded-sm">
           fresh · 8s
         </Badge>
+        <output className="text-sm text-muted-foreground">
+          {shown.length} of {bridges.length} bridges
+        </output>
       </div>
       <div className="mt-3 overflow-x-auto border bg-card">
         <Table>
@@ -562,7 +573,16 @@ function BridgeList({
                 }}
               >
                 <TableCell className="font-mono text-xs font-semibold text-[#164f7b]">
-                  {bridge.name}
+                  <button
+                    className="ovs-object-link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedBridge(bridge.name);
+                      go('bridge-detail');
+                    }}
+                  >
+                    {bridge.name}
+                  </button>
                 </TableCell>
                 <TableCell>
                   <StateLabel state={bridge.state} />
@@ -587,6 +607,25 @@ function BridgeList({
                 )}
               </TableRow>
             ))}
+            {shown.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={mode === 'expert' ? 10 : 8}
+                  className="p-6 text-center"
+                >
+                  <p className="text-sm">No bridges match these filters.</p>
+                  <Button
+                    variant="link"
+                    onClick={() => {
+                      setAuthority('all');
+                      setSearch('');
+                    }}
+                  >
+                    Clear bridge filters
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

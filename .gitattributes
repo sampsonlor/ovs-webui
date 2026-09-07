@@ -1,0 +1,3 @@
+# Contract generators emit LF; keep byte-for-byte checks stable on every host.
+/contracts/openapi.v0.1.json text eol=lf
+/lib/api/*.generated.* text eol=lf

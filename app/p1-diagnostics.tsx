@@ -39,6 +39,8 @@ import {
 import type {
   DiagnosticInputState,
   DiagnosticJobState,
+  DiagnosticParameters,
+  DiagnosticRequest,
   P1DiagnosticsPage,
   P1View,
   PrototypeMode,
@@ -248,6 +250,12 @@ function DiagnosticsHub({
   inputState,
   onInputStateChange,
   scope,
+  onScopeChange,
+  parameters,
+  onParametersChange,
+  busy,
+  hasJob,
+  onOpenLatestJob,
   origin,
   onClearOrigin,
   onRun,
@@ -260,6 +268,12 @@ function DiagnosticsHub({
   inputState: DiagnosticInputState;
   onInputStateChange: (state: DiagnosticInputState) => void;
   scope: string;
+  onScopeChange: (scope: string) => void;
+  parameters: DiagnosticParameters;
+  onParametersChange: (parameters: DiagnosticParameters) => void;
+  busy: boolean;
+  hasJob: boolean;
+  onOpenLatestJob: () => void;
   origin: string | null;
   onClearOrigin: () => void;
   onRun: () => void;
@@ -283,7 +297,7 @@ function DiagnosticsHub({
     [category, search],
   );
   const inputValid = inputState === 'valid';
-  const canRun = selected.availability === 'Available' && inputValid;
+  const canRun = selected.availability === 'Available' && inputValid && !busy;
   const validationMessage =
     inputState === 'validation-error'
       ? 'The selected object is incompatible with this diagnostic template.'
@@ -297,7 +311,11 @@ function DiagnosticsHub({
         title="Diagnostics hub"
         description="Run predefined, structured, resource-bounded diagnostics. No arbitrary shell, file access, or unbounded log stream is exposed."
         actions={
-          <Button variant="outline" onClick={() => onOpenJob('complete')}>
+          <Button
+            variant="outline"
+            disabled={!hasJob}
+            onClick={onOpenLatestJob}
+          >
             <Activity /> Open latest job
           </Button>
         }
@@ -457,19 +475,41 @@ function DiagnosticsHub({
             <div className="grid gap-4 p-4 md:grid-cols-3">
               <div className="grid gap-2 text-xs font-medium">
                 <span>Target object</span>
-                <NativeSelect aria-label="Target object" defaultValue={scope}>
-                  <NativeSelectOption value={scope}>{scope}</NativeSelectOption>
-                  <NativeSelectOption value="Bridge/br-fabric">
-                    Bridge/br-fabric
-                  </NativeSelectOption>
-                  <NativeSelectOption value="Port/bond-uplink">
-                    Port/bond-uplink
-                  </NativeSelectOption>
+                <NativeSelect
+                  aria-label="Target object"
+                  value={scope}
+                  disabled={busy}
+                  onChange={(event) => onScopeChange(event.target.value)}
+                >
+                  {[
+                    ...new Set([
+                      scope,
+                      'Port/bond-storage',
+                      'Bridge/br-fabric',
+                      'Port/bond-uplink',
+                    ]),
+                  ].map((target) => (
+                    <NativeSelectOption key={target} value={target}>
+                      {target}
+                    </NativeSelectOption>
+                  ))}
                 </NativeSelect>
               </div>
               <div className="grid gap-2 text-xs font-medium">
                 <span>Sampling budget</span>
-                <NativeSelect aria-label="Sampling budget" defaultValue="10">
+                <NativeSelect
+                  aria-label="Sampling budget"
+                  value={String(parameters.sampleSeconds)}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onParametersChange({
+                      ...parameters,
+                      sampleSeconds: Number(
+                        event.target.value,
+                      ) as DiagnosticParameters['sampleSeconds'],
+                    })
+                  }
+                >
                   <NativeSelectOption value="5">5 seconds</NativeSelectOption>
                   <NativeSelectOption value="10">
                     10 seconds · recommended
@@ -483,7 +523,15 @@ function DiagnosticsHub({
                 <span>Output detail</span>
                 <NativeSelect
                   aria-label="Output detail"
-                  defaultValue="structured"
+                  value={parameters.detail}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onParametersChange({
+                      ...parameters,
+                      detail: event.target
+                        .value as DiagnosticParameters['detail'],
+                    })
+                  }
                 >
                   <NativeSelectOption value="structured">
                     Structured summary
@@ -548,6 +596,14 @@ function DiagnosticsHub({
             </p>
             <dl className="mt-4 space-y-3 text-xs">
               {[
+                ['Target', scope],
+                ['Sampling budget', `${parameters.sampleSeconds} seconds`],
+                [
+                  'Requested output',
+                  parameters.detail === 'bounded'
+                    ? 'Summary + bounded text'
+                    : 'Structured summary',
+                ],
                 ['Required permission', selected.permission],
                 ['Estimated duration', selected.duration],
                 ['Resource impact', selected.impact],
@@ -577,9 +633,11 @@ function DiagnosticsHub({
             </Button>
             {!canRun && (
               <p className="mt-2 text-xs text-rose-700">
-                {selected.availability !== 'Available'
-                  ? `${selected.availability}: ${selected.permission}`
-                  : 'Resolve input validation before creating a Job.'}
+                {busy
+                  ? 'The current diagnostic Job is still active.'
+                  : selected.availability !== 'Available'
+                    ? `${selected.availability}: ${selected.permission}`
+                    : 'Resolve input validation before creating a Job.'}
               </p>
             )}
           </section>
@@ -601,13 +659,16 @@ function DiagnosticsHub({
       <section className="mt-4 border bg-card">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold">Recent diagnostic Jobs</h2>
+            <h2 className="text-sm font-semibold">
+              Diagnostic review examples
+            </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Jobs remain globally visible after leaving this page.
+              Synthetic historical cases for reviewing result states. Open
+              latest job uses the captured request from this session.
             </p>
           </div>
           <Badge variant="outline" className="rounded-sm">
-            retention · 7 days
+            synthetic examples
           </Badge>
         </div>
         <Table>
@@ -780,6 +841,7 @@ function DiagnosticRun({
   jobState,
   onSetJobState,
   scope,
+  parameters,
   onBack,
   onCancel,
   onRetry,
@@ -792,6 +854,7 @@ function DiagnosticRun({
   jobState: DiagnosticJobState;
   onSetJobState: (state: DiagnosticJobState) => void;
   scope: string;
+  parameters: DiagnosticParameters;
   onBack: () => void;
   onCancel: () => void;
   onRetry: () => void;
@@ -816,7 +879,27 @@ function DiagnosticRun({
     'provider-unavailable',
     'command-failed',
   ].includes(jobState);
-  const result = resultCopyFor(jobState);
+  const storageFixture =
+    diagnostic.id === 'diag.net.link-lacp' && scope === 'Port/bond-storage';
+  const original = resultCopyFor(jobState);
+  const result = storageFixture
+    ? original
+    : {
+        ...original,
+        body: original.body
+          .replace(
+            'operational link and LACP facts',
+            'synthetic provider facts',
+          )
+          .replace('link or LACP fault', 'fault')
+          .replace(
+            'Carrier state was captured, but one LACP partner sample was unavailable.',
+            'One bounded provider sample was captured; an additional sample is unavailable.',
+          ),
+        finding: original.finding.startsWith('Member ')
+          ? `Synthetic ${diagnostic.category} finding · ${scope}${jobState === 'partial' ? ' · partial coverage' : ''}`
+          : original.finding,
+      };
   const progress =
     jobState === 'queued'
       ? 8
@@ -828,20 +911,51 @@ function DiagnosticRun({
             ? 100
             : 0;
   const lifecycle = [
-    ['Requested', '12:54:12', true],
-    ['Queued', '12:54:12', jobState !== 'not-started'],
-    ['Running', '12:54:13', !['not-started', 'queued'].includes(jobState)],
-    ['Result', finished ? '12:54:28' : 'pending', finished],
+    ['Requested', 'Input captured', jobState !== 'not-started'],
+    ['Queued', 'Bounded worker', jobState !== 'not-started'],
+    [
+      'Running',
+      `${parameters.sampleSeconds}s budget`,
+      !['not-started', 'queued'].includes(jobState),
+    ],
+    ['Result', finished ? 'Review available' : 'Pending', finished],
   ] as const;
-  const rawAvailable =
-    finished &&
-    ![
-      'cancelled',
-      'expired',
-      'unavailable',
-      'provider-unavailable',
-      'no-data',
-    ].includes(jobState);
+  const outputAvailable = [
+    'complete',
+    'partial',
+    'truncated',
+    'no-finding',
+    'evidence-unavailable',
+  ].includes(jobState);
+  const rawAvailable = outputAvailable && parameters.detail === 'bounded';
+  const raw =
+    storageFixture && jobState !== 'no-finding'
+      ? `source=synthetic-review-fixture\nobject=${scope}\nsample_seconds=${parameters.sampleSeconds}\nmember=enp129s0f0 carrier=up speed=25000 duplex=full\nmember=enp129s0f1 carrier=down speed=unknown duplex=unknown\nlacp=off bond_mode=active-backup active_member=enp129s0f0`
+      : `source=synthetic-review-fixture\ntemplate=${diagnostic.id}\nobject=${scope}\nsample_seconds=${parameters.sampleSeconds}\nresult=${result.finding}`;
+  const exportResult = () => {
+    const payload = {
+      prototype: true,
+      job: 'job-3114',
+      diagnostic: diagnostic.id,
+      scope,
+      parameters,
+      state: jobState,
+      finding: result.finding,
+      ...(rawAvailable ? { raw } : {}),
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'job-3114.json';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setExported(true);
+    notify(`Exported ${parameters.detail} diagnostic result · ${scope}`);
+  };
   const evidenceMissing = jobState === 'evidence-unavailable';
   return (
     <>
@@ -893,6 +1007,11 @@ function DiagnosticRun({
                     <Square /> Cancel safely
                   </Button>
                 )}
+              {outputAvailable && (
+                <Button variant="outline" size="sm" onClick={exportResult}>
+                  <Download /> Export result
+                </Button>
+              )}
             </div>
             <div className="p-4">
               <div className="flex items-center justify-between text-xs">
@@ -903,7 +1022,9 @@ function DiagnosticRun({
                       ? 'Cancellation requested · preserving partial evidence'
                       : active
                         ? 'Collecting bounded provider facts'
-                        : 'Job lifecycle closed'}
+                        : jobState === 'not-started'
+                          ? 'No diagnostic has been requested'
+                          : 'Job lifecycle closed'}
                 </span>
                 <span className="font-mono font-semibold">{progress}%</span>
               </div>
@@ -927,7 +1048,18 @@ function DiagnosticRun({
             </div>
           </section>
 
-          {active ? (
+          {jobState === 'not-started' ? (
+            <section className="border bg-card p-5">
+              <h2 className="text-base font-semibold">No diagnostic Job yet</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Choose an operation and review its bounded input before running
+                it.
+              </p>
+              <Button className="mt-4" variant="outline" onClick={onBack}>
+                Open diagnostic catalog
+              </Button>
+            </section>
+          ) : active ? (
             <section className="border border-sky-300 bg-sky-50 p-5">
               <div className="flex items-start gap-3">
                 <Activity className="mt-0.5 size-5 animate-pulse text-sky-700" />
@@ -936,8 +1068,8 @@ function DiagnosticRun({
                     Result is not authoritative yet
                   </h2>
                   <p className="mt-1 text-xs text-sky-800">
-                    Live updates accelerate display only. The Job resource
-                    remains authoritative if this page closes or reconnects.
+                    This synthetic Job keeps its captured input across pages.
+                    Its session resets when the browser reloads.
                   </p>
                 </div>
               </div>
@@ -991,7 +1123,7 @@ function DiagnosticRun({
                     Coverage
                   </dt>
                   <dd className="mt-2 text-sm font-semibold">
-                    1 Port · 2 Interfaces · 10 sec
+                    {scope} · {parameters.sampleSeconds} sec
                   </dd>
                 </div>
                 <div className="border border-current/20 bg-white/65 p-3">
@@ -1019,22 +1151,15 @@ function DiagnosticRun({
                       ? '200 / 200 lines · truncated'
                       : '24 / 200 lines'}
                   </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setExported(true);
-                      notify(
-                        'Bounded diagnostic export prepared · job-3114.json',
-                      );
-                    }}
-                  >
-                    <Download /> Export result
-                  </Button>
                 </div>
               </div>
               {mode === 'expert' ? (
-                <pre className="overflow-x-auto whitespace-pre-wrap p-4 font-mono text-[11px] leading-5 text-slate-700">{`source=linux.netlink, ovsdb-server\nobject=Port/bond-storage\nmember=enp129s0f0 carrier=up speed=25000 duplex=full\nmember=enp129s0f1 carrier=down speed=unknown duplex=unknown\nlacp=off bond_mode=active-backup active_member=enp129s0f0\nprovider_observed_at=2026-09-03T12:54:27Z${jobState === 'truncated' ? '\n… output truncated at hard limit; structured finding retained' : ''}`}</pre>
+                <pre className="overflow-x-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-foreground">
+                  {raw}
+                  {jobState === 'truncated'
+                    ? '\n… output truncated at hard limit; structured finding retained'
+                    : ''}
+                </pre>
               ) : (
                 <div className="p-4">
                   <div className="flex items-start gap-3 border border-dashed p-4">
@@ -1051,13 +1176,12 @@ function DiagnosticRun({
                   </div>
                 </div>
               )}
-              {exported && (
-                <div className="border-t bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
-                  Export prepared · job-3114.json · secrets, tokens,
-                  unauthorized configuration, and excess lines excluded
-                </div>
-              )}
             </section>
+          )}
+          {exported && (
+            <output className="block text-sm text-muted-foreground">
+              Exported job-3114.json · {parameters.detail} · {scope}
+            </output>
           )}
         </div>
 
@@ -1069,6 +1193,13 @@ function DiagnosticRun({
                 ['Actor', 'operator.review'],
                 ['Permission', diagnostic.permission],
                 ['Scope', scope],
+                ['Sampling budget', `${parameters.sampleSeconds} seconds`],
+                [
+                  'Requested output',
+                  parameters.detail === 'bounded'
+                    ? 'Summary + bounded text'
+                    : 'Structured summary',
+                ],
                 ['Timeout', '20 seconds'],
                 ['Output ceiling', '64 KiB / 200 lines'],
                 ['Correlation ID', 'corr-DIAG-91C4'],
@@ -1168,6 +1299,11 @@ export function P1DiagnosticsView({
   jobState,
   setJobState,
   scope,
+  setScope,
+  parameters,
+  setParameters,
+  request,
+  busy,
   origin,
   clearOrigin,
   runDiagnostic,
@@ -1187,6 +1323,11 @@ export function P1DiagnosticsView({
   jobState: DiagnosticJobState;
   setJobState: (state: DiagnosticJobState) => void;
   scope: string;
+  setScope: (scope: string) => void;
+  parameters: DiagnosticParameters;
+  setParameters: (parameters: DiagnosticParameters) => void;
+  request: DiagnosticRequest | null;
+  busy: boolean;
   origin: string | null;
   clearOrigin: () => void;
   runDiagnostic: () => void;
@@ -1198,8 +1339,9 @@ export function P1DiagnosticsView({
   notify: (message: string) => void;
 }) {
   const diagnostic =
-    diagnostics.find((item) => item.id === selectedDiagnostic) ??
-    diagnostics[0];
+    diagnostics.find(
+      (item) => item.id === (request?.id ?? selectedDiagnostic),
+    ) ?? diagnostics[0];
   if (view === 'diagnostic-run')
     return (
       <DiagnosticRun
@@ -1207,7 +1349,8 @@ export function P1DiagnosticsView({
         diagnostic={diagnostic}
         jobState={jobState}
         onSetJobState={setJobState}
-        scope={scope}
+        scope={request?.scope ?? scope}
+        parameters={request ?? parameters}
         onBack={() => go('diagnostics-hub')}
         onCancel={cancelDiagnostic}
         onRetry={retryDiagnostic}
@@ -1224,6 +1367,12 @@ export function P1DiagnosticsView({
       inputState={inputState}
       onInputStateChange={setInputState}
       scope={scope}
+      onScopeChange={setScope}
+      parameters={parameters}
+      onParametersChange={setParameters}
+      busy={busy}
+      hasJob={request !== null}
+      onOpenLatestJob={() => go('diagnostic-run')}
       origin={origin}
       onClearOrigin={clearOrigin}
       onRun={runDiagnostic}

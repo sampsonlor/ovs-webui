@@ -38,6 +38,16 @@ export type DiagnosticInputState =
   | 'validation-error'
   | 'scope-too-broad';
 
+export type DiagnosticParameters = {
+  sampleSeconds: 5 | 10 | 15;
+  detail: 'structured' | 'bounded';
+};
+
+export type DiagnosticRequest = DiagnosticParameters & {
+  id: string;
+  scope: string;
+};
+
 export type DiagnosticJobState =
   | 'not-started'
   | 'queued'
