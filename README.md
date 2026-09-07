@@ -38,6 +38,13 @@ The accepted Batch 02 review path is:
 
 Batch 02 exposes catalog availability and permission states; valid, invalid, and over-broad input; queued, running, cancel-requested, cancelled, failed, partial, truncated, expired, unavailable, no-finding, no-data, provider-unavailable, operation-failed, and evidence-unavailable Job/result states. Every diagnostic remains predefined, scope-bounded, time-bounded, and output-bounded.
 
+The 2026-09-07 [Diagnostics high-fidelity review](docs/reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)
+unifies the catalog and Job/result pages. One template definition governs scope,
+sampling budgets, structured/text output and cancellation. Review-only results
+are explicitly labelled; opening evidence does not append another record.
+This visual and interaction slice is pending review after the accepted
+`prototype-bridge-bond-v0.1` checkpoint.
+
 The current Batch 03 review path is:
 
 `Switching → OpenFlow → authority / freshness context → bounded query → paginated flow snapshot → parsed or raw detail → bounded export`

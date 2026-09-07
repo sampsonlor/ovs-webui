@@ -787,6 +787,7 @@ export default function Home() {
   }, []);
 
   const p1 = useP1Controller({
+    getScenario: () => controlRef.current.scenario,
     act,
     go,
     notify: setToast,
@@ -844,7 +845,8 @@ export default function Home() {
         ...presentationRef.current,
         ...controlRef.current,
         diagnostic: {
-          job: 'job-3114',
+          job: interactionRef.current.p1.request ? 'job-3114' : null,
+          reviewOnly: interactionRef.current.p1.reviewOnly,
           state: interactionRef.current.p1.jobState,
           scope:
             interactionRef.current.p1.request?.scope ??
@@ -1143,8 +1145,15 @@ export default function Home() {
           !Object.hasOwn(diagnosticJobLabels, next)
         )
           throw new Error('Unknown diagnostic review state');
-        interactionRef.current.p1.reviewDiagnostic(next as DiagnosticJobState);
-        return { job: 'job-3114', state: next };
+        const blocked = interactionRef.current.p1.reviewDiagnostic(
+          next as DiagnosticJobState,
+        );
+        if (blocked) throw new Error(blocked);
+        return {
+          job: next === 'not-started' ? null : 'job-3114',
+          state: next,
+          reviewOnly: next !== 'not-started',
+        };
       },
     });
     register({
