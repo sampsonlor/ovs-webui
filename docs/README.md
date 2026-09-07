@@ -1,7 +1,8 @@
 # Documentation index
 
-Start with [current status](STATUS.md) and the
-[2026-09-07 interaction review](reviews/UI_WORKFLOW_REVIEW_v0.2.md).
+Start with [current status](STATUS.md), the
+[2026-09-07 interaction review](reviews/UI_WORKFLOW_REVIEW_v0.2.md), and
+[approved IA navigation alignment](reviews/NAVIGATION_ALIGNMENT_v0.1.md).
 Older records below describe their own review date and implementation slice.
 
 ## Core workflow and integration contract v0.1

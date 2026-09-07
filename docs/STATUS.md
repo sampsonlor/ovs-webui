@@ -1,8 +1,8 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-07。基于 `main` 的 `63a629d`，本轮修复位于 `codex/fix-windows-checks-ui-review`，尚未合并。本页是当前入口；历史验收记录保留各自的日期和范围。
+更新：2026-09-07。基于 `main` 的 `63a629d`，本轮修复与导航对齐位于 `codex/fix-windows-checks-ui-review`，已提交 [PR #9](https://github.com/sampsonlor/ovs-webui/pull/9)，待审阅、尚未合并。本页是当前入口；历史验收记录保留各自的日期和范围。
 
-**当前已完成原型的 P0 核心流程与 P1 前三批集成，Ports/VLAN 高保真和本地持久化链路已有实现。整站高保真与正式管理平面尚未完成。** 本轮补齐 Windows 检查兼容性、P1 无效控件与部分浏览器交互验收，详见[本轮审阅记录](reviews/UI_WORKFLOW_REVIEW_v0.2.md)。
+**当前已完成原型的 P0 核心流程与 P1 前三批集成，Ports/VLAN 高保真和本地持久化链路已有实现。整站高保真与正式管理平面尚未完成。** 本轮补齐 Windows 检查兼容性、P1 无效控件与部分浏览器交互验收，并对齐批准 IA 的五域导航。详见[交互审阅记录](reviews/UI_WORKFLOW_REVIEW_v0.2.md)与[导航对齐记录](reviews/NAVIGATION_ALIGNMENT_v0.1.md)。
 
 ## 基线和来源
 
@@ -23,6 +23,7 @@
 | P1 Batch 03 OpenFlow Viewer | 已接受集成；Observe 范围 | 正式 OpenFlow 采集和整页视觉收口 |
 | P1 Batch 04–06 | DPDK/Offload Observe、System Health、Capabilities 独立批次尚未实现 | 按既定顺序与 review gate 推进 |
 | Design System / 高保真 | Ports、VLAN、Candidate、Diff、Safe Apply、Evidence 已有核心组件 | P1 页面组件统一、深色模式、文字可读性和缩放验收 |
+| 批准 IA 导航 | 五域与既有页面归属已对齐；桌面、窄屏共用定义；未实现入口明确 Planned | 本轮待审阅；完整 Page Inventory 与独立资源页仍未全部实现 |
 | Ports/VLAN 本地 lab | SQLite 持久化 Candidate、验证、合成事务、证据及原请求恢复已实现 | 不能替代正式双进程管理平面或真实 OVS 测试 |
 
 ## 架构原文对后续实现的约束
@@ -41,6 +42,6 @@
 
 ## 下一步
 
-先审阅本轮修复与[浏览器验收范围](reviews/UI_WORKFLOW_REVIEW_v0.2.md)，再收口现有高保真页面和批准 IA 的导航映射。新增 P1 页面继续按 Batch 04 → 05 → 06 的顺序逐批审阅。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
+先审阅 [PR #9](https://github.com/sampsonlor/ovs-webui/pull/9) 中的交互修复和[导航映射](reviews/NAVIGATION_ALIGNMENT_v0.1.md)，再收口现有 P1 高保真组件。导航工作由[议题 #10](https://github.com/sampsonlor/ovs-webui/issues/10)跟踪；[浏览器 CI #7](https://github.com/sampsonlor/ovs-webui/issues/7)与[通用模板 lint #6](https://github.com/sampsonlor/ovs-webui/issues/6)继续开放，手工验收不等于关闭这两项。新增 P1 页面继续按 Batch 04 → 05 → 06 的顺序逐批审阅。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。
