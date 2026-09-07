@@ -8,6 +8,7 @@ import {
   diagnosticJobLabels,
   openFlowReviewLabels,
   p1Views,
+  p1SwitchingPages,
   type ChangeIntent,
   type DiagnosticInputState,
   type DiagnosticJobState,
@@ -15,7 +16,6 @@ import {
   type DiagnosticRequest,
   type OpenFlowReviewState,
   type P1View,
-  type ReviewScenario,
 } from '@/app/prototype-model';
 import { captureDiagnosticRequest, diagnosticRunBlock } from '@/lib/p1-control';
 import type {
@@ -29,27 +29,6 @@ import { Button } from '@/components/ui/button';
 
 export function isP1View(view: View): view is P1View {
   return p1Views.some((item) => item === view);
-}
-
-function switchingScenario(scenario: Scenario): ReviewScenario {
-  if (scenario === 'degraded' || scenario === 'provider-unavailable')
-    return 'provider-degraded';
-  if (scenario === 'stale' || scenario === 'conflict') return 'drift';
-  if (
-    [
-      'normal',
-      'drift',
-      'member-down',
-      'lacp-mismatch',
-      'validation-blocked',
-      'provider-degraded',
-      'advanced-config',
-      'outcome-unknown',
-      'network-loss',
-    ].includes(scenario)
-  )
-    return scenario as ReviewScenario;
-  return 'normal';
 }
 
 // Keep selections and diagnostic Jobs mounted while configuration uses the shared workspace.
@@ -314,6 +293,7 @@ export function P1Surface({
   view,
   mode,
   scenario,
+  stageBlock,
   controller: p1,
   go,
   notify,
@@ -321,10 +301,29 @@ export function P1Surface({
   view: P1View;
   mode: Mode;
   scenario: Scenario;
+  stageBlock: string | null;
   controller: P1Controller;
   go: (view: View) => void;
   notify: (message: string) => void;
 }) {
+  if (p1SwitchingPages.some((page) => page === view))
+    return (
+      <P1SwitchingView
+        view={view}
+        mode={mode}
+        scenario={scenario}
+        stageBlock={stageBlock}
+        search={p1.search}
+        setSearch={p1.setSearch}
+        selectedBridge={p1.selectedBridge}
+        setSelectedBridge={p1.setSelectedBridge}
+        selectedBond={p1.selectedBond}
+        setSelectedBond={p1.setSelectedBond}
+        go={go}
+        onStageIntent={p1.stageIntent}
+        onDiagnose={p1.openDiagnostics}
+      />
+    );
   if (
     [
       'loading',
@@ -388,22 +387,7 @@ export function P1Surface({
         notify={notify}
       />
     );
-  return (
-    <P1SwitchingView
-      view={view}
-      mode={mode}
-      scenario={switchingScenario(scenario)}
-      search={p1.search}
-      setSearch={p1.setSearch}
-      selectedBridge={p1.selectedBridge}
-      setSelectedBridge={p1.setSelectedBridge}
-      selectedBond={p1.selectedBond}
-      setSelectedBond={p1.setSelectedBond}
-      go={go}
-      onStageIntent={p1.stageIntent}
-      onDiagnose={p1.openDiagnostics}
-    />
-  );
+  return null;
 }
 
 export function P1MobileSummary({

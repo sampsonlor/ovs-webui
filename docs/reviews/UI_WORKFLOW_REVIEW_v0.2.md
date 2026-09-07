@@ -2,7 +2,7 @@
 
 日期：2026-09-07（Asia/Shanghai）。起点：`63a629d`。分支：`codex/fix-windows-checks-ui-review`。
 
-Disposition：**本轮修复待用户审阅**。下列通过项仅针对本地合成原型，不提升既有 P1 批次、Architecture、Phase 1 或生产验收状态。本轮未开始 Batch 04。
+Disposition 更新：**2026-09-07 用户确认后，修复随 PR #9 合并至 `f5f6619`，接受基线为 `prototype-navigation-v0.1`。** 下列通过项仅针对本地合成原型，不提升既有 P1 批次、Architecture、Phase 1 或生产验收状态。本轮未开始 Batch 04；以下保留当次审阅范围，后续进度以 [STATUS](../STATUS.md) 为准。
 
 ## 修复内容
 

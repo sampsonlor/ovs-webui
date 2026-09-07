@@ -2,7 +2,7 @@
 
 日期：2026-09-07（Asia/Shanghai）。关联：[PR #9](https://github.com/sampsonlor/ovs-webui/pull/9)、[议题 #10](https://github.com/sampsonlor/ovs-webui/issues/10)。
 
-Disposition：**实现和下列本地检查完成，待用户审阅**。本次整理既有原型入口，不接受新的 P1 review gate，也不声明完整 Page Inventory 已实现。
+Disposition 更新：**2026-09-07 用户确认后，PR #9 已合并至 `f5f6619`，合并后 CI 通过，接受基线标记为 `prototype-navigation-v0.1`。** 本次整理既有原型入口，不接受新的 P1 review gate，也不声明完整 Page Inventory 已实现。以下保留本次实现时的检查范围和余项；后续进度以 [STATUS](../STATUS.md) 为准。
 
 ## 页面归属
 

@@ -252,6 +252,26 @@ export function applyBlock(state: ControlState): string | null {
   return null;
 }
 
+export function topologyStageBlock(
+  state: ControlState,
+  desktop: boolean,
+): string | null {
+  if (!desktop) return 'New configuration intent requires desktop.';
+  if (transactionLocked(state.transaction.status))
+    return 'An active transaction owns this workspace. Resolve it first.';
+  if (
+    [
+      'permission-denied',
+      'provider-unavailable',
+      'provider-degraded',
+      'error',
+      'network-loss',
+    ].includes(state.scenario)
+  )
+    return 'Current authority or connectivity is unavailable.';
+  return null;
+}
+
 function reject(state: ControlState, error: string): ControlState {
   return { ...state, error, message: error };
 }
@@ -346,26 +366,8 @@ export function transition(
         ],
       };
     case 'stage-topology': {
-      if (!action.desktop)
-        return reject(state, 'New configuration intent requires desktop.');
-      if (transactionLocked(state.transaction.status))
-        return reject(
-          state,
-          'An active transaction owns this workspace. Resolve it first.',
-        );
-      if (
-        [
-          'permission-denied',
-          'provider-unavailable',
-          'provider-degraded',
-          'error',
-          'network-loss',
-        ].includes(state.scenario)
-      )
-        return reject(
-          state,
-          'Current authority or connectivity is unavailable.',
-        );
+      const blocked = topologyStageBlock(state, action.desktop);
+      if (blocked) return reject(state, blocked);
       const intent = action.intent;
       if (
         !['bridge', 'bond'].includes(intent.kind) ||
