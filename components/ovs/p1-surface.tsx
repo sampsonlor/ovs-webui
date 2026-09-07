@@ -6,7 +6,6 @@ import { P1DiagnosticsView } from '@/app/p1-diagnostics';
 import { P1OpenFlowView } from '@/app/p1-openflow';
 import {
   diagnosticJobLabels,
-  openFlowReviewLabels,
   p1Views,
   p1SwitchingPages,
   type ChangeIntent,
@@ -31,8 +30,9 @@ import type {
 import type { Mode, View } from '@/lib/ovs-model';
 import { ports } from '@/lib/ovs-model';
 import { bridges, bonds } from '@/lib/switching-model';
-import { Notice, StatusBadge } from './foundation';
+import { StatusBadge } from './foundation';
 import { Button } from '@/components/ui/button';
+import { useOpenFlowController } from './openflow-controller';
 
 export function isP1View(view: View): view is P1View {
   return p1Views.some((item) => item === view);
@@ -80,8 +80,7 @@ export function useP1Controller({
   };
   const [origin, setOrigin] = useState<string | null>(null);
   const [autoAdvance, setAutoAdvance] = useState(false);
-  const [openFlowState, setOpenFlowState] =
-    useState<OpenFlowReviewState>('fresh');
+  const openFlow = useOpenFlowController(scenario, getScenario, notify);
   const jobRef = useRef(jobState);
   const handlers = useRef({ act, notify, getScenario });
   useEffect(() => {
@@ -244,8 +243,9 @@ export function useP1Controller({
     return null;
   };
   const reviewOpenFlow = (next: OpenFlowReviewState) => {
-    setOpenFlowState(next);
+    const blocked = openFlow.review(next);
     go('openflow-viewer');
+    return blocked;
   };
   const openEvidence = (kind: 'event' | 'audit') => {
     if (reviewOnlyRef.current || !requestRef.current) {
@@ -350,8 +350,8 @@ export function useP1Controller({
     reviewOnly,
     origin,
     clearOrigin: () => setOrigin(null),
-    openFlowState,
-    setOpenFlowState,
+    openFlow,
+    openFlowState: openFlow.reviewCase,
     stageIntent,
     openDiagnostics,
     runDiagnostic,
@@ -407,37 +407,12 @@ export function P1Surface({
         onDiagnose={p1.openDiagnostics}
       />
     );
-  if (
-    view === 'openflow-viewer' &&
-    [
-      'loading',
-      'empty',
-      'error',
-      'permission-denied',
-      'provider-unavailable',
-    ].includes(scenario)
-  )
-    return (
-      <Notice
-        tone={
-          scenario === 'loading' || scenario === 'empty' ? 'neutral' : 'warning'
-        }
-        title={`Inventory · ${scenario}`}
-      >
-        Current object data is withheld in this review state. Choose Normal path
-        to resume the synthetic fixture.
-      </Notice>
-    );
   if (view === 'openflow-viewer')
     return (
       <P1OpenFlowView
         mode={mode}
-        reviewState={p1.openFlowState}
-        setReviewState={p1.setOpenFlowState}
-        openBridge={(name) => p1.openObject(`Bridge/${name}`)}
-        openPort={(name) => p1.openObject(`Port/${name}`)}
-        go={go}
-        notify={notify}
+        controller={p1.openFlow}
+        openObject={p1.openObject}
       />
     );
   if (view === 'diagnostics-hub' || view === 'diagnostic-run')
@@ -495,16 +470,20 @@ export function P1MobileSummary({
       <div className="mt-4">
         <StatusBadge tone="neutral">
           {view === 'openflow-viewer'
-            ? openFlowReviewLabels[p1.openFlowState]
+            ? p1.openFlow.status
             : view.startsWith('diagnostic')
               ? diagnosticJobLabels[p1.jobState]
               : 'Last known inventory'}
         </StatusBadge>
       </div>
       <p className="mt-3 text-sm">
-        {view.startsWith('diagnostic')
-          ? (p1.request?.scope ?? p1.scope)
-          : p1.selectedBridge}
+        {view === 'openflow-viewer'
+          ? p1.openFlow.snapshot
+            ? `Bridge/${p1.openFlow.snapshot.query.bridge} · ${p1.openFlow.snapshot.rows.length} retained rows`
+            : 'No readable snapshot'
+          : view.startsWith('diagnostic')
+            ? (p1.request?.scope ?? p1.scope)
+            : p1.selectedBridge}
       </p>
       {view.startsWith('diagnostic') && p1.reviewOnly && (
         <p className="mt-3 text-sm text-muted-foreground">

@@ -52,6 +52,14 @@ The current Batch 03 review path is:
 
 Batch 03 keeps OpenFlow at Observe scope. It distinguishes a fresh complete result, external authority, stale data, truncation, a successful 0-row result, provider failure, permission denial, and query timeout. Standard Mode summarizes the pipeline; Expert Mode adds exact cookie, duration, raw output, and collection metadata without adding any write authority.
 
+The 2026-09-07 [OpenFlow high-fidelity review](docs/reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)
+unifies the query, snapshot and detail surfaces. Draft filters do not relabel an
+existing capture; refresh and JSON export retain its original Bridge and query.
+Rows, byte limits, real snapshot age and permission loss are handled by a shared
+controller. This slice was accepted on 2026-09-07 for merge through PR #13,
+following `prototype-diagnostics-v0.1`. Its accepted checkpoint is
+`prototype-openflow-v0.1`.
+
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
 append linked evidence without changing configuration intent; OpenFlow remains

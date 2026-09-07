@@ -1,8 +1,8 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-07。用户已接受 Diagnostics 高保真并授权通过 [PR #12](https://github.com/sampsonlor/ovs-webui/pull/12) 合并到 `main`，注释标签 `prototype-diagnostics-v0.1` 保留接受基线。上一基线为 [PR #11](https://github.com/sampsonlor/ovs-webui/pull/11) 的 `prototype-bridge-bond-v0.1`（`5218641`）。本页是当前入口；历史记录保留各自的日期和范围。
+更新：2026-09-07。用户已接受 OpenFlow Viewer 的高保真与快照语义整理，并要求继续下一批。[PR #13](https://github.com/sampsonlor/ovs-webui/pull/13) 合并后以注释标签 `prototype-openflow-v0.1` 保留接受基线。上一基线为 Diagnostics 的 [PR #12](https://github.com/sampsonlor/ovs-webui/pull/12)，已合并到 `main`（`ea48136`），标签 `prototype-diagnostics-v0.1`。本页是当前入口；历史记录保留各自的日期和范围。
 
-**当前已完成原型的 P0 核心流程与 P1 前三批集成，Ports/VLAN 高保真和本地持久化链路已有实现。整站高保真与正式管理平面尚未完成。** 本轮统一 Diagnostics 目录与 Job / Result 两页，集中模板限制、结果完整性、重试和共享证据门禁。详见[Diagnostics 高保真审阅](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)；上轮接受结果见[Bridge / Bond 审阅](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
+**当前已完成原型的 P0 核心流程与 P1 前三批集成，Ports/VLAN 高保真和本地持久化链路已有实现。整站高保真与正式管理平面尚未完成。** 本轮统一 OpenFlow 查询、结果、详情和导出，分离待查询条件与已采集快照，并接入共享服务状态。详见[OpenFlow 高保真审阅](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)；上轮接受结果见[Diagnostics 审阅](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)和[Bridge / Bond 审阅](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
 
 ## 基线和来源
 
@@ -20,9 +20,9 @@
 | P0 黄金路径 | 冻结；Ports → VLAN → Candidate → Diff/Validation → Safe Apply → Evidence 可演示 | 真实数据、真实权限和正式后端接入 |
 | P1 Batch 01 Bridge + Bond/LACP | 原批次与六页高保真均已接受；PR #11 已合并 | 统一完整库存、正式原生事务 payload / provider |
 | P1 Batch 02 Diagnostics | 原批次与两页高保真均已接受；模板限制和异常语义已统一 | 正式持久化 Job 和受控诊断执行器 |
-| P1 Batch 03 OpenFlow Viewer | 已接受集成；Observe 范围 | 正式 OpenFlow 采集和整页视觉收口 |
+| P1 Batch 03 OpenFlow Viewer | 原批次与高保真均已接受；共享快照与 Observe 边界已统一 | 正式 OpenFlow 采集 |
 | P1 Batch 04–06 | DPDK/Offload Observe、System Health、Capabilities 独立批次尚未实现 | 按既定顺序与 review gate 推进 |
-| Design System / 高保真 | 核心 P0、Bridge/Bond、Diagnostics 已有统一组件；后两者做过浅/深色及放大文字局部检查 | OpenFlow 组件统一、整站深色与浏览器缩放矩阵 |
+| Design System / 高保真 | 核心 P0、Bridge/Bond、Diagnostics、OpenFlow 已有统一组件；P1 前三批做过浅/深色及放大文字局部检查 | 整站深色与浏览器缩放矩阵 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
 | Ports/VLAN 本地 lab | SQLite 持久化 Candidate、验证、合成事务、证据及原请求恢复已实现 | 不能替代正式双进程管理平面或真实 OVS 测试 |
 
@@ -42,6 +42,6 @@
 
 ## 下一步
 
-[Diagnostics 高保真结果](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)已接受，下一步是既有 OpenFlow Viewer 的组件统一。[浏览器 CI #7](https://github.com/sampsonlor/ovs-webui/issues/7)与[通用模板 lint #6](https://github.com/sampsonlor/ovs-webui/issues/6)继续开放，手工验收不等于关闭这两项。新增 P1 页面继续按 Batch 04 → 05 → 06 的顺序逐批审阅。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
+[OpenFlow 高保真结果](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)已接受，下一步是 Batch 04 DPDK/Offload Observe。[浏览器 CI #7](https://github.com/sampsonlor/ovs-webui/issues/7)与[通用模板 lint #6](https://github.com/sampsonlor/ovs-webui/issues/6)继续开放，手工验收不等于关闭这两项。新增 P1 页面继续按 Batch 04 → 05 → 06 的顺序逐批审阅。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。
