@@ -854,6 +854,13 @@ export default function Home() {
           request: interactionRef.current.p1.request,
         },
         openFlowReviewState: interactionRef.current.p1.openFlowState,
+        openFlowCollection: {
+          status: interactionRef.current.p1.openFlow.status,
+          capturedQuery:
+            interactionRef.current.p1.openFlow.snapshot?.query ?? null,
+          retainedRows:
+            interactionRef.current.p1.openFlow.snapshot?.rows.length ?? 0,
+        },
         prototype: true,
       }),
     });
@@ -1176,8 +1183,15 @@ export default function Home() {
           !Object.hasOwn(openFlowReviewLabels, next)
         )
           throw new Error('Unknown OpenFlow review state');
-        interactionRef.current.p1.reviewOpenFlow(next as OpenFlowReviewState);
-        return { view: 'openflow-viewer', state: next, capability: 'Observe' };
+        const blocked = interactionRef.current.p1.reviewOpenFlow(
+          next as OpenFlowReviewState,
+        );
+        return {
+          view: 'openflow-viewer',
+          requestedCase: next,
+          blocked,
+          capability: 'Observe',
+        };
       },
     });
     return () => lifecycle.abort();
