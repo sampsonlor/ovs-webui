@@ -2,7 +2,7 @@
 
 日期：2026-09-07（Asia/Shanghai）。起点：`ea48136`，分支：`codex/feat-p1-openflow-polish`。Diagnostics 已获用户接受，PR #12 已合并，注释标签 `prototype-diagnostics-v0.1` 保留接受基线。
 
-**Disposition 更新：2026-09-07 用户接受本轮结果并要求继续下一批；PR #13 合并到 main 后以注释标签 `prototype-openflow-v0.1` 保留接受基线。** 范围是已接受 P1 Batch 03 的单个 Observe Viewer，不扩大 OpenFlow 写权限，也不代表真实 provider 或生产验收完成。以下保留当次审阅证据，后续进度以 [STATUS](../STATUS.md) 为准。
+**Disposition 更新：2026-09-07 用户接受本轮结果并要求继续下一批；PR #13 已合并到 main（`1db5be6`），注释标签 `prototype-openflow-v0.1` 已推送。** 范围是已接受 P1 Batch 03 的单个 Observe Viewer，不扩大 OpenFlow 写权限，也不代表真实 provider 或生产验收完成。以下保留当次审阅证据，后续进度以 [STATUS](../STATUS.md) 为准。
 
 ## 页面与快照语义
 

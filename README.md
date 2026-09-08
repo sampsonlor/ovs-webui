@@ -5,7 +5,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 ## Project status
 
 See [current status and architecture alignment](docs/STATUS.md) for the
-2026-09-07 inventory, source baselines, interaction fixes and review scope.
+2026-09-08 inventory, source baselines, interaction fixes and review scope.
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
@@ -23,6 +23,7 @@ interaction and contract review tools; they do not change that architecture.
 | P1 Batch 01 · Bridge + Bond/LACP                  | Implemented · Review gate accepted |
 | P1 Batch 02 · Diagnostics                         | Implemented · Review gate accepted |
 | P1 Batch 03 · OpenFlow Viewer                     | Accepted for integration           |
+| P1 Batch 04 · DPDK / Offload Observe              | Implemented · Awaiting review      |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
 
@@ -59,6 +60,14 @@ Rows, byte limits, real snapshot age and permission loss are handled by a shared
 controller. This slice was accepted on 2026-09-07 for merge through PR #13,
 following `prototype-diagnostics-v0.1`. Its accepted checkpoint is
 `prototype-openflow-v0.1`.
+
+The current Batch 04 path is `Visibility → DPDK / Offload → readiness / sources / capability evidence`.
+It distinguishes Enabled, Available, Missing prerequisites, Unsupported and Unknown
+using separate configuration, runtime and provider evidence. Stale observations,
+generation changes, partial telemetry and software fallback remain explicit.
+The [acceleration review](docs/reviews/ACCELERATION_OBSERVE_v0.1.md) records validation
+and the Observe boundary. This batch awaits acceptance; System Health and the
+global Capabilities matrix have not started.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
