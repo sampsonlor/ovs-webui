@@ -81,6 +81,18 @@ declare const __OVS_CORE_LAB__: boolean;
 
 import { PortsPage } from '@/components/ovs/ports-page';
 import {
+  InterfaceContext,
+  UnavailableObject,
+} from '@/components/ovs/object-context';
+import {
+  inventoryBridges,
+  inventoryInterfaces,
+  inventoryMetadata,
+  resolveInventoryObject,
+  objectHash,
+  parseObjectHash,
+} from '@/lib/inventory-model';
+import {
   PageHeader,
   ScopeBadge,
   StateDot,
@@ -184,15 +196,15 @@ function Dashboard({
         {[
           {
             label: 'Ports online',
-            value: '4 / 6',
-            meta: '1 down · 1 unknown',
+            value: `${ports.filter((port) => port.state === 'Up').length} / ${ports.length}`,
+            meta: `${ports.filter((port) => port.state === 'Down').length} down · ${ports.filter((port) => port.state === 'Unknown').length} unknown`,
             icon: Cable,
             tone: 'text-amber-700',
           },
           {
             label: 'Bridges',
-            value: '4',
-            meta: '6 representative ports',
+            value: String(inventoryBridges.length),
+            meta: `${ports.length} included ports · bounded snapshot`,
             icon: Boxes,
             tone: 'text-slate-600',
           },
@@ -382,14 +394,21 @@ function PortDetail({
   mode,
   go,
   onDiagnose,
+  openObject,
 }: {
   port: Port;
   generation: number;
   mode: Mode;
   go: (view: View) => void;
   onDiagnose: () => void;
+  openObject: (target: string) => void;
 }) {
   const editable = port.scope !== 'Observe' && port.authority === 'OVS';
+  const object = resolveInventoryObject(`Port/${port.name}`);
+  const bondScope =
+    object.status === 'found' && object.kind === 'Port'
+      ? object.object.bond?.scope
+      : undefined;
   return (
     <>
       <PageHeader
@@ -466,9 +485,12 @@ function PortDetail({
                 <p className="font-mono text-xs text-muted-foreground">
                   Bridge
                 </p>
-                <p className="mt-1 font-mono text-sm font-semibold">
+                <button
+                  className="ovs-object-link mt-1"
+                  onClick={() => openObject(`Bridge/${port.bridge}`)}
+                >
                   {port.bridge}
-                </p>
+                </button>
               </div>
               <ChevronRight className="mx-auto size-4 text-muted-foreground" />
               <div className="border border-[#8bb7d1] bg-[#f2f8fc] p-3">
@@ -482,9 +504,17 @@ function PortDetail({
                 <p className="font-mono text-xs text-muted-foreground">
                   {port.members ? 'Member Interfaces' : 'Interface'}
                 </p>
-                <p className="mt-1 break-words font-mono text-sm font-semibold">
-                  {port.interfaceName}
-                </p>
+                <div className="mt-1 space-y-1">
+                  {(port.members ?? [port.interfaceName]).map((name) => (
+                    <button
+                      key={name}
+                      className="ovs-object-link block"
+                      onClick={() => openObject(`Interface/${name}`)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
@@ -495,18 +525,28 @@ function PortDetail({
                 ['VLAN', editable ? 'Basic Manage' : 'Observe', port.vlan],
                 [
                   'Bond / LACP',
-                  'Observe',
+                  bondScope ?? 'Observe',
                   port.members
                     ? `Bond Port · ${port.members.length} member Interfaces`
-                    : 'Not a bond member',
+                    : 'Single-Interface Port',
                 ],
                 ['STP / RSTP', 'Observe', 'Forwarding'],
               ].map(([name, scope, value]) => (
                 <button
                   key={name}
                   type="button"
-                  disabled={name !== 'VLAN' || !editable}
-                  onClick={() => go('vlan-edit')}
+                  disabled={
+                    name === 'VLAN'
+                      ? !editable
+                      : name === 'Bond / LACP'
+                        ? !port.members
+                        : true
+                  }
+                  onClick={() =>
+                    name === 'Bond / LACP'
+                      ? openObject(`Port/${port.name}`)
+                      : go('vlan-edit')
+                  }
                   className="border bg-white p-3 text-left disabled:cursor-default disabled:opacity-70"
                 >
                   <div className="flex items-center justify-between">
@@ -667,7 +707,12 @@ function MobilePanel({
         </div>
       ) : (
         <div className="mt-4">
-          <p className="text-sm">Last inventory: 4 up · 1 down · 1 unknown.</p>
+          <p className="text-sm">
+            Included inventory:{' '}
+            {ports.filter((port) => port.state === 'Up').length} up ·{' '}
+            {ports.filter((port) => port.state === 'Down').length} down ·{' '}
+            {ports.filter((port) => port.state === 'Unknown').length} unknown.
+          </p>
           <Notice
             tone={state.scenario === 'normal' ? 'warning' : 'uncertain'}
             title={
@@ -740,6 +785,8 @@ export default function Home() {
   );
   const controlRef = useRef(control);
   const selectedRef = useRef(selectedPort);
+  const navigationRef = useRef<ReturnType<typeof useP1Controller> | null>(null);
+  const restoringRoute = useRef(false);
   const presentationRef = useRef({ view, mode });
   useEffect(() => {
     presentationRef.current = { view, mode };
@@ -774,33 +821,83 @@ export default function Home() {
   };
   const go = (next: View) => {
     if (next === 'vlan-edit') {
-      const original =
-        ports.find((item) => item.name === selectedRef.current) ?? ports[1];
+      const original = ports.find((item) => item.name === selectedRef.current);
       const current = controlRef.current;
       const value =
-        current.candidate?.kind === 'vlan' &&
+        original &&
+        (current.candidate?.kind === 'vlan' &&
         current.candidate.port.name === original.name
           ? current.candidate.mine
-          : (current.live[original.name] ?? original.config);
-      setVlanMode(value.mode);
-      setAllowedVlans(value.trunks);
-      setNativeTag(value.tag === null ? '' : String(value.tag));
+          : (current.live[original.name] ?? original.config));
+      if (value) {
+        setVlanMode(value.mode);
+        setAllowedVlans(value.trunks);
+        setNativeTag(value.tag === null ? '' : String(value.tag));
+      }
+    }
+    if (!restoringRoute.current && !labEnabled) {
+      const selection = navigationRef.current?.getSelection();
+      let hash = `#view/${next}`;
+      const target =
+        next === 'port-detail' || next === 'vlan-edit'
+          ? `Port/${selectedRef.current}`
+          : next === 'bridge-detail'
+            ? `Bridge/${selection?.bridge}`
+            : next === 'bond-detail' || next === 'bond-edit'
+              ? `Port/${selection?.bond}`
+              : next === 'interface-detail'
+                ? `Interface/${selection?.interface}`
+                : null;
+      if (next === 'object-unavailable')
+        hash = `#missing?target=${encodeURIComponent(selection?.missing.target ?? '')}`;
+      else if (next === 'bond-edit' && selection?.bond === '__new__')
+        hash = `#new-bond/${encodeURIComponent(selection.bridge)}`;
+      else if (target && !labEnabled) {
+        const result = resolveInventoryObject(target);
+        hash =
+          result.status === 'found'
+            ? objectHash(
+                result.reference,
+                next === 'port-detail'
+                  ? 'port'
+                  : next === 'vlan-edit'
+                    ? 'vlan'
+                    : next === 'bond-detail'
+                      ? 'bond'
+                      : next === 'bond-edit'
+                        ? 'bond-edit'
+                        : undefined,
+              )
+            : `#missing?target=${encodeURIComponent(target)}`;
+      }
+      if (window.location.hash !== hash)
+        window.history.pushState(null, '', hash);
     }
     setView(next);
     setNavigationOpen(false);
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
-  const portFixture =
-    ports.find((item) => item.name === selectedPort) ?? ports[1];
-  const config = control.live[selectedPort] ?? portFixture.config;
-  const port = {
-    ...portFixture,
-    config,
-    vlan:
-      portFixture.scope === 'Observe' ? portFixture.vlan : vlanLabel(config),
-  };
+  const portFixture = ports.find((item) => item.name === selectedPort);
+  const config = control.live[selectedPort] ?? portFixture?.config;
+  const port =
+    portFixture && config
+      ? {
+          ...portFixture,
+          config,
+          vlan:
+            portFixture.scope === 'Observe'
+              ? portFixture.vlan
+              : vlanLabel(config),
+        }
+      : null;
   const locked = transactionLocked(control.transaction.status);
   const stageChange = () => {
+    if (!port) {
+      setToast(
+        'The requested Port is unavailable. Select it from the current inventory.',
+      );
+      return;
+    }
     const next = act({
       type: 'stage',
       port,
@@ -839,19 +936,107 @@ export default function Home() {
     go,
     notify: setToast,
     scenario: control.scenario,
-    openPort: (name) => {
-      if (!ports.some((item) => item.name === name)) {
-        setToast(`Port/${name} is outside the representative inventory.`);
+    openPort: (name, edit) => {
+      if (labEnabled) {
+        navigationRef.current?.unavailableObject(
+          `Port/${name}`,
+          'This link belongs to the synthetic P1 inventory, not the persisted lab instance. Open Ports to select a lab resource.',
+        );
         return;
       }
       selectPort(name);
-      go('port-detail');
+      go(edit ? 'vlan-edit' : 'port-detail');
     },
   });
   const interactionRef = useRef({ act, go, p1 });
   useEffect(() => {
     interactionRef.current = { act, go, p1 };
+    navigationRef.current = p1;
   });
+  useEffect(() => {
+    const restore = () => {
+      const current = navigationRef.current;
+      if (!current) return;
+      restoringRoute.current = true;
+      try {
+        const hash = window.location.hash;
+        if (
+          labEnabled &&
+          !hash.startsWith('#object/') &&
+          !hash.startsWith('#new-bond/')
+        )
+          return;
+        if (!hash) {
+          interactionRef.current.go('ports');
+          return;
+        }
+        if (hash.startsWith('#object/')) {
+          const route = parseObjectHash(hash);
+          if (labEnabled)
+            current.unavailableObject(
+              hash,
+              'This object URL belongs to the synthetic inventory. The lab has independent resource IDs and generation.',
+            );
+          else if (route) current.openObject(route.target, route.facet);
+          else current.unavailableObject(hash, 'The object URL is malformed.');
+        } else if (hash.startsWith('#new-bond/') && !labEnabled) {
+          const name = decodeURIComponent(hash.slice('#new-bond/'.length));
+          const result = resolveInventoryObject(`Bridge/${name}`);
+          if (
+            result.status === 'found' &&
+            result.kind === 'Bridge' &&
+            result.object.scope === 'Manage'
+          ) {
+            current.setSelectedBridge(name);
+            current.setSelectedBond('__new__');
+            interactionRef.current.go('bond-edit');
+          } else
+            current.unavailableObject(
+              `Bridge/${name}`,
+              'Select a managed Bridge from the current inventory before creating a Bond.',
+            );
+        } else if (hash.startsWith('#missing?')) {
+          current.unavailableObject(
+            new URLSearchParams(hash.slice(9)).get('target') ?? hash,
+            'The original target is unavailable in this inventory. Select a current object to continue.',
+          );
+        } else if (hash.startsWith('#view/')) {
+          const next = hash.slice(6);
+          const objectViews = [
+            'port-detail',
+            'vlan-edit',
+            'bridge-detail',
+            'bond-detail',
+            'bond-edit',
+          ];
+          if (
+            !objectViews.includes(next) &&
+            [...steps, ...p1Steps].some((step) => step.view === next)
+          )
+            interactionRef.current.go(next as View);
+          else
+            current.unavailableObject(
+              hash,
+              'An explicit object reference is required to restore this view.',
+            );
+        } else
+          current.unavailableObject(
+            hash,
+            'This URL is not a recognized prototype resource.',
+          );
+      } catch {
+        current.unavailableObject(
+          window.location.hash,
+          'The object URL is malformed.',
+        );
+      } finally {
+        restoringRoute.current = false;
+      }
+    };
+    restore();
+    window.addEventListener('hashchange', restore);
+    return () => window.removeEventListener('hashchange', restore);
+  }, [labEnabled]);
   useEffect(() => {
     if (labEnabled) return;
     const context = (document as WebMcpDocument).modelContext;
@@ -919,6 +1104,15 @@ export default function Home() {
             interactionRef.current.p1.openFlow.snapshot?.rows.length ?? 0,
         },
         prototype: true,
+        inventory:
+          controlRef.current.scenario === 'permission-denied'
+            ? null
+            : {
+                ...inventoryMetadata,
+                bridges: inventoryBridges.length,
+                ports: ports.length,
+                interfaces: inventoryInterfaces.length,
+              },
       }),
     });
     register({
@@ -943,6 +1137,25 @@ export default function Home() {
           throw new Error('Unknown P0 view');
         interactionRef.current.go(next as View);
         return { view: next };
+      },
+    });
+    register({
+      name: 'open_inventory_object',
+      title: 'Open inventory object',
+      description:
+        'Resolve one synthetic Bridge, Port or Interface by Kind/name or Kind/UUID. Missing targets remain unavailable; navigation never creates configuration.',
+      inputSchema: {
+        type: 'object',
+        properties: { target: { type: 'string' } },
+        required: ['target'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: (input) => {
+        const target = inputObject(input).target;
+        if (typeof target !== 'string')
+          throw new Error('One object reference is required.');
+        return interactionRef.current.p1.openObject(target);
       },
     });
     register({
@@ -1390,22 +1603,52 @@ export default function Home() {
         setSelected={selectPort}
         go={go}
         live={control.live}
+        snapshotLabel={`Shared snapshot · generation ${inventoryMetadata.generation} · bounded`}
       />
     );
+  else if ((view === 'port-detail' || view === 'vlan-edit') && !port)
+    content = (
+      <UnavailableObject
+        target={`Port/${selectedPort}`}
+        reason="The selected Port is outside the current inventory snapshot."
+        go={go}
+      />
+    );
+  else if (view === 'interface-detail') {
+    const item = inventoryInterfaces.find(
+      (item) => item.name === p1.selectedInterface,
+    );
+    content = item ? (
+      <InterfaceContext
+        item={item}
+        mode={mode}
+        openObject={p1.openObject}
+        scenario={control.scenario}
+      />
+    ) : (
+      <UnavailableObject
+        target={`Interface/${p1.selectedInterface}`}
+        reason="The Interface is outside this inventory snapshot."
+        go={go}
+      />
+    );
+  } else if (view === 'object-unavailable')
+    content = <UnavailableObject {...p1.missingObject} go={go} />;
   else if (view === 'port-detail')
     content = (
       <PortDetail
-        port={port}
+        port={port!}
         generation={control.generation}
         mode={mode}
         go={go}
-        onDiagnose={() => p1.openDiagnostics(`Port/${port.name}`)}
+        onDiagnose={() => p1.openDiagnostics(`Port/${port!.name}`)}
+        openObject={p1.openObject}
       />
     );
   else if (view === 'vlan-edit')
     content = (
       <VlanEdit
-        port={port}
+        port={port!}
         mode={mode}
         vlanMode={vlanMode}
         setVlanMode={setVlanMode}
@@ -1422,11 +1665,17 @@ export default function Home() {
   else if (view === 'diff') content = <DiffPage {...common} />;
   else if (view === 'safe-apply')
     content = <SafeApply {...common} currentTime={currentTime} />;
-  else if (view === 'evidence') content = <Evidence state={control} go={go} />;
+  else if (view === 'evidence')
+    content = <Evidence state={control} go={go} openObject={p1.openObject} />;
   else content = <ResponsivePage state={control} go={go} />;
   if (
     control.scenario === 'permission-denied' &&
-    ['port-detail', 'vlan-edit'].includes(view)
+    [
+      'port-detail',
+      'vlan-edit',
+      'interface-detail',
+      'object-unavailable',
+    ].includes(view)
   )
     content = (
       <Notice tone="danger" title="Permission required">
@@ -1439,6 +1688,12 @@ export default function Home() {
       <a
         className="sr-only focus:not-sr-only focus:block focus:p-3"
         href="#page-content"
+        onClick={(event) => {
+          event.preventDefault();
+          const content = document.getElementById('page-content');
+          content?.focus();
+          content?.scrollIntoView({ block: 'start' });
+        }}
       >
         Skip to page content
       </a>
@@ -1620,7 +1875,7 @@ export default function Home() {
         <section
           id="page-content"
           tabIndex={-1}
-          className="min-w-0 p-4 pb-20 lg:px-8 lg:py-7"
+          className="min-w-0 scroll-mt-32 p-4 pb-20 lg:px-8 lg:py-7"
         >
           <div className="mx-auto max-w-[1480px]">
             <ScenarioBanner state={control} act={act} go={go} />
@@ -1631,7 +1886,12 @@ export default function Home() {
             )}
             <div
               className={
-                ['safe-apply', 'evidence'].includes(view) ||
+                [
+                  'safe-apply',
+                  'evidence',
+                  'interface-detail',
+                  'object-unavailable',
+                ].includes(view) ||
                 (labEnabled && coreLabViews.includes(view))
                   ? ''
                   : 'hidden md:block'
@@ -1639,7 +1899,12 @@ export default function Home() {
             >
               {content}
             </div>
-            {!['safe-apply', 'evidence'].includes(view) &&
+            {![
+              'safe-apply',
+              'evidence',
+              'interface-detail',
+              'object-unavailable',
+            ].includes(view) &&
               !(labEnabled && coreLabViews.includes(view)) && (
                 <div className="md:hidden">
                   {isP1View(view) &&

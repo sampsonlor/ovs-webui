@@ -98,11 +98,21 @@ for exceptions, responsive responsibilities and engineering evidence. PR #17 is
 merged at `862b19a`, tagged `prototype-capabilities-v0.1`; the persistence lab does
 not execute this native action.
 
-The [six-batch integration review](docs/reviews/INTEGRATION_v0.2.md) now checks
+The accepted [six-batch integration review](docs/reviews/INTEGRATION_v0.2.md) checks
 cross-domain transaction ownership and unifies Bond editor / WebMCP validation.
-It awaits separate acceptance. The [approved IA coverage inventory](docs/reviews/P1_IA_COVERAGE_v0.1.md)
-maps all 53 page IDs and records remaining inventory, routing and production
-service gaps; acceptance of six batches does not imply whole-site completion.
+PR #18 is merged at `176bca1`, tagged `prototype-p1-integration-v0.2`.
+
+The current [shared inventory review](docs/reviews/SHARED_INVENTORY_v0.1.md)
+unifies 4 Bridges, 10 Ports and 13 attached Interfaces in one bounded synthetic
+snapshot. Fixed UUID references retain instance and generation across object URL
+reloads and browser history; missing targets remain explicit. Bridge, Port, Bond,
+Interface and evidence links share this resolver. The new Interface context is
+read-only, and the persistence lab retains its original six-Port scope and data.
+This slice awaits acceptance. Object URL recovery does not persist prototype
+Candidate or transaction state. The updated
+[approved IA coverage inventory](docs/reviews/P1_IA_COVERAGE_v0.2.md) maps all 53
+page IDs and records remaining full-inventory, service-routing and production
+gaps; acceptance of six batches does not imply whole-site completion.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics

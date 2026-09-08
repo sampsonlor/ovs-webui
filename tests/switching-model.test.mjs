@@ -164,7 +164,7 @@ void test('active-backup uses active capacity and does not present standby or do
   assert.equal(degraded.members[1].link, 'Down');
   assert.equal(degraded.members[1].role, 'Inactive');
   assert.equal(degraded.capacity, '25 Gbps active');
-  assert.deepEqual(storage.members, ['enp129s0f0', 'enp129s0f1']);
+  assert.deepEqual(storage.members, ['enp130s0f0', 'enp130s0f1']);
 });
 
 void test('LACP mismatch withholds forwarding capacity and traffic while retaining link evidence', () => {

@@ -1,6 +1,6 @@
 # P1 六批整合审阅 v0.2
 
-日期：2026-09-08。**Disposition：本轮整合审阅待用户接受。** P0 与 P1 六批各自已接受；本记录不表示整个批准 IA、正式架构实现或生产 Release Gate 已完成。
+日期：2026-09-08。**Disposition：用户已接受本轮整合审阅。** [PR #18](https://github.com/sampsonlor/ovs-webui/pull/18) 在四项 CI 检查通过的 `5a3d268` 上合并至 `176bca1`，接受标签为 `prototype-p1-integration-v0.2`。P0 与 P1 六批各自已接受；本记录不表示整个批准 IA、正式架构实现或生产 Release Gate 已完成。
 
 Batch 06 已获用户“很好，没有问题，继续下一步”确认。PR #17 在四项 CI 检查通过的 `da36029` 上合并，`main` 接受提交为 `862b19a`，注释标签 `prototype-capabilities-v0.1` 已推送。早期三批整合的 [v0.1](INTEGRATION_v0.1.md) 保留原日期与范围。
 
@@ -37,4 +37,4 @@ Bond 程序化创建此前允许使用已存在的 Port 名，并在 storage/man
 
 ## 后续建议
 
-本轮接受后，优先处理统一 Bridge/Port/Interface 库存和稳定对象跳转，再准备 Go/Svelte 正式 Ports/VLAN 切片设计。先明确可复用的契约、状态规则和设计规格，避免继续把代表样例数量当作整站覆盖进度。
+接受后的统一 Bridge/Port/Interface 库存和稳定对象跳转单独记录于 [共享库存 v0.1](SHARED_INVENTORY_v0.1.md)，该后续切片有自己的审阅 Gate。然后准备 Go/Svelte 正式 Ports/VLAN 切片设计。

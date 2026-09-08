@@ -1,8 +1,11 @@
 # Documentation index
 
-Start with [current status](STATUS.md) and the
-[six-batch integration review](reviews/INTEGRATION_v0.2.md), which awaits acceptance,
-and the [53-page approved IA coverage inventory](reviews/P1_IA_COVERAGE_v0.1.md).
+Start with [current status](STATUS.md), the
+[shared inventory and object navigation review](reviews/SHARED_INVENTORY_v0.1.md),
+which awaits acceptance, and the
+[53-page approved IA coverage inventory](reviews/P1_IA_COVERAGE_v0.2.md).
+The [six-batch integration review](reviews/INTEGRATION_v0.2.md) is accepted in
+PR #18, tagged `prototype-p1-integration-v0.2` at `176bca1`.
 The [Capabilities review](reviews/CAPABILITIES_v0.1.md) is accepted in PR #17,
 tagged `prototype-capabilities-v0.1` at `862b19a`.
 The accepted [CI baseline](reviews/CI_BROWSER_BASELINE_v0.1.md) records PR #16

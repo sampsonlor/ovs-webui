@@ -3,6 +3,11 @@ import type {
   DiagnosticParameters,
   DiagnosticRequest,
 } from '../app/prototype-model';
+import { inventoryPorts } from './inventory-model.ts';
+
+const storageMembers = inventoryPorts.find(
+  (port) => port.name === 'bond-storage',
+)!.interfaces;
 
 export type DiagnosticDefinition = {
   id: string;
@@ -229,7 +234,7 @@ export function diagnosticResult(
       ? 'One member has no carrier. The Bond is available through the other member, with reduced redundancy.'
       : 'The synthetic collection completed for this object. Review the captured scope before preparing a configuration change.',
     finding: storage
-      ? 'enp129s0f1 carrier down · enp129s0f0 active'
+      ? `${storageMembers[1]} carrier down · ${storageMembers[0]} active`
       : `Captured ${definition?.category ?? 'provider'} snapshot · ${request.scope}`,
     coverage: `One explicit target · ${request.sampleSeconds}s budget`,
     next: 'Inspect the related object and correlated evidence before staging intent.',
@@ -250,7 +255,7 @@ export function diagnosticResult(
         ? 'Carrier state was captured, but one counter sample is missing. The omitted evidence remains unknown.'
         : 'One provider sample was captured; additional evidence is missing. Coverage remains incomplete.',
       finding: storage
-        ? 'enp129s0f1 carrier down · counters unknown'
+        ? `${storageMembers[1]} carrier down · counters unknown`
         : `Partial ${definition?.category ?? 'provider'} snapshot · ${request.scope}`,
       coverage: 'Incomplete evidence for the requested target',
       tone: 'warning',
@@ -351,8 +356,8 @@ export function diagnosticResult(
     `sample_seconds=${request.sampleSeconds}`,
     ...(storage && state !== 'no-finding'
       ? [
-          'member=enp129s0f0 carrier=up speed=25000 role=active',
-          'member=enp129s0f1 carrier=down speed=unknown role=inactive',
+          `member=${storageMembers[0]} carrier=up speed=25000 role=active`,
+          `member=${storageMembers[1]} carrier=down speed=unknown role=inactive`,
           state === 'partial'
             ? 'counter_sample=unknown coverage=partial'
             : 'lacp=off bond_mode=active-backup',

@@ -1,6 +1,12 @@
+import {
+  inventoryBridges,
+  inventoryPorts,
+  inventoryInterfaces,
+  attachmentCandidates,
+} from './inventory-model.ts';
 import type { Scenario } from './change-control';
 import type { ChangeIntent } from '../app/prototype-model';
-import { ports } from './ovs-model.ts';
+import { ports, vlanLabel, type VlanValue } from './ovs-model.ts';
 
 export type Bridge = {
   name: string;
@@ -32,111 +38,28 @@ export type Bond = {
   provider: string;
 };
 
-// Bounded synthetic inventories; counts include children outside the detail sample.
-export const bridges: Bridge[] = [
-  {
-    name: 'br-fabric',
-    state: 'Up',
-    datapath: 'system',
-    ports: 8,
-    interfaces: 10,
-    bonds: 1,
-    vlans: '10, 20, 120, 240',
-    rstp: 'Enabled',
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: 'c44d…7b92',
-    provider: 'ovsdb-server',
-  },
-  {
-    name: 'br-storage',
-    state: 'Up',
-    datapath: 'system',
-    ports: 3,
-    interfaces: 4,
-    bonds: 1,
-    vlans: '300–319',
-    rstp: 'Disabled',
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: '2a1e…94f0',
-    provider: 'ovsdb-server',
-  },
-  {
-    name: 'br-mgmt',
-    state: 'Up',
-    datapath: 'system',
-    ports: 2,
-    interfaces: 2,
-    bonds: 0,
-    vlans: '4094 native',
-    rstp: 'Enabled',
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: '8b9a…a110',
-    provider: 'ovsdb-server',
-  },
-  {
-    name: 'br-offload',
-    state: 'Unknown',
-    datapath: 'netdev',
-    ports: 5,
-    interfaces: 5,
-    bonds: 1,
-    vlans: 'Provider-owned',
-    rstp: 'Unknown',
-    authority: 'External',
-    scope: 'Observe',
-    uuid: '6fce…004d',
-    provider: 'SmartNIC provider',
-  },
-];
-
-export const bonds: Bond[] = [
-  {
-    name: 'bond-uplink',
-    bridge: 'br-fabric',
-    state: 'Up',
-    mode: 'balance-tcp',
-    lacp: 'active',
-    members: ['enp65s0f0', 'enp65s0f1'],
-    memberSpeeds: [100, 100],
-    minLinks: 1,
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: '9f84…a3d1',
-    provider: 'ovsdb-server',
-  },
-  {
-    name: 'bond-storage',
-    bridge: 'br-storage',
-    state: 'Up',
-    mode: 'active-backup',
-    lacp: 'off',
-    members: ['enp129s0f0', 'enp129s0f1'],
-    memberSpeeds: [25, 25],
-    minLinks: 1,
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: '83cb…41c9',
-    provider: 'ovsdb-server',
-  },
-  {
-    name: 'bond-provider',
-    bridge: 'br-offload',
-    state: 'Unknown',
-    mode: 'balance-slb',
-    lacp: 'off',
-    members: ['pf0hpf', 'pf1hpf'],
-    memberSpeeds: [null, null],
-    minLinks: null,
-    authority: 'External',
-    scope: 'Observe',
-    uuid: 'b8d1…7e44',
-    provider: 'SmartNIC provider',
-  },
-];
-
+// Every page projects the same bounded relationship snapshot.
+export const bridges: Bridge[] = inventoryBridges.map((bridge) => {
+  const children = inventoryPorts.filter((port) => port.bridge === bridge.name);
+  return {
+    ...bridge,
+    ports: children.length,
+    interfaces: children.reduce(
+      (count, port) => count + port.interfaces.length,
+      0,
+    ),
+    bonds: children.filter((port) => port.bond).length,
+  };
+});
+export const bonds: Bond[] = inventoryPorts
+  .filter((port) => port.bond)
+  .map((port) => ({
+    ...port,
+    ...port.bond!,
+    state: port.state === 'Down' ? 'Degraded' : port.state,
+    members: [...port.interfaces],
+    provider: port.authority === 'OVS' ? 'ovsdb-server' : 'SmartNIC provider',
+  }));
 export function providerStale(scenario: Scenario) {
   return scenario === 'provider-degraded' || scenario === 'degraded';
 }
@@ -248,106 +171,53 @@ export function bridgeObservation(bridge: Bridge, scenario: Scenario) {
   };
 }
 
-export const bridgeChildren: Record<
-  string,
-  Array<{
-    name: string;
-    kind: string;
-    interfaces: string;
-    state: string;
-    vlan: string;
-  }>
-> = {
-  'br-fabric': [
-    {
-      name: 'bond-uplink',
-      kind: 'Bond Port',
-      interfaces: 'enp65s0f0, enp65s0f1',
-      state: 'Up',
-      vlan: 'Trunk 10, 20, 120',
-    },
-    {
-      name: 'server-07',
-      kind: 'System Port',
-      interfaces: 'enp129s0f1',
-      state: 'Up',
-      vlan: 'Access 120',
-    },
-    {
-      name: 'server-08',
-      kind: 'System Port',
-      interfaces: 'enp129s0f2',
-      state: 'Down',
-      vlan: 'Access 120',
-    },
-  ],
-  'br-storage': [
-    {
-      name: 'bond-storage',
-      kind: 'Bond Port',
-      interfaces: 'enp129s0f0, enp129s0f1',
-      state: 'Up',
-      vlan: 'Trunk 300–319',
-    },
-    {
-      name: 'storage-node-01',
-      kind: 'System Port',
-      interfaces: 'enp129s0f2',
-      state: 'Up',
-      vlan: 'Access 310',
-    },
-  ],
-  'br-mgmt': [
-    {
-      name: 'mgmt0',
-      kind: 'System Port',
-      interfaces: 'eno1',
-      state: 'Up',
-      vlan: 'Native 4094',
-    },
-    {
-      name: 'mgmt-backup',
-      kind: 'System Port',
-      interfaces: 'eno2',
-      state: 'Up',
-      vlan: 'Native 4094',
-    },
-  ],
-  'br-offload': [
-    {
-      name: 'bond-provider',
-      kind: 'Bond Port',
-      interfaces: 'pf0hpf, pf1hpf',
-      state: 'Unknown',
-      vlan: 'Provider-owned',
-    },
-    {
-      name: 'rep0',
-      kind: 'Provider Port',
-      interfaces: 'pf2hpf',
-      state: 'Unknown',
-      vlan: 'Provider-owned',
-    },
-  ],
-};
+export const bridgeChildren = Object.fromEntries(
+  inventoryBridges.map((bridge) => [
+    bridge.name,
+    inventoryPorts
+      .filter((port) => port.bridge === bridge.name)
+      .map((port) => ({
+        name: port.name,
+        kind: port.bond
+          ? 'Bond Port'
+          : port.authority === 'External'
+            ? 'Provider Port'
+            : 'System Port',
+        interfaces: port.interfaces.join(', '),
+        state: port.state,
+        vlan: port.vlan,
+      })),
+  ]),
+);
 
-export function memberOptions(bridge: string, bond?: Bond) {
-  const names =
-    bridge === 'br-storage'
-      ? ['enp129s0f0', 'enp129s0f1', 'enp129s0f2']
-      : bridge === 'br-mgmt'
-        ? ['eno1', 'eno2', 'enp4s0f0']
-        : bridge === 'br-fabric'
-          ? ['enp65s0f0', 'enp65s0f1', 'enp65s0f2', 'enp65s0f3']
-          : [];
-  return names.map((name) => {
-    const owner = bridgeChildren[bridge]?.find((child) =>
-      child.interfaces.split(', ').includes(name),
-    )?.name;
-    return { name, owner, available: !owner || owner === bond?.name };
-  });
+export function currentBridgeChildren(
+  bridge: string,
+  live: Record<string, VlanValue> = {},
+) {
+  return (bridgeChildren[bridge] ?? []).map((child) => ({
+    ...child,
+    vlan: live[child.name] ? vlanLabel(live[child.name]) : child.vlan,
+  }));
 }
 
+export function memberOptions(bridge: string, bond?: Bond) {
+  return [
+    ...inventoryInterfaces
+      .filter((item) => item.bridge === bridge)
+      .map((item) => ({
+        name: item.name,
+        owner: item.port,
+        available: item.port === bond?.name,
+      })),
+    ...attachmentCandidates
+      .filter(
+        (item) =>
+          item.bridge === bridge &&
+          !inventoryInterfaces.some((native) => native.name === item.name),
+      )
+      .map((item) => ({ name: item.name, owner: undefined, available: true })),
+  ];
+}
 export type BondDraft = {
   name: string;
   bridge: string;
