@@ -1,8 +1,8 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-08。P1 六批均已接受。Capabilities 通过 [PR #17](https://github.com/sampsonlor/ovs-webui/pull/17) 合并至 `main` 的 `862b19a`，接受标签为 `prototype-capabilities-v0.1`。此前 System Health 为 `b08e0a3` / `prototype-system-health-v0.1`，CI 基础 [PR #16](https://github.com/sampsonlor/ovs-webui/pull/16) 为 `fc0f387` / `prototype-ci-browser-v0.1`，#6、#7 已关闭。本轮六批整合修复与覆盖盘点等待审阅；历史记录保留各自日期和范围。
+更新：2026-09-08。P1 六批及整合审阅均已接受。[PR #18](https://github.com/sampsonlor/ovs-webui/pull/18) 已合并至 `main` 的 `176bca1`，接受标签为 `prototype-p1-integration-v0.2`。Capabilities 为 `862b19a` / `prototype-capabilities-v0.1`，System Health 为 `b08e0a3` / `prototype-system-health-v0.1`，CI 基础为 `fc0f387` / `prototype-ci-browser-v0.1`，#6、#7 已关闭。本轮共享库存与对象导航等待审阅；历史记录保留各自日期和范围。
 
-**P0 与 P1 六批已接受，整站高保真与正式管理平面尚未完成。** 本轮统一 Bond 页面与程序化入口的名称、成员和 native diff，并验证跨域共享事务。当前审阅入口是[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)与[批准 IA 的 53 项覆盖盘点](reviews/P1_IA_COVERAGE_v0.1.md)。各批证据见[Capabilities](reviews/CAPABILITIES_v0.1.md)、[System Health](reviews/SYSTEM_HEALTH_v0.1.md)、[加速观察](reviews/ACCELERATION_OBSERVE_v0.1.md)、[OpenFlow](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)、[Diagnostics](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)和[Bridge / Bond](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
+**P0 与 P1 六批已接受，整站高保真与正式管理平面尚未完成。** 本轮统一 4 个 Bridge、10 个 Port、13 个挂接 Interface 的合成关系来源，增加严格对象 URL 和只读 Interface 上下文，消除失效引用的默认对象回退。当前审阅入口是[共享库存 v0.1](reviews/SHARED_INVENTORY_v0.1.md)与[批准 IA 的 53 项覆盖盘点 v0.2](reviews/P1_IA_COVERAGE_v0.2.md)。已接受的[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)及各批证据保留各自范围。
 
 ## 基线和来源
 
@@ -24,7 +24,8 @@
 | P1 Batch 04 DPDK/Offload Observe | 单个总览与只读能力证据已获用户接受；127 项回归、3 项集成及浏览器局部矩阵通过 | 真实 Provider、完整硬件库存与持久化观察 |
 | P1 Batch 05 System Health | 六域共享观察、组件责任、事件时间线及恢复入口已实现；145 项回归与 3 项集成通过，已获用户接受 | 正式健康 Provider、统一库存和持久化状态 / Event 服务 |
 | P1 Batch 06 Capabilities | 9 项能力矩阵、五状态、四 Gate 及 native Candidate / Safe Apply 已接受；PR #17 已合并 | 正式 provider、字段级权限、step-up、持久化能力与恢复证据 |
-| P1 六批整合 v0.2 | Bond 入口一致性修复、跨域事务回归及 53 项 IA 盘点已准备 | 本轮接受；统一库存、稳定对象/Job/证据路由 |
+| P1 六批整合 v0.2 | Bond 入口一致性修复、跨域事务回归及 53 项 IA 盘点已接受；PR #18 已合并 | 正式库存、统一 Job/证据服务路由 |
+| 共享库存与对象导航 v0.1 | 4/10/13 关系快照、固定合成 UUID、可刷新对象 URL、缺失目标和只读 SW-07 上下文已实现 | 本轮接受；完整库存/provider、Interface 原生字段及受控编辑 |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -46,6 +47,6 @@
 
 ## 下一步
 
-审阅 `codex/chore-p1-integration-review` 的六批整合结果。后续优先统一 Bridge/Port/Interface 库存、对象身份与稳定资源跳转，再准备符合架构原文的 Go / Svelte Ports/VLAN 正式切片设计。盘点已记录同 UUID 的 Bond 成员差异与 Interface 复用；当前独立 `br-native-demo`、外部 OpenFlow 样本与 Ports/VLAN lab 的有限边界仍保留。
+审阅 `codex/feat-shared-object-inventory` 的共享库存与导航结果。接受后准备符合架构原文的 Go webd/mgrd 与 Svelte 5 Ports/VLAN 正式切片设计，明确身份、权限、双库、Candidate、Applied evidence 与恢复资源。Bond 成员差异和 Interface 复用已在合成关系快照中纠正；独立 `br-native-demo`、外部 OpenFlow 样本与六 Port 的持久化 lab 仍保留各自边界。对象 URL 刷新不等于原型 Candidate/事务持久化。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。

@@ -35,7 +35,7 @@ import {
 import {
   bridges,
   bonds,
-  bridgeChildren,
+  currentBridgeChildren,
   bridgeObservation,
   bondObservation,
   bondDraftErrors,
@@ -53,6 +53,8 @@ import type {
   PrototypeMode,
 } from '@/app/prototype-model';
 import type { Scenario } from '@/lib/change-control';
+import { UnavailableObject } from './object-context';
+import type { View, VlanValue } from '@/lib/ovs-model';
 
 function Panel({
   title,
@@ -611,7 +613,8 @@ function BridgeDetail({
   mode,
   scenario,
   go,
-  openBond,
+  openObject,
+  live,
   createBond,
   stage,
   blocked,
@@ -620,14 +623,15 @@ function BridgeDetail({
   mode: PrototypeMode;
   scenario: Scenario;
   go: (view: P1View) => void;
-  openBond: (bond: Bond) => void;
+  openObject: (target: string) => void;
+  live: Record<string, VlanValue>;
   createBond: (name: string) => void;
   stage: (intent: ChangeIntent) => void;
   blocked: boolean;
 }) {
   const editable = bridge.scope === 'Manage';
   const observation = bridgeObservation(bridge, scenario);
-  const children = bridgeChildren[bridge.name] ?? [];
+  const children = currentBridgeChildren(bridge.name, live);
   const stageRstp = () =>
     stage({
       kind: 'bridge',
@@ -731,7 +735,7 @@ function BridgeDetail({
           </Panel>
           <Panel
             title="Representative Port children"
-            description="This bounded sample does not list every child counted in the inventory."
+            description="Every Port counted for this Bridge is listed in this shared bounded snapshot."
           >
             <div className="hidden lg:block">
               <Table className="ovs-data-table">
@@ -752,24 +756,26 @@ function BridgeDetail({
                     return (
                       <TableRow key={child.name}>
                         <TableCell>
-                          {bond ? (
-                            <button
-                              className="ovs-object-link"
-                              onClick={() => openBond(bond)}
-                            >
-                              {child.name}
-                            </button>
-                          ) : (
-                            <span className="font-mono font-medium">
-                              {child.name}
-                            </span>
-                          )}
+                          <button
+                            className="ovs-object-link"
+                            onClick={() => openObject(`Port/${child.name}`)}
+                          >
+                            {child.name}
+                          </button>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {child.kind}
                           </p>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {child.interfaces}
+                          {child.interfaces.split(', ').map((name) => (
+                            <button
+                              key={name}
+                              className="ovs-object-link block"
+                              onClick={() => openObject(`Interface/${name}`)}
+                            >
+                              {name}
+                            </button>
+                          ))}
                         </TableCell>
                         <TableCell>
                           <State
@@ -793,18 +799,12 @@ function BridgeDetail({
                 return (
                   <article key={child.name} className="p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      {bond ? (
-                        <button
-                          className="ovs-object-link"
-                          onClick={() => openBond(bond)}
-                        >
-                          {child.name}
-                        </button>
-                      ) : (
-                        <span className="font-mono text-sm font-medium">
-                          {child.name}
-                        </span>
-                      )}
+                      <button
+                        className="ovs-object-link"
+                        onClick={() => openObject(`Port/${child.name}`)}
+                      >
+                        {child.name}
+                      </button>
                       <State
                         value={
                           bond
@@ -817,7 +817,15 @@ function BridgeDetail({
                       {child.kind} · {child.vlan}
                     </p>
                     <p className="mt-2 break-words font-mono text-xs text-muted-foreground">
-                      {child.interfaces}
+                      {child.interfaces.split(', ').map((name) => (
+                        <button
+                          key={name}
+                          className="ovs-object-link block"
+                          onClick={() => openObject(`Interface/${name}`)}
+                        >
+                          {name}
+                        </button>
+                      ))}
                     </p>
                   </article>
                 );
@@ -830,7 +838,7 @@ function BridgeDetail({
             <Properties
               stacked
               values={[
-                ['Authority', bridge.authority],
+                ['OVSDB configuration authority', bridge.authority],
                 ['Provider', bridge.provider],
                 ['Generation', '1842 · fixture'],
                 [
@@ -1084,6 +1092,7 @@ function BondDetail({
   scenario,
   go,
   openBridge,
+  openObject,
   diagnose,
   blocked,
 }: {
@@ -1092,6 +1101,7 @@ function BondDetail({
   scenario: Scenario;
   go: (view: P1View) => void;
   openBridge: (name: string) => void;
+  openObject: (target: string) => void;
   diagnose: (scope: string) => void;
   blocked: boolean;
 }) {
@@ -1127,9 +1137,9 @@ function BondDetail({
         }
       />
       {observation.memberDown && (
-        <Notice tone="warning" title="Member enp129s0f1 is down">
-          bond-storage remains active through enp129s0f0. Redundancy is reduced;
-          configured membership is unchanged.
+        <Notice tone="warning" title={`Member ${bond.members[1]} is down`}>
+          {bond.name} remains active through {bond.members[0]}. Redundancy is
+          reduced; configured membership is unchanged.
         </Notice>
       )}
       {observation.mismatch && (
@@ -1222,7 +1232,12 @@ function BondDetail({
                   {observation.members.map((member) => (
                     <TableRow key={member.name}>
                       <TableCell className="font-mono text-sm font-medium">
-                        {member.name}
+                        <button
+                          className="ovs-object-link"
+                          onClick={() => openObject(`Interface/${member.name}`)}
+                        >
+                          {member.name}
+                        </button>
                       </TableCell>
                       <TableCell>
                         <State value={member.link} />
@@ -1242,9 +1257,12 @@ function BondDetail({
               {observation.members.map((member) => (
                 <article key={member.name} className="p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="font-mono text-sm font-medium">
+                    <button
+                      className="ovs-object-link"
+                      onClick={() => openObject(`Interface/${member.name}`)}
+                    >
                       {member.name}
-                    </span>
+                    </button>
                     <State value={member.link} />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -1274,7 +1292,7 @@ function BondDetail({
                 ['LACP intent', bond.lacp],
                 ['Minimum links', bond.minLinks ?? 'Unknown'],
                 ['Provider', bond.provider],
-                ['Authority', bond.authority],
+                ['OVSDB configuration authority', bond.authority],
               ]}
             />
           </Panel>
@@ -1573,7 +1591,7 @@ function BondEditor({
                 <div>
                   <h3 className="font-semibold">Interface members</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Keep current members or select unassigned Interfaces.
+                    Keep current members or select a host attachment candidate.
                   </p>
                 </div>
                 <StatusBadge tone={errors.members ? 'warning' : 'info'}>
@@ -1620,7 +1638,7 @@ function BondEditor({
                             ? 'Current Bond member'
                             : option.owner
                               ? 'Assigned to ' + option.owner
-                              : 'Unassigned · system'}
+                              : 'Host attachment candidate · system'}
                         </span>
                       </span>
                     </label>
@@ -1803,6 +1821,8 @@ export function P1SwitchingView({
   go,
   onStageIntent,
   onDiagnose,
+  openObject,
+  live,
 }: {
   view: P1View;
   mode: PrototypeMode;
@@ -1814,9 +1834,11 @@ export function P1SwitchingView({
   setSelectedBridge: (value: string) => void;
   selectedBond: string;
   setSelectedBond: (value: string) => void;
-  go: (view: P1View) => void;
+  go: (view: View) => void;
   onStageIntent: (intent: ChangeIntent) => void;
   onDiagnose: (scope: string) => void;
+  openObject: (target: string) => void;
+  live: Record<string, VlanValue>;
 }) {
   const [desktop, setDesktop] = useState(false);
   useEffect(() => {
@@ -1826,8 +1848,7 @@ export function P1SwitchingView({
     query.addEventListener('change', update);
     return () => query.removeEventListener('change', update);
   }, []);
-  const bridge =
-    bridges.find((item) => item.name === selectedBridge) ?? bridges[0];
+  const bridge = bridges.find((item) => item.name === selectedBridge);
   const bond = bonds.find((item) => item.name === selectedBond);
   const openBridge = (name: string) => {
     setSelectedBridge(name);
@@ -1854,6 +1875,26 @@ export function P1SwitchingView({
     ].includes(scenario)
   )
     return <ResourceState view={view} scenario={scenario} />;
+  if ((view === 'bridge-detail' || view === 'bond-edit') && !bridge)
+    return (
+      <UnavailableObject
+        target={`Bridge/${selectedBridge}`}
+        reason="The selected Bridge is outside this inventory snapshot."
+        go={go}
+      />
+    );
+  if (
+    (view === 'bond-detail' ||
+      (view === 'bond-edit' && selectedBond !== '__new__')) &&
+    !bond
+  )
+    return (
+      <UnavailableObject
+        target={`Port/${selectedBond}`}
+        reason="The selected Bond is outside this inventory snapshot. Confirmed intent does not supply a new inventory observation."
+        go={go}
+      />
+    );
   let content: ReactNode;
   if (view === 'bridges')
     content = (
@@ -1870,11 +1911,12 @@ export function P1SwitchingView({
   else if (view === 'bridge-detail')
     content = (
       <BridgeDetail
-        bridge={bridge}
+        bridge={bridge!}
         mode={mode}
         scenario={scenario}
         go={go}
-        openBond={openBond}
+        openObject={openObject}
+        live={live}
         createBond={createBond}
         stage={onStageIntent}
         blocked={blocked}
@@ -1894,11 +1936,12 @@ export function P1SwitchingView({
   else if (view === 'bond-detail')
     content = (
       <BondDetail
-        bond={bond ?? bonds[0]}
+        bond={bond!}
         mode={mode}
         scenario={scenario}
         go={go}
         openBridge={openBridge}
+        openObject={openObject}
         diagnose={onDiagnose}
         blocked={blocked}
       />

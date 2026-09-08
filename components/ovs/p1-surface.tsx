@@ -28,8 +28,11 @@ import type {
   Scenario,
 } from '@/lib/change-control';
 import type { Mode, View } from '@/lib/ovs-model';
-import { ports } from '@/lib/ovs-model';
-import { bridges, bonds } from '@/lib/switching-model';
+import {
+  resolveInventoryObject,
+  type ObjectReference,
+  type ObjectFacet,
+} from '@/lib/inventory-model';
 import { StatusBadge } from './foundation';
 import { Button } from '@/components/ui/button';
 import { useOpenFlowController } from './openflow-controller';
@@ -74,11 +77,36 @@ export function useP1Controller({
   getGeneration: () => number;
   control: ControlState;
   getControl: () => ControlState;
-  openPort: (name: string) => void;
+  openPort: (name: string, edit?: boolean) => void;
   configurationAvailable: boolean;
 }) {
-  const [selectedBridge, setSelectedBridge] = useState('br-fabric');
-  const [selectedBond, setSelectedBond] = useState('bond-uplink');
+  const [selectedBridge, setSelectedBridgeState] = useState('br-fabric');
+  const [selectedBond, setSelectedBondState] = useState('bond-uplink');
+  const [selectedInterface, setSelectedInterfaceState] = useState('');
+  const [missingObject, setMissingObject] = useState({
+    target: '',
+    reason: '',
+  });
+  const selectionRef = useRef({
+    bridge: 'br-fabric',
+    bond: 'bond-uplink',
+    interface: '',
+    missing: { target: '', reason: '' },
+  });
+  const setSelectedBridge = (name: string) => {
+    selectionRef.current.bridge = name;
+    setSelectedBridgeState(name);
+  };
+  const setSelectedBond = (name: string) => {
+    selectionRef.current.bond = name;
+    setSelectedBondState(name);
+  };
+  const unavailableObject = (target: string, reason: string) => {
+    const missing = { target, reason };
+    selectionRef.current.missing = missing;
+    setMissingObject(missing);
+    go('object-unavailable');
+  };
   const [search, setSearch] = useState('');
   const [selectedDiagnostic, setSelectedDiagnostic] =
     useState('diag.net.link-lacp');
@@ -332,20 +360,51 @@ export function useP1Controller({
     );
     go('evidence');
   };
-  const openObject = (target: string) => {
-    const [kind, name] = target.split('/');
-    if (kind === 'Bridge' && bridges.some((item) => item.name === name)) {
-      setSelectedBridge(name);
-      go('bridge-detail');
-    } else if (kind === 'Port' && bonds.some((item) => item.name === name)) {
-      setSelectedBond(name);
-      go('bond-detail');
-    } else if (kind === 'Port' && ports.some((item) => item.name === name))
-      openPort(name);
-    else
-      notify(
-        `No detail sample is available for ${target}. The captured target is preserved.`,
+  const openObject = (
+    target: string | ObjectReference,
+    facet?: ObjectFacet,
+  ) => {
+    if (getScenario() === 'permission-denied') {
+      const result = {
+        status: 'unavailable' as const,
+        target: 'Object reference',
+        reason: 'switching.read is unavailable. Object details are withheld.',
+      };
+      unavailableObject(result.target, result.reason);
+      return result;
+    }
+    const result = resolveInventoryObject(target);
+    if (result.status !== 'found') {
+      unavailableObject(result.target, result.reason);
+      return result;
+    }
+    if (result.kind !== 'Port' && facet) {
+      unavailableObject(
+        `${result.kind}/${result.object.name}`,
+        'This view facet requires a Port reference.',
       );
+      return result;
+    }
+    if (result.kind === 'Bridge') {
+      setSelectedBridge(result.object.name);
+      go('bridge-detail');
+    } else if (result.kind === 'Port') {
+      setSelectedBridge(result.object.bridge);
+      if ((facet === 'bond' || facet === 'bond-edit') && !result.object.bond) {
+        unavailableObject(
+          `Port/${result.object.name}`,
+          'This Port is not a Bond.',
+        );
+      } else if (result.object.bond && facet !== 'port' && facet !== 'vlan') {
+        setSelectedBond(result.object.name);
+        go(facet === 'bond-edit' ? 'bond-edit' : 'bond-detail');
+      } else openPort(result.object.name, facet === 'vlan');
+    } else {
+      selectionRef.current.interface = result.object.name;
+      setSelectedInterfaceState(result.object.name);
+      go('interface-detail');
+    }
+    return result;
   };
   useEffect(() => {
     if (
@@ -395,7 +454,12 @@ export function useP1Controller({
 
   return {
     selectedBridge,
+    live: control.live,
     selectedBond,
+    selectedInterface,
+    missingObject,
+    unavailableObject,
+    getSelection: () => selectionRef.current,
     search,
     setSearch,
     setSelectedBridge,
@@ -489,6 +553,7 @@ export function P1Surface({
         mode={mode}
         scenario={scenario}
         stageBlock={stageBlock}
+        live={p1.live}
         search={p1.search}
         setSearch={p1.setSearch}
         selectedBridge={p1.selectedBridge}
@@ -497,6 +562,7 @@ export function P1Surface({
         setSelectedBond={p1.setSelectedBond}
         go={go}
         onStageIntent={p1.stageIntent}
+        openObject={p1.openObject}
         onDiagnose={p1.openDiagnostics}
       />
     );

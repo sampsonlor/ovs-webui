@@ -698,7 +698,11 @@ export function SafeApply({
   );
 }
 
-export function Evidence({ state, go }: Pick<Props, 'state' | 'go'>) {
+export function Evidence({
+  state,
+  go,
+  openObject,
+}: Pick<Props, 'state' | 'go'> & { openObject: (target: string) => void }) {
   const exportEvidence = () => {
     const url = URL.createObjectURL(
       new Blob(
@@ -772,7 +776,17 @@ export function Evidence({ state, go }: Pick<Props, 'state' | 'go'>) {
                 <div>
                   <p>{entry.text}</p>
                   <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
-                    {entry.object} · {entry.correlation}
+                    {/^(Bridge|Port|Interface)\/[^/]+$/.test(entry.object) ? (
+                      <button
+                        className="ovs-object-link"
+                        onClick={() => openObject(entry.object)}
+                      >
+                        {entry.object}
+                      </button>
+                    ) : (
+                      entry.object
+                    )}{' '}
+                    · {entry.correlation}
                   </p>
                 </div>
               </li>
