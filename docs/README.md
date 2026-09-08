@@ -1,7 +1,9 @@
 # Documentation index
 
 Start with [current status](STATUS.md) and the
-[Bridge / Bond high-fidelity review](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md).
+[Capabilities review](reviews/CAPABILITIES_v0.1.md), which awaits batch acceptance.
+The accepted [CI baseline](reviews/CI_BROWSER_BASELINE_v0.1.md) records PR #16
+and the closure of issues #6 / #7.
 The [2026-09-07 interaction review](reviews/UI_WORKFLOW_REVIEW_v0.2.md) and
 [approved IA navigation alignment](reviews/NAVIGATION_ALIGNMENT_v0.1.md)
 were accepted and merged in PR #9.

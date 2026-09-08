@@ -9,6 +9,8 @@ import {
   Settings,
 } from 'lucide-react';
 import type { Mode, View } from '@/lib/ovs-model';
+import { capabilityStates } from '@/lib/capability-model';
+import type { CapabilityController } from './capability-controller';
 
 type NavigationItem = {
   label: string;
@@ -58,8 +60,8 @@ const domains = [
   {
     label: 'Administration',
     icon: Settings,
-    views: [],
-    note: 'Platform and security pages are not included in this prototype yet.',
+    target: 'capabilities' as View,
+    views: ['capabilities'],
   },
 ];
 
@@ -123,17 +125,22 @@ const changes: NavigationItem[] = [
   { label: 'Diff / Validation', target: 'diff' },
   { label: 'Safe Apply', target: 'safe-apply' },
 ];
+const administration: NavigationItem[] = [
+  { label: 'Capabilities', target: 'capabilities' },
+];
 
 export function PrototypeNavigation({
   view,
   mode,
   go,
   compact = false,
+  capabilities,
 }: {
   view: View;
   mode: Mode;
   go: (view: View) => void;
   compact?: boolean;
+  capabilities?: CapabilityController;
 }) {
   const activeDomain = domains.find((domain) =>
     domain.views.some((value) => value === view),
@@ -149,7 +156,9 @@ export function PrototypeNavigation({
           ? operations
           : section === 'Visibility'
             ? visibility
-            : []
+            : section === 'Administration'
+              ? administration
+              : []
   ).filter((item) => !item.expertOnly || mode === 'expert');
 
   return (
@@ -162,14 +171,13 @@ export function PrototypeNavigation({
             : 'space-y-1'
         }
       >
-        {domains.map(({ label, icon: Icon, target, note }) => {
+        {domains.map(({ label, icon: Icon, target }) => {
           const active = activeDomain?.label === label;
           return (
             <button
               key={label}
               type="button"
               disabled={!target}
-              title={note}
               onClick={() => target && go(target)}
               aria-current={active ? 'page' : undefined}
               className={`flex w-full items-center gap-3 rounded px-3 py-2.5 text-left text-sm disabled:cursor-not-allowed ${active ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground' : 'text-muted-foreground enabled:hover:bg-card'}`}
@@ -183,6 +191,23 @@ export function PrototypeNavigation({
           );
         })}
       </nav>
+      {capabilities && (
+        <button
+          type="button"
+          aria-label={`${compact ? 'Compact' : 'Navigation'} capability states`}
+          onClick={() => go('capabilities')}
+          className="mt-3 w-full rounded border p-3 text-left text-xs leading-5 text-muted-foreground hover:bg-card"
+        >
+          <span className="block text-sm font-semibold text-foreground">
+            Capabilities
+          </span>
+          {capabilities.denied
+            ? 'Access denied'
+            : capabilityStates
+                .map((state) => `${state} · ${capabilities.counts[state]}`)
+                .join(' / ')}
+        </button>
+      )}
       {entries.length > 0 && (
         <nav
           aria-label={`${compact ? 'Compact ' : ''}${section} navigation`}

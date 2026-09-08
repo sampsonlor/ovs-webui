@@ -7,6 +7,8 @@ import {
 import { healthReviewLabels, type HealthReviewCase } from '@/lib/health-model';
 import type { HealthController } from '@/components/ovs/health-controller';
 import { healthTones } from '@/components/ovs/health-page';
+import { CapabilitySummary } from '@/components/ovs/capability-page';
+import type { CapabilityController } from '@/components/ovs/capability-controller';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -145,11 +147,13 @@ function Dashboard({
   go,
   openPort,
   health,
+  capabilities,
 }: {
   state: ControlState;
   go: (view: View) => void;
   openPort: (name: string) => void;
   health: HealthController;
+  capabilities: CapabilityController;
 }) {
   const staged = Boolean(state.candidate);
   const scenario = state.scenario;
@@ -243,6 +247,13 @@ function Dashboard({
           <ChevronRight aria-hidden="true" className="inline size-3.5" />
         </p>
       </button>
+      <div className="mt-4">
+        <CapabilitySummary
+          controller={capabilities}
+          go={go}
+          context="Overview"
+        />
+      </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
         <section className="min-w-0 border bg-card">
           <div className="flex items-center justify-between border-b px-4 py-3">
@@ -735,7 +746,12 @@ export default function Home() {
   }, [view, mode]);
 
   const act = (action: ControlAction) => {
-    if (labEnabled && !['note', 'record-evidence'].includes(action.type)) {
+    if (
+      labEnabled &&
+      !['note', 'record-evidence', 'observe-native-capability'].includes(
+        action.type,
+      )
+    ) {
       const error =
         'Local integration uses the saved server Candidate. Open Ports or Changes; other configuration APIs are not connected yet.';
       setToast(error);
@@ -814,6 +830,7 @@ export default function Home() {
   }, []);
 
   const p1 = useP1Controller({
+    configurationAvailable: !labEnabled,
     control,
     getControl: () => controlRef.current,
     getScenario: () => controlRef.current.scenario,
@@ -885,6 +902,14 @@ export default function Home() {
         },
         openFlowReviewState: interactionRef.current.p1.openFlowState,
         acceleration: interactionRef.current.p1.acceleration.summary(),
+        capabilities: interactionRef.current.p1.capabilities.rows.map(
+          ({ code, state, level, freshness }) => ({
+            code,
+            state,
+            level,
+            freshness,
+          }),
+        ),
         health: interactionRef.current.p1.health.summary(),
         openFlowCollection: {
           status: interactionRef.current.p1.openFlow.status,
@@ -1336,6 +1361,7 @@ export default function Home() {
         state={control}
         go={go}
         health={p1.health}
+        capabilities={p1.capabilities}
         openPort={(name) => {
           selectPort(name);
           go('port-detail');
@@ -1550,11 +1576,22 @@ export default function Home() {
         </label>
       </div>
       {navigationOpen && (
-        <PrototypeNavigation view={view} mode={mode} go={go} compact />
+        <PrototypeNavigation
+          view={view}
+          mode={mode}
+          go={go}
+          capabilities={p1.capabilities}
+          compact
+        />
       )}
-      <div className="min-h-[calc(100vh-7rem)] lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
+      <div className="min-h-[calc(100vh-7rem)] lg:grid lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="hidden border-r bg-sidebar p-3 lg:block">
-          <PrototypeNavigation view={view} mode={mode} go={go} />
+          <PrototypeNavigation
+            view={view}
+            mode={mode}
+            go={go}
+            capabilities={p1.capabilities}
+          />
           <div className="mt-8 border-t px-3 pt-4">
             <p className="text-xs font-medium text-muted-foreground">
               Object model

@@ -16,14 +16,19 @@ if (
     'Browser tests require an isolated ovs-browser-* temporary directory.',
   );
 
-process.env.OVS_CORE_LAB = '1';
+const mode = process.env.OVS_BROWSER_MODE ?? 'lab';
+if (!['lab', 'prototype'].includes(mode))
+  throw new Error('Unknown browser service mode.');
+const lab = mode === 'lab';
+process.env.OVS_CORE_LAB = lab ? '1' : '0';
 const loaded = await loadConfigFromFile({ command: 'serve', mode: 'test' });
 if (!loaded) throw new Error('Missing application Vite configuration.');
 const plugins = loaded.config.plugins;
 const labIndex = plugins.findIndex(
   (plugin) => plugin?.name === 'ovs-core-local-persistence-lab',
 );
-if (labIndex < 0) throw new Error('The real persistence lab must be enabled.');
+if (lab && labIndex < 0)
+  throw new Error('The real persistence lab must be enabled.');
 // Reuse the actual application configuration and service, with a fresh database
 // for each test. The user's .ovs-lab database is never opened by this process.
 let store;
@@ -41,6 +46,7 @@ function closeStore() {
 function resetStore() {
   closeStore();
   dropResponse = null;
+  if (!lab) return;
   store = new CoreLabStore(
     resolve(directory, `state-${++databaseNumber}.sqlite`),
   );
@@ -49,34 +55,35 @@ function resetStore() {
   stopTransactions = startTransactionWorker(store);
 }
 resetStore();
-plugins[labIndex] = {
-  name: 'isolated-core-persistence-lab',
-  configureServer(server) {
-    server.middlewares.use((req, res, next) => {
-      const droppedSave =
-        dropResponse === 'candidate' &&
-        req.method === 'PATCH' &&
-        req.url === '/api/v1/candidate';
-      const droppedTransaction =
-        dropResponse === 'transaction' &&
-        req.method === 'POST' &&
-        req.url === '/api/v1/transactions';
-      if (droppedSave || droppedTransaction) {
-        const end = res.end.bind(res);
-        res.end = (...args) => {
-          // The middleware and store finish the real command before its reply
-          // is dropped. No authenticated request is replayed by the test runner.
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            res.destroy();
-            return res;
-          }
-          return end(...args);
-        };
-      }
-      return middleware(req, res, next);
-    });
-  },
-};
+if (lab)
+  plugins[labIndex] = {
+    name: 'isolated-core-persistence-lab',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const droppedSave =
+          dropResponse === 'candidate' &&
+          req.method === 'PATCH' &&
+          req.url === '/api/v1/candidate';
+        const droppedTransaction =
+          dropResponse === 'transaction' &&
+          req.method === 'POST' &&
+          req.url === '/api/v1/transactions';
+        if (droppedSave || droppedTransaction) {
+          const end = res.end.bind(res);
+          res.end = (...args) => {
+            // The middleware and store finish the real command before its reply
+            // is dropped. No authenticated request is replayed by the test runner.
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              res.destroy();
+              return res;
+            }
+            return end(...args);
+          };
+        }
+        return middleware(req, res, next);
+      });
+    },
+  };
 plugins.unshift({
   name: 'isolated-ui-component-review',
   configureServer(server) {

@@ -20,9 +20,13 @@ type LabServer = {
   dropResponses: (operation: 'candidate' | 'transaction') => Promise<void>;
 };
 
-export const test = base.extend<{ baseURL: string }, { labServer: LabServer }>({
+export const test = base.extend<
+  { baseURL: string },
+  { labServer: LabServer; serverMode: 'lab' | 'prototype' }
+>({
+  serverMode: ['lab', { scope: 'worker', option: true }],
   labServer: [
-    async ({ browserName }, provide) => {
+    async ({ browserName, serverMode }, provide) => {
       const root = resolve(tmpdir());
       const directory = await mkdtemp(
         join(root, `ovs-browser-${browserName}-`),
@@ -37,6 +41,7 @@ export const test = base.extend<{ baseURL: string }, { labServer: LabServer }>({
           env: {
             ...process.env,
             OVS_BROWSER_TEST: '1',
+            OVS_BROWSER_MODE: serverMode,
             OVS_BROWSER_DATA_DIR: directory,
           },
         },

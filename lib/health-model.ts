@@ -7,6 +7,7 @@ import {
   type AccelerationSnapshot,
 } from './acceleration-model.ts';
 import { flowFreshness, type FlowSnapshot } from './openflow-model.ts';
+import type { CapabilityRow } from './capability-model';
 
 export const healthStates = [
   'Healthy',
@@ -71,6 +72,7 @@ export type HealthSnapshot = {
   components: HealthComponent[];
 };
 export type HealthSignals = {
+  capability?: { rows: CapabilityRow[]; failure: string | null };
   openFlow: { snapshot: FlowSnapshot | null; failure: string | null };
   acceleration: {
     snapshot: AccelerationSnapshot | null;
@@ -589,6 +591,36 @@ export function deriveHealth(
     row.generation = null;
     row.source = 'Shared OpenFlow snapshot / ' + flow.id;
     row.freshness = unavailable ? 'Unavailable' : freshness;
+    components.push(row);
+  }
+  const native = signals.capability?.rows.find((row) => row.id === 'protected');
+  if (native) {
+    const status =
+      native.freshness !== 'Fresh' || native.providerState === 'Unavailable'
+        ? 'Unknown'
+        : native.providerState === 'Degraded'
+          ? 'Degraded'
+          : 'Healthy';
+    const row = transient(
+      'native-capability-provider',
+      'Providers',
+      'Native capability evidence',
+      status,
+      `${native.state} · ${native.reason}`,
+      native.scope,
+      { label: 'Inspect capability gates', view: 'capabilities' },
+    );
+    row.source = native.source;
+    row.observedAt = native.observedAt;
+    row.generation = native.generation;
+    row.freshness =
+      native.freshness === 'Fresh'
+        ? 'Fresh'
+        : native.freshness === 'Unavailable'
+          ? 'Unavailable'
+          : 'Stale';
+    row.impact =
+      'Provider evidence only. Availability does not authorize a native operation or prove forwarding health.';
     components.push(row);
   }
   const transaction = control.transaction;

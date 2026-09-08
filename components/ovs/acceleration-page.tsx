@@ -24,6 +24,7 @@ import {
   observationFreshness,
   observationText,
   type AccelerationRecord,
+  type AccelerationFamily,
   type AccelerationReviewCase,
   type AccelerationState,
   type Observation,
@@ -139,7 +140,7 @@ function CapabilityEvidence({
       <Notice title="Phase 1 · Observe only" tone="info">
         Availability describes the environment. Enablement, tuning, switchdev
         changes and driver provisioning are outside this phase. The global
-        Capabilities matrix remains a later review batch.
+        Capabilities matrix uses this same captured evidence.
       </Notice>
       <h4 className="text-sm font-semibold">
         Required evidence for this declared profile
@@ -162,11 +163,13 @@ export function P1AccelerationView({
   controller: acc,
   openObject,
   openDiagnostics,
+  openCapability,
 }: {
   mode: Mode;
   controller: AccelerationController;
   openObject: (scope: string) => void;
   openDiagnostics: () => void;
+  openCapability: (id: AccelerationFamily) => void;
 }) {
   useEffect(() => {
     acc.ensureSnapshot();
@@ -193,17 +196,25 @@ export function P1AccelerationView({
         scope="Observe"
         description="Review readiness, runtime evidence and prerequisites across the acceleration path."
         actions={
-          <Button
-            variant="outline"
-            onClick={acc.read}
-            disabled={acc.busy || !!acc.serviceBlock}
-          >
-            <RefreshCw
-              aria-hidden="true"
-              className={acc.busy ? 'animate-spin' : ''}
-            />
-            {acc.busy ? 'Reading…' : 'Refresh observations'}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              onClick={() => openCapability(acc.selected?.id ?? 'dpdk')}
+            >
+              Open global capability evidence
+            </Button>
+            <Button
+              variant="outline"
+              onClick={acc.read}
+              disabled={acc.busy || !!acc.serviceBlock}
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={acc.busy ? 'animate-spin' : ''}
+              />
+              {acc.busy ? 'Reading…' : 'Refresh observations'}
+            </Button>
+          </>
         }
       />
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">

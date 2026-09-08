@@ -11,13 +11,15 @@ export type P1DiagnosticsPage = 'diagnostics-hub' | 'diagnostic-run';
 export type P1OpenFlowPage = 'openflow-viewer';
 export type P1AccelerationPage = 'acceleration-overview';
 export type P1HealthPage = 'system-health';
+export type P1CapabilityPage = 'capabilities';
 
 export type P1View =
   | P1SwitchingPage
   | P1DiagnosticsPage
   | P1OpenFlowPage
   | P1AccelerationPage
-  | P1HealthPage;
+  | P1HealthPage
+  | P1CapabilityPage;
 
 export type OpenFlowReviewState =
   | 'fresh'
@@ -106,7 +108,7 @@ export type ReviewScenario =
   | 'network-loss';
 
 export type ChangeIntent = {
-  kind: 'vlan' | 'bridge' | 'bond';
+  kind: 'vlan' | 'bridge' | 'bond' | 'isolation';
   objectType: 'Port' | 'Bridge';
   objectName: string;
   title: string;
@@ -131,6 +133,7 @@ export const p1Steps: Array<{ id: string; label: string; view: P1View }> = [
   { id: 'P1-09', label: 'OpenFlow', view: 'openflow-viewer' },
   { id: 'P1-10', label: 'DPDK / Offload', view: 'acceleration-overview' },
   { id: 'P1-11', label: 'System Health', view: 'system-health' },
+  { id: 'P1-12', label: 'Capabilities', view: 'capabilities' },
 ];
 
 export const p1SwitchingPages: P1SwitchingPage[] = [
@@ -155,4 +158,5 @@ export const p1Views: P1View[] = [
   ...p1OpenFlowPages,
   'acceleration-overview',
   'system-health',
+  'capabilities',
 ];

@@ -25,6 +25,8 @@ interaction and contract review tools; they do not change that architecture.
 | P1 Batch 03 · OpenFlow Viewer                     | Accepted for integration           |
 | P1 Batch 04 · DPDK / Offload Observe              | Implemented · Review gate accepted |
 | P1 Batch 05 · System Health                       | Implemented · Review gate accepted |
+| P1 Batch 06 · Capabilities                        | Implemented · Awaiting review      |
+| Full lint and browser CI · #6 / #7                | Accepted · PR #16 merged           |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
 
@@ -78,8 +80,22 @@ change safety and Jobs. Missing, stale and unavailable evidence remains explicit
 health reads never confirm a Safe Apply. The [System Health review](docs/reviews/SYSTEM_HEALTH_v0.1.md)
 records the scenario, responsive and regression checks. This batch was accepted
 on 2026-09-08 for merge through PR #15, with checkpoint
-`prototype-system-health-v0.1` at main commit `b08e0a3`. The global Capabilities
-matrix follows the lint and browser CI work tracked by #6 and #7.
+`prototype-system-health-v0.1` at main commit `b08e0a3`. Full lint and browser CI
+were accepted and merged through PR #16 at `fc0f387`; issues #6 and #7 are closed,
+and the accepted checkpoint is `prototype-ci-browser-v0.1`.
+
+Batch 06 connects `Administration / Overview / Health → Capabilities → provider
+evidence → related observation or guarded native change review`. Nine declared
+samples share Enabled, Available, Missing prerequisites, Unsupported and Unknown
+across the navigation, Overview, Health and matrix. DPDK / Offload remain Observe;
+refreshing the registry never renews their independent captured evidence.
+
+The native protected-Port sample requires current provider support, local NORMAL
+authority, permission and safe recovery before staging a Candidate. It uses the
+existing Diff / Validation, Safe Apply and Audit workflow on the isolated synthetic
+`br-native-demo` target. See the [Capabilities review](docs/reviews/CAPABILITIES_v0.1.md)
+for exceptions, responsive responsibilities and engineering evidence. This batch
+awaits user acceptance; the persistence lab does not execute this native action.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
