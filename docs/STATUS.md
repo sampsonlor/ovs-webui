@@ -1,8 +1,8 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-08。System Health 已接受并合并至 `main`（`b08e0a3`，`prototype-system-health-v0.1`）。全量 lint 与浏览器 CI 也已获用户接受，通过 [PR #16](https://github.com/sampsonlor/ovs-webui/pull/16) 合并并关闭 #6、#7，接受检查点为 `prototype-ci-browser-v0.1`。当前恢复 Batch 06 Capabilities。本页是当前入口；历史记录保留各自的日期和范围。
+更新：2026-09-08。System Health 已接受并合并至 `main`（`b08e0a3`，`prototype-system-health-v0.1`）。全量 lint 与浏览器 CI 也已获用户接受，通过 [PR #16](https://github.com/sampsonlor/ovs-webui/pull/16) 合并至 `fc0f387` 并关闭 #6、#7，接受检查点为 `prototype-ci-browser-v0.1`，合并后 CI 通过。Batch 06 Capabilities 已实现，等待用户审阅接受。本页是当前入口；历史记录保留各自的日期和范围。
 
-**P0 核心流程与 P1 前五批已接受，下一批为 Capabilities。整站高保真与正式管理平面尚未完成。** Batch 05 将顶栏、首页和 Operations 的健康入口统一到共享状态，区分管理面与数据面影响，保留 Unknown、Stale、Critical 及 Recovery Required。详见[System Health 审阅](reviews/SYSTEM_HEALTH_v0.1.md)；既有接受结果见[加速观察](reviews/ACCELERATION_OBSERVE_v0.1.md)、[OpenFlow](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)、[Diagnostics](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)和[Bridge / Bond](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
+**P0 核心流程与 P1 前五批已接受，Capabilities 等待本批接受。整站高保真与正式管理平面尚未完成。** Batch 06 将导航、首页、Health 与能力矩阵统一到五状态投影，保留独立观察来源，并通过四项 Gate 约束合成 native protected Port 流程。详见[Capabilities 审阅](reviews/CAPABILITIES_v0.1.md)；既有接受结果见[System Health](reviews/SYSTEM_HEALTH_v0.1.md)、[加速观察](reviews/ACCELERATION_OBSERVE_v0.1.md)、[OpenFlow](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)、[Diagnostics](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)和[Bridge / Bond](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
 
 ## 基线和来源
 
@@ -23,9 +23,9 @@
 | P1 Batch 03 OpenFlow Viewer | 原批次与高保真均已接受；共享快照与 Observe 边界已统一 | 正式 OpenFlow 采集 |
 | P1 Batch 04 DPDK/Offload Observe | 单个总览与只读能力证据已获用户接受；127 项回归、3 项集成及浏览器局部矩阵通过 | 真实 Provider、完整硬件库存与持久化观察 |
 | P1 Batch 05 System Health | 六域共享观察、组件责任、事件时间线及恢复入口已实现；145 项回归与 3 项集成通过，已获用户接受 | 正式健康 Provider、统一库存和持久化状态 / Event 服务 |
-| P1 Batch 06 Capabilities | 已恢复原生能力策略草稿，尚未形成可验收批次 | 完成全局能力矩阵、能力证据、受限配置入口与异常验收 |
-| CI 工程基础 #6 / #7 | 已获用户接受；全量 lint、145 项回归、3 项集成、12 项浏览器测试及构建通过 | PR #16 关闭议题，详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；真实 OVS 与正式管理面另行验收 |
-| Design System / 高保真 | 核心 P0、Bridge/Bond、Diagnostics、OpenFlow、加速总览和健康页使用统一组件；P1 前五批做过浅/深色及放大文字局部检查 | 整站深色与浏览器缩放矩阵 |
+| P1 Batch 06 Capabilities | 9 项能力矩阵、五状态共享证据、四项 Gate 及 native protected Port 的 Candidate / Safe Apply 流程已实现 | 本批审阅接受；正式 provider、字段级权限、step-up、持久化能力与恢复证据 |
+| CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
+| Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | Capabilities 接受与整站深色、浏览器缩放矩阵 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
 | Ports/VLAN 本地 lab | SQLite 持久化 Candidate、验证、合成事务、证据及原请求恢复已实现 | 不能替代正式双进程管理平面或真实 OVS 测试 |
 
@@ -45,6 +45,6 @@
 
 ## 下一步
 
-继续 Batch 06 Capabilities，从 `codex/feat-p1-batch-06-capabilities` 的本地草稿 `4f24387` 恢复；全局矩阵和配置入口仍须遵循原生能力、Provider、权限及安全前置条件。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
+审阅 `codex/feat-p1-batch-06-capabilities` 的本批结果；接受后再合并并记录注释标签。随后先完成 P1 跨域整合审阅和剩余 IA 覆盖盘点，再确定符合架构原文的 Go / Svelte 正式纵向切片。当前独立 `br-native-demo` 原生演示不改写既有库存、外部 OpenFlow 控制样本或 Ports/VLAN 持久化 lab。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。

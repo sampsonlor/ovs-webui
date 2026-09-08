@@ -1,4 +1,8 @@
 'use client';
+import {
+  nativeConfirmBlock,
+  nativeRollbackBlock,
+} from '@/lib/native-capability';
 
 import { useState } from 'react';
 import {
@@ -310,7 +314,7 @@ export function DiffPage({ state, mode, act, go }: Props) {
                       ? 'Bond intent and Interface membership'
                       : candidate.kind === 'isolation'
                         ? 'Native Port.protected policy and four safety gates'
-                      : 'Bridge configuration intent',
+                        : 'Bridge configuration intent',
                   'Capability and OVS authority',
                   'Permission and management-path policy',
                   `Generation ${candidate.baseGeneration} · candidate revision ${candidate.revision}`,
@@ -484,6 +488,24 @@ export function SafeApply({
   const uncertain = ['outcome-unknown', 'degraded', 'needs-attention'].includes(
     status,
   );
+  const nativeConfirm =
+    transaction.snapshot?.kind === 'isolation'
+      ? nativeConfirmBlock(
+          state.nativeCapability,
+          state.scenario,
+          state.generation,
+          currentTime,
+        )
+      : null;
+  const nativeRollback =
+    transaction.snapshot?.kind === 'isolation'
+      ? nativeRollbackBlock(
+          state.nativeCapability,
+          state.scenario,
+          state.generation,
+          currentTime,
+        )
+      : null;
   return (
     <>
       <PageHeader
@@ -573,16 +595,36 @@ export function SafeApply({
                   ? 'Timer is a local estimate. The server result must be read after reconnecting.'
                   : 'Checkpoint and health results are synthetic fixture responses.'}
               </p>
+              {(nativeConfirm || nativeRollback) && (
+                <Notice
+                  tone="warning"
+                  title="Native evidence requires review"
+                  actions={
+                    <Button
+                      variant="outline"
+                      onClick={() => go('capabilities')}
+                    >
+                      Inspect capability evidence
+                    </Button>
+                  }
+                >
+                  {nativeConfirm ?? nativeRollback}
+                </Notice>
+              )}
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 <Button
                   variant="outline"
-                  disabled={disconnected}
+                  disabled={disconnected || !!nativeRollback}
                   onClick={() => act({ type: 'rollback', now: now() })}
                 >
                   <Undo2 /> Roll back now
                 </Button>
                 <Button
-                  disabled={state.scenario !== 'normal' || seconds === 0}
+                  disabled={
+                    state.scenario !== 'normal' ||
+                    seconds === 0 ||
+                    !!nativeConfirm
+                  }
                   onClick={() => act({ type: 'confirm', now: now() })}
                 >
                   <CheckCircle2 /> Confirm configuration
@@ -619,9 +661,9 @@ export function SafeApply({
                 </Button>
               }
             >
-              The current VLAN fields no longer match this transaction.
-              Overwriting another writer would be unsafe. No force rollback is
-              offered; operator recovery is required.
+              The current native fields or authority no longer match this
+              transaction. Overwriting another writer would be unsafe. No force
+              rollback is offered; operator recovery is required.
             </Notice>
           )}
           {['confirmed', 'applied', 'not-applied', 'rolled-back'].includes(

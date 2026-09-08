@@ -1,6 +1,13 @@
 import type { Port, VlanValue } from './ovs-model';
 import type { ChangeIntent } from '../app/prototype-model';
-import { nativePolicyBlock, nativeStageBlock, type NativeCapabilityProof } from './native-capability.ts';
+import {
+  nativeConfirmBlock,
+  nativeStageBlock,
+  nativeRollbackBlock,
+  nativeFreshness,
+  nativeTarget,
+  type NativeCapabilityProof,
+} from './native-capability.ts';
 
 export const scenarioLabels = {
   normal: 'Normal path',
@@ -95,6 +102,7 @@ export type Transaction = {
 };
 export type ControlState = {
   nativeCapability?: NativeCapabilityProof | null;
+  nativeEnabled?: boolean;
   candidate: Candidate | null;
   generation: number;
   validatedRevision: number | null;
@@ -130,7 +138,12 @@ export const initialControlState: ControlState = {
 
 export type ControlAction =
   | { type: 'observe-native-capability'; proof: NativeCapabilityProof | null }
-  | { type: 'stage-isolation'; desktop: boolean; now: number }
+  | {
+      type: 'stage-isolation';
+      desktop: boolean;
+      impactAccepted: boolean;
+      now: number;
+    }
   | { type: 'scenario'; scenario: Scenario; now: number }
   | {
       type: 'stage-topology';
@@ -234,7 +247,10 @@ export function conflictCurrent(candidate: VlanCandidate): VlanValue {
   };
 }
 
-export function validationBlock(state: ControlState, now = Date.now()): string | null {
+export function validationBlock(
+  state: ControlState,
+  now = Date.now(),
+): string | null {
   if (transactionLocked(state.transaction.status))
     return 'Resolve the active transaction before preparing another apply.';
   if (!state.candidate) return 'The workspace is empty.';
@@ -242,13 +258,24 @@ export function validationBlock(state: ControlState, now = Date.now()): string |
     return `Resolve ${scenarioLabels[state.scenario].toLowerCase()} before validation.`;
   if (state.candidate.baseGeneration !== state.generation)
     return 'The candidate base generation is stale.';
-  if (state.candidate.kind === 'isolation') return nativeStageBlock(state.nativeCapability, state.scenario, state.generation, now, true, state.transaction.status);
+  if (state.candidate.kind === 'isolation')
+    return nativeStageBlock(
+      state.nativeCapability,
+      state.scenario,
+      state.generation,
+      now,
+      true,
+      state.transaction.status,
+    );
   return state.candidate.kind === 'vlan'
     ? validateVlan(state.candidate.mine)
     : null;
 }
 
-export function applyBlock(state: ControlState, now = Date.now()): string | null {
+export function applyBlock(
+  state: ControlState,
+  now = Date.now(),
+): string | null {
   const blocked = validationBlock(state, now);
   if (blocked) return blocked;
   if (state.validatedRevision !== state.candidate?.revision)
@@ -310,10 +337,30 @@ function log(
 }
 
 function rollback(state: ControlState, now: number): ControlState {
-  const nativeAuthorityLost = state.transaction.snapshot?.kind === 'isolation' && (!state.nativeCapability || state.nativeCapability.authority !== 'Local OVS' || state.nativeCapability.provider !== 'Available');
-  const unsafe = nativeAuthorityLost || ['rollback-conflict', 'conflict', 'stale', 'drift'].includes(
-    state.scenario,
-  );
+  const nativeAuthorityLost =
+    state.transaction.snapshot?.kind === 'isolation' &&
+    (!state.nativeCapability ||
+      nativeFreshness(state.nativeCapability, state.generation, now) !==
+        'Fresh' ||
+      state.nativeCapability.enabled !== true ||
+      !state.nativeCapability.normalSwitching ||
+      !state.nativeCapability.rollback ||
+      !state.nativeCapability.checkpoint ||
+      state.nativeCapability.authority !== 'Local OVS' ||
+      state.nativeCapability.provider !== 'Available' ||
+      [
+        'provider-degraded',
+        'degraded',
+        'provider-unavailable',
+        'error',
+        'loading',
+        'empty',
+      ].includes(state.scenario));
+  const unsafe =
+    nativeAuthorityLost ||
+    ['rollback-conflict', 'conflict', 'stale', 'drift'].includes(
+      state.scenario,
+    );
   if (unsafe)
     return log(
       {
@@ -334,6 +381,19 @@ function rollback(state: ControlState, now: number): ControlState {
     {
       ...state,
       generation,
+      ...(state.transaction.snapshot?.kind === 'isolation' &&
+      state.nativeCapability
+        ? {
+            nativeCapability: {
+              ...state.nativeCapability,
+              enabled: false,
+              source: `${state.transaction.id}/compare-before-rollback`,
+              observedAt: now,
+              generation,
+            },
+            nativeEnabled: false,
+          }
+        : {}),
       validatedRevision: null,
       candidate: state.candidate
         ? { ...state.candidate, baseGeneration: generation }
@@ -358,19 +418,64 @@ export function transition(
 ): ControlState {
   switch (action.type) {
     case 'observe-native-capability':
-      return { ...state, nativeCapability: action.proof ? structuredClone(action.proof) : null, validatedRevision: state.candidate?.kind === 'isolation' ? null : state.validatedRevision };
-    case 'stage-isolation': {
-      const blocked = nativeStageBlock(state.nativeCapability, state.scenario, state.generation, action.now, action.desktop, state.transaction.status);
-      if (blocked) return reject(state, blocked);
-      if (state.candidate) return reject(state, 'Review or discard the existing Candidate before preparing native isolation.');
-      const intent: ChangeIntent = {
-        kind: 'isolation', objectType: 'Port', objectName: 'server-07', bridgeName: 'br-fabric',
-        title: 'Enable native protected Port / server-07',
-        summary: 'Block communication with other protected Ports in the declared local NORMAL switching path. Unprotected peers remain reachable.',
-        current: 'Port/server-07\nprotected: false', candidate: 'Port/server-07\nprotected: true',
-        risk: 'Medium', capability: 'port.isolation.manage', evidenceObject: 'Port/server-07',
+      return {
+        ...state,
+        nativeCapability: action.proof ? structuredClone(action.proof) : null,
+        validatedRevision:
+          state.candidate?.kind === 'isolation'
+            ? null
+            : state.validatedRevision,
       };
-      return log({ ...state, candidate: { kind: 'isolation', intent, baseGeneration: state.generation, revision: 1 }, validatedRevision: null, transaction: { ...initialControlState.transaction } }, action.now, 'Audit', 'Staged bounded native Port.protected intent. Running configuration is unchanged.');
+    case 'stage-isolation': {
+      const blocked = nativeStageBlock(
+        state.nativeCapability,
+        state.scenario,
+        state.generation,
+        action.now,
+        action.desktop,
+        state.transaction.status,
+      );
+      if (blocked) return reject(state, blocked);
+      if (action.impactAccepted !== true)
+        return reject(
+          state,
+          'Review and acknowledge the native traffic impact before staging.',
+        );
+      if (state.candidate)
+        return reject(
+          state,
+          'Review or discard the existing Candidate before preparing native isolation.',
+        );
+      const intent: ChangeIntent = {
+        kind: 'isolation',
+        objectType: 'Port',
+        objectName: nativeTarget.port,
+        bridgeName: nativeTarget.bridge,
+        title: `Enable native protected Port / ${nativeTarget.port}`,
+        summary:
+          'Block communication with other protected Ports in the declared local NORMAL switching path. Unprotected peers remain reachable.',
+        current: `${nativeTarget.target}\nprotected: false`,
+        candidate: `${nativeTarget.target}\nprotected: true`,
+        risk: state.nativeCapability?.highRisk ? 'High' : 'Medium',
+        capability: 'port.isolation.manage',
+        evidenceObject: nativeTarget.target,
+      };
+      return log(
+        {
+          ...state,
+          candidate: {
+            kind: 'isolation',
+            intent,
+            baseGeneration: state.generation,
+            revision: 1,
+          },
+          validatedRevision: null,
+          transaction: { ...initialControlState.transaction },
+        },
+        action.now,
+        'Audit',
+        'Staged bounded native Port.protected intent. Running configuration is unchanged.',
+      );
     }
     case 'record-evidence':
       return {
@@ -525,7 +630,7 @@ export function transition(
         'Candidate discarded. Running configuration is unchanged.',
       );
     case 'validate': {
-      const blocked = validationBlock(state);
+      const blocked = validationBlock(state, action.now);
       if (blocked) return reject(state, blocked);
       return log(
         { ...state, validatedRevision: state.candidate!.revision },
@@ -630,7 +735,22 @@ export function transition(
         correlation: `corr-demo-${sequence}`,
       };
       return log(
-        { ...state, sequence, transaction },
+        {
+          ...state,
+          sequence,
+          transaction,
+          ...(state.candidate?.kind === 'isolation' && state.nativeCapability
+            ? {
+                nativeEnabled: true,
+                nativeCapability: {
+                  ...state.nativeCapability,
+                  enabled: true,
+                  source: `${transaction.id}/provisional-apply`,
+                  observedAt: action.now,
+                },
+              }
+            : {}),
+        },
         action.now,
         'Audit',
         `Simulated Safe Apply submitted. Reason: ${state.note.trim()}. Checkpoint, probe and compare-before-rollback fixture active; confirmation due in 90 seconds.`,
@@ -651,7 +771,12 @@ export function transition(
         );
       const candidate = state.transaction.snapshot!;
       if (candidate.kind === 'isolation') {
-        const blocked = nativePolicyBlock(state.nativeCapability, state.scenario, state.generation, action.now);
+        const blocked = nativeConfirmBlock(
+          state.nativeCapability,
+          state.scenario,
+          state.generation,
+          action.now,
+        );
         if (blocked) return reject(state, blocked);
       }
       return log(
@@ -659,6 +784,18 @@ export function transition(
           ...state,
           candidate: null,
           generation: state.generation + 1,
+          ...(candidate.kind === 'isolation' && state.nativeCapability
+            ? {
+                nativeEnabled: true,
+                nativeCapability: {
+                  ...state.nativeCapability,
+                  enabled: true,
+                  observedAt: action.now,
+                  generation: state.generation + 1,
+                  source: `${state.transaction.id}/confirmed`,
+                },
+              }
+            : {}),
           validatedRevision: null,
           live:
             candidate.kind === 'vlan'
@@ -686,7 +823,15 @@ export function transition(
           state,
           'Cannot send rollback while disconnected. Reconnect to read the authoritative result.',
         );
-      if (state.transaction.snapshot?.kind === 'isolation' && (state.scenario === 'permission-denied' || state.nativeCapability?.authorized !== true)) return reject(state, 'Current native rollback authorization is required. The manager-owned deadline and recovery resource remain active.');
+      if (state.transaction.snapshot?.kind === 'isolation') {
+        const blocked = nativeRollbackBlock(
+          state.nativeCapability,
+          state.scenario,
+          state.generation,
+          action.now,
+        );
+        if (blocked) return reject(state, blocked);
+      }
       return rollback(state, action.now);
     case 'tick':
       if (
@@ -744,6 +889,10 @@ export function transition(
           validatedRevision: null,
           candidate: applied ? null : state.candidate,
           generation: applied ? state.generation + 1 : state.generation,
+          ...(candidate.kind === 'isolation' &&
+          ['applied', 'not-applied'].includes(action.result)
+            ? { nativeEnabled: applied, nativeCapability: null }
+            : {}),
           live:
             applied && candidate.kind === 'vlan'
               ? { ...state.live, [candidate.port.name]: candidate.mine }

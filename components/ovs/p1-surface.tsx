@@ -35,6 +35,13 @@ import { Button } from '@/components/ui/button';
 import { useOpenFlowController } from './openflow-controller';
 import { useAccelerationController } from './acceleration-controller';
 import { useHealthController } from './health-controller';
+import { useCapabilityController } from './capability-controller';
+import {
+  P1CapabilityView,
+  CapabilityMobileSummary,
+  CapabilitySummary,
+} from './capability-page';
+import { capabilityCatalog, type CapabilityId } from '@/lib/capability-model';
 import { P1HealthView, HealthMobileSummary } from './health-page';
 import type { HealthAction } from '@/lib/health-model';
 import {
@@ -57,6 +64,7 @@ export function useP1Controller({
   control,
   getControl,
   openPort,
+  configurationAvailable,
 }: {
   act: (action: ControlAction) => ControlState;
   go: (view: View) => void;
@@ -67,6 +75,7 @@ export function useP1Controller({
   control: ControlState;
   getControl: () => ControlState;
   openPort: (name: string) => void;
+  configurationAvailable: boolean;
 }) {
   const [selectedBridge, setSelectedBridge] = useState('br-fabric');
   const [selectedBond, setSelectedBond] = useState('bond-uplink');
@@ -101,12 +110,28 @@ export function useP1Controller({
     getGeneration,
     notify,
   );
+  const capabilities = useCapabilityController({
+    control,
+    getControl,
+    act,
+    notify,
+    configurationAvailable,
+    onStaged: () => go('workspace'),
+    signals: {
+      openFlow: { snapshot: openFlow.snapshot, failure: openFlow.failure },
+      acceleration: {
+        snapshot: acceleration.snapshot,
+        failure: acceleration.failure,
+      },
+    },
+  });
   const health = useHealthController({
     control,
     getControl,
     act,
     notify,
     signals: {
+      capability: { rows: capabilities.rows, failure: capabilities.failure },
       openFlow: { snapshot: openFlow.snapshot, failure: openFlow.failure },
       acceleration: {
         snapshot: acceleration.snapshot,
@@ -396,6 +421,16 @@ export function useP1Controller({
     clearOrigin: () => setOrigin(null),
     openFlow,
     acceleration,
+    capabilities,
+    openCapability: (id: CapabilityId) => {
+      capabilities.select(id);
+      go('capabilities');
+    },
+    openCapabilityRelated: (id: CapabilityId) => {
+      if (id === 'dpdk' || id === 'offload') acceleration.select(id);
+      const definition = capabilityCatalog.find((item) => item.id === id);
+      if (definition) go(definition.view);
+    },
     health,
     openHealthAction: (action: HealthAction) => {
       if ('diagnostic' in action)
@@ -480,14 +515,36 @@ export function P1Surface({
         controller={p1.acceleration}
         openObject={p1.openObject}
         openDiagnostics={p1.openAccelerationDiagnostics}
+        openCapability={p1.openCapability}
       />
     );
   if (view === 'system-health')
     return (
-      <P1HealthView
+      <>
+        <P1HealthView
+          mode={mode}
+          controller={p1.health}
+          onAction={p1.openHealthAction}
+        />
+        <div className="mt-5">
+          <CapabilitySummary
+            controller={p1.capabilities}
+            go={go}
+            context="Health"
+          />
+        </div>
+      </>
+    );
+  if (view === 'capabilities')
+    return (
+      <P1CapabilityView
         mode={mode}
-        controller={p1.health}
-        onAction={p1.openHealthAction}
+        controller={p1.capabilities}
+        go={go}
+        openRelated={p1.openCapabilityRelated}
+        refreshAcceleration={() => {
+          p1.acceleration.read();
+        }}
       />
     );
   if (view === 'diagnostics-hub' || view === 'diagnostic-run')
@@ -541,6 +598,8 @@ export function P1MobileSummary({
         onAction={p1.openHealthAction}
       />
     );
+  if (view === 'capabilities')
+    return <CapabilityMobileSummary controller={p1.capabilities} go={go} />;
   return (
     <section className="ovs-surface p-5">
       <p className="ovs-eyebrow">Incident companion · synthetic snapshot</p>
