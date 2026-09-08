@@ -9,8 +9,13 @@ export type P1SwitchingPage =
 export type P1DiagnosticsPage = 'diagnostics-hub' | 'diagnostic-run';
 
 export type P1OpenFlowPage = 'openflow-viewer';
+export type P1AccelerationPage = 'acceleration-overview';
 
-export type P1View = P1SwitchingPage | P1DiagnosticsPage | P1OpenFlowPage;
+export type P1View =
+  | P1SwitchingPage
+  | P1DiagnosticsPage
+  | P1OpenFlowPage
+  | P1AccelerationPage;
 
 export type OpenFlowReviewState =
   | 'fresh'
@@ -122,6 +127,7 @@ export const p1Steps: Array<{ id: string; label: string; view: P1View }> = [
   { id: 'P1-07', label: 'Diagnostics', view: 'diagnostics-hub' },
   { id: 'P1-08', label: 'Run & result', view: 'diagnostic-run' },
   { id: 'P1-09', label: 'OpenFlow', view: 'openflow-viewer' },
+  { id: 'P1-10', label: 'DPDK / Offload', view: 'acceleration-overview' },
 ];
 
 export const p1SwitchingPages: P1SwitchingPage[] = [
@@ -144,4 +150,5 @@ export const p1Views: P1View[] = [
   ...p1SwitchingPages,
   ...p1DiagnosticsPages,
   ...p1OpenFlowPages,
+  'acceleration-overview',
 ];

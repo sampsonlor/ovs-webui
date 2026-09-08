@@ -46,8 +46,8 @@ const domains = [
   {
     label: 'Visibility',
     icon: Eye,
-    views: [],
-    note: 'Observation and discovery pages are not included in this prototype yet.',
+    target: 'acceleration-overview' as View,
+    views: ['acceleration-overview'],
   },
   {
     label: 'Operations',
@@ -92,6 +92,22 @@ const switching: NavigationItem[] = [
   { label: 'OpenFlow', target: 'openflow-viewer' },
 ];
 
+const visibility: NavigationItem[] = [
+  { label: 'DPDK / Offload', target: 'acceleration-overview' },
+  {
+    label: 'Endpoints / FDB',
+    note: 'Discovery inventory is outside the current prototype batch.',
+  },
+  {
+    label: 'Neighbors / LLDP',
+    note: 'Neighbor discovery is outside the current prototype batch.',
+  },
+  {
+    label: 'Statistics / Telemetry',
+    note: 'The full telemetry inventory is planned. Acceleration includes bounded runtime observations.',
+  },
+];
+
 const operations: NavigationItem[] = [
   {
     label: 'Diagnostics',
@@ -130,7 +146,9 @@ export function PrototypeNavigation({
         ? switching
         : section === 'Operations'
           ? operations
-          : []
+          : section === 'Visibility'
+            ? visibility
+            : []
   ).filter((item) => !item.expertOnly || mode === 'expert');
 
   return (

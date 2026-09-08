@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  accelerationReviewLabels,
+  type AccelerationReviewCase,
+} from '@/lib/acceleration-model';
+
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
@@ -788,6 +793,7 @@ export default function Home() {
 
   const p1 = useP1Controller({
     getScenario: () => controlRef.current.scenario,
+    getGeneration: () => controlRef.current.generation,
     act,
     go,
     notify: setToast,
@@ -854,6 +860,7 @@ export default function Home() {
           request: interactionRef.current.p1.request,
         },
         openFlowReviewState: interactionRef.current.p1.openFlowState,
+        acceleration: interactionRef.current.p1.acceleration.summary(),
         openFlowCollection: {
           status: interactionRef.current.p1.openFlow.status,
           capturedQuery:
@@ -1192,6 +1199,37 @@ export default function Home() {
           blocked,
           capability: 'Observe',
         };
+      },
+    });
+    register({
+      name: 'set_acceleration_review_state',
+      title: 'Set acceleration review state',
+      description:
+        'Collect synthetic read-only DPDK and offload evidence using the same service and viewport gates as the UI.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          state: {
+            type: 'string',
+            enum: Object.keys(accelerationReviewLabels),
+          },
+        },
+        required: ['state'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: (input) => {
+        const next = inputObject(input).state;
+        if (
+          typeof next !== 'string' ||
+          !Object.hasOwn(accelerationReviewLabels, next)
+        )
+          throw new Error('Unknown acceleration review state');
+        const blocked = interactionRef.current.p1.acceleration.review(
+          next as AccelerationReviewCase,
+        );
+        if (!blocked) interactionRef.current.go('acceleration-overview');
+        return { requestedCase: next, blocked, capability: 'Observe' };
       },
     });
     return () => lifecycle.abort();

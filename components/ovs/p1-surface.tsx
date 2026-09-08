@@ -33,6 +33,11 @@ import { bridges, bonds } from '@/lib/switching-model';
 import { StatusBadge } from './foundation';
 import { Button } from '@/components/ui/button';
 import { useOpenFlowController } from './openflow-controller';
+import { useAccelerationController } from './acceleration-controller';
+import {
+  P1AccelerationView,
+  AccelerationMobileSummary,
+} from './acceleration-page';
 
 export function isP1View(view: View): view is P1View {
   return p1Views.some((item) => item === view);
@@ -45,6 +50,7 @@ export function useP1Controller({
   notify,
   scenario,
   getScenario,
+  getGeneration,
   openPort,
 }: {
   act: (action: ControlAction) => ControlState;
@@ -52,6 +58,7 @@ export function useP1Controller({
   notify: (message: string) => void;
   scenario: Scenario;
   getScenario: () => Scenario;
+  getGeneration: () => number;
   openPort: (name: string) => void;
 }) {
   const [selectedBridge, setSelectedBridge] = useState('br-fabric');
@@ -81,6 +88,12 @@ export function useP1Controller({
   const [origin, setOrigin] = useState<string | null>(null);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const openFlow = useOpenFlowController(scenario, getScenario, notify);
+  const acceleration = useAccelerationController(
+    scenario,
+    getScenario,
+    getGeneration,
+    notify,
+  );
   const jobRef = useRef(jobState);
   const handlers = useRef({ act, notify, getScenario });
   useEffect(() => {
@@ -115,6 +128,7 @@ export function useP1Controller({
   const openDiagnostics = (
     nextScope: string,
     source = `Object / ${nextScope}`,
+    diagnostic?: string,
   ) => {
     if (['queued', 'running', 'cancel-requested'].includes(jobRef.current)) {
       notify('Open the active diagnostic Job before changing its scope.');
@@ -122,6 +136,11 @@ export function useP1Controller({
       return;
     }
     setScope(nextScope);
+    if (diagnostic) {
+      setSelectedDiagnostic(diagnostic);
+      setParameters({ sampleSeconds: 10, detail: 'structured' });
+      setInputState('valid');
+    }
     setOrigin(source);
     go('diagnostics-hub');
   };
@@ -351,6 +370,13 @@ export function useP1Controller({
     origin,
     clearOrigin: () => setOrigin(null),
     openFlow,
+    acceleration,
+    openAccelerationDiagnostics: () =>
+      openDiagnostics(
+        'Bridge/br-offload',
+        'Visibility / DPDK / Offload',
+        'diag.acceleration.provider',
+      ),
     openFlowState: openFlow.reviewCase,
     stageIntent,
     openDiagnostics,
@@ -415,6 +441,15 @@ export function P1Surface({
         openObject={p1.openObject}
       />
     );
+  if (view === 'acceleration-overview')
+    return (
+      <P1AccelerationView
+        mode={mode}
+        controller={p1.acceleration}
+        openObject={p1.openObject}
+        openDiagnostics={p1.openAccelerationDiagnostics}
+      />
+    );
   if (view === 'diagnostics-hub' || view === 'diagnostic-run')
     return (
       <P1DiagnosticsView
@@ -457,6 +492,8 @@ export function P1MobileSummary({
   controller: P1Controller;
   go: (view: View) => void;
 }) {
+  if (view === 'acceleration-overview')
+    return <AccelerationMobileSummary controller={p1.acceleration} go={go} />;
   return (
     <section className="ovs-surface p-5">
       <p className="ovs-eyebrow">Incident companion · synthetic snapshot</p>
