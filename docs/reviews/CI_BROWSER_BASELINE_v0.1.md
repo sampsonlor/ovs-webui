@@ -1,7 +1,8 @@
 # 全量 lint 与浏览器 CI 验收 v0.1
 
 日期：2026-09-08。对应议题 [#6](https://github.com/sampsonlor/ovs-webui/issues/6)、
-[#7](https://github.com/sampsonlor/ovs-webui/issues/7)。Disposition：待 PR 审阅。
+[#7](https://github.com/sampsonlor/ovs-webui/issues/7)。Disposition：2026-09-08 用户接受，经
+[PR #16](https://github.com/sampsonlor/ovs-webui/pull/16) 合并；接受检查点为 `prototype-ci-browser-v0.1`。
 基础提交为已接受的 System Health `b08e0a3`；本批属于工程回归保护，不接受新的 P1 功能。
 
 ## 实现
@@ -44,7 +45,7 @@ SQLite 数据库和浏览器上下文；Vite 服务及 worker 复用已存在的
 本地验证通过：`pnpm typecheck`、全量 `pnpm lint:ci`、145 项回归测试、3 项进程 / HTTP
 集成测试、12 项 Chromium 浏览器测试及 `pnpm build`。通用模板另做浅 / 深色截图复核，
 测试专用入口采用应用的 Arial / Helvetica 系统字体回退，不依赖远程字体加载。
-云端门禁结果见关联 PR 的 Checks；Disposition 在 PR 审阅前保持待接受。
+实现提交 `3009dcd` 的云端四项门禁全部通过；接受记录提交的检查结果见关联 PR 的 Checks。
 
 浏览器附件限于失败截图、可访问性
 快照和操作 / 断言追踪，保留 7 天；不上传数据库、浏览器 profile、storageState、源码包
