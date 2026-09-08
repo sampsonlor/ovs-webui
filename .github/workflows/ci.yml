@@ -23,12 +23,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Install pinned toolchain and locked dependencies
+      - name: Install pinned toolchain
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24.19.0
           cache: true
-          require-lockfile: true
+          install: false
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --no-runtime
       - name: Type check
         run: pnpm typecheck
       - name: Full repository lint
@@ -57,12 +59,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Install pinned toolchain and locked dependencies
+      - name: Install pinned toolchain
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24.19.0
           cache: true
-          require-lockfile: true
+          install: false
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --no-runtime
       - name: HTTP lifecycle and process restart tests
         run: pnpm test:integration
       - name: Retain integration test report
@@ -82,12 +86,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Install pinned toolchain and locked dependencies
+      - name: Install pinned toolchain
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24.19.0
           cache: true
-          require-lockfile: true
+          install: false
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --no-runtime
       - name: Install Chromium and system dependencies
         run: pnpm exec playwright install --with-deps chromium
       - name: Ports to Candidate and UI template browser checks

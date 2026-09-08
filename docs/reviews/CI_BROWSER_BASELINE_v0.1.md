@@ -15,6 +15,7 @@
 - Carousel 和移动断点通过 `useSyncExternalStore` 订阅外部状态，保留 SSR 初始值，
   同时清理 select / reInit / media-query 订阅。Node 测试注册显式交给 test runner 等待和汇总。
 - 锁定 Playwright 1.63.0；新增浏览器 job 并纳入现有 `CI Gate`，任一检查失败、取消或跳过均阻止通过。
+- 三个测试 job 均显式执行冻结 lockfile 的依赖安装；工具链 Action 只负责固定 pnpm / Node。
 
 ## 浏览器覆盖
 

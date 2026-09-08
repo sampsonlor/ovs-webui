@@ -8,6 +8,8 @@
 `.github/workflows/ci.yml` 在指向 main 的 PR、main/ci 分支推送和手动触发时运行。
 工具链固定为 Node 24.19.0 / pnpm 11.19.0；依赖必须按现有 lockfile 安装，Actions
 固定到已核对的提交。默认 GITHUB_TOKEN 只读代码，不保留 Git checkout 凭据。
+工具链 Action 设置 `install: false`；三个测试 job 均显式执行
+`pnpm install --frozen-lockfile --no-runtime`，强制使用 lockfile 和已固定的 Node runtime。
 
 | 检查                             | 执行内容                                                                                 |
 | -------------------------------- | ---------------------------------------------------------------------------------------- |
