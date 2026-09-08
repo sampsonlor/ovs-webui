@@ -226,6 +226,15 @@ body {
   border-radius: 50%;
   background: var(--tone-fg);
 }
+.ovs-health {
+  overflow-wrap: anywhere;
+}
+.ovs-health .ovs-status {
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .ovs-notice {
   margin-block: 1rem;
   padding: 1rem;

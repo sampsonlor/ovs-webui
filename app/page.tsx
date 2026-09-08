@@ -4,6 +4,9 @@ import {
   accelerationReviewLabels,
   type AccelerationReviewCase,
 } from '@/lib/acceleration-model';
+import { healthReviewLabels, type HealthReviewCase } from '@/lib/health-model';
+import type { HealthController } from '@/components/ovs/health-controller';
+import { healthTones } from '@/components/ovs/health-page';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -141,12 +144,12 @@ function Dashboard({
   state,
   go,
   openPort,
-  onDiagnose,
+  health,
 }: {
   state: ControlState;
   go: (view: View) => void;
   openPort: (name: string) => void;
-  onDiagnose: () => void;
+  health: HealthController;
 }) {
   const staged = Boolean(state.candidate);
   const scenario = state.scenario;
@@ -161,8 +164,8 @@ function Dashboard({
         scope="Observe"
         actions={
           <>
-            <Button variant="outline" onClick={onDiagnose}>
-              Diagnose health
+            <Button variant="outline" onClick={() => go('system-health')}>
+              Inspect system health
             </Button>
             <Button
               onClick={() => go('ports')}
@@ -191,8 +194,8 @@ function Dashboard({
           },
           {
             label: 'Active alerts',
-            value: scenario === 'normal' ? '2' : '3',
-            meta: '0 critical · warnings',
+            value: String(health.incidents.length),
+            meta: `${health.incidents.filter((row) => ['Critical', 'Recovery Required'].includes(row.status)).length} critical / recovery · ${health.unknown} unknown`,
             icon: AlertTriangle,
             tone: 'text-amber-700',
           },
@@ -221,6 +224,25 @@ function Dashboard({
           </article>
         ))}
       </div>
+      <button
+        type="button"
+        aria-label="Open shared System Health"
+        onClick={() => go('system-health')}
+        className="mt-4 w-full rounded-lg border bg-card p-4 text-left hover:bg-muted/40"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm font-semibold">System Health</span>
+          <StatusBadge tone={healthTones[health.overall]}>
+            {health.overall}
+          </StatusBadge>
+        </div>
+        <p className="mt-3 text-sm">{health.reason}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Shared observations · {health.unknown} unknown · inspect component
+          evidence{' '}
+          <ChevronRight aria-hidden="true" className="inline size-3.5" />
+        </p>
+      </button>
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
         <section className="min-w-0 border bg-card">
           <div className="flex items-center justify-between border-b px-4 py-3">
@@ -792,6 +814,8 @@ export default function Home() {
   }, []);
 
   const p1 = useP1Controller({
+    control,
+    getControl: () => controlRef.current,
     getScenario: () => controlRef.current.scenario,
     getGeneration: () => controlRef.current.generation,
     act,
@@ -861,6 +885,7 @@ export default function Home() {
         },
         openFlowReviewState: interactionRef.current.p1.openFlowState,
         acceleration: interactionRef.current.p1.acceleration.summary(),
+        health: interactionRef.current.p1.health.summary(),
         openFlowCollection: {
           status: interactionRef.current.p1.openFlow.status,
           capturedQuery:
@@ -1232,6 +1257,34 @@ export default function Home() {
         return { requestedCase: next, blocked, capability: 'Observe' };
       },
     });
+    register({
+      name: 'set_health_review_state',
+      title: 'Set System Health review state',
+      description:
+        'Read a synthetic health observation sample with the same permission and service gates as the UI. Meaningful health transitions append shared Event evidence; configuration and transactions are unchanged.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', enum: Object.keys(healthReviewLabels) },
+        },
+        required: ['state'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute: (input) => {
+        const next = inputObject(input).state;
+        if (
+          typeof next !== 'string' ||
+          !Object.hasOwn(healthReviewLabels, next)
+        )
+          throw new Error('Unknown health review state');
+        const blocked = interactionRef.current.p1.health.review(
+          next as HealthReviewCase,
+        );
+        if (!blocked) interactionRef.current.go('system-health');
+        return { requestedCase: next, blocked, capability: 'Observe' };
+      },
+    });
     return () => lifecycle.abort();
   }, [labEnabled]);
 
@@ -1282,12 +1335,7 @@ export default function Home() {
       <Dashboard
         state={control}
         go={go}
-        onDiagnose={() =>
-          p1.openDiagnostics(
-            'Port/bond-storage',
-            'System Health / member degradation',
-          )
-        }
+        health={p1.health}
         openPort={(name) => {
           selectPort(name);
           go('port-detail');
@@ -1383,11 +1431,26 @@ export default function Home() {
               sw-edge-01
             </p>
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => go('dashboard')}>
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => go('system-health')}
+              aria-label={`Open System Health · ${p1.health.overall}`}
+              className="h-auto min-h-7 max-w-full whitespace-normal"
+            >
               <Activity />
-              <span className="hidden sm:inline">Health</span>
-              <span className="sr-only sm:hidden">Health</span>
+              <span className="hidden sm:inline">
+                Health · {p1.health.overall}
+              </span>
+              <span className="sr-only sm:hidden">
+                Health · {p1.health.overall}
+              </span>
+              <span
+                aria-hidden="true"
+                className="ovs-state-dot"
+                data-tone={healthTones[p1.health.overall]}
+              />
             </Button>
             <Button
               variant="ghost"

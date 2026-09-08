@@ -52,8 +52,8 @@ const domains = [
   {
     label: 'Operations',
     icon: Activity,
-    target: 'diagnostics-hub' as View,
-    views: ['diagnostics-hub', 'diagnostic-run', 'evidence'],
+    target: 'system-health' as View,
+    views: ['system-health', 'diagnostics-hub', 'diagnostic-run', 'evidence'],
   },
   {
     label: 'Administration',
@@ -109,6 +109,7 @@ const visibility: NavigationItem[] = [
 ];
 
 const operations: NavigationItem[] = [
+  { label: 'System Health', target: 'system-health' },
   {
     label: 'Diagnostics',
     target: 'diagnostics-hub',
