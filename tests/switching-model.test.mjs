@@ -6,6 +6,7 @@ import {
   bridgeObservation,
   bondObservation,
   bondDraftErrors,
+  bondChangeIntent,
   memberOptions,
 } from '../lib/switching-model.ts';
 import {
@@ -26,6 +27,112 @@ const draft = {
   minLinks: '1',
   members: ['enp65s0f2', 'enp65s0f3'],
 };
+
+void test('Bond creation shares the editor mapping, free members and minimum links across entry points', () => {
+  const input = {
+    name: draft.name,
+    bridge: draft.bridge,
+    mode: draft.mode,
+    lacp: draft.lacp,
+  };
+  assert.deepEqual(representativeBondIntent(input), bondChangeIntent(draft));
+  assert.deepEqual(
+    representativeBondIntent({
+      ...input,
+      members: [...draft.members].reverse(),
+      minLinks: 2,
+    }),
+    bondChangeIntent({ ...draft, minLinks: '2' }),
+  );
+  assert.deepEqual(
+    representativeBondIntent(input, true),
+    bondChangeIntent(draft, undefined, false, true),
+  );
+});
+
+void test('programmatic creation cannot claim occupied Interfaces or reuse a Port from either inventory', () => {
+  const input = {
+    name: draft.name,
+    bridge: draft.bridge,
+    mode: draft.mode,
+    lacp: draft.lacp,
+  };
+  for (const name of [
+    'uplink-01',
+    'server-07',
+    'bond-uplink',
+    'bond-storage',
+    'mgmt0',
+  ]) {
+    assert.ok(bondDraftErrors({ ...draft, name }).name);
+    assert.throws(
+      () => representativeBondIntent({ ...input, name }),
+      /already exists/,
+    );
+  }
+  for (const bridge of ['br-storage', 'br-mgmt'])
+    assert.throws(
+      () => representativeBondIntent({ ...input, bridge }),
+      /at least two/,
+    );
+  for (const members of [
+    uplink.members,
+    ['enp65s0f2'],
+    ['enp65s0f2', 'enp65s0f2'],
+    ['unknown', 'enp65s0f3'],
+  ]) {
+    assert.ok(bondDraftErrors({ ...draft, members }).members);
+    assert.throws(() => representativeBondIntent({ ...input, members }));
+  }
+});
+
+void test('programmatic Bond inputs reject malformed members, policies and out-of-range minimum links', () => {
+  const input = {
+    name: draft.name,
+    bridge: draft.bridge,
+    mode: draft.mode,
+    lacp: draft.lacp,
+  };
+  for (const patch of [
+    { members: null },
+    { members: 'enp65s0f2,enp65s0f3' },
+    { members: [1, 2] },
+    { minLinks: '' },
+    { minLinks: null },
+    { minLinks: -1 },
+    { minLinks: 3 },
+    { minLinks: 0.5 },
+    { minLinks: Infinity },
+    { mode: 'unknown' },
+    { lacp: 'off' },
+  ])
+    assert.throws(() => representativeBondIntent({ ...input, ...patch }));
+  assert.ok(bondDraftErrors({ ...draft, mode: 'unknown' }).policy);
+  assert.ok(bondDraftErrors({ ...draft, lacp: 'unknown' }).policy);
+});
+
+void test('shared Bond updates preserve advanced fields and reject rename, reparent, no-op and Observe writes', () => {
+  const existing = { ...uplink, minLinks: '1' };
+  assert.throws(() => bondChangeIntent(existing, uplink), /No Bond/);
+  assert.throws(
+    () => bondChangeIntent({ ...existing, name: 'renamed' }, uplink),
+    /name cannot/,
+  );
+  assert.throws(
+    () => bondChangeIntent({ ...existing, bridge: 'br-storage' }, uplink),
+    /cannot move/,
+  );
+  assert.throws(
+    () => bondChangeIntent({ ...provider, minLinks: '1' }, provider),
+    /Observe/,
+  );
+  const intent = bondChangeIntent({ ...existing, minLinks: '2' }, uplink, true);
+  assert.match(intent.current, /other_config:min-links: 1/);
+  assert.match(intent.candidate, /other_config:min-links: 2/);
+  assert.match(intent.current, /bond-rebalance-interval: 10000/);
+  assert.match(intent.candidate, /bond-rebalance-interval: 10000/);
+  assert.equal(intent.evidenceObject, 'Port/bond-uplink');
+});
 
 void test('provider-owned member evidence remains unknown in normal and degraded snapshots', () => {
   for (const scenario of ['normal', 'degraded', 'provider-degraded']) {

@@ -1,4 +1,6 @@
 import type { Scenario } from './change-control';
+import type { ChangeIntent } from '../app/prototype-model';
+import { ports } from './ovs-model.ts';
 
 export type Bridge = {
   name: string;
@@ -358,6 +360,7 @@ export type BondDraft = {
 export function bondDraftErrors(draft: BondDraft, bond?: Bond) {
   const options = memberOptions(draft.bridge, bond);
   const portNames = [
+    ...ports.map((item) => item.name),
     ...bonds.map((item) => item.name),
     ...Object.values(bridgeChildren)
       .flat()
@@ -366,14 +369,19 @@ export function bondDraftErrors(draft: BondDraft, bond?: Bond) {
   return {
     name: !/^[A-Za-z0-9_.-]{1,63}$/.test(draft.name)
       ? 'Use 1–63 letters, numbers, dots, underscores or hyphens.'
-      : !bond && portNames.includes(draft.name)
-        ? 'This Port name already exists in the synthetic inventory.'
-        : null,
-    bridge: !bridges.some(
-      (item) => item.name === draft.bridge && item.scope === 'Manage',
-    )
-      ? 'Choose an OVS-managed Bridge.'
-      : null,
+      : bond && draft.name !== bond.name
+        ? 'An existing Bond Port name cannot be changed.'
+        : !bond && portNames.includes(draft.name)
+          ? 'This Port name already exists in the synthetic inventory.'
+          : null,
+    bridge:
+      bond && draft.bridge !== bond.bridge
+        ? 'An existing Bond cannot move to another Bridge in this editor.'
+        : !bridges.some(
+              (item) => item.name === draft.bridge && item.scope === 'Manage',
+            )
+          ? 'Choose an OVS-managed Bridge.'
+          : null,
     members:
       draft.members.length < 2
         ? 'Select at least two Interface members.'
@@ -387,9 +395,12 @@ export function bondDraftErrors(draft: BondDraft, bond?: Bond) {
           ? 'Members must belong to this Bond or be unassigned in the selected Bridge sample.'
           : null,
     policy:
-      draft.mode === 'balance-tcp' && draft.lacp === 'off'
-        ? 'balance-tcp requires LACP active or passive.'
-        : null,
+      !['balance-tcp', 'active-backup', 'balance-slb'].includes(draft.mode) ||
+      !['active', 'passive', 'off'].includes(draft.lacp)
+        ? 'Choose a supported Bond mode and LACP policy.'
+        : draft.mode === 'balance-tcp' && draft.lacp === 'off'
+          ? 'balance-tcp requires LACP active or passive.'
+          : null,
     minLinks:
       !draft.minLinks.trim() ||
       !Number.isInteger(Number(draft.minLinks)) ||
@@ -397,5 +408,50 @@ export function bondDraftErrors(draft: BondDraft, bond?: Bond) {
       Number(draft.minLinks) > draft.members.length
         ? 'Minimum links must be an integer from 0 to the selected member count.'
         : null,
+  };
+}
+
+export function bondNativeValue(draft: BondDraft, advanced = false) {
+  return [
+    `bridge: ${draft.bridge}`,
+    `bond_mode: ${draft.mode}`,
+    `lacp: ${draft.lacp}`,
+    `other_config:min-links: ${draft.minLinks}`,
+    `interfaces: [${[...draft.members].sort().join(', ')}]`,
+    ...(advanced ? ['other_config:bond-rebalance-interval: 10000'] : []),
+  ].join('\n');
+}
+
+// UI and programmatic creation share both validation and native mapping.
+export function bondChangeIntent(
+  draft: BondDraft,
+  bond?: Bond,
+  advanced = false,
+  memberDown = false,
+): ChangeIntent {
+  if (bond?.scope === 'Observe') throw new Error('This Bond is Observe-only.');
+  const error = Object.values(bondDraftErrors(draft, bond)).find(Boolean);
+  if (error) throw new Error(error);
+  const current = bond
+    ? bondNativeValue(
+        { ...bond, minLinks: String(bond.minLinks ?? 'unknown') },
+        advanced,
+      )
+    : 'object: absent';
+  const candidate = bondNativeValue(draft, advanced);
+  if (current === candidate)
+    throw new Error('No Bond configuration changes to stage.');
+  return {
+    kind: 'bond',
+    objectType: 'Port',
+    objectName: draft.name,
+    bridgeName: draft.bridge,
+    title: `${bond ? 'Update' : 'Create'} Bond Port / ${draft.name}`,
+    summary: `${draft.members.length} Interface members on ${draft.bridge} · ${draft.mode} · LACP ${draft.lacp}`,
+    current,
+    candidate,
+    risk: draft.bridge === 'br-mgmt' || memberDown ? 'High' : 'Medium',
+    capability: 'bond.manage',
+    evidenceObject: `Port/${draft.name}`,
   };
 }

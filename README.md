@@ -25,7 +25,7 @@ interaction and contract review tools; they do not change that architecture.
 | P1 Batch 03 · OpenFlow Viewer                     | Accepted for integration           |
 | P1 Batch 04 · DPDK / Offload Observe              | Implemented · Review gate accepted |
 | P1 Batch 05 · System Health                       | Implemented · Review gate accepted |
-| P1 Batch 06 · Capabilities                        | Implemented · Awaiting review      |
+| P1 Batch 06 · Capabilities                        | Implemented · Review gate accepted |
 | Full lint and browser CI · #6 / #7                | Accepted · PR #16 merged           |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
@@ -94,8 +94,15 @@ The native protected-Port sample requires current provider support, local NORMAL
 authority, permission and safe recovery before staging a Candidate. It uses the
 existing Diff / Validation, Safe Apply and Audit workflow on the isolated synthetic
 `br-native-demo` target. See the [Capabilities review](docs/reviews/CAPABILITIES_v0.1.md)
-for exceptions, responsive responsibilities and engineering evidence. This batch
-awaits user acceptance; the persistence lab does not execute this native action.
+for exceptions, responsive responsibilities and engineering evidence. PR #17 is
+merged at `862b19a`, tagged `prototype-capabilities-v0.1`; the persistence lab does
+not execute this native action.
+
+The [six-batch integration review](docs/reviews/INTEGRATION_v0.2.md) now checks
+cross-domain transaction ownership and unifies Bond editor / WebMCP validation.
+It awaits separate acceptance. The [approved IA coverage inventory](docs/reviews/P1_IA_COVERAGE_v0.1.md)
+maps all 53 page IDs and records remaining inventory, routing and production
+service gaps; acceptance of six batches does not imply whole-site completion.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
