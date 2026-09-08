@@ -24,7 +24,7 @@ interaction and contract review tools; they do not change that architecture.
 | P1 Batch 02 · Diagnostics                         | Implemented · Review gate accepted |
 | P1 Batch 03 · OpenFlow Viewer                     | Accepted for integration           |
 | P1 Batch 04 · DPDK / Offload Observe              | Implemented · Review gate accepted |
-| P1 Batch 05 · System Health                       | Implemented · Awaiting review      |
+| P1 Batch 05 · System Health                       | Implemented · Review gate accepted |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
 
@@ -76,8 +76,9 @@ One shared observation cache explains Healthy, Recovering, Degraded, Critical,
 Unknown and Recovery Required across OVS, datapath, providers, management plane,
 change safety and Jobs. Missing, stale and unavailable evidence remains explicit;
 health reads never confirm a Safe Apply. The [System Health review](docs/reviews/SYSTEM_HEALTH_v0.1.md)
-records the scenario, responsive and regression checks. This batch awaits user
-review; the global Capabilities matrix has not started.
+records the scenario, responsive and regression checks. This batch was accepted
+on 2026-09-08 for merge through PR #15, with checkpoint
+`prototype-system-health-v0.1`. The global Capabilities matrix is next.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics

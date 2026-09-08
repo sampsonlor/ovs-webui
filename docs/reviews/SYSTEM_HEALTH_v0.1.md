@@ -2,7 +2,7 @@
 
 日期：2026-09-08（Asia/Shanghai）。起点：`90533df`；分支：`codex/feat-p1-batch-05-system-health`。前置 Batch 04 已获用户接受，PR #14 已合并，注释标签 `prototype-acceleration-v0.1` 已推送。
 
-**Disposition：实现和本机检查完成，等待用户接受。本次不接受或启动 Batch 06 Capabilities。** 本记录覆盖 P1-11 交互原型，不构成真实主机健康、生产授权或数据库恢复验收。
+**Disposition 更新：2026-09-08 用户接受 System Health 并要求继续下一批；PR #15 合并后以注释标签 `prototype-system-health-v0.1` 记录接受基线。** 本记录覆盖 P1-11 交互原型，不构成真实主机健康、生产授权或数据库恢复验收。
 
 ## 依据与范围
 
@@ -61,4 +61,4 @@ manager.db Recovery Required 提供原证据与操作员恢复提示；没有假
 - 既有 Bond WebMCP 代表意图的名称 / 成员检查差异继续保留于后续工作，未在本批扩大修改范围。
 - 浏览器 CI #7、通用模板 lint #6 保持开放。`.openai/hosting.json`、部署及站点访问设置未修改。
 
-用户接受本批后再合并、记录接受标签并进入 Batch 06 Capabilities。
+Batch 05 已获接受，下一批按计划进入 Capabilities。
