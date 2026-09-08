@@ -92,7 +92,7 @@ function validateStaged(
   };
 }
 
-test('validation admission, captured diff, job and request survive restart; server worker needs no browser', (t) => {
+void test('validation admission, captured diff, job and request survive restart; server worker needs no browser', (t) => {
   const f = fixture(t);
   const first = f.open();
   const { session } = stage(first, 'alice');
@@ -131,7 +131,7 @@ test('validation admission, captured diff, job and request survive restart; serv
   );
 });
 
-test('validation replay preserves original acceptance after completion and expiry; keys cannot cross operations', (t) => {
+void test('validation replay preserves original acceptance after completion and expiry; keys cannot cross operations', (t) => {
   const store = fixture(t).open();
   const staged = stage(store, 'alice');
   const v = validateStaged(store, staged.session);
@@ -172,7 +172,7 @@ test('validation replay preserves original acceptance after completion and expir
   );
 });
 
-test('server clock expiry is persisted, scoped, and never resurrected by a later read', (t) => {
+void test('server clock expiry is persisted, scoped, and never resurrected by a later read', (t) => {
   let time = Date.parse('2026-09-05T01:00:00.000Z');
   const store = fixture(t).open({ clock: () => time });
   const { session } = stage(store, 'alice');
@@ -193,7 +193,7 @@ test('server clock expiry is persisted, scoped, and never resurrected by a later
   assert.equal(store.readRequest('bob', result.requestId).status, 404);
 });
 
-test('Candidate edits and external generation changes invalidate validation without rewriting its diff', (t) => {
+void test('Candidate edits and external generation changes invalidate validation without rewriting its diff', (t) => {
   const store = fixture(t).open();
   const { session } = stage(store, 'alice');
   store.validations.policyChange('available');
@@ -248,7 +248,7 @@ test('Candidate edits and external generation changes invalidate validation with
   assert.equal(validateStaged(store, session).result.status, 'passed');
 });
 
-test('admission races are rejected and queued work expires when revision, generation or policy changes', (t) => {
+void test('admission races are rejected and queued work expires when revision, generation or policy changes', (t) => {
   const store = fixture(t).open();
   const { session } = stage(store, 'alice');
   const old = validationCommand(store);
@@ -287,7 +287,7 @@ test('admission races are rejected and queued work expires when revision, genera
   );
 });
 
-test('provider, safety and node checks block explicitly; job success never means validation passed', (t) => {
+void test('provider, safety and node checks block explicitly; job success never means validation passed', (t) => {
   const store = fixture(t).open();
   const { session } = stage(store, 'alice');
   const defaults = validateStaged(store, session).result;
@@ -330,7 +330,7 @@ test('provider, safety and node checks block explicitly; job success never means
   assert.equal(store.workspace(session).permissions.startSafeApply, false);
 });
 
-test('read-only and revoked permissions cannot validate; restored permission cannot revive old validation', (t) => {
+void test('read-only and revoked permissions cannot validate; restored permission cannot revive old validation', (t) => {
   const store = fixture(t).open();
   const { session } = stage(store, 'alice');
   store.validations.policyChange('available');
@@ -359,7 +359,7 @@ test('read-only and revoked permissions cannot validate; restored permission can
   );
 });
 
-test('queued checks cannot pass after a Candidate edit and current native write authority is checked on execution', (t) => {
+void test('queued checks cannot pass after a Candidate edit and current native write authority is checked on execution', (t) => {
   const store = fixture(t).open();
   const { session } = stage(store, 'alice');
   store.validations.policyChange('available');
@@ -395,7 +395,7 @@ test('queued checks cannot pass after a Candidate edit and current native write 
   );
 });
 
-test('Candidate, session and request evidence survive closing and reopening the database', (t) => {
+void test('Candidate, session and request evidence survive closing and reopening the database', (t) => {
   const f = fixture(t);
   const first = f.open();
   const login = first.login('alice');
@@ -415,7 +415,7 @@ test('Candidate, session and request evidence survive closing and reopening the 
   );
 });
 
-test('independent database connections enforce one strong ETag winner without overwriting it', (t) => {
+void test('independent database connections enforce one strong ETag winner without overwriting it', (t) => {
   const f = fixture(t);
   const a = f.open();
   const b = f.open();
@@ -439,7 +439,7 @@ test('independent database connections enforce one strong ETag winner without ov
   );
 });
 
-test('idempotent replay returns the original snapshot; changed payload or ETag cannot reuse its key', (t) => {
+void test('idempotent replay returns the original snapshot; changed payload or ETag cannot reuse its key', (t) => {
   const store = fixture(t).open();
   const first = stage(store, 'alice');
   const repeat = store.mutate(
@@ -478,7 +478,7 @@ test('idempotent replay returns the original snapshot; changed payload or ETag c
   );
 });
 
-test('per-user Candidates and request ledger are isolated even when users reuse a request ID', (t) => {
+void test('per-user Candidates and request ledger are isolated even when users reuse a request ID', (t) => {
   const store = fixture(t).open();
   const requestId = randomUUID();
   const alice = stage(store, 'alice', requestId);
@@ -490,7 +490,7 @@ test('per-user Candidates and request ledger are isolated even when users reuse 
   assert.equal(stage(store, 'observer').result.status, 403);
 });
 
-test('stale and overlapping external observations require reviewed atomic rebase and preserve running data', (t) => {
+void test('stale and overlapping external observations require reviewed atomic rebase and preserve running data', (t) => {
   const store = fixture(t).open();
   const first = stage(store, 'alice');
   store.externalChange(null, null);
@@ -545,7 +545,7 @@ test('stale and overlapping external observations require reviewed atomic rebase
   assert.equal(store.meta('inventory').items[1].configuration.value.tag, 140);
 });
 
-test('Observe-only Ports, provider failure and node admission lock cannot create editable intent', (t) => {
+void test('Observe-only Ports, provider failure and node admission lock cannot create editable intent', (t) => {
   const store = fixture(t).open();
   const snapshot = store.snapshot('alice');
   const session = {
@@ -620,7 +620,7 @@ async function httpFixture(t) {
   return { store, origin, login };
 }
 
-test('HTTP bootstrap, paginated Ports, persisted save and read-only identity use the production contract validator', async (t) => {
+void test('HTTP bootstrap, paginated Ports, persisted save and read-only identity use the production contract validator', async (t) => {
   const { login } = await httpFixture(t);
   const alice = await login('alice');
   const controller = new WorkspaceController(alice.client);
@@ -646,7 +646,7 @@ test('HTTP bootstrap, paginated Ports, persisted save and read-only identity use
   assert.equal(await readonly.mutate(command), false);
 });
 
-test('HTTP validation completes on the server and restores its exact result and job in a new controller', async (t) => {
+void test('HTTP validation completes on the server and restores its exact result and job in a new controller', async (t) => {
   const { login, store } = await httpFixture(t);
   const alice = await login('alice');
   stage(store, 'alice');
@@ -676,7 +676,7 @@ test('HTTP validation completes on the server and restores its exact result and 
   assert.ok(restored.getSnapshot().snapshot.candidate.intents.length);
 });
 
-test('lost validation response recovers original request by GET without a duplicate POST', async (t) => {
+void test('lost validation response recovers original request by GET without a duplicate POST', async (t) => {
   const { login, origin, store } = await httpFixture(t);
   const alice = await login('alice');
   stage(store, 'alice');
@@ -711,7 +711,7 @@ test('lost validation response recovers original request by GET without a duplic
   assert.equal(alice.calls.filter((method) => method === 'POST').length, 1);
 });
 
-test('wrong-snapshot validation acceptance remains unknown and recovery refuses unrelated ledger evidence', async (t) => {
+void test('wrong-snapshot validation acceptance remains unknown and recovery refuses unrelated ledger evidence', async (t) => {
   const { login, origin, store } = await httpFixture(t);
   const alice = await login('alice');
   stage(store, 'alice');
@@ -751,7 +751,7 @@ test('wrong-snapshot validation acceptance remains unknown and recovery refuses 
   assert.equal(alice.calls.filter((method) => method === 'POST').length, 1);
 });
 
-test('revocation between browser review and HTTP validation clears private state and closes controls', async (t) => {
+void test('revocation between browser review and HTTP validation clears private state and closes controls', async (t) => {
   const { login, store } = await httpFixture(t);
   const alice = await login('alice');
   stage(store, 'alice');
@@ -770,7 +770,7 @@ test('revocation between browser review and HTTP validation clears private state
   );
 });
 
-test('HTTP reads reject passed validation with unknown checks and unrelated job evidence', async (t) => {
+void test('HTTP reads reject passed validation with unknown checks and unrelated job evidence', async (t) => {
   const { login, origin, store } = await httpFixture(t);
   const alice = await login('alice');
   stage(store, 'alice');
@@ -802,7 +802,7 @@ test('HTTP reads reject passed validation with unknown checks and unrelated job 
   );
 });
 
-test('an accepted save with a lost HTTP reply recovers by GET without another PATCH', async (t) => {
+void test('an accepted save with a lost HTTP reply recovers by GET without another PATCH', async (t) => {
   const { login, origin } = await httpFixture(t);
   const alice = await login('alice');
   const client = new CoreHttpClient({
@@ -835,7 +835,7 @@ test('an accepted save with a lost HTTP reply recovers by GET without another PA
   assert.equal(alice.calls.filter((method) => method === 'PATCH').length, 1);
 });
 
-test('session switch invalidates the former session and clears private client snapshots on 401', async (t) => {
+void test('session switch invalidates the former session and clears private client snapshots on 401', async (t) => {
   const { login } = await httpFixture(t);
   const alice = await login('alice');
   const controller = new WorkspaceController(alice.client);
@@ -853,7 +853,7 @@ test('session switch invalidates the former session and clears private client sn
   assert.equal(controller.getSnapshot().inventory, null);
 });
 
-test('cross-origin, wrong epoch and missing CSRF are rejected at the local HTTP boundary', async (t) => {
+void test('cross-origin, wrong epoch and missing CSRF are rejected at the local HTTP boundary', async (t) => {
   const { login, origin } = await httpFixture(t);
   const alice = await login('alice');
   const snapshot = await alice.client.readCandidate();
@@ -888,7 +888,7 @@ test('cross-origin, wrong epoch and missing CSRF are rejected at the local HTTP 
   );
 });
 
-test('paging rejects external generation changes instead of presenting mixed snapshots', async (t) => {
+void test('paging rejects external generation changes instead of presenting mixed snapshots', async (t) => {
   const { login, store } = await httpFixture(t);
   const alice = await login('alice');
   let reads = 0;
@@ -902,7 +902,7 @@ test('paging rejects external generation changes instead of presenting mixed sna
   );
 });
 
-test('a disposed session cannot repopulate state from delayed reads', async (t) => {
+void test('a disposed session cannot repopulate state from delayed reads', async (t) => {
   const { login } = await httpFixture(t);
   const alice = await login('alice');
   let release;

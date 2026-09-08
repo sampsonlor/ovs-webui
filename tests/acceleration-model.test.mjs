@@ -27,13 +27,13 @@ for (const [reviewCase, expected] of [
   ['unsupported', 'Unsupported'],
   ['unknown', 'Unknown'],
 ]) {
-  test(`both capability families derive ${expected} from authoritative evidence`, () => {
+  void test(`both capability families derive ${expected} from authoritative evidence`, () => {
     for (const record of capture(reviewCase).records)
       assert.equal(assess(record).state, expected);
   });
 }
 
-test('normal retains independent DPDK and offload coverage, with vhost unknown', () => {
+void test('normal retains independent DPDK and offload coverage, with vhost unknown', () => {
   const [dpdk, offload] = capture('normal').records;
   assert.equal(assess(dpdk).state, 'Enabled');
   assert.equal(assess(offload).state, 'Unknown');
@@ -47,7 +47,7 @@ test('normal retains independent DPDK and offload coverage, with vhost unknown',
   );
 });
 
-test('configured and operational contradictions never imply Enabled or Available', () => {
+void test('configured and operational contradictions never imply Enabled or Available', () => {
   for (const record of capture('mismatch').records) {
     assert.equal(assess(record).state, 'Unknown');
     fact(record, 'configured').value = false;
@@ -58,7 +58,7 @@ test('configured and operational contradictions never imply Enabled or Available
   }
 });
 
-test('a missing prerequisite is an explicit negative, not missing evidence', () => {
+void test('a missing prerequisite is an explicit negative, not missing evidence', () => {
   const record = capture('missing').records[0];
   assert.equal(assess(record).state, 'Missing prerequisites');
   fact(record, 'memory').value = null;
@@ -72,7 +72,7 @@ test('a missing prerequisite is an explicit negative, not missing evidence', () 
   );
 });
 
-test('capability decisions expire exactly at the freshness boundary', () => {
+void test('capability decisions expire exactly at the freshness boundary', () => {
   for (const record of capture().records) {
     assert.equal(assess(record, now + accelerationTtlMs - 1).state, 'Enabled');
     assert.equal(assess(record, now + accelerationTtlMs).state, 'Unknown');
@@ -89,7 +89,7 @@ test('capability decisions expire exactly at the freshness boundary', () => {
   );
 });
 
-test('instance and generation mismatches invalidate individual required facts', () => {
+void test('instance and generation mismatches invalidate individual required facts', () => {
   const record = capture().records[0];
   fact(record, 'operational').generation--;
   assert.equal(assess(record).state, 'Unknown');
@@ -107,7 +107,7 @@ test('instance and generation mismatches invalidate individual required facts', 
   );
 });
 
-test('provider outage cannot be mistaken for Unsupported or current Enabled', () => {
+void test('provider outage cannot be mistaken for Unsupported or current Enabled', () => {
   for (const reviewCase of ['enabled', 'unsupported'])
     for (const record of capture(reviewCase).records) {
       for (const scenario of [
@@ -133,7 +133,7 @@ test('provider outage cannot be mistaken for Unsupported or current Enabled', ()
   }
 });
 
-test('partial telemetry can retain Enabled while counters remain unknown', () => {
+void test('partial telemetry can retain Enabled while counters remain unknown', () => {
   const capturedDuringDegradation = captureAcceleration(
     'enabled',
     now,
@@ -170,7 +170,7 @@ test('partial telemetry can retain Enabled while counters remain unknown', () =>
   }
 });
 
-test('fallback evidence preserves actual zero hardware entries and separate software counts', () => {
+void test('fallback evidence preserves actual zero hardware entries and separate software counts', () => {
   const offload = capture('fallback').records[1];
   assert.equal(assess(offload).state, 'Enabled');
   assert.equal(fact(offload, 'hw-flows').value, 0);
@@ -181,7 +181,7 @@ test('fallback evidence preserves actual zero hardware entries and separate soft
   assert.equal(observationText(false), 'No');
 });
 
-test('representor role does not fabricate native type, a physical connector or PF/VF identity', () => {
+void test('representor role does not fabricate native type, a physical connector or PF/VF identity', () => {
   const offload = capture().records[1];
   assert.equal(fact(offload, 'native-type').value, null);
   assert.equal(fact(offload, 'pf-vf').value, null);
@@ -197,7 +197,7 @@ test('representor role does not fabricate native type, a physical connector or P
   }
 });
 
-test('empty reads and mismatched filters do not select another hidden capability', () => {
+void test('empty reads and mismatched filters do not select another hidden capability', () => {
   assert.deepEqual(capture('empty').records, []);
   const records = capture('normal').records;
   assert.deepEqual(
@@ -235,7 +235,7 @@ test('empty reads and mismatched filters do not select another hidden capability
   );
 });
 
-test('observation admission shares service, busy and responsive gates without transaction writes', () => {
+void test('observation admission shares service, busy and responsive gates without transaction writes', () => {
   for (const scenario of [
     'permission-denied',
     'loading',

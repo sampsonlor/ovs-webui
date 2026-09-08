@@ -26,7 +26,7 @@ const collection = {
   detail: 'structured',
 };
 
-test('catalog capabilities agree with runnable allowlist and budgets fit their timeout', () => {
+void test('catalog capabilities agree with runnable allowlist and budgets fit their timeout', () => {
   assert.deepEqual(
     diagnostics
       .filter((item) => item.availability === 'Available')
@@ -39,7 +39,7 @@ test('catalog capabilities agree with runnable allowlist and budgets fit their t
     );
 });
 
-test('capturing input and starting a Job reject incompatible target, budget and output without normalization', () => {
+void test('capturing input and starting a Job reject incompatible target, budget and output without normalization', () => {
   for (const request of [
     { ...collection, scope: 'Port/bond-storage' },
     { ...collection, sampleSeconds: 15 },
@@ -77,7 +77,7 @@ test('capturing input and starting a Job reject incompatible target, budget and 
   );
 });
 
-test('unavailable and missing evidence states never become successful health results or exports', () => {
+void test('unavailable and missing evidence states never become successful health results or exports', () => {
   for (const state of [
     'not-started',
     'queued',
@@ -110,7 +110,7 @@ test('unavailable and missing evidence states never become successful health res
   );
 });
 
-test('storage evidence retains a known carrier fault while missing counters remain unknown', () => {
+void test('storage evidence retains a known carrier fault while missing counters remain unknown', () => {
   const partial = diagnosticResult(network, 'partial');
   assert.match(partial.finding, /carrier down.*counters unknown/);
   assert.match(partial.raw, /counter_sample=unknown coverage=partial/);
@@ -125,7 +125,7 @@ test('storage evidence retains a known carrier fault while missing counters rema
   assert.doesNotMatch(other.finding + other.raw, /enp129s0f1|carrier down/);
 });
 
-test('output limits, actual excerpt counts and truncation are preserved in export', () => {
+void test('output limits, actual excerpt counts and truncation are preserved in export', () => {
   const trace = {
     ...network,
     id: 'diag.ovs.datapath-trace',
@@ -141,7 +141,7 @@ test('output limits, actual excerpt counts and truncation are preserved in expor
   assert.equal(diagnosticResult(network, 'complete').limits.textLines, 200);
 });
 
-test('structured-only results never expose or export text, including truncated review cases', () => {
+void test('structured-only results never expose or export text, including truncated review cases', () => {
   for (const request of [collection, { ...network, detail: 'structured' }])
     for (const state of [
       'complete',
@@ -159,7 +159,7 @@ test('structured-only results never expose or export text, including truncated r
   assert.equal(diagnosticResult(collection, 'complete').limits.textLines, 0);
 });
 
-test('Event link failure preserves the captured result and clearly labels preview exports', () => {
+void test('Event link failure preserves the captured result and clearly labels preview exports', () => {
   const result = diagnosticResult(network, 'evidence-unavailable');
   assert.equal(result.evidenceAvailable, false);
   assert.equal(result.outputAvailable, true);
@@ -170,7 +170,7 @@ test('Event link failure preserves the captured result and clearly labels previe
   assert.equal(network.scope, 'Port/bond-storage');
 });
 
-test('service uncertainty blocks new work and cancellation while degraded collection remains possible', () => {
+void test('service uncertainty blocks new work and cancellation while degraded collection remains possible', () => {
   assert.ok(
     diagnosticRunBlock(
       network.id,

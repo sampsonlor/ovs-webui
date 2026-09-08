@@ -58,7 +58,7 @@ const mutation = {
   expectedGeneration: candidate.currentGeneration,
 };
 
-test('Ports reads use the configured HTTP origin and preserve bounded query encoding', async (t) => {
+void test('Ports reads use the configured HTTP origin and preserve bounded query encoding', async (t) => {
   const inventory = example('PortsPage');
   let received;
   const server = createServer((req, res) => {
@@ -88,7 +88,7 @@ test('Ports reads use the configured HTTP origin and preserve bounded query enco
   assert.deepEqual(result, inventory);
 });
 
-test('Candidate round-trip preserves server ETag, idempotency key, CSRF and session transport policy', async () => {
+void test('Candidate round-trip preserves server ETag, idempotency key, CSRF and session transport policy', async () => {
   const calls = [];
   const client = makeClient(async (url, options) => {
     calls.push({ url, options });
@@ -109,7 +109,7 @@ test('Candidate round-trip preserves server ETag, idempotency key, CSRF and sess
   assert.equal(calls.length, 2);
 });
 
-test('missing or weak ETag, raw OVS writes and a locked candidate are rejected before transport', async () => {
+void test('missing or weak ETag, raw OVS writes and a locked candidate are rejected before transport', async () => {
   for (const etag of [null, '*', 'W/"version"', 'unquoted', '"bad\nvalue"']) {
     const client = makeClient(async () =>
       reply(candidate, 200, etag === null ? {} : { ETag: etag }),
@@ -147,7 +147,7 @@ test('missing or weak ETag, raw OVS writes and a locked candidate are rejected b
   assert.equal(calls, 0);
 });
 
-test('a 412 for this candidate request is explicit rejection; no silent rebase or retry occurs', async () => {
+void test('a 412 for this candidate request is explicit rejection; no silent rebase or retry occurs', async () => {
   let calls = 0;
   const rejected = {
     ...problem,
@@ -166,7 +166,7 @@ test('a 412 for this candidate request is explicit rejection; no silent rebase o
   assert.equal(calls, 1);
 });
 
-test('lost, malformed and wrong-request write replies retain the original request as unknown', async () => {
+void test('lost, malformed and wrong-request write replies retain the original request as unknown', async () => {
   for (const response of [
     () => {
       throw new TypeError('lost reply');
@@ -192,7 +192,7 @@ test('lost, malformed and wrong-request write replies retain the original reques
   }
 });
 
-test('provider failures and expired sessions are errors rather than fabricated empty inventory', async () => {
+void test('provider failures and expired sessions are errors rather than fabricated empty inventory', async () => {
   for (const [status, code] of [
     [503, 'PROVIDER_UNAVAILABLE'],
     [401, 'UNAUTHENTICATED'],
@@ -218,7 +218,7 @@ test('provider failures and expired sessions are errors rather than fabricated e
   );
 });
 
-test('scope and schema checks reject wrong object IDs, mixed generations and partial bootstrap identity', async () => {
+void test('scope and schema checks reject wrong object IDs, mixed generations and partial bootstrap identity', async () => {
   const inventory = example('PortsPage');
   await assert.rejects(
     () =>
@@ -263,7 +263,7 @@ test('scope and schema checks reject wrong object IDs, mixed generations and par
   );
 });
 
-test('real HTTP gateway connects lost Safe Apply acknowledgement to existing read-only recovery', async () => {
+void test('real HTTP gateway connects lost Safe Apply acknowledgement to existing read-only recovery', async () => {
   const calls = [];
   const client = makeClient(async (url, options) => {
     calls.push({ url, method: options.method });
@@ -284,7 +284,7 @@ test('real HTTP gateway connects lost Safe Apply acknowledgement to existing rea
   );
 });
 
-test('404 request lookup and unexpected acceptance status never prove Not Applied', async () => {
+void test('404 request lookup and unexpected acceptance status never prove Not Applied', async () => {
   const missing = makeClient(async () =>
     reply({ ...problem, status: 404, code: 'NOT_FOUND' }, 404),
   );
@@ -305,7 +305,7 @@ test('404 request lookup and unexpected acceptance status never prove Not Applie
   );
 });
 
-test('request timeout aborts once and preserves uncertainty without submitting again', async () => {
+void test('request timeout aborts once and preserves uncertainty without submitting again', async () => {
   let calls = 0;
   const client = makeClient(
     (_url, options) =>
@@ -326,7 +326,7 @@ test('request timeout aborts once and preserves uncertainty without submitting a
   assert.equal(calls, 1);
 });
 
-test('in-flight staging retains its reviewed command and ETag while CSRF refresh is pending', async () => {
+void test('in-flight staging retains its reviewed command and ETag while CSRF refresh is pending', async () => {
   const input = structuredClone(mutation);
   const reviewed = structuredClone(snapshot);
   let release;

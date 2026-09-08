@@ -23,7 +23,7 @@ const capture = (
   degraded = false,
 ) => collectFlowSnapshot(query, reviewCase, time, elapsed, degraded);
 
-test('a captured request and its rows are independent of later draft edits', () => {
+void test('a captured request and its rows are independent of later draft edits', () => {
   const draft = { ...defaultFlowQuery };
   const request = captureFlowQuery(draft);
   const snapshot = capture(draft).snapshot;
@@ -34,7 +34,7 @@ test('a captured request and its rows are independent of later draft edits', () 
   assert.equal(snapshot.rows.length, 8);
 });
 
-test('Bridge fixtures preserve protocol, ownership and typed related objects', () => {
+void test('Bridge fixtures preserve protocol, ownership and typed related objects', () => {
   const fabric = capture().snapshot;
   const storage = capture({
     ...defaultFlowQuery,
@@ -60,7 +60,7 @@ test('Bridge fixtures preserve protocol, ownership and typed related objects', (
   });
 });
 
-test('invalid priority, catalog scope and oversized text fail before collection', () => {
+void test('invalid priority, catalog scope and oversized text fail before collection', () => {
   for (const priority of ['-1', '65536', '1e2', '1.5', 'abc']) {
     const query = { ...defaultFlowQuery, priority };
     assert.ok(flowQueryErrors(query).priority);
@@ -79,7 +79,7 @@ test('invalid priority, catalog scope and oversized text fail before collection'
   );
 });
 
-test('viewer filters combine on the captured population without shell or regex evaluation', () => {
+void test('viewer filters combine on the captured population without shell or regex evaluation', () => {
   const query = {
     ...defaultFlowQuery,
     table: '10',
@@ -99,7 +99,7 @@ test('viewer filters combine on the captured population without shell or regex e
   );
 });
 
-test('large collections obey both caps and export raw and parsed values consistently', () => {
+void test('large collections obey both caps and export raw and parsed values consistently', () => {
   const snapshot = capture(defaultFlowQuery, 'truncated').snapshot;
   assert.equal(snapshot.matchedRows, 768);
   assert.ok(
@@ -131,7 +131,7 @@ test('large collections obey both caps and export raw and parsed values consiste
   assert.deepEqual(exported.snapshot.rows, snapshot.rows);
 });
 
-test('narrowing a large population can produce a complete bounded result', () => {
+void test('narrowing a large population can produce a complete bounded result', () => {
   const snapshot = capture(
     { ...defaultFlowQuery, table: '10' },
     'truncated',
@@ -144,7 +144,7 @@ test('narrowing a large population can produce a complete bounded result', () =>
   );
 });
 
-test('large opaque source fields enforce the byte cap without rewriting retained raw rows', () => {
+void test('large opaque source fields enforce the byte cap without rewriting retained raw rows', () => {
   const input = capture(defaultFlowQuery, 'truncated').snapshot;
   input.rows = input.rows.map((row) => ({
     ...row,
@@ -162,7 +162,7 @@ test('large opaque source fields enforce the byte cap without rewriting retained
   );
 });
 
-test('permission, unavailable provider and timeout never supply fallback rows', () => {
+void test('permission, unavailable provider and timeout never supply fallback rows', () => {
   for (const failure of [
     'permission-denied',
     'provider-unavailable',
@@ -178,7 +178,7 @@ test('permission, unavailable provider and timeout never supply fallback rows', 
   });
 });
 
-test('empty success has no selected detail, including when the previous page was late', () => {
+void test('empty success has no selected detail, including when the previous page was late', () => {
   const snapshot = capture(defaultFlowQuery, 'empty').snapshot;
   assert.equal(snapshot.rows.length, 0);
   assert.deepEqual(flowPage(snapshot.rows, 99, 'br-fabric-flow-0'), {
@@ -189,7 +189,7 @@ test('empty success has no selected detail, including when the previous page was
   });
 });
 
-test('selection follows visible pages and clamps after a smaller capture', () => {
+void test('selection follows visible pages and clamps after a smaller capture', () => {
   const rows = capture().snapshot.rows;
   const second = flowPage(rows, 2, rows[0].id);
   assert.equal(second.selected.id, rows[4].id);
@@ -199,7 +199,7 @@ test('selection follows visible pages and clamps after a smaller capture', () =>
   assert.equal(flowPage(small, 99, rows[4].id).selected.id, small[0].id);
 });
 
-test('freshness ages independently of collection coverage and degraded evidence remains partial', () => {
+void test('freshness ages independently of collection coverage and degraded evidence remains partial', () => {
   const fresh = capture().snapshot;
   assert.equal(flowFreshness(fresh, now + 29999), 'Fresh');
   assert.equal(flowFreshness(fresh, now + 30000), 'Stale');
@@ -218,7 +218,7 @@ test('freshness ages independently of collection coverage and degraded evidence 
   );
 });
 
-test('all collection entry points share mobile, busy and service gates', () => {
+void test('all collection entry points share mobile, busy and service gates', () => {
   assert.match(
     flowAdmission(defaultFlowQuery, 'normal', 390, false),
     /tablet or desktop/,

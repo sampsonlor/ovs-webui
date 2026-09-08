@@ -60,13 +60,16 @@ function ComboboxInput({
   showTrigger?: boolean;
   showClear?: boolean;
 }) {
+  const generatedId = React.useId();
+  const inputId = props.id ?? generatedId;
   return (
     <InputGroup className={cn('w-auto', className)}>
       <ComboboxPrimitive.Input
         render={<InputGroupInput disabled={disabled} />}
         {...props}
+        id={inputId}
       />
-      <InputGroupAddon align="inline-end">
+      <InputGroupAddon align="inline-end" htmlFor={inputId}>
         {showTrigger && (
           <InputGroupButton
             size="icon-xs"

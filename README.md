@@ -78,7 +78,8 @@ change safety and Jobs. Missing, stale and unavailable evidence remains explicit
 health reads never confirm a Safe Apply. The [System Health review](docs/reviews/SYSTEM_HEALTH_v0.1.md)
 records the scenario, responsive and regression checks. This batch was accepted
 on 2026-09-08 for merge through PR #15, with checkpoint
-`prototype-system-health-v0.1`. The global Capabilities matrix is next.
+`prototype-system-health-v0.1` at main commit `b08e0a3`. The global Capabilities
+matrix follows the lint and browser CI work tracked by #6 and #7.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
@@ -172,11 +173,17 @@ lost acknowledgements, safe confirmation, rollback conflicts and out-of-order re
 Track accepted work and upcoming slices on the public
 [OVS WebUI Phase 1 board](https://github.com/users/sampsonlor/projects/2/views/1).
 
-Pull requests and main updates run the pinned toolchain, contract checks, product
-lint, TypeScript, regression tests, process-recovery integration tests and production
-build. `CI Gate` requires both jobs to succeed. JUnit reports are retained for 7 days.
+Pull requests and main updates run the pinned toolchain, contract checks, full
+repository lint, TypeScript, regression tests, process-recovery integration tests,
+Chromium workflow / UI template checks and the production build. `CI Gate` requires
+all three jobs to succeed. JUnit reports and browser failure evidence are retained
+for 7 days; traces omit network and DOM snapshots to avoid recording session tokens.
 The `ci-integration` environment uses disposable Linux runners and per-test SQLite
 databases; it has no production credentials or real OVS executor.
+
+Run the browser suite with `pnpm exec playwright install chromium` followed by
+`pnpm test:browser` (Linux CI also installs system dependencies with `--with-deps`).
+Each browser test uses a fresh temporary lab database and browser context.
 
 See [the GitHub CI guide](docs/contracts/GITHUB_CI_v0.1.md) for local commands,
 lint scope, environment isolation and remaining Staging/browser/provider gates.

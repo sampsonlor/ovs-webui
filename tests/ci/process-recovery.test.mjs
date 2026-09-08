@@ -152,7 +152,7 @@ async function terminalValidation(api, id) {
   assert.fail('Server worker did not finish within its bounded test window.');
 }
 
-test(
+void test(
   'isolated HTTP service enforces identity and safety prerequisites using a fresh database',
   { timeout: 20_000 },
   async (t) => {
@@ -180,7 +180,7 @@ test(
   },
 );
 
-test(
+void test(
   'a killed server restores its session, Candidate, accepted request and queued validation without resubmission',
   { timeout: 25_000 },
   async (t) => {
@@ -242,7 +242,7 @@ test(
   },
 );
 
-test(
+void test(
   'a killed server retains the original Safe Apply deadline and rolls back after restarting without a browser',
   { timeout: 25_000 },
   async (t) => {

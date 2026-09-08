@@ -38,7 +38,7 @@ function gateway(overrides = {}) {
   };
 }
 
-test('lost acceptance reply is recovered from the original request without a second write', async () => {
+void test('lost acceptance reply is recovered from the original request without a second write', async () => {
   let writes = 0;
   let accepted = false;
   const calls = [];
@@ -70,7 +70,7 @@ test('lost acceptance reply is recovered from the original request without a sec
   ]);
 });
 
-test('missing, still-recording, disconnected and wrong-scope ledger reads stay unknown', async () => {
+void test('missing, still-recording, disconnected and wrong-scope ledger reads stay unknown', async () => {
   for (const readRequest of [
     async () => null,
     async () => ({ ...requestRecord, state: 'recorded', transactionId: null }),
@@ -94,7 +94,7 @@ test('missing, still-recording, disconnected and wrong-scope ledger reads stay u
   }
 });
 
-test('only an authoritative rejection for this request is treated as not started', async () => {
+void test('only an authoritative rejection for this request is treated as not started', async () => {
   for (const reply of [
     problem,
     { ...problem, commandEffect: 'unknown' },
@@ -127,7 +127,7 @@ test('only an authoritative rejection for this request is treated as not started
   assert.equal(recovered.kind, 'rejected');
 });
 
-test('misrouted acceptance and recovery responses cannot attach a different transaction', async () => {
+void test('misrouted acceptance and recovery responses cannot attach a different transaction', async () => {
   for (const tx of [
     { ...provisional, requestId: 'other-request' },
     { ...provisional, nodeId: 'other-node' },
@@ -160,7 +160,7 @@ test('misrouted acceptance and recovery responses cannot attach a different tran
   }
 });
 
-test('Applied while provisional remains locked; only authoritative confirmation is terminal', () => {
+void test('Applied while provisional remains locked; only authoritative confirmation is terminal', () => {
   const shown = presentTransaction(provisional, context);
   assert.equal(shown.state, 'awaiting-confirmation');
   assert.equal(shown.canConfirm, true);
@@ -169,7 +169,7 @@ test('Applied while provisional remains locked; only authoritative confirmation 
   assert.equal(presentTransaction(confirmed, context).canConfirm, false);
 });
 
-test('local deadline disables decisions but never manufactures rollback or a terminal verdict', () => {
+void test('local deadline disables decisions but never manufactures rollback or a terminal verdict', () => {
   const expired = presentTransaction(provisional, {
     ...context,
     nowMonotonicMs: 91000,
@@ -182,7 +182,7 @@ test('local deadline disables decisions but never manufactures rollback or a ter
   assert.equal(provisional.safeApply, 'awaiting-confirmation');
 });
 
-test('server time plus monotonic elapsed time works without trusting the wall clock', () => {
+void test('server time plus monotonic elapsed time works without trusting the wall clock', () => {
   assert.equal(
     presentTransaction(provisional, { ...context, nowMonotonicMs: 16000 })
       .remainingSeconds,
@@ -201,7 +201,7 @@ test('server time plus monotonic elapsed time works without trusting the wall cl
   );
 });
 
-test('disconnect, stale reads, unknown evidence and revoked permissions keep risky actions closed', () => {
+void test('disconnect, stale reads, unknown evidence and revoked permissions keep risky actions closed', () => {
   for (const ctx of [
     { ...context, connected: false },
     { ...context, fresh: false },
@@ -227,7 +227,7 @@ test('disconnect, stale reads, unknown evidence and revoked permissions keep ris
   assert.equal(presentTransaction(unknown, context).state, 'checking-outcome');
 });
 
-test('inconsistent terminal data, degraded outcomes and rollback conflicts never enable a new apply', () => {
+void test('inconsistent terminal data, degraded outcomes and rollback conflicts never enable a new apply', () => {
   for (const tx of [
     rollbackConflict,
     { ...provisional, outcome: 'degraded' },
@@ -248,7 +248,7 @@ test('inconsistent terminal data, degraded outcomes and rollback conflicts never
   );
 });
 
-test('a delayed older poll cannot replace a newer terminal result', () => {
+void test('a delayed older poll cannot replace a newer terminal result', () => {
   assert.equal(acceptTransactionSnapshot(confirmed, provisional), confirmed);
   assert.equal(acceptTransactionSnapshot(provisional, confirmed), confirmed);
   assert.equal(
@@ -275,7 +275,7 @@ test('a delayed older poll cannot replace a newer terminal result', () => {
   );
 });
 
-test('all four reconciliation outcomes preserve the original transaction and remain distinct', async () => {
+void test('all four reconciliation outcomes preserve the original transaction and remain distinct', async () => {
   const cases = [
     [provisional, 'awaiting-confirmation', true],
     [
