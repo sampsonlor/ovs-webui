@@ -15,6 +15,7 @@ Older records below describe their own review date and implementation slice.
 - `contracts/LOCAL_VALIDATION_v0.1.md` — durable server diff, validation jobs, expiry and exception review
 - `contracts/LOCAL_SAFE_APPLY_v0.1.md` — synthetic transactions, protected rollback, recovery and evidence
 - `contracts/GITHUB_CI_v0.1.md` — CI gates, isolated Linux testing and project workflow
+- `reviews/CI_BROWSER_BASELINE_v0.1.md` — full lint and browser workflow coverage for issues #6 / #7
 - `../contracts/openapi.v0.1.json` — generated OpenAPI contract for the first Ports/VLAN integration slice
 
 The contract is a review proposal. The opt-in local lab connects HTTP adapters to synthetic persistent resources. Production persistence, authentication and OVS operations remain separate integration gates.

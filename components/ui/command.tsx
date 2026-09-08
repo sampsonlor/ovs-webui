@@ -67,6 +67,8 @@ function CommandInput({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
+  const generatedId = React.useId();
+  const inputId = props.id ?? generatedId;
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
       <InputGroup className="bg-input/30 border-input/30 h-8! rounded-lg! shadow-none! *:data-[slot=input-group-addon]:pl-2!">
@@ -77,8 +79,9 @@ function CommandInput({
             className,
           )}
           {...props}
+          id={inputId}
         />
-        <InputGroupAddon>
+        <InputGroupAddon htmlFor={inputId}>
           <SearchIcon className="size-4 shrink-0 opacity-50" />
         </InputGroupAddon>
       </InputGroup>

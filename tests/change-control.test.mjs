@@ -31,7 +31,7 @@ function active() {
   return action(ready(), 'start', { desktop: true });
 }
 
-test('empty, unvalidated, reasonless and narrow-screen requests cannot start transactions', () => {
+void test('empty, unvalidated, reasonless and narrow-screen requests cannot start transactions', () => {
   assert.match(
     action(initialControlState, 'start', { desktop: true }).error,
     /empty/,
@@ -45,7 +45,7 @@ test('empty, unvalidated, reasonless and narrow-screen requests cannot start tra
   assert.equal(active().transaction.status, 'countdown');
 });
 
-test('idle and completed jobs never accept confirm or rollback', () => {
+void test('idle and completed jobs never accept confirm or rollback', () => {
   for (const decision of ['confirm', 'rollback'])
     assert.ok(action(initialControlState, decision).error);
   const done = action(active(), 'confirm');
@@ -55,7 +55,7 @@ test('idle and completed jobs never accept confirm or rollback', () => {
   assert.deepEqual(done.live[target.name], mine);
 });
 
-test('read-only authority, unavailable permission and mobile cannot stage', () => {
+void test('read-only authority, unavailable permission and mobile cannot stage', () => {
   assert.match(staged(ports[4]).error, /Observe/);
   const denied = action(initialControlState, 'scenario', {
     scenario: 'permission-denied',
@@ -69,7 +69,7 @@ test('read-only authority, unavailable permission and mobile cannot stage', () =
   );
 });
 
-test('VLAN input rejects malformed and out-of-range intent and preserves native semantics', () => {
+void test('VLAN input rejects malformed and out-of-range intent and preserves native semantics', () => {
   for (const trunks of ['0', '4095', '40-10', '1,,2', 'a', '1-', ''])
     assert.ok(validateVlan({ ...mine, trunks }));
   assert.ok(validateVlan({ ...mine, tag: 120 }));
@@ -84,7 +84,7 @@ test('VLAN input rejects malformed and out-of-range intent and preserves native 
   );
 });
 
-test('candidate captures the selected object and one intent cannot silently replace another', () => {
+void test('candidate captures the selected object and one intent cannot silently replace another', () => {
   const state = staged(ports[2]);
   assert.equal(state.candidate.port.name, 'server-08');
   assert.deepEqual(state.candidate.mine, mine);
@@ -98,7 +98,7 @@ test('candidate captures the selected object and one intent cannot silently repl
   );
 });
 
-test('active transaction rejects restaging, discarding and duplicate submissions', () => {
+void test('active transaction rejects restaging, discarding and duplicate submissions', () => {
   const state = active();
   for (const attempt of [
     action(state, 'start', { desktop: true }),
@@ -111,7 +111,7 @@ test('active transaction rejects restaging, discarding and duplicate submissions
   }
 });
 
-test('conflict requires explicit choice; using mine rebases but never applies', () => {
+void test('conflict requires explicit choice; using mine rebases but never applies', () => {
   const conflict = action(ready(), 'scenario', { scenario: 'conflict' });
   assert.ok(action(conflict, 'start', { desktop: true }).error);
   assert.ok(action(conflict, 'rebase', { choice: 'non-overlapping' }).error);
@@ -124,7 +124,7 @@ test('conflict requires explicit choice; using mine rebases but never applies', 
   assert.match(applyBlock(rebased), /Validate/);
 });
 
-test('keeping current removes only candidate intent and records the current external value', () => {
+void test('keeping current removes only candidate intent and records the current external value', () => {
   const state = action(
     action(staged(), 'scenario', { scenario: 'conflict' }),
     'rebase',
@@ -135,7 +135,7 @@ test('keeping current removes only candidate intent and records the current exte
   assert.equal(state.transaction.status, 'idle');
 });
 
-test('stale non-overlapping merge preserves intent; drift is a separate read-only action', () => {
+void test('stale non-overlapping merge preserves intent; drift is a separate read-only action', () => {
   const state = action(ready(), 'scenario', { scenario: 'stale' });
   const rebased = action(state, 'rebase', { choice: 'non-overlapping' });
   assert.deepEqual(rebased.candidate.base, state.candidate.base);
@@ -149,7 +149,7 @@ test('stale non-overlapping merge preserves intent; drift is a separate read-onl
   assert.equal(reconciled.validatedRevision, null);
 });
 
-test('unknown result stays locked even if the review selector returns to normal', () => {
+void test('unknown result stays locked even if the review selector returns to normal', () => {
   let state = action(active(), 'scenario', { scenario: 'outcome-unknown' });
   state = action(state, 'scenario', { scenario: 'normal' });
   assert.equal(state.transaction.status, 'outcome-unknown');
@@ -158,7 +158,7 @@ test('unknown result stays locked even if the review selector returns to normal'
   assert.ok(action(state, 'start', { desktop: true }).error);
 });
 
-test('all four reconciliation outcomes use the original job without resubmission', () => {
+void test('all four reconciliation outcomes use the original job without resubmission', () => {
   const unknown = action(active(), 'scenario', { scenario: 'outcome-unknown' });
   for (const result of [
     'applied',
@@ -179,7 +179,7 @@ test('all four reconciliation outcomes use the original job without resubmission
   }
 });
 
-test('deadline uses elapsed time, not interval count; disconnected expiry never claims success', () => {
+void test('deadline uses elapsed time, not interval count; disconnected expiry never claims success', () => {
   const state = active();
   assert.equal(
     action(state, 'tick', { now: now + 89_999 }).transaction.status,
@@ -201,7 +201,7 @@ test('deadline uses elapsed time, not interval count; disconnected expiry never 
   );
 });
 
-test('late confirm cannot beat expiry and external writes stop protected rollback', () => {
+void test('late confirm cannot beat expiry and external writes stop protected rollback', () => {
   const state = active();
   assert.equal(
     action(state, 'confirm', { now: now + 90_001 }).transaction.status,
@@ -215,7 +215,7 @@ test('late confirm cannot beat expiry and external writes stop protected rollbac
   assert.ok(action(stopped, 'start', { desktop: true }).error);
 });
 
-test('readiness is invalidated when an already-validated candidate changes', () => {
+void test('readiness is invalidated when an already-validated candidate changes', () => {
   const state = action(ready(), 'stage', {
     port: target,
     mine: { ...mine, trunks: '120, 300' },
