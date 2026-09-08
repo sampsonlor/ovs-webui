@@ -50,7 +50,7 @@ for (const [review, expected] of [
   ['recovering', 'Recovering'],
   ['recovery-required', 'Recovery Required'],
 ]) {
-  test(`health sample explains ${expected} with component evidence`, () => {
+  void test(`health sample explains ${expected} with component evidence`, () => {
     const health = derive(review);
     assert.equal(health.overall, expected);
     assert.ok(
@@ -62,7 +62,7 @@ for (const [review, expected] of [
   });
 }
 
-test('confirmed severity and recovery retain priority while unknown coverage stays explicit', () => {
+void test('confirmed severity and recovery retain priority while unknown coverage stays explicit', () => {
   assert.equal(rollupHealth([]), 'Unknown');
   assert.equal(
     rollupHealth([{ status: 'Healthy' }, { status: 'Unknown' }]),
@@ -82,7 +82,7 @@ test('confirmed severity and recovery retain priority while unknown coverage sta
   assert.equal(component(health, 'link').related, 'Port/server-08');
 });
 
-test('management failure does not imply datapath failure or create a replacement database', () => {
+void test('management failure does not imply datapath failure or create a replacement database', () => {
   const api = derive('management-critical');
   assert.equal(component(api, 'api').status, 'Critical');
   assert.equal(component(api, 'packet-path').status, 'Healthy');
@@ -96,13 +96,13 @@ test('management failure does not imply datapath failure or create a replacement
   );
 });
 
-test('daemon failure leaves forwarding unknown rather than guessing a datapath outage', () => {
+void test('daemon failure leaves forwarding unknown rather than guessing a datapath outage', () => {
   const health = derive('critical');
   assert.equal(component(health, 'vswitchd').status, 'Critical');
   assert.equal(component(health, 'packet-path').status, 'Unknown');
 });
 
-test('health expires at its exact TTL and rejects future or mismatched-generation observations', () => {
+void test('health expires at its exact TTL and rejects future or mismatched-generation observations', () => {
   assert.equal(
     derive('healthy', control(), signals(), now + healthTtlMs - 1).overall,
     'Healthy',
@@ -119,7 +119,7 @@ test('health expires at its exact TTL and rejects future or mismatched-generatio
   }
 });
 
-test('failed refresh retains historical findings and cannot reassert current Healthy', () => {
+void test('failed refresh retains historical findings and cannot reassert current Healthy', () => {
   const health = derive('critical', control(), signals(), now, true);
   assert.equal(health.overall, 'Unknown');
   assert.equal(component(health, 'vswitchd').historicalStatus, 'Critical');
@@ -127,7 +127,7 @@ test('failed refresh retains historical findings and cannot reassert current Hea
   assert.match(component(health, 'vswitchd').value, /not running/);
 });
 
-test('no observations and denied service never become a healthy host', () => {
+void test('no observations and denied service never become a healthy host', () => {
   for (const health of [
     derive('empty'),
     deriveHealth(null, control(), signals(), now),
@@ -149,7 +149,7 @@ test('no observations and denied service never become a healthy host', () => {
   assert.equal(healthReadBlock('normal'), null);
 });
 
-test('healthy health reads preserve every unresolved shared transaction and its checkpoint', () => {
+void test('healthy health reads preserve every unresolved shared transaction and its checkpoint', () => {
   for (const status of [
     'countdown',
     'outcome-unknown',
@@ -188,7 +188,7 @@ test('healthy health reads preserve every unresolved shared transaction and its 
   }
 });
 
-test('member and LACP incidents preselect the correct bounded diagnostic scope', () => {
+void test('member and LACP incidents preselect the correct bounded diagnostic scope', () => {
   for (const [scenario, scope] of [
     ['member-down', 'Port/bond-storage'],
     ['lacp-mismatch', 'Port/bond-uplink'],
@@ -216,7 +216,7 @@ test('member and LACP incidents preselect the correct bounded diagnostic scope',
   );
 });
 
-test('shared acceleration evidence overrides the health fixture without inventing freshness', () => {
+void test('shared acceleration evidence overrides the health fixture without inventing freshness', () => {
   const observations = signals();
   observations.acceleration.snapshot = captureAcceleration(
     'unknown',
@@ -254,7 +254,7 @@ test('shared acceleration evidence overrides the health fixture without inventin
   );
 });
 
-test('OpenFlow coverage keeps its own scope, TTL and missing generation provenance', () => {
+void test('OpenFlow coverage keeps its own scope, TTL and missing generation provenance', () => {
   const observations = signals();
   observations.openFlow.snapshot = collectFlowSnapshot(
     { ...defaultFlowQuery, bridge: 'br-storage' },
@@ -285,7 +285,7 @@ test('OpenFlow coverage keeps its own scope, TTL and missing generation provenan
   );
 });
 
-test('Job failures and missing results remain explicit, while a preview is not an executed Job', () => {
+void test('Job failures and missing results remain explicit, while a preview is not an executed Job', () => {
   const observations = signals();
   for (const [state, expected] of [
     ['failed', 'Degraded'],
@@ -311,7 +311,7 @@ test('Job failures and missing results remain explicit, while a preview is not a
   );
 });
 
-test('incident age survives refresh; recovery emits one Event without mutating Audit history', () => {
+void test('incident age survives refresh; recovery emits one Event without mutating Audit history', () => {
   const first = derive('degraded').components;
   const refresh = deriveHealth(
     captureHealth('degraded', now + 5000, generation),

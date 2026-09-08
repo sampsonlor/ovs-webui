@@ -1,6 +1,6 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-08。Batch 04 DPDK/Offload Observe 已获接受，[PR #14](https://github.com/sampsonlor/ovs-webui/pull/14) 已合并到 `main`（`90533df`），注释标签 `prototype-acceleration-v0.1` 已推送。Batch 05 System Health 已于 2026-09-08 获用户接受；PR #15 合并后记录标签 prototype-system-health-v0.1。本页是当前入口；历史记录保留各自的日期和范围。
+更新：2026-09-08。Batch 05 System Health 已获用户接受，[PR #15](https://github.com/sampsonlor/ovs-webui/pull/15) 已合并到 `main`（`b08e0a3`），注释标签 `prototype-system-health-v0.1` 已推送。当前优先处理通用模板 lint #6 与浏览器 CI #7，Capabilities 草稿保存在独立分支。本页是当前入口；历史记录保留各自的日期和范围。
 
 **P0 核心流程与 P1 前五批已接受，下一批为 Capabilities。整站高保真与正式管理平面尚未完成。** Batch 05 将顶栏、首页和 Operations 的健康入口统一到共享状态，区分管理面与数据面影响，保留 Unknown、Stale、Critical 及 Recovery Required。详见[System Health 审阅](reviews/SYSTEM_HEALTH_v0.1.md)；既有接受结果见[加速观察](reviews/ACCELERATION_OBSERVE_v0.1.md)、[OpenFlow](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)、[Diagnostics](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)和[Bridge / Bond](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
 
@@ -23,7 +23,8 @@
 | P1 Batch 03 OpenFlow Viewer | 原批次与高保真均已接受；共享快照与 Observe 边界已统一 | 正式 OpenFlow 采集 |
 | P1 Batch 04 DPDK/Offload Observe | 单个总览与只读能力证据已获用户接受；127 项回归、3 项集成及浏览器局部矩阵通过 | 真实 Provider、完整硬件库存与持久化观察 |
 | P1 Batch 05 System Health | 六域共享观察、组件责任、事件时间线及恢复入口已实现；145 项回归与 3 项集成通过，已获用户接受 | 正式健康 Provider、统一库存和持久化状态 / Event 服务 |
-| P1 Batch 06 Capabilities | 尚未开始 | Batch 05 接受后推进 |
+| P1 Batch 06 Capabilities | 已起草原生能力策略，暂存于独立分支，尚未形成可验收批次 | lint / 浏览器 CI 基础工作完成后继续 |
+| CI 工程基础 #6 / #7 | 全量 lint 与 Chromium 工作流 / 通用模板回归已实现；本地 145 项回归、3 项集成、12 项浏览器测试及构建通过 | PR 门禁通过并接受合并后关闭议题；详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md) |
 | Design System / 高保真 | 核心 P0、Bridge/Bond、Diagnostics、OpenFlow、加速总览和健康页使用统一组件；P1 前五批做过浅/深色及放大文字局部检查 | 整站深色与浏览器缩放矩阵 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
 | Ports/VLAN 本地 lab | SQLite 持久化 Candidate、验证、合成事务、证据及原请求恢复已实现 | 不能替代正式双进程管理平面或真实 OVS 测试 |
@@ -44,6 +45,6 @@
 
 ## 下一步
 
-[Batch 05 System Health](reviews/SYSTEM_HEALTH_v0.1.md) 已获接受，PR #15 合并并记录注释标签 prototype-system-health-v0.1 后，进入 Batch 06 Capabilities。[浏览器 CI #7](https://github.com/sampsonlor/ovs-webui/issues/7)与[通用模板 lint #6](https://github.com/sampsonlor/ovs-webui/issues/6)继续开放，手工验收不等于关闭这两项。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
+优先完成[通用模板 lint #6](https://github.com/sampsonlor/ovs-webui/issues/6)与[浏览器 CI #7](https://github.com/sampsonlor/ovs-webui/issues/7)的 PR 审阅；合并后由关联 PR 关闭议题，再恢复 Batch 06 Capabilities。Capabilities 草稿位于 `codex/feat-p1-batch-06-capabilities` 的本地提交 `4f24387`，不属于本次 CI 交付。正式工程实现另行建立符合架构原文的 Go / Svelte 纵向切片。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。

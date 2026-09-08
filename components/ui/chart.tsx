@@ -12,6 +12,12 @@ const THEMES = { light: '', dark: '.dark' } as const;
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const;
 type TooltipNameType = number | string;
 
+function seriesKey(value: unknown, fallback = 'value') {
+  return typeof value === 'string' || typeof value === 'number'
+    ? String(value)
+    : fallback;
+}
+
 export type ChartConfig = Record<
   string,
   {
@@ -152,7 +158,7 @@ function ChartTooltipContent({
     }
 
     const [item] = payload;
-    const key = `${labelKey ?? item?.dataKey ?? item?.name ?? 'value'}`;
+    const key = seriesKey(labelKey ?? item.dataKey, seriesKey(item.name));
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
       !labelKey && typeof label === 'string'
@@ -200,7 +206,10 @@ function ChartTooltipContent({
         {payload
           .filter((item) => item.type !== 'none')
           .map((item, index) => {
-            const key = `${nameKey ?? item.name ?? item.dataKey ?? 'value'}`;
+            const key = seriesKey(
+              nameKey ?? item.name,
+              seriesKey(item.dataKey),
+            );
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color ?? item.payload?.fill ?? item.color;
 
@@ -299,7 +308,7 @@ function ChartLegendContent({
       {payload
         .filter((item) => item.type !== 'none')
         .map((item, index) => {
-          const key = `${nameKey ?? item.dataKey ?? 'value'}`;
+          const key = seriesKey(nameKey ?? item.dataKey);
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (

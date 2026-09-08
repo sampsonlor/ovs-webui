@@ -27,7 +27,7 @@ const draft = {
   members: ['enp65s0f2', 'enp65s0f3'],
 };
 
-test('provider-owned member evidence remains unknown in normal and degraded snapshots', () => {
+void test('provider-owned member evidence remains unknown in normal and degraded snapshots', () => {
   for (const scenario of ['normal', 'degraded', 'provider-degraded']) {
     const observed = bondObservation(provider, scenario);
     assert.equal(observed.state, 'Unknown');
@@ -46,7 +46,7 @@ test('provider-owned member evidence remains unknown in normal and degraded snap
   assert.equal(provider.minLinks, null);
 });
 
-test('active-backup uses active capacity and does not present standby or down members as forwarding', () => {
+void test('active-backup uses active capacity and does not present standby or down members as forwarding', () => {
   const normal = bondObservation(storage, 'normal');
   assert.equal(normal.capacity, '25 Gbps active');
   assert.equal(normal.members[1].role, 'Standby');
@@ -60,7 +60,7 @@ test('active-backup uses active capacity and does not present standby or down me
   assert.deepEqual(storage.members, ['enp129s0f0', 'enp129s0f1']);
 });
 
-test('LACP mismatch withholds forwarding capacity and traffic while retaining link evidence', () => {
+void test('LACP mismatch withholds forwarding capacity and traffic while retaining link evidence', () => {
   const normal = bondObservation(uplink, 'normal');
   assert.equal(normal.capacity, '200 Gbps aggregate');
   assert.equal(normal.negotiation, 'Negotiated');
@@ -79,7 +79,7 @@ test('LACP mismatch withholds forwarding capacity and traffic while retaining li
   );
 });
 
-test('missing speed does not become zero aggregate capacity', () => {
+void test('missing speed does not become zero aggregate capacity', () => {
   const partial = bondObservation(
     { ...uplink, memberSpeeds: [100, null] },
     'normal',
@@ -88,7 +88,7 @@ test('missing speed does not become zero aggregate capacity', () => {
   assert.equal(partial.members[1].speed, 'Unknown');
 });
 
-test('Bridge posture follows only its own Bond evidence and keeps external RSTP unknown', () => {
+void test('Bridge posture follows only its own Bond evidence and keeps external RSTP unknown', () => {
   assert.equal(bridgeObservation(bridges[0], 'member-down').state, 'Up');
   assert.equal(bridgeObservation(bridges[1], 'member-down').state, 'Degraded');
   assert.equal(
@@ -99,7 +99,7 @@ test('Bridge posture follows only its own Bond evidence and keeps external RSTP 
   assert.equal(bridges[3].rstp, 'Unknown');
 });
 
-test('Bond editor distinguishes owned members from Interfaces already assigned to another Port', () => {
+void test('Bond editor distinguishes owned members from Interfaces already assigned to another Port', () => {
   assert.ok(
     Object.values(bondDraftErrors(draft)).every((value) => value === null),
   );
@@ -125,7 +125,7 @@ test('Bond editor distinguishes owned members from Interfaces already assigned t
   assert.ok(bondDraftErrors({ ...draft, bridge: 'br-storage' }).members);
 });
 
-test('Bond editor reports concrete name, membership, LACP and minimum-link constraints', () => {
+void test('Bond editor reports concrete name, membership, LACP and minimum-link constraints', () => {
   assert.ok(bondDraftErrors({ ...draft, name: 'invalid name' }).name);
   assert.ok(bondDraftErrors({ ...draft, members: ['enp65s0f2'] }).members);
   assert.ok(
@@ -137,7 +137,7 @@ test('Bond editor reports concrete name, membership, LACP and minimum-link const
   assert.ok(bondDraftErrors({ ...draft, bridge: 'br-offload' }).bridge);
 });
 
-test('the displayed global staging block agrees with the shared transition guard', () => {
+void test('the displayed global staging block agrees with the shared transition guard', () => {
   const intent = representativeBondIntent({
     name: 'bond-review',
     bridge: 'br-fabric',

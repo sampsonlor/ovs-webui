@@ -31,7 +31,7 @@ jobs:
           require-lockfile: true
       - name: Type check
         run: pnpm typecheck
-      - name: Product code lint
+      - name: Full repository lint
         run: pnpm lint:ci
       - name: Contract and regression tests
         run: pnpm test:ci
@@ -74,10 +74,41 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  browser:
+    name: Browser workflow and UI templates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install pinned toolchain and locked dependencies
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24.19.0
+          cache: true
+          require-lockfile: true
+      - name: Install Chromium and system dependencies
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Ports to Candidate and UI template browser checks
+        run: pnpm test:browser
+      - name: Retain browser results and failure evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: browser-results
+          path: |
+            test-results/browser.xml
+            test-results/browser/**/*.png
+            test-results/browser/**/trace.zip
+            test-results/browser/**/error-context.md
+          if-no-files-found: ignore
+          retention-days: 7
+
   gate:
     name: CI Gate
     if: always()
-    needs: [quality, integration]
+    needs: [quality, integration, browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -85,6 +116,8 @@ jobs:
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
         run: |
           test "$QUALITY_RESULT" = success
           test "$INTEGRATION_RESULT" = success
+          test "$BROWSER_RESULT" = success

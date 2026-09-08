@@ -133,7 +133,7 @@ function decision(
   };
 }
 
-test('admission, checkpoint, commit receipt and confirmation window survive every server boundary', (t) => {
+void test('admission, checkpoint, commit receipt and confirmation window survive every server boundary', (t) => {
   const f = fixture(t);
   let store = f.open();
   const setup = prepared(store);
@@ -179,7 +179,7 @@ test('admission, checkpoint, commit receipt and confirmation window survive ever
   assert.equal(store.transactions.job('bob', tx.jobId), null);
 });
 
-test('confirmation consumes Candidate only after authoritative application and survives lost-ack replay', (t) => {
+void test('confirmation consumes Candidate only after authoritative application and survives lost-ack replay', (t) => {
   const f = fixture(t);
   let store = f.open();
   const setup = prepared(store);
@@ -236,7 +236,7 @@ test('confirmation consumes Candidate only after authoritative application and s
   );
 });
 
-test('deadline wins a late confirm and server rollback preserves intent without browser participation', (t) => {
+void test('deadline wins a late confirm and server rollback preserves intent without browser participation', (t) => {
   const f = fixture(t);
   let store = f.open();
   const setup = prepared(store);
@@ -271,7 +271,7 @@ test('deadline wins a late confirm and server rollback preserves intent without 
   );
 });
 
-test('rollback compares owned fields and a conflict cannot be cleared by healthy fixtures or read-only reconciliation', (t) => {
+void test('rollback compares owned fields and a conflict cannot be cleared by healthy fixtures or read-only reconciliation', (t) => {
   const f = fixture(t);
   const store = f.open();
   const setup = prepared(store);
@@ -324,7 +324,7 @@ test('rollback compares owned fields and a conflict cannot be cleared by healthy
   );
 });
 
-test('protected rollback preserves an unrelated external Port change', (t) => {
+void test('protected rollback preserves an unrelated external Port change', (t) => {
   const f = fixture(t);
   const store = f.open();
   const setup = prepared(store);
@@ -348,7 +348,7 @@ test('protected rollback preserves an unrelated external Port change', (t) => {
   );
 });
 
-test('provider loss retains OutcomeUnknown and the watchdog resumes after restart and recovery', (t) => {
+void test('provider loss retains OutcomeUnknown and the watchdog resumes after restart and recovery', (t) => {
   const f = fixture(t);
   let store = f.open();
   const setup = prepared(store);
@@ -381,7 +381,7 @@ test('provider loss retains OutcomeUnknown and the watchdog resumes after restar
   );
 });
 
-test('node admission excludes another user across database connections; stale decisions and revoked permissions cannot confirm', (t) => {
+void test('node admission excludes another user across database connections; stale decisions and revoked permissions cannot confirm', (t) => {
   const f = fixture(t);
   const first = f.open();
   const a = prepared(first);
@@ -419,7 +419,7 @@ test('node admission excludes another user across database connections; stale de
   );
 });
 
-test('expired validation, changed policy and unavailable safety never admit a write; changes after admission fail preflight', (t) => {
+void test('expired validation, changed policy and unavailable safety never admit a write; changes after admission fail preflight', (t) => {
   const f = fixture(t);
   const store = f.open();
   const setup = prepared(store);
@@ -490,7 +490,7 @@ async function httpClient(
   });
 }
 
-test('HTTP lost Apply and Confirm acknowledgements recover across controller reload without a second POST', async (t) => {
+void test('HTTP lost Apply and Confirm acknowledgements recover across controller reload without a second POST', async (t) => {
   const f = fixture(t);
   const store = f.open();
   prepared(store);
@@ -572,7 +572,7 @@ test('HTTP lost Apply and Confirm acknowledgements recover across controller rel
   controller.dispose();
 });
 
-test('missing acceptance evidence and unwritable recovery storage keep new submissions closed', async (t) => {
+void test('missing acceptance evidence and unwritable recovery storage keep new submissions closed', async (t) => {
   const store = fixture(t).open();
   prepared(store);
   let writes = 0;

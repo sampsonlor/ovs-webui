@@ -20,7 +20,7 @@ const validate = (name, value) => {
   return { valid: check(value), errors: check.errors };
 };
 
-test('all contract schemas compile under JSON Schema 2020-12 and all examples validate', () => {
+void test('all contract schemas compile under JSON Schema 2020-12 and all examples validate', () => {
   for (const name of Object.keys(schemas))
     assert.ok(ajv.getSchema(`#/components/schemas/${name}`));
   for (const [name, example] of schemaExamples) {
@@ -33,7 +33,7 @@ test('all contract schemas compile under JSON Schema 2020-12 and all examples va
   }
 });
 
-test('wire VLAN intents reject ambiguous all-VLAN input, malformed IDs, duplicates and raw OVS writes', () => {
+void test('wire VLAN intents reject ambiguous all-VLAN input, malformed IDs, duplicates and raw OVS writes', () => {
   for (const value of [
     { mode: 'trunk', tag: null, trunks: [] },
     { mode: 'access', tag: 120, trunks: [240] },
@@ -56,7 +56,7 @@ test('wire VLAN intents reject ambiguous all-VLAN input, malformed IDs, duplicat
   );
 });
 
-test('reconciliation cannot accept a client-selected outcome; apply cannot accept force or expert authority', () => {
+void test('reconciliation cannot accept a client-selected outcome; apply cannot accept force or expert authority', () => {
   assert.equal(
     validate('ReconciliationRequest', { requestId: 'req-1', result: 'applied' })
       .valid,
@@ -78,7 +78,7 @@ test('reconciliation cannot accept a client-selected outcome; apply cannot accep
   );
 });
 
-test('every mutation declares an idempotency key and every operation resolves its schemas', () => {
+void test('every mutation declares an idempotency key and every operation resolves its schemas', () => {
   const operationIds = new Set();
   const visit = (node) => {
     if (!node || typeof node !== 'object') return;

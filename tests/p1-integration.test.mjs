@@ -14,7 +14,7 @@ import {
 } from '../lib/p1-control.ts';
 import { ports } from '../lib/ovs-model.ts';
 
-test('diagnostic request captures its original scope and bounded options independently of later edits', () => {
+void test('diagnostic request captures its original scope and bounded options independently of later edits', () => {
   const draft = { sampleSeconds: 5, detail: 'bounded' };
   const request = captureDiagnosticRequest(
     'diag.net.link-lacp',
@@ -31,7 +31,7 @@ test('diagnostic request captures its original scope and bounded options indepen
   });
 });
 
-test('diagnostic request rejects unbounded durations, unknown output formats and unavailable templates', () => {
+void test('diagnostic request rejects unbounded durations, unknown output formats and unavailable templates', () => {
   for (const parameters of [
     { sampleSeconds: 0, detail: 'structured' },
     { sampleSeconds: 20, detail: 'bounded' },
@@ -93,7 +93,7 @@ const ready = (intent = bond) =>
 const active = (intent = bond) =>
   act(ready(intent), 'start', { desktop: true });
 
-test('Bridge and Bond keep native identity through Candidate, transaction and evidence', () => {
+void test('Bridge and Bond keep native identity through Candidate, transaction and evidence', () => {
   for (const intent of [bridge, bond]) {
     const state = active(intent);
     assert.equal(state.error, null);
@@ -113,7 +113,7 @@ test('Bridge and Bond keep native identity through Candidate, transaction and ev
   }
 });
 
-test('P0 and P1 intents cannot replace one another or stage on mobile/Observe objects', () => {
+void test('P0 and P1 intents cannot replace one another or stage on mobile/Observe objects', () => {
   assert.ok(transition(stage(), vlan).error);
   assert.ok(
     act(transition(initialControlState, vlan), 'stage-topology', {
@@ -138,7 +138,7 @@ test('P0 and P1 intents cannot replace one another or stage on mobile/Observe ob
     );
 });
 
-test('unknown topology transaction stays locked across diagnostics and VLAN attempts', () => {
+void test('unknown topology transaction stays locked across diagnostics and VLAN attempts', () => {
   const unknown = act(active(), 'scenario', { scenario: 'outcome-unknown' });
   const withDiagnostic = act(unknown, 'record-evidence', {
     kind: 'Event',
@@ -160,7 +160,7 @@ test('unknown topology transaction stays locked across diagnostics and VLAN atte
   assert.equal(normal.transaction.status, 'outcome-unknown');
 });
 
-test('topology rebase invalidates validation and conflicting native values cannot be forced', () => {
+void test('topology rebase invalidates validation and conflicting native values cannot be forced', () => {
   const stale = act(ready(), 'scenario', { scenario: 'stale' });
   const rebased = act(stale, 'rebase', { choice: 'non-overlapping' });
   assert.equal(rebased.validatedRevision, null);
@@ -171,7 +171,7 @@ test('topology rebase invalidates validation and conflicting native values canno
   assert.equal(act(conflict, 'rebase', { choice: 'current' }).candidate, null);
 });
 
-test('topology confirmation cannot succeed after disconnected expiry or rollback conflict', () => {
+void test('topology confirmation cannot succeed after disconnected expiry or rollback conflict', () => {
   const disconnected = act(active(), 'scenario', { scenario: 'network-loss' });
   const expired = act(disconnected, 'tick', { now: 100_000 });
   assert.equal(expired.transaction.status, 'outcome-unknown');
@@ -185,7 +185,7 @@ test('topology confirmation cannot succeed after disconnected expiry or rollback
   );
 });
 
-test('P1 programmatic entry points enforce managed Bridge, LACP, bounded scope and device gates', () => {
+void test('P1 programmatic entry points enforce managed Bridge, LACP, bounded scope and device gates', () => {
   for (const override of [
     { bridge: 'br-offload' },
     { name: 'bad/name' },
