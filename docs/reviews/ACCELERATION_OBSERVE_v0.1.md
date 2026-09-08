@@ -2,7 +2,7 @@
 
 审阅：2026-09-07；提交整理：2026-09-08（Asia/Shanghai）。起点：`1db5be6`；分支：`codex/feat-p1-batch-04-acceleration-observe`。OpenFlow PR #13 已获用户接受并合并，注释标签 `prototype-openflow-v0.1` 已保留该基线。
 
-**Disposition：Batch 04 已实现并完成本地检查，等待用户审阅。System Health 和全局 Capabilities 尚未开始。** 本记录覆盖 P1-10 单个 DPDK / Offload 总览及页内只读能力证据；不是生产 Provider、硬件兼容性或启用流程验收。
+**Disposition 更新：2026-09-08 用户接受 Batch 04 并要求继续下一批；PR #14 合并后以注释标签 `prototype-acceleration-v0.1` 保留接受基线。** 本记录覆盖 P1-10 单个 DPDK / Offload 总览及页内只读能力证据；不是生产 Provider、硬件兼容性或启用流程验收。System Health 为下一批，全局 Capabilities 尚未开始。
 
 ## 范围和依据
 

@@ -23,7 +23,7 @@ interaction and contract review tools; they do not change that architecture.
 | P1 Batch 01 · Bridge + Bond/LACP                  | Implemented · Review gate accepted |
 | P1 Batch 02 · Diagnostics                         | Implemented · Review gate accepted |
 | P1 Batch 03 · OpenFlow Viewer                     | Accepted for integration           |
-| P1 Batch 04 · DPDK / Offload Observe              | Implemented · Awaiting review      |
+| P1 Batch 04 · DPDK / Offload Observe              | Implemented · Review gate accepted |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
 
@@ -66,8 +66,9 @@ It distinguishes Enabled, Available, Missing prerequisites, Unsupported and Unkn
 using separate configuration, runtime and provider evidence. Stale observations,
 generation changes, partial telemetry and software fallback remain explicit.
 The [acceleration review](docs/reviews/ACCELERATION_OBSERVE_v0.1.md) records validation
-and the Observe boundary. This batch awaits acceptance; System Health and the
-global Capabilities matrix have not started.
+and the Observe boundary. This batch was accepted on 2026-09-08 for merge through
+PR #14, with checkpoint `prototype-acceleration-v0.1`. System Health is next;
+the global Capabilities matrix has not started.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
