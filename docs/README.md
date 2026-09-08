@@ -1,7 +1,10 @@
 # Documentation index
 
 Start with [current status](STATUS.md) and the
-[Capabilities review](reviews/CAPABILITIES_v0.1.md), which awaits batch acceptance.
+[six-batch integration review](reviews/INTEGRATION_v0.2.md), which awaits acceptance,
+and the [53-page approved IA coverage inventory](reviews/P1_IA_COVERAGE_v0.1.md).
+The [Capabilities review](reviews/CAPABILITIES_v0.1.md) is accepted in PR #17,
+tagged `prototype-capabilities-v0.1` at `862b19a`.
 The accepted [CI baseline](reviews/CI_BROWSER_BASELINE_v0.1.md) records PR #16
 and the closure of issues #6 / #7.
 The [2026-09-07 interaction review](reviews/UI_WORKFLOW_REVIEW_v0.2.md) and

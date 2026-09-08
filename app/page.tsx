@@ -1115,7 +1115,7 @@ export default function Home() {
       name: 'stage_bond_change',
       title: 'Stage Bond change',
       description:
-        'Stage a representative Bond Port intent through the shared Candidate safety gates.',
+        'Stage a new Bond Port using the same name, member ownership, LACP, minimum-link and Candidate gates as the editor. Omitted members use at most two unassigned Interfaces in the selected sample.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1126,6 +1126,13 @@ export default function Home() {
             enum: ['balance-tcp', 'active-backup', 'balance-slb'],
           },
           lacp: { type: 'string', enum: ['active', 'passive', 'off'] },
+          members: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 2,
+            uniqueItems: true,
+          },
+          minLinks: { type: 'integer', minimum: 0 },
         },
         required: ['name', 'bridge', 'mode', 'lacp'],
         additionalProperties: false,
@@ -1133,7 +1140,10 @@ export default function Home() {
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute: (input) => {
         const next = interactionRef.current.p1.stageIntent(
-          representativeBondIntent(inputObject(input)),
+          representativeBondIntent(
+            inputObject(input),
+            controlRef.current.scenario === 'member-down',
+          ),
         );
         if (next.error) throw new Error(next.error);
         return {

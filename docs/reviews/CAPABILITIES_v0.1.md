@@ -2,7 +2,7 @@
 
 日期：2026-09-08（Asia/Shanghai）。前置 Batch 05 已接受；CI 基础 PR #16 已合并至 `main` 的 `fc0f387`，#6、#7 已关闭，接受标签为 `prototype-ci-browser-v0.1`。
 
-**Disposition：Batch 06 已实现并通过本地工程与浏览器验收，等待用户接受。** 本批不创建接受标签，不修改生产架构、部署或站点访问设置。
+**Disposition：用户于 2026-09-08 接受 Batch 06。** [PR #17](https://github.com/sampsonlor/ovs-webui/pull/17) 在四项 CI 检查通过的 `da36029` 上合并，接受提交为 `862b19a`，注释标签 `prototype-capabilities-v0.1` 已推送。生产架构、部署和站点访问设置未改变。后续六批整合审阅单独记录于 [v0.2](INTEGRATION_v0.2.md)。
 
 ## 依据与范围
 

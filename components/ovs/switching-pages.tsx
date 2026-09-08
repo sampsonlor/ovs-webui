@@ -39,6 +39,8 @@ import {
   bridgeObservation,
   bondObservation,
   bondDraftErrors,
+  bondNativeValue,
+  bondChangeIntent,
   memberOptions,
   providerStale,
   type Bridge,
@@ -1367,15 +1369,7 @@ function BondEditor({
     !creating && bond.name === 'bond-uplink' && scenario === 'advanced-config';
   const advancedLocked = advanced && mode === 'standard';
   const readOnly = bond?.scope === 'Observe';
-  const native = (value: BondDraft) =>
-    [
-      'bridge: ' + value.bridge,
-      'bond_mode: ' + value.mode,
-      'lacp: ' + value.lacp,
-      'other_config:min-links: ' + value.minLinks,
-      'interfaces: [' + [...value.members].sort().join(', ') + ']',
-      ...(advanced ? ['other_config:bond-rebalance-interval: 10000'] : []),
-    ].join('\n');
+  const native = (value: BondDraft) => bondNativeValue(value, advanced);
   const before = bond
     ? native({
         name: bond.name,
@@ -1396,29 +1390,7 @@ function BondEditor({
     unchanged;
   const submit = () => {
     if (cannotStage) return;
-    stage({
-      kind: 'bond',
-      objectType: 'Port',
-      objectName: draft.name,
-      title: (creating ? 'Create' : 'Update') + ' Bond Port / ' + draft.name,
-      summary:
-        draft.members.length +
-        ' Interface members on ' +
-        draft.bridge +
-        ' · ' +
-        draft.mode +
-        ' · LACP ' +
-        draft.lacp,
-      current: before,
-      candidate,
-      risk:
-        draft.bridge === 'br-mgmt' || scenario === 'member-down'
-          ? 'High'
-          : 'Medium',
-      capability: 'bond.manage',
-      evidenceObject: 'Port/' + draft.name,
-      bridgeName: draft.bridge,
-    });
+    stage(bondChangeIntent(draft, bond, advanced, scenario === 'member-down'));
   };
   return (
     <>

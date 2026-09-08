@@ -8,6 +8,11 @@ import {
   diagnosticScopeError,
   diagnosticServiceBlock,
 } from './diagnostics-model.ts';
+import {
+  bondChangeIntent,
+  memberOptions,
+  type BondDraft,
+} from './switching-model.ts';
 
 export const runnableDiagnostics = [
   'diag.net.link-lacp',
@@ -64,6 +69,7 @@ export function captureDiagnosticRequest(
 
 export function representativeBondIntent(
   data: Record<string, unknown>,
+  memberDown = false,
 ): ChangeIntent {
   const { name, bridge, mode, lacp } = data;
   if (typeof name !== 'string' || !/^[a-zA-Z0-9_.-]{1,63}$/.test(name))
@@ -85,22 +91,31 @@ export function representativeBondIntent(
   )
     throw new Error('Choose a compatible LACP policy.');
   const members =
-    bridge === 'br-storage'
-      ? ['enp129s0f0', 'enp129s0f1']
-      : bridge === 'br-mgmt'
-        ? ['eno1', 'eno2']
-        : ['enp65s0f2', 'enp65s0f3'];
-  return {
-    kind: 'bond',
-    objectType: 'Port',
-    objectName: name,
-    bridgeName: bridge,
-    title: `Create Bond Port / ${name}`,
-    summary: `Attach 2 Interface members on ${bridge} · ${mode} · LACP ${lacp}`,
-    current: 'object: absent',
-    candidate: `bridge: ${bridge}\nbond_mode: ${mode}\nlacp: ${lacp}\ninterfaces: [${members.join(', ')}]`,
-    risk: bridge === 'br-mgmt' ? 'High' : 'Medium',
-    capability: 'bond.manage',
-    evidenceObject: `Port/${name}`,
-  };
+    data.members === undefined
+      ? memberOptions(bridge)
+          .filter((option) => option.available)
+          .slice(0, 2)
+          .map((option) => option.name)
+      : data.members;
+  if (
+    !Array.isArray(members) ||
+    !members.every((member) => typeof member === 'string')
+  )
+    throw new Error('Members must be an array of Interface names.');
+  const minLinks = data.minLinks === undefined ? 1 : data.minLinks;
+  if (typeof minLinks !== 'number' || !Number.isInteger(minLinks))
+    throw new Error('Minimum links must be an integer.');
+  return bondChangeIntent(
+    {
+      name,
+      bridge,
+      mode: mode as BondDraft['mode'],
+      lacp: lacp as BondDraft['lacp'],
+      minLinks: String(minLinks),
+      members,
+    },
+    undefined,
+    false,
+    memberDown,
+  );
 }
