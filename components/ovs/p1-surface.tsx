@@ -34,6 +34,9 @@ import { StatusBadge } from './foundation';
 import { Button } from '@/components/ui/button';
 import { useOpenFlowController } from './openflow-controller';
 import { useAccelerationController } from './acceleration-controller';
+import { useHealthController } from './health-controller';
+import { P1HealthView, HealthMobileSummary } from './health-page';
+import type { HealthAction } from '@/lib/health-model';
 import {
   P1AccelerationView,
   AccelerationMobileSummary,
@@ -51,6 +54,8 @@ export function useP1Controller({
   scenario,
   getScenario,
   getGeneration,
+  control,
+  getControl,
   openPort,
 }: {
   act: (action: ControlAction) => ControlState;
@@ -59,6 +64,8 @@ export function useP1Controller({
   scenario: Scenario;
   getScenario: () => Scenario;
   getGeneration: () => number;
+  control: ControlState;
+  getControl: () => ControlState;
   openPort: (name: string) => void;
 }) {
   const [selectedBridge, setSelectedBridge] = useState('br-fabric');
@@ -94,6 +101,24 @@ export function useP1Controller({
     getGeneration,
     notify,
   );
+  const health = useHealthController({
+    control,
+    getControl,
+    act,
+    notify,
+    signals: {
+      openFlow: { snapshot: openFlow.snapshot, failure: openFlow.failure },
+      acceleration: {
+        snapshot: acceleration.snapshot,
+        failure: acceleration.failure,
+      },
+      diagnostic: {
+        state: jobState,
+        scope: request?.scope ?? scope,
+        reviewOnly,
+      },
+    },
+  });
   const jobRef = useRef(jobState);
   const handlers = useRef({ act, notify, getScenario });
   useEffect(() => {
@@ -371,6 +396,13 @@ export function useP1Controller({
     clearOrigin: () => setOrigin(null),
     openFlow,
     acceleration,
+    health,
+    openHealthAction: (action: HealthAction) => {
+      if ('diagnostic' in action)
+        openDiagnostics(action.scope, 'System Health', action.diagnostic);
+      else if ('object' in action) openObject(action.object);
+      else go(action.view);
+    },
     openAccelerationDiagnostics: () =>
       openDiagnostics(
         'Bridge/br-offload',
@@ -450,6 +482,14 @@ export function P1Surface({
         openDiagnostics={p1.openAccelerationDiagnostics}
       />
     );
+  if (view === 'system-health')
+    return (
+      <P1HealthView
+        mode={mode}
+        controller={p1.health}
+        onAction={p1.openHealthAction}
+      />
+    );
   if (view === 'diagnostics-hub' || view === 'diagnostic-run')
     return (
       <P1DiagnosticsView
@@ -494,6 +534,13 @@ export function P1MobileSummary({
 }) {
   if (view === 'acceleration-overview')
     return <AccelerationMobileSummary controller={p1.acceleration} go={go} />;
+  if (view === 'system-health')
+    return (
+      <HealthMobileSummary
+        controller={p1.health}
+        onAction={p1.openHealthAction}
+      />
+    );
   return (
     <section className="ovs-surface p-5">
       <p className="ovs-eyebrow">Incident companion · synthetic snapshot</p>
