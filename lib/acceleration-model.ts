@@ -228,6 +228,7 @@ export function captureAcceleration(
   reviewCase: AccelerationReviewCase,
   now: number,
   generation: number,
+  scenario = 'normal',
 ): AccelerationSnapshot {
   const observedAt =
     reviewCase === 'stale' ? now - accelerationTtlMs - 1000 : now;
@@ -467,6 +468,11 @@ export function captureAcceleration(
     generation: capturedGeneration,
     instance: accelerationInstance,
     reviewCase,
-    records: reviewCase === 'empty' ? [] : [make('dpdk'), make('offload')],
+    records:
+      reviewCase === 'empty'
+        ? []
+        : [make('dpdk'), make('offload')].map((record) =>
+            projectAccelerationRecord(record, scenario),
+          ),
   };
 }

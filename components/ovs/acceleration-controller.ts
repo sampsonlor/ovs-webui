@@ -89,7 +89,7 @@ export function useAccelerationController(
     attempted.current = true;
     const requestToken = ++token.current;
     const capturedGeneration = getGeneration();
-    update({ busy: true, failure: null, reviewCase });
+    update({ busy: true, reviewCase });
     timer.current = setTimeout(() => {
       if (requestToken !== token.current) return;
       const current = services.current;
@@ -123,6 +123,7 @@ export function useAccelerationController(
         current.getScenario() === 'empty' ? 'empty' : reviewCase,
         ended,
         capturedGeneration,
+        current.getScenario(),
       );
       update({ snapshot, busy: false, failure: null });
       setNow(ended);

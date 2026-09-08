@@ -134,6 +134,24 @@ test('provider outage cannot be mistaken for Unsupported or current Enabled', ()
 });
 
 test('partial telemetry can retain Enabled while counters remain unknown', () => {
+  const capturedDuringDegradation = captureAcceleration(
+    'enabled',
+    now,
+    generation,
+    'provider-degraded',
+  );
+  for (const observed of capturedDuringDegradation.records) {
+    const afterRecovery = projectAccelerationRecord(observed, 'normal');
+    assert.equal(afterRecovery.provider, 'Degraded');
+    assert.ok(
+      afterRecovery.facts
+        .filter((item) =>
+          ['pmd-cycles', 'rx-drops', 'hw-flows', 'sw-flows'].includes(item.key),
+        )
+        .every((item) => item.value === null),
+      'restoring the service cannot fill telemetry absent from the captured observation',
+    );
+  }
   for (const record of capture().records) {
     const projected = projectAccelerationRecord(record, 'provider-degraded');
     assert.equal(projected.provider, 'Degraded');

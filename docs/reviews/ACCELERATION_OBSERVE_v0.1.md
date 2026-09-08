@@ -33,7 +33,7 @@
 
 每个字段保留 authority、source、observedAt、instance 和 generation，60 秒后实时显示历史证据，五态随之重新判定。当前共享 generation 改变也使旧关键字段失效；这是原型保守一致性演示，不能替代正式实例生命周期和 field-version 算法。
 
-Provider degraded 单独显示：若核心运行证据仍齐全，可以保持 Enabled，但 PMD / 流 / drop 计数缺失显示 Unknown。回退 fixture 含 0 条硬件流、12 条软件回退和独立原因；0 与缺失值分开。默认 vhost 和未返回的硬件映射不会以 0、Down 或 Unsupported 代替。
+Provider degraded 单独显示：若核心运行证据仍齐全，可以保持 Enabled，但 PMD / 流 / drop 计数缺失显示 Unknown。降级在捕获时保留，恢复服务不会填回原快照中缺失的计数；读取失败后重试期间，历史状态保留到新读取成功。回退 fixture 含 0 条硬件流、12 条软件回退和独立原因；0 与缺失值分开。默认 vhost 和未返回的硬件映射不会以 0、Down 或 Unsupported 代替。
 
 共享权限 / 服务在读取提交和完成时检查；重复读取被拒绝，权限撤销中止回调并清除快照，恢复权限后需要重读。页面公开 review 工具使用相同门禁；状态读取实时检查当前权限。Provider outage 和失败只允许查看明确标注的历史值，不会使旧快照成为当前成功结果。重试保留当前合成异常，需要显式更换 review fixture 才改变演示结果。
 
