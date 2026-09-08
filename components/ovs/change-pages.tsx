@@ -308,6 +308,8 @@ export function DiffPage({ state, mode, act, go }: Props) {
                     ? 'VLAN schema and ranges'
                     : candidate.kind === 'bond'
                       ? 'Bond intent and Interface membership'
+                      : candidate.kind === 'isolation'
+                        ? 'Native Port.protected policy and four safety gates'
                       : 'Bridge configuration intent',
                   'Capability and OVS authority',
                   'Permission and management-path policy',

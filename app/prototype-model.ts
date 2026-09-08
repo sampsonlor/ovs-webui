@@ -106,7 +106,7 @@ export type ReviewScenario =
   | 'network-loss';
 
 export type ChangeIntent = {
-  kind: 'vlan' | 'bridge' | 'bond';
+  kind: 'vlan' | 'bridge' | 'bond' | 'isolation';
   objectType: 'Port' | 'Bridge';
   objectName: string;
   title: string;
