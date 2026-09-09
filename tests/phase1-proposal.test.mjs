@@ -18,7 +18,7 @@ const validators = Object.fromEntries(Object.keys(proposal.components.schemas).m
   name, ajv.compile({ $ref: `${schemaId}#/components/schemas/${name}` }),
 ]));
 
-test('Phase 1 proposal has valid component schemas and resolvable local references', () => {
+await test('Phase 1 proposal has valid component schemas and resolvable local references', () => {
   assert.equal(proposal['x-review-status'], 'proposed');
   for (const schema of Object.values(proposal.components.schemas)) {
     assert.ok(ajv.validateSchema(schema), JSON.stringify(ajv.errors));
@@ -38,7 +38,7 @@ test('Phase 1 proposal has valid component schemas and resolvable local referenc
   visit(proposal);
 });
 
-test('Phase 1 operations bind path identities and explicit request domains', () => {
+await test('Phase 1 operations bind path identities and explicit request domains', () => {
   const operationIds = new Set();
   for (const [path, methods] of Object.entries(proposal.paths)) {
     for (const [method, operation] of Object.entries(methods)) {
@@ -61,7 +61,7 @@ test('Phase 1 operations bind path identities and explicit request domains', () 
 // Shape checks do not prove authorization or real OVS execution; those have
 // separate implementation gates in issues #34 and #38–#40.
 for (const example of examples.cases) {
-  test(`Phase 1 wire example: ${example.name}`, () => {
+  await test(`Phase 1 wire example: ${example.name}`, () => {
     const validate = validators[example.schema];
     assert.ok(validate, `Missing schema ${example.schema}`);
     assert.equal(validate(example.value), example.valid, JSON.stringify(validate.errors));
