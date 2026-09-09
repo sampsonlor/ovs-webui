@@ -111,10 +111,74 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  go-runtime:
+    name: Go runtime (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify native architecture and Go formatting
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          go version
+          test "$(go env GOARCH)" = "$EXPECTED_ARCH"
+          unformatted=$(gofmt -l cmd internal)
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Vet and native race tests
+        env:
+          CGO_ENABLED: '1'
+        run: |
+          go vet ./...
+          go test -race -count=1 -timeout=45s ./...
+      - name: Bounded protocol fuzzing
+        run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
+      - name: Build CGO-free daemon binaries
+        run: |
+          mkdir -p outputs/runtime
+          go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-webd ./cmd/ovs-webd
+          go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-mgrd ./cmd/ovs-mgrd
+      - name: Install ephemeral OVS test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y openvswitch-switch
+      - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
+        run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
+      - name: Retain runtime evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: go-runtime-${{ matrix.arch }}
+          path: |
+            test-results/go-runtime-smoke.json
+            test-results/go-runtime-journal.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   gate:
     name: CI Gate
     if: always()
-    needs: [quality, integration, browser]
+    needs: [quality, integration, browser, go-runtime]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -123,7 +187,9 @@ jobs:
           QUALITY_RESULT: ${{ needs.quality.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
+          GO_RUNTIME_RESULT: ${{ needs.go-runtime.result }}
         run: |
           test "$QUALITY_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$BROWSER_RESULT" = success
+          test "$GO_RUNTIME_RESULT" = success
