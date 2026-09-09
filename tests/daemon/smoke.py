@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import shutil
 import signal
@@ -55,13 +56,20 @@ def main():
     runtime = Path('/run') / runtime_name
     units = {service: f'ovs-{service}-ci-{suffix}.service' for service in ('mgrd', 'webd')}
     unit_paths = [Path('/etc/systemd/system') / name for name in units.values()]
-    fixture.mkdir(mode=0o750)
-    os.chown(fixture, 0, 65534)
+    account_name = f'ovs-ci-{suffix}'
+    account_created = False
+    fixture.mkdir(mode=0o700)
     ovs = fixture / 'ovs'
     ovs.mkdir(mode=0o700)
     env = dict(os.environ, OVS_RUNDIR=str(ovs), OVS_LOGDIR=str(ovs), OVS_DBDIR=str(ovs))
     checks = []
     try:
+        run('useradd', '--system', '--no-create-home', '--home-dir', '/nonexistent',
+            '--shell', '/usr/sbin/nologin', '--user-group', account_name)
+        account_created = True
+        account = pwd.getpwnam(account_name)
+        os.chown(fixture, 0, account.pw_gid)
+        fixture.chmod(0o750)
         for service in units:
             target = fixture / f'ovs-{service}'
             shutil.copyfile(source / f'ovs-{service}', target)
@@ -70,7 +78,7 @@ def main():
         run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
             '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost',
             '-keyout', str(key), '-out', str(cert))
-        os.chown(key, 0, 65534)
+        os.chown(key, 0, account.pw_gid)
         key.chmod(0o640)
         cert.chmod(0o644)
         with socket.socket() as reserve:
@@ -78,19 +86,19 @@ def main():
             port = reserve.getsockname()[1]
         configuration = fixture / 'runtime.env'
         configuration.write_text(
-            f'WEBD_UID=65534\nWEBD_GID=65534\nMANAGER_SOCKET={runtime}/mgrd.sock\n'
+            f'WEBD_UID={account.pw_uid}\nWEBD_GID={account.pw_gid}\nMANAGER_SOCKET={runtime}/mgrd.sock\n'
             f'HTTPS_LISTEN=127.0.0.1:{port}\nTLS_CERT={cert}\nTLS_KEY={key}\n')
         for service, name in units.items():
             template = (repo / 'packaging/systemd' / f'ovs-{service}.service').read_text()
             assert not re.search(r'^(PartOf|BindsTo|Requires|ExecStop)=', template, re.M)
             assert 'openvswitch' not in template and 'ovs-vswitchd' not in template
-            rendered = template.replace('ovs-webui-web', 'nobody')
-            # Ubuntu's nobody user belongs to the nogroup group.
-            rendered = rendered.replace('Group=nobody', 'Group=nogroup')
+            # Replace template paths before inserting fixture paths that share
+            # the same prefix. Each test owns a dedicated service identity.
+            rendered = template.replace('/run/ovs-webui', str(runtime))
+            rendered = rendered.replace('RuntimeDirectory=ovs-webui', f'RuntimeDirectory={runtime_name}')
+            rendered = rendered.replace('ovs-webui-web', account_name)
             rendered = rendered.replace('/etc/ovs-webui/runtime.env', str(configuration))
             rendered = rendered.replace(f'/usr/libexec/ovs-{service}', str(fixture / f'ovs-{service}'))
-            rendered = rendered.replace('/run/ovs-webui', str(runtime))
-            rendered = rendered.replace('RuntimeDirectory=ovs-webui', f'RuntimeDirectory={runtime_name}')
             rendered = rendered.replace('After=network.target ovs-mgrd.service', f'After=network.target {units["mgrd"]}')
             (Path('/etc/systemd/system') / name).write_text(rendered)
         run('systemctl', 'daemon-reload')
@@ -161,7 +169,7 @@ def main():
         manager_pid = run('systemctl', 'show', '-p', 'MainPID', '--value', units['mgrd']).strip()
         web_pid = run('systemctl', 'show', '-p', 'MainPID', '--value', units['webd']).strip()
         assert re.search(r'^Uid:\s+0\s+0\s+0\s+0', Path(f'/proc/{manager_pid}/status').read_text(), re.M)
-        assert re.search(r'^Uid:\s+65534\s+65534\s+65534\s+65534', Path(f'/proc/{web_pid}/status').read_text(), re.M)
+        assert re.search(r'^Uid:' + (rf'\s+{account.pw_uid}' * 4) + r'\s*$', Path(f'/proc/{web_pid}/status').read_text(), re.M)
         assert (runtime / 'mgrd.sock').stat().st_mode & 0o777 == 0o660
         checks.append('root mgrd and non-root webd communicate through credential-checked IPC and HTTPS')
         assert fetch('/api/v1/transactions')[0] == 404
@@ -211,6 +219,9 @@ def main():
         # These absolute paths were generated above under /run for this fixture.
         assert fixture.parent == Path('/run') and fixture.name.startswith('ovs-webui-fixture-')
         shutil.rmtree(fixture)
+        if account_created:
+            run('userdel', account_name, check=False)
+            run('groupdel', account_name, check=False)
 
 
 if __name__ == '__main__':
