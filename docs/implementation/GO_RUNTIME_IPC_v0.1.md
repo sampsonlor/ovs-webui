@@ -1,6 +1,6 @@
 # Go 双进程与受控 IPC v0.1
 
-日期：2026-09-09。对应 [#31](https://github.com/sampsonlor/ovs-webui/issues/31)，状态：实现待审阅。
+日期：2026-09-09。对应 [#31](https://github.com/sampsonlor/ovs-webui/issues/31)，状态：[PR #57 实现待审阅](https://github.com/sampsonlor/ovs-webui/pull/57)。
 
 前置设计 [PR #56](https://github.com/sampsonlor/ovs-webui/pull/56) 已按用户的下一步指令接受，并合并为 `e2e649e`，接受标签为 `phase1-implementation-design-v0.1`。Scope DOCX 仍保留 Draft for Review；PR #19 的共享库存原型独立待审。本次交付正式 Go 运行时的基础，不代表用户认证、持久化、OVS 配置或整站 Svelte 已完成。
 
@@ -45,6 +45,8 @@ CGO_ENABLED=0 go build -o ovs-mgrd ./cmd/ovs-mgrd
 ## 验证证据与审阅
 
 本地 Windows 已通过通用 Go 测试和 vet；Linux amd64/arm64 可交叉构建。Windows 不作为 Unix credentials、systemd 或真实 OVS 的执行证据。新增 [CI job](../../.github/workflows/ci.yml) 在 `ubuntu-24.04` 和 `ubuntu-24.04-arm` 原生运行，CI Gate 要求两者都成功。
+
+实现提交 `5284735` 的 [Linux CI](https://github.com/sampsonlor/ovs-webui/actions/runs/34337698896) 已在两个原生架构通过 Go vet/race、协议 fuzz、CGO-free 构建，以及 systemd/真实 OVS dummy datapath 故障验收；OVS 实测版本为 3.3.9。[保留的结果与来源](../reviews/evidence/GO_RUNTIME_IPC_v0.1.json)记录测试 merge SHA、job、artifact 校验和、架构与六个进程场景，不依赖临时 artifact 长期存在。最终 PR 的完整 CI Gate 仍以其最新提交为准。
 
 | 正常与异常路径 | 可复核证据 |
 | --- | --- |

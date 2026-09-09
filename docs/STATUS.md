@@ -26,7 +26,7 @@
 | P1 Batch 06 Capabilities | 9 项能力矩阵、五状态、四 Gate 及 native Candidate / Safe Apply 已接受；PR #17 已合并 | 正式 provider、字段级权限、step-up、持久化能力与恢复证据 |
 | P1 六批整合 v0.2 | Bond 入口一致性修复、跨域事务回归及 53 项 IA 盘点已接受；PR #18 已合并 | 统一库存与稳定资源路由的 PR #19 仍待审阅 |
 | Phase 1 实现设计 #30 | Go/IPC/双库、身份授权、Safe Apply/恢复、API 草案及全范围映射已接受；PR #56 已合并 | 各正式模块按设计独立实现与验收，Scope 原文保留 Draft |
-| Go 运行时与 IPC #31 | Go 双进程、TLS、固定 peer、typed IPC、默认拒绝授权、有界队列和 systemd templates 已实现待审 | 原生双架构 CI 与本批接受；#32/#34/#36 继续双库、Auth Grant 和真实 provider |
+| Go 运行时与 IPC #31 | [PR #57](https://github.com/sampsonlor/ovs-webui/pull/57) 已实现，原生双架构及 OVS 3.3.9 进程故障测试通过 | 本批接受；#32/#34/#36 继续双库、Auth Grant 和真实 provider |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
