@@ -47,3 +47,14 @@ func TestBootstrapDoesNotInventProductReadinessOrExposeErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestBootstrapExplainsVersionMismatch(t *testing.T) {
+	h := BootstrapHandler(probeFunc(func(context.Context) (ipc.Health, error) {
+		return ipc.Health{}, &ipc.RemoteError{Code: "IPC_VERSION_MISMATCH", Status: 409}
+	}))
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest("GET", "/readyz", nil))
+	if response.Code != 503 || !strings.Contains(response.Body.String(), "IPC_VERSION_MISMATCH") {
+		t.Fatal("version mismatch lost its recovery reason")
+	}
+}

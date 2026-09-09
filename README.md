@@ -29,13 +29,20 @@ interaction and contract review tools; they do not change that architecture.
 | Full lint and browser CI · #6 / #7                | Accepted · PR #16 merged           |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
-| Phase 1 implementation design v0.1               | Proposed for Review · #30           |
+| Phase 1 implementation design v0.1               | Accepted · PR #56 merged            |
+| Go daemon foundation / typed IPC v0.1            | Implemented · Review pending · #31  |
 
 The [Phase 1 implementation design](docs/implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
 maps all 58 Scope requirements and 53 approved IA pages to implementation owners
-and review gates. It includes the proposed dual-process runtime, identity,
+and review gates. It includes the accepted dual-process runtime design, identity,
 authorization, transaction recovery and API migration. The received Scope
 original remains Draft for Review; the design does not mark backend delivery complete.
+
+The [Go runtime foundation](docs/implementation/GO_RUNTIME_IPC_v0.1.md) now provides
+separate Linux daemons, HTTPS bootstrap resources, credential-checked Unix IPC,
+bounded requests and systemd supervision. Its native amd64/arm64 CI includes
+process failure and isolated OVS forwarding tests. Authentication, persistence,
+configuration providers and the Svelte product remain subsequent implementation work.
 
 The accepted Batch 01 path remains available:
 

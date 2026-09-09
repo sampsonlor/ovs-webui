@@ -119,6 +119,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.problem(w, r, 401, "IPC_GRANT_REQUIRED")
 			return
 		}
+		if ctx.Err() != nil {
+			h.problem(w, r, 504, "IPC_DEADLINE_EXCEEDED")
+			return
+		}
 		if err := h.authorizer.Authorize(ctx, grant, inspectOperation); err != nil {
 			if ctx.Err() != nil {
 				h.problem(w, r, 504, "IPC_DEADLINE_EXCEEDED")
@@ -127,6 +131,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				h.problem(w, r, 403, "IPC_OPERATION_DENIED")
 			}
+			return
+		}
+		if ctx.Err() != nil {
+			h.problem(w, r, 504, "IPC_DEADLINE_EXCEEDED")
 			return
 		}
 		result, err := h.inspect(ctx)

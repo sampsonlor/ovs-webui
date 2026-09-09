@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -48,7 +49,12 @@ func BootstrapHandler(manager ManagerProbe) http.Handler {
 			defer cancel()
 			health, err := manager.Probe(ctx)
 			if err != nil {
-				write(w, 503, ipc.Problem{Code: "MANAGER_UNAVAILABLE"})
+				code := "MANAGER_UNAVAILABLE"
+				var remote *ipc.RemoteError
+				if errors.As(err, &remote) && remote.Code == "IPC_VERSION_MISMATCH" {
+					code = remote.Code
+				}
+				write(w, 503, ipc.Problem{Code: code})
 				return
 			}
 			write(w, 200, health)
