@@ -1,0 +1,17 @@
+{
+  "major": 1,
+  "minor": 0,
+  "transport": "HTTP/1.1 over a credential-checked Unix stream socket",
+  "handshake": "/ipc/v1/handshake",
+  "handshake_fields": ["protocol_major", "protocol_minor", "software_version", "schema_digest"],
+  "health": "/ipc/v1/health",
+  "operations": [{"name": "runtime.inspect", "capability": "state.read", "queue": "read", "request": {}}],
+  "body_bytes": 1048576,
+  "header_bytes": 16384,
+  "json_depth": 16,
+  "json_array_items": 4096,
+  "json_tokens": 16384,
+  "json_string_bytes": 65536,
+  "max_connections": 96,
+  "response_bytes": 65536
+}

@@ -1,6 +1,6 @@
 # ADR 0001 Phase 1 运行时与协议选择
 
-日期：2026-09-09。状态：Proposed。关联 #30。决定在设计审阅接受后生效；未修改批准 Architecture v1.0.1 的产品或安全边界。
+日期：2026-09-09。状态：Accepted for implementation。关联 #30 / 已合并 PR #56，接受标签 `phase1-implementation-design-v0.1`。未修改批准 Architecture v1.0.1 的产品或安全边界；版本窗口仍需后续资格测试。
 
 ## 背景
 

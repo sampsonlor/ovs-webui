@@ -1,6 +1,6 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-09。P1 六批及六批整合已接受，[PR #18](https://github.com/sampsonlor/ovs-webui/pull/18) 已合并至 `main` 的 `176bca1`。共享库存 [PR #19](https://github.com/sampsonlor/ovs-webui/pull/19) 仍有独立待审范围。当前正在推进 [#30 正式实现设计](https://github.com/sampsonlor/ovs-webui/issues/30)，设计稿待审阅；历史记录保留各自日期和范围。
+更新：2026-09-09。P1 六批及整合已接受；#30 实现设计通过 [PR #56](https://github.com/sampsonlor/ovs-webui/pull/56) 合并至 `main` 的 `e2e649e`，接受标签为 `phase1-implementation-design-v0.1`。当前推进 [#31 Go 双进程与受控 IPC](implementation/GO_RUNTIME_IPC_v0.1.md)，实现另行审阅。共享库存 [PR #19](https://github.com/sampsonlor/ovs-webui/pull/19) 仍保留独立待审范围。
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点](reviews/P1_IA_COVERAGE_v0.1.md)和各批记录。
 
@@ -25,7 +25,8 @@
 | P1 Batch 05 System Health | 六域共享观察、组件责任、事件时间线及恢复入口已实现；145 项回归与 3 项集成通过，已获用户接受 | 正式健康 Provider、统一库存和持久化状态 / Event 服务 |
 | P1 Batch 06 Capabilities | 9 项能力矩阵、五状态、四 Gate 及 native Candidate / Safe Apply 已接受；PR #17 已合并 | 正式 provider、字段级权限、step-up、持久化能力与恢复证据 |
 | P1 六批整合 v0.2 | Bond 入口一致性修复、跨域事务回归及 53 项 IA 盘点已接受；PR #18 已合并 | 统一库存与稳定资源路由的 PR #19 仍待审阅 |
-| Phase 1 实现设计 #30 | Go/IPC/双库、身份授权、Safe Apply/恢复、API 草案及全范围映射已形成审阅稿 | Scope 状态、差异处置及设计准入接受；尚未实现正式 daemon/provider |
+| Phase 1 实现设计 #30 | Go/IPC/双库、身份授权、Safe Apply/恢复、API 草案及全范围映射已接受；PR #56 已合并 | 各正式模块按设计独立实现与验收，Scope 原文保留 Draft |
+| Go 运行时与 IPC #31 | [PR #57](https://github.com/sampsonlor/ovs-webui/pull/57) 已实现，原生双架构及 OVS 3.3.9 进程故障测试通过 | 本批接受；#32/#34/#36 继续双库、Auth Grant 和真实 provider |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -47,8 +48,8 @@
 
 ## 下一步
 
-完成 #30 的设计审阅与阶段准入后，按依赖从 #31 Go 双进程及受控 IPC 开始正式工程，再推进双库、身份、真实库存和 Ports/VLAN 安全闭环。PR #19 的库存与导航原型另行接受；本设计不替代其审阅。
+审阅 #31 的 Go 运行时、IPC 与原生 Linux 故障测试证据；接受后推进 #32 双 SQLite Repository，再依次接入身份、真实库存和 Ports/VLAN 安全闭环。PR #19 的库存与导航原型继续另行接受。
 
-[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。新增 #52 搜索/一跳拓扑、#53 本地托管 OpenFlow 条件写入门禁、#54 完整 Svelte/双语/响应式迁移、#55 管理员/API 文档。已有 #20–#28 保留功能验收，其中 #20 用户/角色、#27 AAA、#28 API Tokens 不因当前页面缺少入口而遗漏。#29/#30 为 In Progress，其余新工程任务为 Todo。
+[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30 已完成，#29/#31 为 In Progress，其余工程任务为 Todo。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档；已有 #20–#28 保留用户/角色、AAA、Tokens 等完整功能验收。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。
