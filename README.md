@@ -5,7 +5,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 ## Project status
 
 See [current status and architecture alignment](docs/STATUS.md) for the
-2026-09-08 inventory, source baselines, interaction fixes and review scope.
+2026-09-09 inventory, source baselines, implementation design and review scope.
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
@@ -16,7 +16,7 @@ interaction and contract review tools; they do not change that architecture.
 | Baseline                                          | Status                             |
 | ------------------------------------------------- | ---------------------------------- |
 | Architecture Baseline v1.0.1                      | Approved source retained           |
-| Phase 1 Scope v1.0                                | Approved upstream reference        |
+| Phase 1 Scope v1.0                                | Original received · Draft for Review |
 | UI Information Architecture + Page Inventory v1.0 | Approved Baseline                  |
 | P0 Low-Fidelity UX Baseline v0.1                  | Frozen                             |
 | P1 Low-Fidelity Prototype Plan v0.1               | Draft for Review                   |
@@ -29,6 +29,13 @@ interaction and contract review tools; they do not change that architecture.
 | Full lint and browser CI · #6 / #7                | Accepted · PR #16 merged           |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
+| Phase 1 implementation design v0.1               | Proposed for Review · #30           |
+
+The [Phase 1 implementation design](docs/implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
+maps all 58 Scope requirements and 53 approved IA pages to implementation owners
+and review gates. It includes the proposed dual-process runtime, identity,
+authorization, transaction recovery and API migration. The received Scope
+original remains Draft for Review; the design does not mark backend delivery complete.
 
 The accepted Batch 01 path remains available:
 

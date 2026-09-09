@@ -1,15 +1,15 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-08。P1 六批均已接受。Capabilities 通过 [PR #17](https://github.com/sampsonlor/ovs-webui/pull/17) 合并至 `main` 的 `862b19a`，接受标签为 `prototype-capabilities-v0.1`。此前 System Health 为 `b08e0a3` / `prototype-system-health-v0.1`，CI 基础 [PR #16](https://github.com/sampsonlor/ovs-webui/pull/16) 为 `fc0f387` / `prototype-ci-browser-v0.1`，#6、#7 已关闭。本轮六批整合修复与覆盖盘点等待审阅；历史记录保留各自日期和范围。
+更新：2026-09-09。P1 六批及六批整合已接受，[PR #18](https://github.com/sampsonlor/ovs-webui/pull/18) 已合并至 `main` 的 `176bca1`。共享库存 [PR #19](https://github.com/sampsonlor/ovs-webui/pull/19) 仍有独立待审范围。当前正在推进 [#30 正式实现设计](https://github.com/sampsonlor/ovs-webui/issues/30)，设计稿待审阅；历史记录保留各自日期和范围。
 
-**P0 与 P1 六批已接受，整站高保真与正式管理平面尚未完成。** 本轮统一 Bond 页面与程序化入口的名称、成员和 native diff，并验证跨域共享事务。当前审阅入口是[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)与[批准 IA 的 53 项覆盖盘点](reviews/P1_IA_COVERAGE_v0.1.md)。各批证据见[Capabilities](reviews/CAPABILITIES_v0.1.md)、[System Health](reviews/SYSTEM_HEALTH_v0.1.md)、[加速观察](reviews/ACCELERATION_OBSERVE_v0.1.md)、[OpenFlow](reviews/OPENFLOW_HIGH_FIDELITY_v0.1.md)、[Diagnostics](reviews/DIAGNOSTICS_HIGH_FIDELITY_v0.1.md)和[Bridge / Bond](reviews/BRIDGE_BOND_HIGH_FIDELITY_v0.1.md)。
+**Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点](reviews/P1_IA_COVERAGE_v0.1.md)和各批记录。
 
 ## 基线和来源
 
 | 文档 | 当前依据 |
 | --- | --- |
 | [Architecture Baseline v1.0.1](baselines/OVS_WebUI_Architecture_Baseline_v1.0.1.docx) | 2026-09-07 收到原文，正文标记 Baseline Approved，日期 2026-09-02；已原样归档 |
-| Phase 1 Scope v1.0 | 仍缺独立批准原文；Architecture 第 11 节提供功能边界，但不替代独立范围文档 |
+| [Phase 1 Scope v1.0](baselines/OVS_WebUI_Phase1_Scope_v1.0.docx) | 2026-09-09 收到并原样归档；文档日期 2026-09-02，正文标记 Draft for Review；不能自动视为批准版 |
 | [UI Information Architecture / Page Inventory v1.0](baselines/OVS_WebUI_UI_Information_Architecture_Page_Inventory_v1.0.docx) | 仓库已有 Approved Baseline；本次根目录同名文件正文为 Draft for Review，保留较新的批准版作为依据 |
 | [P1 Prototype Plan v0.1](plans/OVS_WebUI_P1_Low_Fidelity_Prototype_Plan_v0.1.docx) | Draft for Review；实现及单批接受情况参见集成记录 |
 
@@ -24,7 +24,8 @@
 | P1 Batch 04 DPDK/Offload Observe | 单个总览与只读能力证据已获用户接受；127 项回归、3 项集成及浏览器局部矩阵通过 | 真实 Provider、完整硬件库存与持久化观察 |
 | P1 Batch 05 System Health | 六域共享观察、组件责任、事件时间线及恢复入口已实现；145 项回归与 3 项集成通过，已获用户接受 | 正式健康 Provider、统一库存和持久化状态 / Event 服务 |
 | P1 Batch 06 Capabilities | 9 项能力矩阵、五状态、四 Gate 及 native Candidate / Safe Apply 已接受；PR #17 已合并 | 正式 provider、字段级权限、step-up、持久化能力与恢复证据 |
-| P1 六批整合 v0.2 | Bond 入口一致性修复、跨域事务回归及 53 项 IA 盘点已准备 | 本轮接受；统一库存、稳定对象/Job/证据路由 |
+| P1 六批整合 v0.2 | Bond 入口一致性修复、跨域事务回归及 53 项 IA 盘点已接受；PR #18 已合并 | 统一库存与稳定资源路由的 PR #19 仍待审阅 |
+| Phase 1 实现设计 #30 | Go/IPC/双库、身份授权、Safe Apply/恢复、API 草案及全范围映射已形成审阅稿 | Scope 状态、差异处置及设计准入接受；尚未实现正式 daemon/provider |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -46,6 +47,8 @@
 
 ## 下一步
 
-审阅 `codex/chore-p1-integration-review` 的六批整合结果。后续优先统一 Bridge/Port/Interface 库存、对象身份与稳定资源跳转，再准备符合架构原文的 Go / Svelte Ports/VLAN 正式切片设计。盘点已记录同 UUID 的 Bond 成员差异与 Interface 复用；当前独立 `br-native-demo`、外部 OpenFlow 样本与 Ports/VLAN lab 的有限边界仍保留。
+完成 #30 的设计审阅与阶段准入后，按依赖从 #31 Go 双进程及受控 IPC 开始正式工程，再推进双库、身份、真实库存和 Ports/VLAN 安全闭环。PR #19 的库存与导航原型另行接受；本设计不替代其审阅。
+
+[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。新增 #52 搜索/一跳拓扑、#53 本地托管 OpenFlow 条件写入门禁、#54 完整 Svelte/双语/响应式迁移、#55 管理员/API 文档。已有 #20–#28 保留功能验收，其中 #20 用户/角色、#27 AAA、#28 API Tokens 不因当前页面缺少入口而遗漏。#29/#30 为 In Progress，其余新工程任务为 Todo。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。
