@@ -286,6 +286,35 @@ func TestRestartIdleAbsoluteExpiryAndClockRollback(t *testing.T) {
 	_, err = r.InspectAuth(testContext, c.Grant)
 	wantCode(t, err, "CREDENTIAL_EXPIRED_OR_REVOKED")
 }
+func TestElevationDeadlineAndAuthEpochInvalidation(t *testing.T) {
+	r, _ := fixture(t)
+	admin := login(t, r, "admin", true)
+	result := execute(t, r, admin, "POST", "/tokens", map[string]any{"name": "epoch-test", "scopes": []string{"state.read"}, "expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)}, "")
+	var token map[string]any
+	if err := json.Unmarshal(result.Body, &token); err != nil {
+		t.Fatal(err)
+	}
+	_, err := r.Reauthenticate(testContext, admin.Grant, authn.Reauthentication{Password: "incorrect-synthetic-password"})
+	wantCode(t, err, "AUTHENTICATION_REJECTED")
+	future := admin.Claims.ElevatedUntil.Add(time.Second)
+	r.now = func() time.Time { return future }
+	if _, err = r.InspectAuth(testContext, admin.Grant); err != nil {
+		t.Fatal("elevation expiry invalidated ordinary session", err)
+	}
+	_, err = r.ExecuteAuth(testContext, admin.Grant, request(t, r, "POST", "/tokens", map[string]any{"name": "expired-elevation", "scopes": []string{"state.read"}, "expires_at": future.Add(time.Hour).UTC().Format(time.RFC3339)}, ""))
+	wantCode(t, err, "REAUTHENTICATION_REQUIRED")
+	if err = r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE auth_state SET epoch=? WHERE singleton=1", repository.NewID())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, credential := range []string{admin.Grant, token["secret"].(string)} {
+		_, err = r.InspectAuth(testContext, credential)
+		wantCode(t, err, "CREDENTIAL_EXPIRED_OR_REVOKED")
+	}
+}
+
 func TestRevocationSerializesWithAdmittedSecurityMutation(t *testing.T) {
 	r, _ := fixture(t)
 	for i := 0; i < 4; i++ {

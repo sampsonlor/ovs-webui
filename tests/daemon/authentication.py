@@ -196,7 +196,7 @@ def main():
         code, admin, _ = call('/users/' + session['principal_id'], cookie=cookie)
         assert code == 200
         _, (code, failure, _) = command('/users/' + admin['id'], {'disabled': True, 'role_ids': admin['role_ids']}, cookie, session, 'PATCH', admin['revision'])
-        assert code == 409 and failure['code'] == 'LAST_LOCAL_ADMINISTRATOR'
+        assert code == 409 and failure.get('code') == 'LAST_LOCAL_ADMINISTRATOR', f'last administrator guard: HTTP {code}, code={failure.get("code")}'
         user_request, (code, created, _) = command('/users', {'username': 'observer', 'password': password, 'role_ids': [reader_role]}, cookie, session)
         assert code == 202
         observer_id = created['resource_ref']['id']
