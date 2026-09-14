@@ -1,7 +1,9 @@
 package web
 
 import (
+	"encoding/json"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"net"
 	"net/http"
 	"net/netip"
@@ -103,10 +105,13 @@ func (p *ProxyPolicy) Handler(next http.Handler) http.Handler {
 			}
 		}
 		if reject || r.TLS == nil || (p.host != "" && effectiveHost != p.host) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/problem+json")
 			w.Header().Set("Cache-Control", "no-store")
 			w.WriteHeader(421)
-			_, _ = w.Write([]byte(`{"error":{"code":"HTTPS_AUTHORITY_REJECTED"}}`))
+			problem := apitypes.Fail(421, "HTTPS_AUTHORITY_REJECTED")
+			problem.CommandEffect = "not-started"
+			problem.CorrelationID = repository.NewID()
+			_ = json.NewEncoder(w).Encode(problem)
 			return
 		}
 		next.ServeHTTP(w, r)

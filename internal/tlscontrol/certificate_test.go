@@ -25,6 +25,13 @@ func TestCertificateValidationRejectsUntrustedWrongHostExpiredAndMismatchedKeys(
 	if err != nil || len(pair.Certificate) != 1 || len(descriptor.Fingerprint) != 64 {
 		t.Fatal(err)
 	}
+	nearExpiry := pair.Leaf.NotAfter.Add(-time.Minute)
+	if _, _, err := KeyPair(cert, key, "console.example", roots, nearExpiry, false); err == nil {
+		t.Fatal("short-lived candidate admitted")
+	}
+	if _, _, err := StoredKeyPair(cert, key, "console.example", roots, nearExpiry, false); err != nil {
+		t.Fatal("stored identity expired before actual expiry", err)
+	}
 	_, other, _ := Bootstrap("console.example", now)
 	for _, tc := range []struct {
 		name  string

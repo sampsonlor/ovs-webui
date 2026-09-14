@@ -58,6 +58,9 @@ func (m *ManagedTLS) selectServing(ctx context.Context, state tlscontrol.State) 
 	}
 	selected := &servingCertificate{ID: active, FallbackID: active, Pair: &old, Fallback: &old, State: state}
 	if state.TrialID != "" && !state.Expired(tlscontrol.Now()) {
+		if old.Leaf == nil || !old.Leaf.NotAfter.After(time.Unix(state.DeadlineWall, 0)) {
+			return selected, nil
+		}
 		pair, _, err := m.store.Load(ctx, state.TrialID)
 		if err == nil {
 			selected.ID = state.TrialID

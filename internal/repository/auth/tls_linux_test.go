@@ -103,6 +103,9 @@ func TestTLSDeadlineSurvivesRestartAndBootChangeWithFailureEvidence(t *testing.T
 	r.tlsNow = func() tlscontrol.Clock {
 		return tlscontrol.Clock{BootID: "different-boot", NS: original.StartedNS, Wall: time.Now()}
 	}
+	if read(t, r, c, "/certificates/"+id)["state"] != "rolled-back" {
+		t.Fatal("first read exposed expired trial")
+	}
 	rolled, err := r.TLSState(testContext)
 	if err != nil || rolled.TrialID != "" || rolled.ActiveID != "" {
 		t.Fatal("boot recovery failed", err)

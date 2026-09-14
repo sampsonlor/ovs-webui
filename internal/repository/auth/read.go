@@ -43,6 +43,11 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 	if err = op.ValidateParameters(path, query, func(string) []string { return nil }); err != nil {
 		return out, err
 	}
+	if op.ID == "listCertificates" || op.ID == "readCertificate" {
+		if _, err = r.TLSState(ctx); err != nil {
+			return out, err
+		}
+	}
 	unlock, err := r.lock(ctx)
 	if err != nil {
 		return out, err

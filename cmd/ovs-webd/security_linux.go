@@ -52,6 +52,9 @@ func (o securityOptions) certificates(ctx context.Context, db *sqlite.Store, ini
 	}
 	var ring secret.Ring
 	if initialize {
+		if err = certificates.CheckUninitialized(ctx, db); err != nil {
+			return nil, err
+		}
 		ring, err = secret.InitializeKeys(o.tlsDir, nil)
 	} else {
 		ring, err = secret.LoadKeys(o.tlsDir)

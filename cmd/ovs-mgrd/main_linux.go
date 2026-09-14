@@ -180,6 +180,15 @@ func run() int {
 		return 0
 	}
 	go store.Maintain(ctx)
+	// Reconcile the persisted lease before accepting reads or advertising ready.
+	// A one-second maintenance tick must not expose an expired trial as current
+	// immediately after a manager restart.
+	if authentication != nil {
+		if _, err := authentication.TLSState(ctx); err != nil {
+			logger.Error("service_start_failed", "code", "TLS_RECOVERY_UNAVAILABLE")
+			return 1
+		}
+	}
 	listener, err := ipc.ListenUnix(ipc.SocketOptions{Path: *socket, OwnerUID: 0, GroupGID: uint32(*gid), PeerUID: uint32(*uid)})
 	if err != nil {
 		logger.Error("service_start_failed", "code", "IPC_LISTENER_UNAVAILABLE")

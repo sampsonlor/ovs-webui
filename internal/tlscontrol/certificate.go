@@ -22,6 +22,16 @@ import (
 )
 
 func KeyPair(certPEM []byte, key secret.Value, host string, roots *x509.CertPool, now time.Time, bootstrap bool) (tls.Certificate, Descriptor, error) {
+	return keyPair(certPEM, key, host, roots, now, bootstrap, RecoveryWindow)
+}
+
+// StoredKeyPair validates an existing identity through its actual expiry. The
+// admission lifetime floor for a new trial must not expire a running identity
+// two minutes early merely because webd restarted.
+func StoredKeyPair(certPEM []byte, key secret.Value, host string, roots *x509.CertPool, now time.Time, bootstrap bool) (tls.Certificate, Descriptor, error) {
+	return keyPair(certPEM, key, host, roots, now, bootstrap, 0)
+}
+func keyPair(certPEM []byte, key secret.Value, host string, roots *x509.CertPool, now time.Time, bootstrap bool, minimumLifetime time.Duration) (tls.Certificate, Descriptor, error) {
 	fail := func() (tls.Certificate, Descriptor, error) {
 		return tls.Certificate{}, Descriptor{}, apitypes.Fail(422, "TLS_CANDIDATE_INVALID")
 	}
@@ -46,7 +56,7 @@ func KeyPair(certPEM []byte, key secret.Value, host string, roots *x509.CertPool
 		return fail()
 	}
 	leaf, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil || leaf.IsCA || leaf.VerifyHostname(host) != nil || now.Before(leaf.NotBefore) || !leaf.NotAfter.After(now.Add(RecoveryWindow)) {
+	if err != nil || leaf.IsCA || leaf.VerifyHostname(host) != nil || now.Before(leaf.NotBefore) || !leaf.NotAfter.After(now.Add(minimumLifetime)) {
 		return fail()
 	}
 	switch public := leaf.PublicKey.(type) {

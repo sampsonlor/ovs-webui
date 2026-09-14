@@ -14,6 +14,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/secrets"
+	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/secret"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
@@ -32,6 +33,21 @@ type identity struct {
 	Certificate []byte `json:"certificate"`
 	PrivateKey  []byte `json:"private_key"`
 	Bootstrap   bool   `json:"bootstrap"`
+}
+
+// CheckUninitialized runs before creating bootstrap keys, including when an
+// operator attempts bootstrap against a restored DB with missing key files.
+func CheckUninitialized(ctx context.Context, db *sqlite.Store) error {
+	return db.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
+		var count int
+		if err := q.QueryRowContext(ctx, "SELECT count(*) FROM tls_local_state").Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			return apitypes.Fail(409, "TLS_ALREADY_INITIALIZED")
+		}
+		return nil
+	})
 }
 
 func New(s *secrets.Store, host string, roots *x509.CertPool) (*Store, error) {
@@ -102,7 +118,7 @@ func (s *Store) Load(ctx context.Context, id string) (tls.Certificate, tlscontro
 	if json.Unmarshal(value.Bytes(), &v) != nil {
 		return tls.Certificate{}, tlscontrol.Descriptor{}, secret.ErrUnavailable
 	}
-	pair, d, err := tlscontrol.KeyPair(v.Certificate, secret.NewValue(v.PrivateKey), s.Host, s.Roots, time.Now(), v.Bootstrap)
+	pair, d, err := tlscontrol.StoredKeyPair(v.Certificate, secret.NewValue(v.PrivateKey), s.Host, s.Roots, time.Now(), v.Bootstrap)
 	d.ID = id
 	return pair, d, err
 }

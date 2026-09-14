@@ -37,7 +37,7 @@ bootstrap 生成 ECDSA P-256 自签名、90 天有效的 HTTPS 身份，SAN 来�
 2. 候选私钥仅在 webd TLS 分区加密。mgrd 接收封闭的候选元数据并重新授权实际 operation，保存 validated Certificate、完成的 Job、幂等回执和 Audit。相同 principal/epoch/request ID 的重复输入恢复原候选；改变输入拒绝。最多 128 个候选，当前版本由运维规划轮换容量，完整删除/页面管理不在本批开放。
 3. `POST /api/v1/certificates/{id}/activations` 需要强 If-Match、当前权限和二次认证。mgrd 先持久化 120 秒 trial 和运行中 Job；webd 校验候选与旧身份，将本地恢复状态落盘后原子切换 TLS 指针。安装失败时保留原身份，Job 继续等待并最终失败恢复。试用窗从持久入场开始，安装延迟不会延长保护期限。
 4. 新增兼容接口 `POST /api/v1/certificates/{id}/confirmations`：当前 session、CSRF、Origin、二次认证、If-Match 均有效，而且当前 HTTP 请求所属 TLS 握手实际使用该候选，才可确认。webd 从服务端连接上下文记录身份，禁止用请求头自报；TLS session tickets 关闭，激活响应要求关闭旧连接。旧 keep-alive 连接的确认返回 `TLS_FRESH_CONNECTION_REQUIRED`。
-5. 确认完成原激活 Job/receipt，更新证书及 Audit；未确认则恢复上一已确认身份（第一次激活时为 bootstrap）。mgrd 与 webd 独立使用 boot ID + CLOCK_BOOTTIME 截止点 + wall-clock 防倒退检查。相同 boot 的进程重启不延长期限，跨 boot 或时钟异常立即结束 trial。mgrd 不可用时 webd 的握手回调仍按原期限选择旧证书；恢复 mgrd 后补齐持久失败证据。没有存储/授权依据时不伪造成功。
+5. 确认完成原激活 Job/receipt，更新证书及 Audit；未确认则恢复上一已确认身份（第一次激活时为 bootstrap）。mgrd 与 webd 独立使用 boot ID + CLOCK_BOOTTIME 截止点 + wall-clock 防倒退检查。相同 boot 的进程重启不延长期限，跨 boot 或时钟异常立即结束 trial。mgrd 不可用时 webd 的握手回调仍按原期限选择旧证书；恢复 mgrd 后先补齐持久失败证据再接收请求，证书读取也先核对 deadline。没有存储/授权依据时不伪造成功。既有身份直到实际到期才失效，但安装候选要求旧身份仍覆盖此次恢复截止点；应提前完成证书轮换。
 
 Public v1.2.0 为 115 路径 / 132 操作；冻结的 v1.0.0 保留，旧 v1.1.0 输入/响应兼容。私有 IPC minor=2，增加 peer-checked `tls.execute` 和 `tls.state`；精确 digest/软件版本握手继续生效。该恢复保护用于 HTTPS 身份，不代替后续 OVS 配置的 Applied/Health/Safe Apply 状态机。
 
