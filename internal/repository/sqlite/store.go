@@ -307,12 +307,11 @@ func acquire(ctx context.Context, active, waiting chan struct{}) (func(), error)
 	}
 }
 func (s *Store) checked(writable bool) bool {
-	status := s.Status()
-	if !status.Readable || (writable && !status.Writable) {
-		return false
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.status.Readable || (writable && !s.status.Writable) {
+		return false
+	}
 	if err := s.guard.check(); err != nil {
 		s.status = repository.Status{State: "degraded", Code: err.Error()}
 		return false
@@ -366,6 +365,9 @@ func (s *Store) Write(ctx context.Context, fn func(context.Context, *sql.Tx) err
 	}
 	if err = s.commit(tx); err != nil {
 		s.degrade("STORAGE_COMMIT_UNKNOWN", true)
+		// A failed COMMIT can leave a driver transaction open. Retire its
+		// connection rather than retaining locks or admitting another write.
+		_ = s.writer.Close()
 		return repository.ErrCommitUnknown
 	}
 	return nil
@@ -388,6 +390,8 @@ func (s *Store) failure(err error) error {
 		switch failure.Code() & 255 {
 		case 5, 6:
 			return repository.ErrBusy
+		case 9:
+			return repository.ErrCanceled
 		case 19:
 			return repository.ErrConflict
 		case 13:
@@ -435,13 +439,22 @@ func (s *Store) Checkpoint(ctx context.Context) error {
 // SQL source strings are embedded and reviewed; no request may supply pragmas,
 // migrations, connection URIs, filenames or callbacks through the IPC surface.
 func (s *Store) Probe(ctx context.Context) repository.Status {
-	if s.Status().Readable {
-		_ = s.Read(ctx, func(ctx context.Context, c *sql.Conn) error {
-			var v int
-			return c.QueryRowContext(ctx, "PRAGMA schema_version").Scan(&v)
-		})
+	status := s.Status()
+	if !status.Readable {
+		return status
 	}
-	return s.Status()
+	err := s.Read(ctx, func(ctx context.Context, c *sql.Conn) error {
+		var v int
+		return c.QueryRowContext(ctx, "PRAGMA schema_version").Scan(&v)
+	})
+	status = s.Status()
+	if err != nil && status.Writable {
+		// A saturated or canceled probe cannot claim readiness. This response
+		// does not permanently latch a transient timeout as database damage.
+		status.State, status.Code = "degraded", err.Error()
+		status.Readable, status.Writable = false, false
+	}
+	return status
 }
 func (s *Store) Maintain(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)

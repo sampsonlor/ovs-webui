@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -33,6 +34,9 @@ func pair(t *testing.T) (sqlite.Options, sqlite.Options) {
 	w := sqlite.Options{Path: filepath.Join(t.TempDir(), "web.db"), Kind: repository.Web, SoftwareVersion: "test"}
 	m := sqlite.Options{Path: filepath.Join(t.TempDir(), "manager.db"), Kind: repository.Manager, SoftwareVersion: "test"}
 	for _, o := range []sqlite.Options{w, m} {
+		if err := os.Chmod(filepath.Dir(o.Path), 0700); err != nil {
+			t.Fatal(err)
+		}
 		if err := sqlite.Initialize(ctx, o); err != nil {
 			t.Fatal(err)
 		}

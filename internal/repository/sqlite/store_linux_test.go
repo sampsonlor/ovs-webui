@@ -28,7 +28,11 @@ var background = context.Background()
 
 func options(t *testing.T) Options {
 	t.Helper()
-	return Options{Path: filepath.Join(t.TempDir(), "web.db"), Kind: repository.Web, SoftwareVersion: "test-v1"}
+	directory := t.TempDir()
+	if err := os.Chmod(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return Options{Path: filepath.Join(directory, "web.db"), Kind: repository.Web, SoftwareVersion: "test-v1"}
 }
 func initialized(t *testing.T, o Options) *Store {
 	t.Helper()
@@ -339,6 +343,69 @@ func TestUnknownCommitRequiresReconciliation(t *testing.T) {
 	}
 	if err := writeDocument(s, "replay", []byte(`{}`)); err != repository.ErrUnavailable {
 		t.Fatal("replayed after uncertain commit")
+	}
+}
+func TestOversizedBackupManifestIsRejected(t *testing.T) {
+	s := initialized(t, options(t))
+	directory, err := s.Backup(background)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "manifest.json")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.Write([]byte(strings.Repeat(" ", 8193) + `{}`))
+	_ = f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = VerifyBackup(background, directory, repository.Web); err == nil {
+		t.Fatal("accepted a manifest with hidden trailing data")
+	}
+}
+func TestTransientProbeFailureDoesNotClaimReadyOrLatch(t *testing.T) {
+	s := initialized(t, options(t))
+	ctx, cancel := context.WithCancel(background)
+	cancel()
+	status := s.Probe(ctx)
+	if status.State != "degraded" || status.Code != "STORAGE_CANCELED" || status.Writable {
+		t.Fatal("canceled probe reported ready", status)
+	}
+	if status = s.Probe(background); status.State != "ready" || !status.Writable {
+		t.Fatal("transient failure latched", status)
+	}
+}
+func TestBusyCheckpointIsARecoverableWarning(t *testing.T) {
+	s := initialized(t, options(t))
+	if err := writeDocument(s, "before-snapshot", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.readers.Conn(background)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if _, err = c.ExecContext(background, "BEGIN DEFERRED"); err != nil {
+		t.Fatal(err)
+	}
+	defer c.ExecContext(background, "ROLLBACK")
+	var n int
+	if err = c.QueryRowContext(background, "SELECT count(*) FROM metadata").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if err = writeDocument(s, "after-snapshot", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Checkpoint(background); err != repository.ErrBusy || !s.Status().Writable || s.Status().Warning != "STORAGE_CHECKPOINT_PENDING" {
+		t.Fatal("pinned reader misclassified", err, s.Status())
+	}
+	if _, err = c.ExecContext(background, "ROLLBACK"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Checkpoint(background); err != nil || s.Status().Warning != "" || !s.Status().Writable {
+		t.Fatal("checkpoint did not recover", err, s.Status())
 	}
 }
 func TestReadDeadlineAndWriterBusyAreBounded(t *testing.T) {

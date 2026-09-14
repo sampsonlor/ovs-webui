@@ -145,6 +145,11 @@ func VerifyBackup(ctx context.Context, directory string, kind repository.Kind) (
 	if err != nil {
 		return fail()
 	}
+	info, err := f.Stat()
+	if err != nil || info.Size() > 8192 {
+		_ = f.Close()
+		return fail()
+	}
 	decoder := json.NewDecoder(io.LimitReader(f, 8193))
 	decoder.DisallowUnknownFields()
 	err = decoder.Decode(&manifest)
