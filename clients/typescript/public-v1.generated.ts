@@ -77,6 +77,7 @@ export type PasswordCommand = { "request_id": RequestId; "password": string };
 export type RoleCommand = { "request_id": RequestId; "name": string; "capabilities": Array<string> };
 export type TokenCommand = { "request_id": RequestId; "name": string; "scopes": Array<string>; "expires_at": DateTime };
 export type EmptyCommand = { "request_id": RequestId };
+export type Reauthentication = { "password": string };
 export type AAACommand = { "request_id": RequestId; "servers": Array<{ "host": string; "port": number; "secret_ref": Id; "timeout_seconds": number }>; "local_fallback": boolean };
 export type CertificateCommand = { "request_id": RequestId; "certificate_pem": string; "private_key_pem": string };
 export type SettingsCommand = { "request_id": RequestId; "locale": "zh-CN" | "en-US"; "theme": "light" | "dark" | "system"; "view_mode": "standard" | "expert" };
@@ -147,6 +148,7 @@ export interface Operations {
   subscribeResourceChanges: { method: "GET"; path: "/stream"; body: never; response: void };
   readContract: { method: "GET"; path: "/contract"; body: never; response: ContractInfo };
   readRuntime: { method: "GET"; path: "/runtime"; body: never; response: Runtime };
+  reauthenticateSession: { method: "POST"; path: "/session/reauthentication"; body: Reauthentication; response: Session };
   readOpenAPI: { method: "GET"; path: "/openapi.json"; body: never; response: { [key: string]: unknown } };
   listBridges: { method: "GET"; path: "/bridges"; body: never; response: BridgePage };
   readBridge: { method: "GET"; path: "/bridges/{bridge_id}"; body: never; response: Bridge };

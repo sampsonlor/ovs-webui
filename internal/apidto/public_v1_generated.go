@@ -913,6 +913,9 @@ type TokenCommand struct {
 type EmptyCommand struct {
 	RequestId RequestId `json:"request_id"`
 }
+type Reauthentication struct {
+	Password string `json:"password"`
+}
 type AAACommand struct {
 	RequestId     RequestId                    `json:"request_id"`
 	Servers       []map[string]json.RawMessage `json:"servers"`

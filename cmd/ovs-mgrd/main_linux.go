@@ -6,14 +6,19 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
+	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
 )
@@ -26,17 +31,31 @@ func run() int {
 	version := flag.Bool("version", false, "Print build version")
 	database := flag.String("database", "/var/lib/ovs-webui/manager/manager.db", "Private manager database path")
 	initialize := flag.Bool("init-database", false, "Explicitly initialize a new database and exit; never overwrite")
+	authKeyPath := flag.String("auth-key-file", "", "Private authentication key (default: auth.key beside manager.db)")
+	initAuthKey := flag.Bool("init-auth-key", false, "Explicitly create a new authentication key and exit; never overwrite")
+	bootstrap := flag.String("bootstrap-admin", "", "Initialize first local administrator; read password from stdin, then exit")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.SoftwareVersion())
 		return 0
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("service", "ovs-mgrd")
-	if flag.NArg() != 0 || os.Geteuid() != 0 || (!*initialize && (*uid == 0 || *gid == 0 || uint64(*uid) >= 1<<32-1 || uint64(*gid) >= 1<<32-1)) {
+	if flag.NArg() != 0 || os.Geteuid() != 0 || (!*initialize && !*initAuthKey && *bootstrap == "" && (*uid == 0 || *gid == 0 || uint64(*uid) >= 1<<32-1 || uint64(*gid) >= 1<<32-1)) {
 		logger.Error("invalid_process_configuration", "code", "ROOT_AND_FIXED_WEBD_ID_REQUIRED")
 		return 2
 	}
 	syscall.Umask(0077)
+	if *authKeyPath == "" {
+		*authKeyPath = filepath.Join(filepath.Dir(*database), "auth.key")
+	}
+	if *initAuthKey {
+		if _, err := authn.KeyFile(*authKeyPath, true); err != nil {
+			logger.Error("auth_key_initialization_failed", "code", "AUTH_KEY_UNAVAILABLE")
+			return 1
+		}
+		logger.Info("auth_key_initialized")
+		return 0
+	}
 	options := sqlite.Options{Path: *database, Kind: repository.Manager, SoftwareVersion: buildinfo.SoftwareVersion()}
 	if *initialize {
 		if err := sqlite.Initialize(context.Background(), options); err != nil {
@@ -53,6 +72,33 @@ func run() int {
 	if storageErr != nil {
 		logger.Error("storage_degraded", "code", store.Status().Code)
 	}
+	var authentication *auth.Repository
+	if key, err := authn.KeyFile(*authKeyPath, false); err == nil && storageErr == nil {
+		authentication, err = auth.New(store, key)
+		if err != nil {
+			logger.Error("authentication_degraded", "code", "AUTH_UNAVAILABLE")
+		}
+	} else {
+		logger.Warn("authentication_degraded", "code", "AUTH_KEY_UNAVAILABLE")
+	}
+	if *bootstrap != "" {
+		if authentication == nil {
+			logger.Error("bootstrap_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, 1027))
+		if err != nil || len(data) > 1026 {
+			logger.Error("bootstrap_failed", "code", "PASSWORD_INPUT_INVALID")
+			return 1
+		}
+		password := strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r")
+		if err = authentication.Bootstrap(ctx, *bootstrap, password); err != nil {
+			logger.Error("bootstrap_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		logger.Info("local_administrator_initialized")
+		return 0
+	}
 	go store.Maintain(ctx)
 	listener, err := ipc.ListenUnix(ipc.SocketOptions{Path: *socket, OwnerUID: 0, GroupGID: uint32(*gid), PeerUID: uint32(*uid)})
 	if err != nil {
@@ -60,15 +106,23 @@ func run() int {
 		return 1
 	}
 	defer listener.Release()
-	server := ipc.HTTPServer(ipc.NewHandler(ipc.CurrentProtocol(buildinfo.SoftwareVersion()), nil, logger, func(ctx context.Context) ipc.Health {
+	var authorizer ipc.Authorizer
+	var authService authn.Manager
+	if authentication != nil {
+		authorizer = authentication
+		authService = authentication
+	}
+	handler := ipc.NewHandler(ipc.CurrentProtocol(buildinfo.SoftwareVersion()), authorizer, logger, func(ctx context.Context) ipc.Health {
 		health := ipc.BootstrapHealth()
 		status := store.Probe(ctx)
 		health.Storage = &ipc.StorageHealth{Manager: &status}
+		health.AuthenticationReady = authentication != nil && authentication.Ready(ctx)
 		if !status.Writable {
 			health.State = "degraded"
 		}
 		return health
-	}))
+	}).WithAuthentication(authService)
+	server := ipc.HTTPServer(handler)
 	logger.Info("service_started", "scope", "runtime-bootstrap", "configuration_ready", false)
 	if err := runtimehost.Run(ctx, server, func() error { return server.Serve(listener) }, logger); err != nil {
 		logger.Error("service_stopped", "code", "HTTP_SERVE_FAILED")

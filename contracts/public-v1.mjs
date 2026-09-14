@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.0.0', description: 'Phase 1 public transport baseline. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability.' };
+api.info = { title: 'OVS WebUI public API', version: '1.1.0', description: 'Phase 1 public transport baseline with local authentication and scoped credentials. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -69,6 +69,7 @@ s.PasswordCommand = command({ password: { ...string(1024), writeOnly: true, 'x-s
 s.RoleCommand = command({ name: string(), capabilities: array(string(), 128) });
 s.TokenCommand = command({ name: string(), scopes: array(string(), 128), expires_at: ref('DateTime') });
 s.EmptyCommand = command({});
+s.Reauthentication = closed({ password: { ...string(1024), writeOnly: true, 'x-sensitive': true } });
 s.AAACommand = command({ servers: array(closed({ host: string(256), port: integer(1, 65535), secret_ref: id, timeout_seconds: integer(1, 10) }), 8), local_fallback: bool });
 s.CertificateCommand = command({ certificate_pem: string(65536), private_key_pem: { ...string(65536), writeOnly: true, 'x-sensitive': true } });
 s.SettingsCommand = command({ locale: choices('zh-CN', 'en-US'), theme: choices('light', 'dark', 'system'), view_mode: choices('standard', 'expert') });
@@ -124,6 +125,7 @@ api.paths['/requests/{request_id}'].get.parameters.find(p => p.name === 'epoch')
 api.paths['/stream'].get['x-service-state'] = 'transport';
 add('/contract', 'get', 'readContract', 'ContractInfo', '', 33, { public: true });
 add('/runtime', 'get', 'readRuntime', 'Runtime', '', 31, { public: true });
+add('/session/reauthentication', 'post', 'reauthenticateSession', 'Session', 'session.read', 34, { body: 'Reauthentication', status: 200, sensitive: true });
 // OpenAPI itself is a document, not a management resource.
 api.paths['/openapi.json'] = { get: { operationId: 'readOpenAPI', security: [], 'x-capability': '', 'x-service-issue': 33, 'x-service-state': 'transport', parameters: [], responses: { 200: { description: 'OpenAPI 3.1.1 document', content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } } } };
 

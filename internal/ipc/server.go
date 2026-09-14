@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+
+	"github.com/sampsonlor/ovs-webui/internal/authn"
 )
 
 type connectionKey struct{}
@@ -22,6 +24,7 @@ type authenticatedConn interface {
 }
 
 type Handler struct {
+	auth       authn.Manager
 	protocol   Protocol
 	authorizer Authorizer
 	budgets    map[Class]*budget
@@ -29,6 +32,8 @@ type Handler struct {
 	logger     *slog.Logger
 	health     func(context.Context) Health
 }
+
+func (h *Handler) WithAuthentication(manager authn.Manager) *Handler { h.auth = manager; return h }
 
 func NewHandler(protocol Protocol, authorizer Authorizer, logger *slog.Logger, probes ...func(context.Context) Health) *Handler {
 	if authorizer == nil {
@@ -75,6 +80,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	r = r.WithContext(ctx)
 	switch r.URL.Path {
+	case "/ipc/v1/operations/auth.authenticate", "/ipc/v1/operations/auth.inspect", "/ipc/v1/operations/auth.check", "/ipc/v1/operations/auth.reauthenticate", "/ipc/v1/operations/auth.revoke", "/ipc/v1/operations/security.read", "/ipc/v1/operations/security.execute":
+		if !state.negotiated.Load() {
+			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")
+			return
+		}
+		h.authOperation(w, r)
 	case "/ipc/v1/health":
 		if r.Method != http.MethodGet || r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
 			h.problem(w, r, 400, "IPC_INVALID_REQUEST")
