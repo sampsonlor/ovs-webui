@@ -126,6 +126,10 @@ func roleID(t *testing.T, r *Repository, c authn.LoginResult, name string) strin
 func createUser(t *testing.T, r *Repository, c authn.LoginResult, name, role string) string {
 	t.Helper()
 	out := execute(t, r, c, "POST", "/users", map[string]any{"username": name, "password": testPassword, "role_ids": []string{role}}, "")
+	job := read(t, r, c, "/jobs/"+out.Receipt.Job.ID)
+	if job["sequence"] != "1" || job["state"] != "succeeded" || job["correlation_id"] != out.Receipt.CorrelationID {
+		t.Fatal("user creation did not expose its durable terminal job")
+	}
 	return out.Receipt.Resource.ID
 }
 

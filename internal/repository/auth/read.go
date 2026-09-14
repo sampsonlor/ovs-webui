@@ -289,7 +289,7 @@ func (r *Repository) job(ctx context.Context, q querier, c authn.Claims, id stri
 	if err = r.allowPrior(ctx, q, c, doc.Operation, doc.Resource); err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": id, "sequence": 1, "state": state, "operation": doc.Operation, "owner_id": doc.OwnerID, "resource_ref": doc.Resource, "cancellable": false, "correlation_id": receipt.CorrelationID}, nil
+	return map[string]any{"id": id, "sequence": "1", "state": state, "operation": doc.Operation, "owner_id": doc.OwnerID, "resource_ref": doc.Resource, "cancellable": false, "correlation_id": receipt.CorrelationID}, nil
 }
 
 // Authentication errors cross IPC as stable codes only, never SQL or secrets.

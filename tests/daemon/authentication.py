@@ -201,7 +201,7 @@ def main():
         assert code == 202
         observer_id = created['resource_ref']['id']
         code, job, _ = call('/jobs/' + created['job_id'], cookie=cookie)
-        assert code == 200 and job['state'] == 'succeeded' and job['correlation_id'] == created['correlation_id']
+        assert code == 200 and job['state'] == 'succeeded' and job['sequence'] == '1' and job['correlation_id'] == created['correlation_id'], f'created user job: HTTP {code}, code={job.get("code")}'
         code, receipt, _ = call('/requests/' + user_request + '?domain=management&epoch=' + session['request_epochs']['management'], cookie=cookie)
         assert code == 200 and receipt['resource_ref']['id'] == observer_id
         checks.append('last administrator protection and durable user effect/Job/receipt with one correlation')
