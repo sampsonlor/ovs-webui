@@ -230,7 +230,7 @@ func (o *Operation) ValidateParameters(path map[string]string, query url.Values,
 }
 func (o *Operation) Decode(data []byte) (map[string]any, []byte, error) {
 	value, err := ipc.ParseObject(data)
-	if err != nil {
+	if err != nil || !boundedNumbers(value) {
 		return nil, nil, apitypes.Fail(400, "INVALID_JSON")
 	}
 	if o.Body == nil || o.Body.Validate(value) != nil {
@@ -252,9 +252,39 @@ func (o *Operation) ValidateResponse(status int, body []byte) error {
 	if schema == nil {
 		return apitypes.Fail(500, "INVALID_SERVICE_RESPONSE")
 	}
-	value, err := jsonschema.UnmarshalJSON(bytes.NewReader(body))
-	if err != nil || schema.Validate(value) != nil {
+	value, err := ipc.ParseObject(body)
+	if err != nil || !boundedNumbers(value) || schema.Validate(value) != nil {
 		return apitypes.Fail(500, "INVALID_SERVICE_RESPONSE")
 	}
 	return nil
+}
+
+// JSON Schema uses exact rationals. Bound numeric spelling before it can
+// expand an attacker-selected exponent or mantissa into an enormous integer.
+// IDs and uint64 sequences are strings; this does not round valid numbers.
+func boundedNumbers(value any) bool {
+	switch v := value.(type) {
+	case json.Number:
+		text := string(v)
+		if len(text) > 64 {
+			return false
+		}
+		if at := strings.IndexAny(text, "eE"); at >= 0 {
+			exponent, err := strconv.ParseInt(text[at+1:], 10, 32)
+			return err == nil && exponent >= -308 && exponent <= 308
+		}
+	case map[string]any:
+		for _, item := range v {
+			if !boundedNumbers(item) {
+				return false
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if !boundedNumbers(item) {
+				return false
+			}
+		}
+	}
+	return true
 }
