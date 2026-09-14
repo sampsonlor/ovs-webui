@@ -67,7 +67,7 @@ func (r *Repository) ExecuteTLS(ctx context.Context, credential string, input tl
 		})
 	}
 	return r.receipts.Execute(ctx, command, check, func(ctx context.Context, tx *sql.Tx) (requests.Mutation, error) {
-		result := requests.Mutation{Status: 202, Terminal: true}
+		result := requests.Mutation{Status: 202, Terminal: true, Body: json.RawMessage(`{}`)}
 		var err error
 		c, err = r.checkOperation(ctx, tx, credential, op, refsFor(op, path), true)
 		if err != nil {

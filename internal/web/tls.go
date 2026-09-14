@@ -146,9 +146,9 @@ func (m *ManagedTLS) Execute(ctx context.Context, s publicapi.Subject, q publica
 		}
 		input.Candidate = &d
 	case "activateCertificate":
-		if _, _, err := m.store.Load(ctx, q.Path["certificate_id"]); err != nil {
-			return result, err
-		}
+		// mgrd checks current descriptor validity for new admission. Local loading
+		// happens in Sync after its durable receipt, so an already accepted retry
+		// can recover the receipt even if that certificate has since expired.
 	case "confirmCertificate":
 		if s.TLSIdentity == "" || s.TLSIdentity != q.Path["certificate_id"] {
 			return result, apitypes.Fail(409, "TLS_FRESH_CONNECTION_REQUIRED")
