@@ -28,6 +28,7 @@ func run() int {
 	socket := flag.String("manager-socket", "/run/ovs-webui/mgrd.sock", "Manager Unix socket path")
 	cert := flag.String("tls-cert", "", "Required TLS certificate file")
 	key := flag.String("tls-key", "", "Required TLS private key file")
+	origin := flag.String("public-origin", "", "Canonical HTTPS origin for browser writes and WebSocket access")
 	version := flag.Bool("version", false, "Print build version")
 	database := flag.String("database", "/var/lib/ovs-webui/web/web.db", "Private web database path")
 	initialize := flag.Bool("init-database", false, "Explicitly initialize a new database and exit; never overwrite")
@@ -76,7 +77,13 @@ func run() int {
 	}
 	go store.Maintain(ctx)
 	client := ipc.NewClient(*socket, ipc.CurrentProtocol(buildinfo.SoftwareVersion()))
-	server := runtimehost.NewHTTPServer(web.BootstrapHandler(client, store.Probe))
+	handler, closeAPI, err := web.PublicHandler(ctx, client, store.Probe, *origin)
+	if err != nil {
+		logger.Error("invalid_public_api_configuration", "code", "API_CONFIGURATION_INVALID")
+		return 2
+	}
+	defer closeAPI()
+	server := runtimehost.NewHTTPServer(handler)
 	server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}}
 	server.Protocols = new(http.Protocols)
 	server.Protocols.SetHTTP1(true)
