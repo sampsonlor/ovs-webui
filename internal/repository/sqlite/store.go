@@ -382,6 +382,10 @@ func (s *Store) failure(err error) error {
 	if errors.Is(err, repository.ErrConflict) || errors.Is(err, repository.ErrInvalid) {
 		return err
 	}
+	var rejection repository.Rejection
+	if errors.As(err, &rejection) {
+		return err
+	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return repository.ErrCanceled
 	}

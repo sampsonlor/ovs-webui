@@ -16,32 +16,42 @@ var ErrInvalidJSON = errors.New("invalid typed JSON")
 // DecodeStrict rejects ambiguity before encoding/json's case-insensitive struct
 // matching or replacement of malformed Unicode can change request meaning.
 func DecodeStrict(data []byte, target any) error {
-	if len(data) > MaxBodyBytes || !utf8.Valid(data) || !validEscapes(data) {
+	value, err := ParseObject(data)
+	if err != nil {
+		return err
+	}
+	t := reflect.TypeOf(target)
+	if t == nil || t.Kind() != reflect.Pointer || !exactFields(value, t.Elem()) {
 		return ErrInvalidJSON
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if err = d.Decode(target); err != nil {
+		return ErrInvalidJSON
+	}
+	return nil
+}
+
+// ParseObject applies the same framing, duplicate-key, Unicode and resource
+// limits before the public OpenAPI validator handles schema-specific fields.
+func ParseObject(data []byte) (map[string]any, error) {
+	if len(data) > MaxBodyBytes || !utf8.Valid(data) || !validEscapes(data) {
+		return nil, ErrInvalidJSON
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
 	tokens := 0
 	value, err := readValue(d, 0, &tokens)
 	if err != nil {
-		return ErrInvalidJSON
+		return nil, ErrInvalidJSON
 	}
 	if _, ok := value.(map[string]any); !ok {
-		return ErrInvalidJSON
+		return nil, ErrInvalidJSON
 	}
 	if _, err = d.Token(); err != io.EOF {
-		return ErrInvalidJSON
+		return nil, ErrInvalidJSON
 	}
-	t := reflect.TypeOf(target)
-	if t == nil || t.Kind() != reflect.Pointer || !exactFields(value, t.Elem()) {
-		return ErrInvalidJSON
-	}
-	d = json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if err = d.Decode(target); err != nil {
-		return ErrInvalidJSON
-	}
-	return nil
+	return value.(map[string]any), nil
 }
 
 func readValue(d *json.Decoder, depth int, count *int) (any, error) {

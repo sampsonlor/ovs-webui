@@ -43,11 +43,17 @@ The [Go runtime foundation](docs/implementation/GO_RUNTIME_IPC_v0.1.md) now prov
 separate Linux daemons, HTTPS bootstrap resources, credential-checked Unix IPC,
 bounded requests and systemd supervision. Its native amd64/arm64 CI includes
 process failure and isolated OVS forwarding tests. The
-[dual SQLite foundation](docs/implementation/SQLITE_REPOSITORIES_v0.1.md), reviewed
-separately in PR #58, adds private databases, atomic migrations, consistent backups
+[dual SQLite foundation](docs/implementation/SQLITE_REPOSITORIES_v0.1.md), accepted
+in PR #58, adds private databases, atomic migrations, consistent backups
 and durable handoff receipts. Missing or damaged databases stop write admission;
 normal startup never replaces them with empty stores. Authentication, configuration
 providers and the Svelte product remain subsequent implementation work.
+
+The current [public REST v1 review](docs/implementation/PUBLIC_API_v1.0.md), PR #59,
+adds OpenAPI runtime validation, generated DTOs, durable request idempotency and
+bounded WebSocket invalidation hints. The catalog covers all 58 Scope IDs and
+53 pages; authentication and real business services retain their separate gates.
+Protected endpoints fail closed until the owning services are connected.
 
 The accepted Batch 01 path remains available:
 

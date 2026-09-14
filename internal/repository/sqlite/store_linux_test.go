@@ -259,7 +259,8 @@ func TestAtomicMigrationBackupAndFailurePreservePriorData(t *testing.T) {
 			if fail {
 				sqlText += "INSERT INTO missing_table VALUES(1);"
 			}
-			plan := append(migrations.For(o.Kind), migration(3, sqlText))
+			baseVersion := len(migrations.For(o.Kind))
+			plan := append(migrations.For(o.Kind), migration(baseVersion+1, sqlText))
 			next, err := openWithMigrations(background, o, plan)
 			_ = next.Close()
 			if (err != nil) != fail {
@@ -270,7 +271,7 @@ func TestAtomicMigrationBackupAndFailurePreservePriorData(t *testing.T) {
 				t.Fatal("migration lacked snapshot")
 			}
 			manifest, err := VerifyBackup(background, backups[0], o.Kind)
-			if err != nil || manifest.SchemaVersion != 2 {
+			if err != nil || manifest.SchemaVersion != baseVersion {
 				t.Fatal("unverifiable pre-migration backup", err)
 			}
 			db, err := connect(o.Path, true, 1)
@@ -281,7 +282,7 @@ func TestAtomicMigrationBackupAndFailurePreservePriorData(t *testing.T) {
 			var count, applied int
 			_ = db.QueryRow("SELECT count(*) FROM metadata").Scan(&count)
 			_ = db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&applied)
-			if count != 1 || applied != map[bool]int{true: 2, false: 3}[fail] {
+			if count != 1 || applied != map[bool]int{true: baseVersion, false: baseVersion + 1}[fail] {
 				t.Fatal("migration lost data or partially applied", count, applied)
 			}
 			_ = db.QueryRow("SELECT count(*) FROM sqlite_schema WHERE name='migration_probe'").Scan(&count)

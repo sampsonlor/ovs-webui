@@ -11,6 +11,13 @@ import (
 
 type Kind string
 
+// A typed domain rejection rolls back the SQL transaction without classifying
+// a precondition or authorization failure as physical database damage.
+type Rejection interface {
+	error
+	RepositoryRejection()
+}
+
 const (
 	Web         Kind = "web"
 	Manager     Kind = "manager"

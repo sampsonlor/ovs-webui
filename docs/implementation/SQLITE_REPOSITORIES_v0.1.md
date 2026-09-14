@@ -1,6 +1,6 @@
 # 双 SQLite Repository、迁移与故障保护 v0.1
 
-日期：2026-09-14。对应 [#32](https://github.com/sampsonlor/ovs-webui/issues/32)，状态：[PR #58 实现待审阅](https://github.com/sampsonlor/ovs-webui/pull/58)。前置 #31 已通过 PR #57 接受合并，基线为 `e61d36c` / `phase1-go-runtime-v0.1`。
+日期：2026-09-14。对应 [#32](https://github.com/sampsonlor/ovs-webui/issues/32)，[PR #58 已接受合并](https://github.com/sampsonlor/ovs-webui/pull/58)至 `7117620`，标签 `phase1-sqlite-repositories-v0.1`。前置 #31 已通过 PR #57 接受合并，基线为 `e61d36c` / `phase1-go-runtime-v0.1`。本文保留 #32 的 schema 2 验收范围；#33 的 schema 3 增量见[公开 API 与请求恢复](PUBLIC_API_v1.0.md)。
 
 本批为两个正式 Go 进程建立持久存储、升级前提和故障状态。普通启动不能重建缺失或损坏的权威库。收到并保存 handoff 回执只证明请求已到达 manager，不代表授权、配置 admission、OVS Commit、Applied 或 Safe Apply Confirmed。
 
