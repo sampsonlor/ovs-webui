@@ -1,6 +1,6 @@
 # Phase 1 实现设计审阅 v0.1
 
-日期：2026-09-09。关联 [#30](https://github.com/sampsonlor/ovs-webui/issues/30)。状态：**Proposed for Review，尚未冻结或接受**。
+日期：2026-09-09。关联 [#30](https://github.com/sampsonlor/ovs-webui/issues/30)。状态：**Accepted for implementation**。用户审阅设计后要求继续下一步；PR #56 合并于 `e2e649e`，接受标签为 `phase1-implementation-design-v0.1`。Scope 原文仍为 Draft for Review，PR #19 保持独立待审。
 
 本次解决正式管理面尚缺可执行设计与完整范围追踪的问题。交付物为原文归档、设计/ADR、全范围责任映射、首切片 API 与迁移草案及可复用契约样例。正式 Go daemon、Svelte 页面和真实 OVS provider 的实现与验收仍由后续任务承担。
 
@@ -57,10 +57,10 @@ PR 的现有 Quality/build、隔离集成及浏览器 CI 继续提供原型回�
 
 ## Disposition 与下一步
 
-- [ ] 接受 Scope Draft 状态的处置及与 Architecture/IA/当前交互约束的显式差异；不静默升级源文档状态。
-- [ ] 接受运行时/driver/typed IPC、双库 handoff、身份算法、权限、SecretStore 与资源预算设计。
-- [ ] 接受字段并发、OutcomeUnknown、Applied、确认期限和受保护恢复的设计与后续故障证据要求。
-- [ ] 接受未发布 lab → 正式 API 的迁移、首个发布 baseline 与全站 API/UI parity 责任。
-- [ ] 记录 PR #19 的独立处置，并确认 #31 的工程准入。
+- [x] 接受 Scope Draft 状态的处置及与 Architecture/IA/当前交互约束的显式差异；不静默升级源文档状态。
+- [x] 接受运行时/driver/typed IPC、双库 handoff、身份算法、权限、SecretStore 与资源预算设计。
+- [x] 接受字段并发、OutcomeUnknown、Applied、确认期限和受保护恢复的设计与后续故障证据要求。
+- [x] 接受未发布 lab → 正式 API 的迁移、首个发布 baseline 与全站 API/UI parity 责任。
+- [x] PR #19 保持独立待审，其原型增量不阻止本次 Go/IPC 基础工程；确认 #31 准入。
 
-#29 与 #30 保持 In Progress；设计接受并记录 disposition 后才能冻结 #30、继续 #31。#52–#55 已补为 Phase 1 Todo，分别负责搜索/本地拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移、管理员/API 手册；#51 汇总其发布证据。当前不创建接受标签、不自动合并其他 PR，也不把待办标记为交付完成。
+#30 设计冻结完成；#29 与 #31 为 In Progress，后者另有[实现审阅](../implementation/GO_RUNTIME_IPC_v0.1.md)。#52–#55 保留 Phase 1 Todo；#51 汇总发布证据。设计接受不等于正式功能、API 发布或产品 Phase 1 完成。

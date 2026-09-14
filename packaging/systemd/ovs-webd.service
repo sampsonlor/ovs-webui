@@ -1,0 +1,38 @@
+[Unit]
+Description=OVS WebUI HTTPS management service
+After=network.target ovs-mgrd.service
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ovs-webui-web
+Group=ovs-webui-web
+EnvironmentFile=/etc/ovs-webui/runtime.env
+ExecStart=/usr/libexec/ovs-webd --listen=${HTTPS_LISTEN} --manager-socket=${MANAGER_SOCKET} --tls-cert=${TLS_CERT} --tls-key=${TLS_KEY}
+UMask=0077
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=5s
+KillMode=control-group
+NoNewPrivileges=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+MemoryMax=128M
+TasksMax=64
+LimitNOFILE=256
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=100
+
+[Install]
+WantedBy=multi-user.target

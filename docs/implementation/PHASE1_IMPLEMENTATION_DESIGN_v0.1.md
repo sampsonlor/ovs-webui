@@ -1,6 +1,6 @@
 # Phase 1 正式管理面实现设计
 
-日期：2026-09-09。状态：**Proposed for Review**。对应 [#30](https://github.com/sampsonlor/ovs-webui/issues/30)，属于 [Phase 1](https://github.com/sampsonlor/ovs-webui/milestone/1)。本文确定可供审阅的实现选择；批准后才作为 #31 起后续工程的输入。
+日期：2026-09-09。状态：**Accepted for implementation**。对应 [#30](https://github.com/sampsonlor/ovs-webui/issues/30)，属于 [Phase 1](https://github.com/sampsonlor/ovs-webui/milestone/1)。PR #56 已接受并合并，接受标签为 `phase1-implementation-design-v0.1`；本文作为 #31 起后续工程输入，具体实现各自保留验收 Gate。
 
 首条正式切片是登录 → 真实 Port 库存 → VLAN Candidate → Diff/Validation → 字段级执行 → Applied → Safe Apply → Event/Audit。首切片的完成不代表 Phase 1 GA。完整范围见[范围与页面映射](PHASE1_SCOPE_TRACEABILITY_v0.1.md)，API 迁移见[契约设计](../contracts/PHASE1_API_MIGRATION_v0.1.md)。
 
@@ -8,7 +8,7 @@
 
 Architecture v1.0.1 与 IA v1.0 是批准基线。2026-09-09 收到的 [Scope v1.0](../baselines/OVS_WebUI_Phase1_Scope_v1.0.docx)正文仍为 Draft for Review；已原样归档，不能因文件已收到便改称 Approved。Scope 的 Required/Manage、58 个 Scope ID、交付物和退出条件全部纳入映射，歧义由 Architecture 的硬边界优先。
 
-P0、P1 六批及整合已接受；main 基于 PR #18 / `176bca1`。[共享库存 PR #19](https://github.com/sampsonlor/ovs-webui/pull/19)仍待接受，其 4/10/13 合成关系与 URL 只作为待审原型证据。设计可以先形成可审阅稿；后续正式实现以[审阅记录](../reviews/PHASE1_DESIGN_v0.1.md)的准入为准。功能主单中的真实服务验收不会被设成后端开工之前必须关闭的循环依赖。
+P0、P1 六批及整合已接受；本设计基于 PR #18 / `176bca1`，经 PR #56 合并为 `e2e649e`。[共享库存 PR #19](https://github.com/sampsonlor/ovs-webui/pull/19)仍待接受，其 4/10/13 合成关系与 URL 只作为待审原型证据。[审阅记录](../reviews/PHASE1_DESIGN_v0.1.md)已确认 #31 工程准入。功能主单中的真实服务验收不会被设成后端开工之前必须关闭的循环依赖。
 
 ## 进程与代码组织
 
@@ -28,7 +28,7 @@ flowchart TD
 
 保持两个 daemon。安全调度器是 mgrd 内独立于 HTTP/诊断请求的常驻任务，不引入第三个 watchdog daemon。systemd 监督两个服务，但二者均不得对 OVS units 使用 `PartOf`、`BindsTo` 或 stop propagation。停止、升级或卸载 WebUI 不操作 OVS。
 
-后续 #31 建立以下目录；本 PR 不生成运行时占位实现，也不改变现有原型构建。
+以下是 #31 起的目录责任规划；#30 设计 PR 本身未生成运行时占位实现。#31 的实际交付范围见 [Go 运行时与 IPC](GO_RUNTIME_IPC_v0.1.md)。
 
 ```text
 cmd/ovs-webd/                    HTTPS, embedded assets, composition root
@@ -225,4 +225,4 @@ Session cookie `__Host-ovs_session`，Secure/HttpOnly/SameSite=Strict/Path=/，�
 
 新增 Scope 明确的 QinQ、NetFlow、双语、全局搜索/一跳拓扑及 conditional OpenFlow 写入均在[映射与差异表](PHASE1_SCOPE_TRACEABILITY_v0.1.md)跟踪。#52 提供搜索/本地拓扑，#53 单独处理 OpenFlow conditional write，#54 完成首切片之外的 Svelte/双语页面，#55 交付可操作的管理员/API 文档。#51 在发布前汇总这些新增任务的证据；它们不依赖 #51 完成而造成循环。OpenFlow 当前已接受原型继续 Observe；是否开放 local-managed Expert 写入要有独立 ownership、并发、transaction/evidence 和恢复审阅。DPDK/Offload 仍 Observe。
 
-本任务的冻结需接受 Scope 状态/差异处置、身份与权限、双库 handoff、typed IPC、事务/恢复、参数、版本窗口和 API 迁移。真实 OVS 与软件实现测试属于后续模块的验收；设计文档检查不能冒充那些证据。
+本任务已接受并冻结 Scope 状态/差异处置、身份与权限、双库 handoff、typed IPC、事务/恢复、参数、版本窗口和 API 迁移设计。真实 OVS 与软件实现测试属于后续模块的验收；设计文档检查不能冒充那些证据。
