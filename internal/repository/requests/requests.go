@@ -236,7 +236,10 @@ func (r *Repository) Execute(ctx context.Context, c Command, reauthorize func(co
 				return apitypes.Fail(500, "JOB_NOT_DURABLE")
 			}
 		}
-		receipt := apitypes.Receipt{RequestID: c.ID, Domain: c.Domain, Epoch: c.Epoch, State: "accepted", Effect: "linked-resource", Resource: result.Resource, Job: result.Job, CorrelationID: repository.NewID()}
+		receipt := apitypes.Receipt{RequestID: c.ID, Domain: c.Domain, Epoch: c.Epoch, State: "accepted", Effect: "unknown", Resource: result.Resource, Job: result.Job, CorrelationID: repository.NewID()}
+		if result.Resource != nil {
+			receipt.Effect = "linked-resource"
+		}
 		var completed any
 		if result.Terminal {
 			receipt.State = "completed"

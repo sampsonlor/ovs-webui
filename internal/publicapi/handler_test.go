@@ -240,3 +240,30 @@ func TestProblemSanitization(t *testing.T) {
 		t.Fatal("internal error leaked")
 	}
 }
+
+func TestAcceptedAndSecretReplayCannotMisrouteReceipt(t *testing.T) {
+	id := apitypes.RequestID(time.Now())
+	job := apitypes.Ref{Kind: "job", ID: resource}
+	receipt := apitypes.Receipt{RequestID: id, Domain: "management", Epoch: epoch, State: "accepted", Effect: "linked-resource", Resource: &job, Job: &job, CorrelationID: repository.NewID()}
+	accepted := apitypes.Accepted{RequestID: id, Domain: "management", Epoch: epoch, JobID: resource, Resource: &job, CorrelationID: receipt.CorrelationID}
+	result := apitypes.Result{Status: 202, Receipt: receipt}
+	result.Body, _ = json.Marshal(accepted)
+	h := newTestHandler(t, Options{Authorizer: &testAuthority{}, Gateway: testGateway{execute: func(context.Context, Subject, Query, requests.Command) (apitypes.Result, error) { return result, nil }}})
+	body := fmt.Sprintf(`{"request_id":%q}`, id)
+	if w := call(h, "POST", "/api/v1/jobs/"+resource+"/cancellations", body, commandHeaders(id)); w.Code != 202 {
+		t.Fatal(w.Code, w.Body)
+	}
+	accepted.JobID = principal
+	result.Body, _ = json.Marshal(accepted)
+	assertProblem(t, h, call(h, "POST", "/api/v1/jobs/"+resource+"/cancellations", body, commandHeaders(id)), 500, "INVALID_SERVICE_RESPONSE")
+	result.Status = 200
+	result.Replayed = true
+	result.Body, _ = json.Marshal(receipt)
+	body = fmt.Sprintf(`{"request_id":%q,"name":"synthetic","scopes":["state.read"],"expires_at":%q}`, id, time.Now().Add(time.Hour).UTC().Format(time.RFC3339))
+	if w := call(h, "POST", "/api/v1/tokens", body, commandHeaders(id)); w.Code != 200 {
+		t.Fatal(w.Code, w.Body)
+	}
+	receipt.Epoch = resource
+	result.Body, _ = json.Marshal(receipt)
+	assertProblem(t, h, call(h, "POST", "/api/v1/tokens", body, commandHeaders(id)), 500, "INVALID_SERVICE_RESPONSE")
+}

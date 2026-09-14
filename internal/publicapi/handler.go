@@ -329,7 +329,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if result.Replayed && op.SecretResponse {
-		if e = h.contract.Schemas["RequestReceipt"].Validate(jsonValue(result.Body)); e != nil {
+		var receipt apitypes.Receipt
+		if e = h.contract.Schemas["RequestReceipt"].Validate(jsonValue(result.Body)); e != nil || result.Status != 200 || json.Unmarshal(result.Body, &receipt) != nil || !sameReceipt(receipt, result.Receipt) {
 			fail(apitypes.Fail(500, "INVALID_SERVICE_RESPONSE"))
 			return
 		}
@@ -349,6 +350,9 @@ func sameRef(a, b *apitypes.Ref) bool {
 		return a == nil && b == nil
 	}
 	return *a == *b
+}
+func sameReceipt(a, b apitypes.Receipt) bool {
+	return a.RequestID == b.RequestID && a.Domain == b.Domain && a.Epoch == b.Epoch && a.State == b.State && a.Effect == b.Effect && a.CorrelationID == b.CorrelationID && sameRef(a.Resource, b.Resource) && sameRef(a.Job, b.Job)
 }
 func sendResponse(w http.ResponseWriter, r Response) {
 	if r.ETag == "" && len(r.Body) > 0 {
