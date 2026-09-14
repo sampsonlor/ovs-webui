@@ -90,13 +90,14 @@ def main():
         roots.chmod(0o600)
         os.chown(roots, account.pw_uid, account.pw_gid)
 
-        def identity(name, host='127.0.0.1'):
+        def identity(name, host='127.0.0.1', signer=None):
             cert, key, csr = [fixture / f'{name}.{ext}' for ext in ('crt', 'key', 'csr')]
             run('openssl', 'req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes',
                 '-subj', '/CN=Synthetic CI Leaf', '-keyout', str(key), '-out', str(csr))
             ext = fixture / f'{name}.ext'
             ext.write_text(f'basicConstraints=critical,CA:FALSE\nsubjectAltName=IP:{host}\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth\n')
-            run('openssl', 'x509', '-req', '-in', str(csr), '-CA', str(ca), '-CAkey', str(ca_key),
+            issuer_cert, issuer_key = signer or (ca, ca_key)
+            run('openssl', 'x509', '-req', '-in', str(csr), '-CA', str(issuer_cert), '-CAkey', str(issuer_key),
                 '-set_serial', str(secrets.randbits(96) + 1), '-days', '1', '-extfile', str(ext), '-out', str(cert))
             credentials.append(key.read_text().strip())
             return cert.read_text(), key.read_text()
@@ -104,6 +105,11 @@ def main():
         first_cert, first_key = identity('first')
         second_cert, second_key = identity('second')
         wrong_host_cert, wrong_host_key = identity('wrong-host', '192.0.2.35')
+        foreign_ca, foreign_key = fixture / 'foreign-root.crt', fixture / 'foreign-root.key'
+        run('openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes',
+            '-days', '2', '-subj', '/CN=Untrusted Synthetic Root', '-addext', 'basicConstraints=critical,CA:TRUE',
+            '-keyout', str(foreign_key), '-out', str(foreign_ca))
+        untrusted_cert, untrusted_key = identity('untrusted', signer=(foreign_ca, foreign_key))
         trust = ssl.create_default_context(cafile=str(bootstrap))
         trust.load_verify_locations(cafile=str(ca))
         config = fixture / 'runtime.env'
@@ -183,7 +189,7 @@ def main():
         cookie, session = login()
         # Offline tools cannot mutate an active daemon's locked database.
         assert web_action('--rotate-secret-key', 'tls', '--public-origin', origin, check=False).returncode != 0
-        for cert, key in ((first_cert, second_key), (wrong_host_cert, wrong_host_key), (bootstrap.read_text(), first_key)):
+        for cert, key in ((first_cert, second_key), (wrong_host_cert, wrong_host_key), (untrusted_cert, untrusted_key)):
             _, (code, _, _) = command('/certificates', {'certificate_pem': cert, 'private_key_pem': key}, cookie, session)
             assert code == 422, f'invalid certificate status {code}'
             assert fingerprint() == original_fingerprint
