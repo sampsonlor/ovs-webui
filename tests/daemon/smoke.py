@@ -196,12 +196,14 @@ def main():
         assert re.search(r'^Uid:' + (rf'\s+{account.pw_uid}' * 4) + r'\s*$', Path(f'/proc/{web_pid}/status').read_text(), re.M)
         assert (runtime / 'mgrd.sock').stat().st_mode & 0o777 == 0o660
         checks.append('root mgrd and non-root webd communicate through credential-checked IPC and HTTPS')
-        status, problem = fetch('/api/v1/transactions')
+        status, body = fetch('/api/v1/transactions')
+        problem = json.loads(body)
         assert status == 401 and problem['code'] == 'UNAUTHENTICATED'
         assert problem['command_effect'] == 'unknown' and problem['correlation_id']
-        assert fetch('/api/v1/contract')[1]['major'] == 1
-        assert fetch('/api/v1/openapi.json')[1]['openapi'] == '3.1.1'
-        assert fetch('/api/v1/runtime')[1]['authentication_ready'] is False
+        assert json.loads(fetch('/api/v1/contract')[1])['major'] == 1
+        assert json.loads(fetch('/api/v1/openapi.json')[1])['openapi'] == '3.1.1'
+        assert json.loads(fetch('/api/v1/runtime')[1])['authentication_ready'] is False
+        checks.append('public OpenAPI v1, structured Problem and closed production authority')
         with socket.create_connection(('127.0.0.1', port), timeout=2) as plain:
             plain.sendall(b'GET /healthz HTTP/1.1\r\nHost: localhost\r\n\r\n')
             assert b'200 OK' not in plain.recv(4096)

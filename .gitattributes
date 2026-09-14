@@ -6,3 +6,8 @@
 /internal/apicontract/openapi.json text eol=lf
 /internal/apidto/*generated.go text eol=lf
 /clients/typescript/*generated.ts text eol=lf
+/contracts/v1*.json linguist-generated=true
+/contracts/releases/*.json linguist-generated=true
+/internal/apicontract/openapi.json linguist-generated=true
+/internal/apidto/*generated.go linguist-generated=true
+/clients/typescript/*generated.ts linguist-generated=true
