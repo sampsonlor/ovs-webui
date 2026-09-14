@@ -29,6 +29,9 @@ func ValidSecret(value, prefix string) bool {
 // Versioned AEAD envelope; AAD binds consumer, cookie hash and database identity.
 // Session and manager keys are separate files and never part of ordinary DB backup.
 func Seal(key, plain, aad []byte) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, errors.New("AUTH_KEY_INVALID")
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -45,6 +48,9 @@ func Seal(key, plain, aad []byte) ([]byte, error) {
 	return a.Seal(out, nonce, plain, aad), nil
 }
 func Unseal(key, envelope, aad []byte) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, errors.New("AUTH_KEY_INVALID")
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err

@@ -21,13 +21,13 @@ var aliases = map[string]string{
 	"config.apply": "configuration.apply", "config.decide": "configuration.confirm", "request.read": "requests.read",
 	"job.read": "jobs.read", "job.cancel": "jobs.cancel", "event.read": "events.read", "audit.read": "audit.read",
 	"user.read": "access.users.manage", "user.manage": "access.users.manage", "role.read": "access.roles.manage", "role.manage": "access.roles.manage",
-	"token.read": "tokens.self", "token.manage": "tokens.self", "access.read": "access.aaa.manage", "access.configure": "access.aaa.manage",
+	"token.read": "access.tokens.self", "token.manage": "access.tokens.self", "access.read": "access.aaa.manage", "access.configure": "access.aaa.manage",
 	"certificate.read": "access.tls.manage", "certificate.manage": "access.tls.manage", "backup.read": "backup.create", "backup.manage": "backup.create",
 	"recovery.read": "configuration.read", "recovery.manage": "backup.restore", "diagnostic.read": "diagnostics.read", "diagnostic.run": "diagnostics.active",
 	"capture.run": "diagnostics.disruptive", "support.export": "support_bundle.create", "lifecycle.manage": "ovs.lifecycle.manage",
 	"config.export": "configuration.read", "artifact.read": "artifacts.read", "artifact.write": "artifacts.write", "openflow.manage": "openflow.local.write",
 }
-var readCapabilities = []string{"inventory.read", "state.read", "capabilities.read", "jobs.read", "events.read", "audit.read", "workspace.read", "configuration.read", "requests.read", "diagnostics.read", "artifacts.read"}
+var readCapabilities = []string{"inventory.read", "state.read", "capabilities.read", "jobs.read", "events.read", "audit.read", "workspace.read", "configuration.read", "requests.read", "diagnostics.read", "artifacts.read", "access.tokens.self"}
 var securityCapabilities = []string{"access.users.manage", "access.roles.manage", "access.aaa.manage", "access.tokens.manage", "access.tls.manage"}
 var networkCapabilities = []string{"workspace.write", "configuration.validate", "configuration.apply", "configuration.confirm", "configuration.rollback", "ovs.port.vlan.write", "diagnostics.active", "diagnostics.disruptive", "support_bundle.create", "backup.create", "backup.restore", "configuration.import", "management_network.write", "ovs.lifecycle.manage", "jobs.cancel", "artifacts.write"}
 var managementCapabilities = []string{"management.policy.write", "management.debug.write", "management.services.control", "openflow.local.write"}
@@ -122,7 +122,7 @@ func require(c authn.Claims, capability string, elevated bool, now int64) error 
 	if !ok {
 		return apitypes.Fail(403, "CAPABILITY_UNKNOWN")
 	}
-	if canonical != "tokens.self" && !slices.Contains(c.Capabilities, canonical) {
+	if !slices.Contains(c.Capabilities, canonical) {
 		return apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	if elevated && (c.CredentialKind != "grant" || c.ElevatedUntil.Unix() <= now) {

@@ -221,6 +221,8 @@ func TestTokenScopeOneTimeSecretAndReceiptRecovery(t *testing.T) {
 	}
 	_, err = r.CheckAuth(testContext, secret, authn.Check{Capability: "user.manage"})
 	wantCode(t, err, "CAPABILITY_DENIED")
+	_, err = r.CheckAuth(testContext, secret, authn.Check{Capability: "token.read"})
+	wantCode(t, err, "CAPABILITY_DENIED")
 	_, err = r.Reauthenticate(testContext, secret, authn.Reauthentication{Password: testPassword})
 	wantCode(t, err, "BROWSER_SESSION_REQUIRED")
 	execute(t, r, admin, "POST", "/tokens/"+created["id"].(string)+"/revocations", map[string]any{}, "")

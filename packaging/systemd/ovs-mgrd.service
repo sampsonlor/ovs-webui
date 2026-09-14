@@ -34,7 +34,9 @@ RestrictNamespaces=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 ReadWritePaths=/run/ovs-webui
-MemoryMax=128M
+# Two bounded 64 MiB Argon2id workers plus authority/schema/SQLite overhead.
+Environment=GOMEMLIMIT=192MiB
+MemoryMax=256M
 TasksMax=64
 LimitNOFILE=256
 LogRateLimitIntervalSec=30s

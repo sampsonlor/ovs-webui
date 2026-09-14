@@ -33,7 +33,7 @@ and #54 and the existing functional issues.
   New passwords require 12–1024 bytes. See the [Go Argon2
   implementation](https://pkg.go.dev/golang.org/x/crypto/argon2).
 - Two active password derivations, no unbounded queue; ten attempts per username
-  and sixty attempts globally per rolling minute window. Attempt accounting is
+  and sixty attempts globally in sixty-second attempt windows. Attempt accounting is
   persistent and hashed. Reauthentication shares the same limits.
 - Grants, cookies, CSRF values and API tokens have independent prefixes and
   256-bit random secrets. Manager stores only credential hashes. Grants expire
@@ -77,6 +77,16 @@ transport aliases are mapped to the accepted design's canonical namespace;
 there is no role-name bypass. SecurityAdmin does not imply network writes, and
 NetworkAdmin does not imply security administration. Unknown capabilities are
 rejected. Existing grants cannot gain permissions beyond their issuance ceiling.
+Self-service tokens use `access.tokens.self`; managing another principal's token
+also requires `access.tokens.manage`. Token Bearer access is constrained by these
+same explicit scopes, including reads of its owner's token metadata.
+
+The mgrd systemd limit is 256 MiB with a 192 MiB Go memory target, accounting for
+two 64 MiB password workers and bounded schema/SQLite/runtime overhead. Native
+service smoke tests record actual peak memory and concurrent login timings.
+The Go race-test package timeout is 180 seconds because full-cost Argon2id tests
+on arm64 exceed the earlier 90-second cumulative limit; production request
+deadlines remain five seconds.
 
 Every security mutation requires current elevation. A shared mgrd decision gate
 orders revocation, policy changes and execution. Password derivation happens
