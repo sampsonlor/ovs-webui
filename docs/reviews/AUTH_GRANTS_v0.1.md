@@ -1,6 +1,6 @@
 # Auth Grant 技术审阅 v0.1
 
-日期：2026-09-14。任务 #34 / [PR #60](https://github.com/sampsonlor/ovs-webui/pull/60)。实现及技术验收完成，等待用户接受，保持 Open / In Progress；尚未建立本批接受标签。前置 #33 已合并并接受，基线为 `phase1-public-api-v1.0`。
+日期：2026-09-14。任务 #34 / [PR #60](https://github.com/sampsonlor/ovs-webui/pull/60) 已获用户接受并合并，#34 已关闭 / Done。合并基线 `da24f62215940b113d1316bc5e60f55964b6f2c4`，接受标签 `phase1-auth-grants-v0.1`。最终接受提交 `e83b707c2c4ef60d6c046cb908a39f8ca3f817c4` 的 [CI](https://github.com/sampsonlor/ovs-webui/actions/runs/34828624014) 六项通过。前置 #33 基线为 `phase1-public-api-v1.0`。
 
 本批提供 #20 用户/角色、#27 AAA、#28 API Tokens 共用的真实 Go 身份与授权基础。完整功能页面与后续 provider 保留各自验收。实现与初始化说明见 [AUTH_GRANTS_v0.1](../implementation/AUTH_GRANTS_v0.1.md)。
 
@@ -44,4 +44,4 @@ Standard/Expert 继续只改变呈现深度；桌面、平板和移动端职责�
 
 #20–#28 已全部归入 Phase 1 milestone，仍保留 Todo 与完整功能验收。TACACS+ 返回 AUTH_PROVIDER_UNAVAILABLE，后续按 #27 与 #35 的 SecretStore 依赖实现；Svelte 页面按 #41/#54 接入。本批的消费者专用会话加密不等同于 #35 的完整 SecretStore、证书激活与密钥轮换，也不代替 #37 共享证据或 #48 恢复流程。
 
-用户接受本批后再合并 PR #60、关闭 #34，并推进 #35 SecretStore、HTTPS 与证书安全激活。PR #19 继续作为独立库存原型审阅。
+本批已接受；当前推进 #35 SecretStore、HTTPS 与证书安全激活。PR #19 继续作为独立库存原型审阅。

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,10 +18,13 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
+	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
+	"github.com/sampsonlor/ovs-webui/internal/repository/secrets"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
+	"github.com/sampsonlor/ovs-webui/internal/secret"
 )
 
 func main() { os.Exit(run()) }
@@ -34,19 +38,32 @@ func run() int {
 	authKeyPath := flag.String("auth-key-file", "", "Private authentication key (default: auth.key beside manager.db)")
 	initAuthKey := flag.Bool("init-auth-key", false, "Explicitly create a new authentication key and exit; never overwrite")
 	bootstrap := flag.String("bootstrap-admin", "", "Initialize first local administrator; read password from stdin, then exit")
+	secretDir := flag.String("secret-key-directory", "", "Private versioned privileged keys (default: secret-keys beside manager.db)")
+	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
+	rotateSecret := flag.Bool("rotate-secret-key", false, "Offline privileged key rotation, retaining old versions")
+	restore := flag.Bool("prepare-restore-security", false, "Offline: rotate restored auth/request epochs and revoke all grants/tokens; run with webd reconciliation")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.SoftwareVersion())
 		return 0
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("service", "ovs-mgrd")
-	if flag.NArg() != 0 || os.Geteuid() != 0 || (!*initialize && !*initAuthKey && *bootstrap == "" && (*uid == 0 || *gid == 0 || uint64(*uid) >= 1<<32-1 || uint64(*gid) >= 1<<32-1)) {
+	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
+	actions := 0
+	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *initSecret, *rotateSecret, *restore} {
+		if enabled {
+			actions++
+		}
+	}
+	if flag.NArg() != 0 || os.Geteuid() != 0 || actions > 1 || (actions == 0 && (*uid == 0 || *gid == 0 || uint64(*uid) >= 1<<32-1 || uint64(*gid) >= 1<<32-1)) {
 		logger.Error("invalid_process_configuration", "code", "ROOT_AND_FIXED_WEBD_ID_REQUIRED")
 		return 2
 	}
 	syscall.Umask(0077)
 	if *authKeyPath == "" {
 		*authKeyPath = filepath.Join(filepath.Dir(*database), "auth.key")
+	}
+	if *secretDir == "" {
+		*secretDir = filepath.Join(filepath.Dir(*database), "secret-keys")
 	}
 	if *initAuthKey {
 		if _, err := authn.KeyFile(*authKeyPath, true); err != nil {
@@ -71,6 +88,51 @@ func run() int {
 	defer store.Close()
 	if storageErr != nil {
 		logger.Error("storage_degraded", "code", store.Status().Code)
+	}
+	if *initSecret {
+		if storageErr != nil {
+			logger.Error("security_action_failed", "code", "STORAGE_UNAVAILABLE")
+			return 1
+		}
+		if _, err := secret.InitializeKeys(*secretDir, nil); err != nil {
+			logger.Error("security_action_failed", "code", "SECRET_KEY_UNAVAILABLE")
+			return 1
+		}
+		logger.Info("security_action_completed")
+		return 0
+	}
+	var privileged *secrets.Store
+	if _, err := os.Lstat(*secretDir); err == nil {
+		keys, e := secret.LoadKeys(*secretDir)
+		if e == nil && storageErr == nil {
+			privileged, e = secrets.New(ctx, store, secret.Privileged, keys)
+		}
+		if e != nil || privileged == nil {
+			logger.Error("service_start_failed", "code", "SECRET_KEY_UNAVAILABLE")
+			return 1
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		logger.Error("service_start_failed", "code", "SECRET_KEY_UNAVAILABLE")
+		return 1
+	}
+	if *rotateSecret {
+		if privileged == nil {
+			logger.Error("security_action_failed", "code", "SECRET_KEY_UNAVAILABLE")
+			return 1
+		}
+		next, err := secret.PrepareKey(*secretDir)
+		if err == nil {
+			err = privileged.Rewrap(ctx, next)
+		}
+		if err == nil {
+			err = secret.ActivateKeys(*secretDir, next.Active)
+		}
+		if err != nil {
+			logger.Error("security_action_failed", "code", "SECRET_ROTATION_FAILED")
+			return 1
+		}
+		logger.Info("security_action_completed")
+		return 0
 	}
 	var authentication *auth.Repository
 	if key, err := authn.KeyFile(*authKeyPath, false); err == nil && storageErr == nil {
@@ -99,6 +161,24 @@ func run() int {
 		logger.Info("local_administrator_initialized")
 		return 0
 	}
+	if *restore {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		if privileged != nil {
+			if err := privileged.Rewrap(ctx, privileged.Ring); err != nil {
+				logger.Error("security_action_failed", "code", "SECRET_KEY_UNAVAILABLE")
+				return 1
+			}
+		}
+		if err := authentication.PrepareRestore(ctx); err != nil {
+			logger.Error("security_action_failed", "code", "RESTORE_SECURITY_FAILED")
+			return 1
+		}
+		logger.Info("security_action_completed")
+		return 0
+	}
 	go store.Maintain(ctx)
 	listener, err := ipc.ListenUnix(ipc.SocketOptions{Path: *socket, OwnerUID: 0, GroupGID: uint32(*gid), PeerUID: uint32(*uid)})
 	if err != nil {
@@ -122,6 +202,10 @@ func run() int {
 		}
 		return health
 	}).WithAuthentication(authService)
+	if authentication != nil {
+		handler.WithTLS(authentication)
+		go authentication.MaintainTLS(ctx)
+	}
 	server := ipc.HTTPServer(handler)
 	logger.Info("service_started", "scope", "runtime-bootstrap", "configuration_ready", false)
 	if err := runtimehost.Run(ctx, server, func() error { return server.Serve(listener) }, logger); err != nil {

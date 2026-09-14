@@ -182,6 +182,8 @@ jobs:
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
         run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
+      - name: Encrypted TLS identity, fresh connection confirmation and real recovery deadline
+        run: sudo -- python3 tests/daemon/tls_lifecycle.py --bin-dir outputs/runtime
       - name: Retain runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -193,6 +195,8 @@ jobs:
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json
             test-results/go-auth-journal.log
+            test-results/go-tls-smoke.json
+            test-results/go-tls-journal.log
           if-no-files-found: ignore
           retention-days: 7
 

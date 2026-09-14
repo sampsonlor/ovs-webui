@@ -14,6 +14,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
+	"github.com/sampsonlor/ovs-webui/internal/secret"
 )
 
 func sessionFixture(t *testing.T) (*Repository, sqlite.Options) {
@@ -89,12 +90,12 @@ func TestTamperedEnvelopeAndWrongKeyCannotCreateIdentity(t *testing.T) {
 	if err := r.Save(ctx, cookie, m); err != nil {
 		t.Fatal(err)
 	}
-	original := append([]byte{}, r.key...)
-	r.key = bytes.Repeat([]byte{3}, 32)
+	original := r.keys
+	r.keys, _ = secret.NewRing(1, map[int][]byte{1: bytes.Repeat([]byte{3}, 32)})
 	if _, err := r.Load(ctx, cookie); err == nil {
 		t.Fatal("wrong key decrypted mapping")
 	}
-	r.key = original
+	r.keys = original
 	hash := authn.Hash(cookie)
 	tampered := []byte(`{"principal_id":"administrator","role":"Administrator"}`)
 	if err := r.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.1.0', description: 'Phase 1 public transport baseline with local authentication and scoped credentials. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability.' };
+api.info = { title: 'OVS WebUI public API', version: '1.2.0', description: 'Phase 1 public transport baseline with local authentication, scoped credentials and certificate activation recovery. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -166,6 +166,7 @@ for (const [path, op, body, cap, issue, options] of [
  ['/aaa','configureAAA','AAACommand','access.configure',34,{etag:true,method:'patch'}],
  ['/certificates','createCertificate','CertificateCommand','certificate.manage',35,{sensitive:true}],
  ['/certificates/{certificate_id}/activations','activateCertificate','EmptyCommand','certificate.manage',35,{etag:true}],
+ ['/certificates/{certificate_id}/confirmations','confirmCertificate','EmptyCommand','certificate.manage',35,{etag:true}],
  ['/diagnostics','createDiagnostic','DiagnosticCommand','diagnostic.run',46,{}],
  ['/captures','createCapture','CaptureCommand','capture.run',46,{}],
  ['/support-bundles','createSupportBundle','SupportCommand','support.export',46,{}],

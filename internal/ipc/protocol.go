@@ -42,7 +42,7 @@ func CurrentProtocol(software string) Protocol {
 		panic("invalid embedded protocol manifest")
 	}
 	sum := sha256.Sum256(compact.Bytes())
-	return Protocol{Major: 1, Minor: 1, Software: software, Digest: hex.EncodeToString(sum[:])}
+	return Protocol{Major: 1, Minor: 2, Software: software, Digest: hex.EncodeToString(sum[:])}
 }
 
 type HandshakeReply struct {

@@ -20,12 +20,17 @@ import (
 const sessionCookie = "__Host-ovs_session"
 
 type Authentication struct {
-	manager  authn.Manager
-	sessions *sessions.Repository
+	manager      authn.Manager
+	sessions     *sessions.Repository
+	certificates *ManagedTLS
 }
 
 func NewAuthentication(manager authn.Manager, sessions *sessions.Repository) *Authentication {
 	return &Authentication{manager: manager, sessions: sessions}
+}
+func (a *Authentication) WithCertificates(c *ManagedTLS) *Authentication {
+	a.certificates = c
+	return a
 }
 func authError(err error) error {
 	if err == nil {
@@ -83,7 +88,7 @@ func (a *Authentication) Authenticate(ctx context.Context, r *http.Request) (pub
 	if c.PrincipalID != m.PrincipalID || c.CredentialKind != "grant" {
 		return subject, apitypes.Fail(401, "SESSION_INVALID")
 	}
-	return publicapi.Subject{ID: c.PrincipalID, PermissionRevision: c.Revision, CredentialKind: "cookie", CSRFToken: m.CSRF, Credential: m.Grant, SessionCookie: cookie}, nil
+	return publicapi.Subject{ID: c.PrincipalID, PermissionRevision: c.Revision, CredentialKind: "cookie", CSRFToken: m.CSRF, Credential: m.Grant, SessionCookie: cookie, TLSIdentity: servedCertificate(r.Context())}, nil
 }
 func (a *Authentication) Revalidate(ctx context.Context, s publicapi.Subject) (publicapi.Subject, error) {
 	// Re-read the sealed mapping as well, so deleted/replaced local sessions stop
@@ -211,7 +216,13 @@ func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q public
 	}
 	return publicapi.Response{Status: result.Status, Body: result.Body, ETag: result.ETag}, nil
 }
-func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, _ publicapi.Query, c requests.Command) (apitypes.Result, error) {
+func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q publicapi.Query, c requests.Command) (apitypes.Result, error) {
+	if q.Operation.ID == "createCertificate" || q.Operation.ID == "activateCertificate" || q.Operation.ID == "confirmCertificate" {
+		if a.certificates == nil {
+			return apitypes.Result{}, apitypes.Fail(503, "TLS_STORE_UNAVAILABLE")
+		}
+		return a.certificates.Execute(ctx, s, q, c)
+	}
 	result, err := a.manager.ExecuteAuth(ctx, s.Credential, authn.Command{Method: c.Method, URI: c.URI, Epoch: c.Epoch, RequestID: c.ID, Precondition: c.Precondition, Payload: c.Payload})
 	return result, authError(err)
 }

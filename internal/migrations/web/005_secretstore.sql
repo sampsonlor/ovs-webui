@@ -1,0 +1,3 @@
+CREATE TABLE secret_records(partition TEXT NOT NULL, id TEXT NOT NULL, purpose TEXT NOT NULL, provider TEXT NOT NULL, key_version INTEGER NOT NULL, envelope BLOB NOT NULL, PRIMARY KEY(partition,id)) STRICT;
+CREATE TABLE tls_candidates(id TEXT PRIMARY KEY, principal_id TEXT NOT NULL, epoch TEXT NOT NULL, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL, digest_version INTEGER NOT NULL, input_digest TEXT NOT NULL, certificate_pem BLOB NOT NULL, UNIQUE(principal_id,epoch,request_id)) STRICT;
+CREATE TABLE tls_local_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), envelope BLOB NOT NULL) STRICT;

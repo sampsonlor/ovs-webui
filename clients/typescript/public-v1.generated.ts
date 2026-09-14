@@ -243,6 +243,7 @@ export interface Operations {
   deleteUser: { method: "POST"; path: "/users/{user_id}/deletions"; body: EmptyCommand; response: Accepted };
   revokeToken: { method: "POST"; path: "/tokens/{token_id}/revocations"; body: EmptyCommand; response: Accepted };
   activateCertificate: { method: "POST"; path: "/certificates/{certificate_id}/activations"; body: EmptyCommand; response: Accepted };
+  confirmCertificate: { method: "POST"; path: "/certificates/{certificate_id}/confirmations"; body: EmptyCommand; response: Accepted };
   createDiagnostic: { method: "POST"; path: "/diagnostics"; body: DiagnosticCommand; response: Accepted };
   createCapture: { method: "POST"; path: "/captures"; body: CaptureCommand; response: Accepted };
   createSupportBundle: { method: "POST"; path: "/support-bundles"; body: SupportCommand; response: Accepted };
