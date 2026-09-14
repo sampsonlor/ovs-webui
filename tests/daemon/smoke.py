@@ -108,7 +108,7 @@ def main():
         configuration = fixture / 'runtime.env'
         configuration.write_text(
             f'WEBD_UID={account.pw_uid}\nWEBD_GID={account.pw_gid}\nMANAGER_SOCKET={runtime}/mgrd.sock\n'
-            f'HTTPS_LISTEN=127.0.0.1:{port}\nTLS_CERT={cert}\nTLS_KEY={key}\n'
+            f'HTTPS_LISTEN=127.0.0.1:{port}\nTLS_CERT={cert}\nTLS_KEY={key}\nPUBLIC_ORIGIN=\n'
             f'MANAGER_DATABASE={manager_database}\nWEB_DATABASE={web_database}\n')
         for service, name in units.items():
             template = (repo / 'packaging/systemd' / f'ovs-{service}.service').read_text()

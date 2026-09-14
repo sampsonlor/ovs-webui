@@ -12,11 +12,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
+	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/sessions"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
 	"github.com/sampsonlor/ovs-webui/internal/web"
@@ -32,17 +35,30 @@ func run() int {
 	version := flag.Bool("version", false, "Print build version")
 	database := flag.String("database", "/var/lib/ovs-webui/web/web.db", "Private web database path")
 	initialize := flag.Bool("init-database", false, "Explicitly initialize a new database and exit; never overwrite")
+	sessionKeyPath := flag.String("session-key-file", "", "Private session key (default: session.key beside web.db)")
+	initSessionKey := flag.Bool("init-session-key", false, "Explicitly create a new session key and exit; never overwrite")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.SoftwareVersion())
 		return 0
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("service", "ovs-webd")
-	if flag.NArg() != 0 || os.Geteuid() == 0 || (!*initialize && (*cert == "" || *key == "")) {
+	if flag.NArg() != 0 || os.Geteuid() == 0 || (!*initialize && !*initSessionKey && (*cert == "" || *key == "")) {
 		logger.Error("invalid_process_configuration", "code", "NONROOT_AND_TLS_REQUIRED")
 		return 2
 	}
 	syscall.Umask(0077)
+	if *sessionKeyPath == "" {
+		*sessionKeyPath = filepath.Join(filepath.Dir(*database), "session.key")
+	}
+	if *initSessionKey {
+		if _, err := authn.KeyFile(*sessionKeyPath, true); err != nil {
+			logger.Error("session_key_initialization_failed", "code", "AUTH_KEY_UNAVAILABLE")
+			return 1
+		}
+		logger.Info("session_key_initialized")
+		return 0
+	}
 	options := sqlite.Options{Path: *database, Kind: repository.Web, SoftwareVersion: buildinfo.SoftwareVersion()}
 	if *initialize {
 		if err := sqlite.Initialize(context.Background(), options); err != nil {
@@ -77,7 +93,16 @@ func run() int {
 	}
 	go store.Maintain(ctx)
 	client := ipc.NewClient(*socket, ipc.CurrentProtocol(buildinfo.SoftwareVersion()))
-	handler, closeAPI, err := web.PublicHandler(ctx, client, store.Probe, *origin)
+	var authentication *web.Authentication
+	if sessionKey, keyErr := authn.KeyFile(*sessionKeyPath, false); keyErr == nil && storageErr == nil && *origin != "" {
+		if sessionStore, err := sessions.New(ctx, store, sessionKey); err == nil {
+			authentication = web.NewAuthentication(client, sessionStore)
+		}
+	}
+	if authentication == nil {
+		logger.Warn("authentication_degraded", "code", "SESSION_AUTH_UNAVAILABLE")
+	}
+	handler, closeAPI, err := web.PublicHandler(ctx, client, store.Probe, *origin, authentication)
 	if err != nil {
 		logger.Error("invalid_public_api_configuration", "code", "API_CONFIGURATION_INVALID")
 		return 2

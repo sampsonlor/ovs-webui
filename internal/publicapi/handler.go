@@ -22,7 +22,11 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 )
 
-type Subject struct{ ID, PermissionRevision, CredentialKind, CSRFToken string }
+type Subject struct {
+	ID, PermissionRevision, CredentialKind, CSRFToken string
+	Credential                                        string `json:"-"`
+	SessionCookie                                     string `json:"-"`
+}
 type Authorizer interface {
 	Authenticate(context.Context, *http.Request) (Subject, error)
 	// Revalidate returns the current policy revision, checking expiry/revocation.
@@ -53,6 +57,7 @@ type Response struct {
 	Status int
 	Body   json.RawMessage
 	ETag   string
+	Cookie *http.Cookie
 }
 
 // AuthorityGateway executes in the endpoint's owning process. Management
@@ -175,7 +180,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if op.ID == "readContract" {
-		respond(w, 200, map[string]any{"major": 1, "version": "1.0.0", "openapi_url": "/api/v1/openapi.json", "service_state": "authentication-and-domain-services-pending", "request_domains": []string{"workspace", "management"}}, "application/json")
+		respond(w, 200, map[string]any{"major": 1, "version": "1.1.0", "openapi_url": "/api/v1/openapi.json", "service_state": "availability-reported-by-runtime-and-domain-services", "request_domains": []string{"workspace", "management"}}, "application/json")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -187,7 +192,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if op.ID == "decideTransaction" || op.ID == "reconcileTransaction" {
 		slots = h.control
 	}
-	if op.ID == "createSession" || op.ID == "deleteSession" {
+	if op.ID == "createSession" || op.ID == "deleteSession" || op.ID == "reauthenticateSession" {
 		slots = h.auth
 	}
 	var release sync.Once
@@ -213,6 +218,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var subject Subject
+	if op.ID == "createSession" && (h.origin == "" || r.Header.Get("Origin") != h.origin) {
+		fail(apitypes.Fail(403, "ORIGIN_REJECTED"))
+		return
+	}
 	if !op.Public {
 		subject, err = h.authorizer.Authenticate(ctx, r)
 		if err != nil {
@@ -275,7 +284,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(apitypes.Fail(503, "SERVICE_UNAVAILABLE"))
 		return
 	}
-	if op.ID == "createSession" || op.ID == "deleteSession" {
+	if op.ID == "createSession" || op.ID == "deleteSession" || op.ID == "reauthenticateSession" {
 		response, e := h.gateway.Session(ctx, subject, q, body)
 		if e != nil {
 			fail(e)
@@ -355,6 +364,9 @@ func sameReceipt(a, b apitypes.Receipt) bool {
 	return a.RequestID == b.RequestID && a.Domain == b.Domain && a.Epoch == b.Epoch && a.State == b.State && a.Effect == b.Effect && a.CorrelationID == b.CorrelationID && sameRef(a.Resource, b.Resource) && sameRef(a.Job, b.Job)
 }
 func sendResponse(w http.ResponseWriter, r Response) {
+	if r.Cookie != nil {
+		http.SetCookie(w, r.Cookie)
+	}
 	if r.ETag == "" && len(r.Body) > 0 {
 		var value struct {
 			Revision string `json:"revision"`

@@ -4,7 +4,39 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/sampsonlor/ovs-webui/internal/authn"
 )
+
+func TestStrictSecurityCommandDelegatesOnlyRawPayload(t *testing.T) {
+	input := authn.Command{Method: "PATCH", URI: "/api/v1/users/synthetic", Payload: json.RawMessage(`{"disabled":true,"role_ids":[]}`)}
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded authn.Command
+	if err = DecodeStrict(encoded, &decoded); err != nil || string(decoded.Payload) != string(input.Payload) {
+		t.Fatalf("raw command payload did not round trip: %v", err)
+	}
+	for _, raw := range []string{
+		`{"method":"PATCH","actor":"admin","payload":{}}`,
+		`{"Method":"PATCH","payload":{}}`,
+		`{"payload":{"disabled":true,"disabled":false}}`,
+		`{"payload":{"name":"\ud800"}}`,
+		`{"payload":{"nested":` + strings.Repeat("[", MaxJSONDepth+1) + `0` + strings.Repeat("]", MaxJSONDepth+1) + `}}`,
+	} {
+		if DecodeStrict([]byte(raw), &decoded) == nil {
+			t.Fatal("raw payload bypassed envelope or recursive JSON checks")
+		}
+	}
+	// An arbitrary interface is not a delegated operation payload.
+	var untyped struct {
+		Payload any `json:"payload"`
+	}
+	if DecodeStrict([]byte(`{"payload":{"actor":"admin"}}`), &untyped) == nil {
+		t.Fatal("untyped payload bypassed exact field matching")
+	}
+}
 
 func TestStrictJSONAmbiguityAndBounds(t *testing.T) {
 	type request struct {

@@ -14,8 +14,8 @@ import (
 
 // PublicHandler composes the versioned transport with bootstrap probes. Domain
 // operations remain denied until mgrd authentication and services are wired.
-func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(context.Context) repository.Status, origin string) (http.Handler, func(), error) {
-	api, err := publicapi.New(publicapi.Options{Context: ctx, PublicOrigin: origin, Runtime: func(ctx context.Context) (any, error) {
+func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(context.Context) repository.Status, origin string, authentication ...*Authentication) (http.Handler, func(), error) {
+	options := publicapi.Options{Context: ctx, PublicOrigin: origin, Runtime: func(ctx context.Context) (any, error) {
 		health, err := manager.Probe(ctx)
 		if err != nil {
 			code := "MANAGER_UNAVAILABLE"
@@ -24,6 +24,9 @@ func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(conte
 				code = remote.Code
 			}
 			return nil, apitypes.Fail(503, code)
+		}
+		if len(authentication) == 0 || authentication[0] == nil {
+			health.AuthenticationReady = false
 		}
 		if storage != nil {
 			status := storage(ctx)
@@ -41,7 +44,12 @@ func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(conte
 			return nil, p
 		}
 		return health, nil
-	}})
+	}}
+	if len(authentication) > 0 && authentication[0] != nil {
+		options.Authorizer = authentication[0]
+		options.Gateway = authentication[0]
+	}
+	api, err := publicapi.New(options)
 	if err != nil {
 		return nil, nil, err
 	}

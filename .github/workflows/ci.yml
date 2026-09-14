@@ -161,7 +161,9 @@ jobs:
           go vet ./...
           go mod verify
           mkdir -p test-results
-          go test -json -race -count=1 -timeout=90s ./... | tee test-results/go-tests.json
+          # Full production-cost Argon2id cases run under the race detector on
+          # both architectures; the timeout is per package, not per HTTP call.
+          go test -json -race -count=1 -timeout=180s ./... | tee test-results/go-tests.json
       - name: Bounded protocol fuzzing
         run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
       - name: Build CGO-free daemon binaries
@@ -178,6 +180,8 @@ jobs:
           sudo apt-get install --no-install-recommends -y openvswitch-switch
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
+      - name: Real authentication, encrypted sessions and revocation across daemon restarts
+        run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
       - name: Retain runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -187,6 +191,8 @@ jobs:
             test-results/go-tests.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
+            test-results/go-auth-smoke.json
+            test-results/go-auth-journal.log
           if-no-files-found: ignore
           retention-days: 7
 

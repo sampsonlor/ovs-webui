@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.0.0",
-    "description": "Phase 1 public transport baseline. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability."
+    "version": "1.1.0",
+    "description": "Phase 1 public transport baseline with local authentication and scoped credentials. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability."
   },
   "servers": [
     {
@@ -4403,6 +4403,190 @@
           }
         },
         "security": []
+      }
+    },
+    "/session/reauthentication": {
+      "post": {
+        "operationId": "reauthenticateSession",
+        "summary": "reauthenticateSession",
+        "x-capability": "session.read",
+        "x-service-issue": 34,
+        "x-service-state": "service-pending",
+        "x-resource-kind": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reauthentication"
+              }
+            }
+          }
+        },
+        "x-sensitive-request": true
       }
     },
     "/openapi.json": {
@@ -29188,6 +29372,22 @@
         },
         "required": [
           "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "Reauthentication": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "writeOnly": true,
+            "x-sensitive": true
+          }
+        },
+        "required": [
+          "password"
         ],
         "additionalProperties": false
       },

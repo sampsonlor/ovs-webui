@@ -1,6 +1,6 @@
 # Public REST v1 技术审阅
 
-日期：2026-09-14。任务 #33 / [PR #59](https://github.com/sampsonlor/ovs-webui/pull/59)。前置 #32 已接受合并并关闭，标签 `phase1-sqlite-repositories-v0.1`。本批为公共传输与请求恢复审阅，等待用户接受；#33 保持 Open / In Progress。
+日期：2026-09-14。任务 #33 / [PR #59](https://github.com/sampsonlor/ovs-webui/pull/59)。前置 #32 已接受合并并关闭，标签 `phase1-sqlite-repositories-v0.1`。用户已接受本批；PR #59 合并至 `9f641dde03756101bd56151686aed540057273d3`，已建立注释标签 `phase1-public-api-v1.0`，#33 已关闭并移入 Done。以下保留本批接受时的范围与证据，后续认证接线见 [#34 审阅](AUTH_GRANTS_v0.1.md)。
 
 ## 结果与边界
 
@@ -33,4 +33,4 @@
 
 本批新增传输层，不新增原型页面或移动端高风险动作。Standard/Expert 继续使用同一权限和验证规则；Desktop 配置、Tablet 审阅/既有 Safe Apply、Mobile 事件处理的职责保留。现有浏览器验收负责原型响应式与键盘路径，本批接口清单不视为 53 页已全部上线。
 
-技术实现与执行证据完成后提交审阅；用户接受本批后再合并 #59、关闭 #33，并进入 #34 的 mgrd Auth Grant 与每操作 Capability Enforcement。#19 继续作为独立库存原型审阅，不并入本项。
+技术实现与执行证据已获用户接受并完成合并；现进入 #34 的 mgrd Auth Grant 与每操作 Capability Enforcement。#19 继续作为独立库存原型审阅，不并入本项。

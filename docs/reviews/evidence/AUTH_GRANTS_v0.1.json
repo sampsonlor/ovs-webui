@@ -1,0 +1,900 @@
+{
+  "scope": "Manager authentication grants, current capability authority, scoped API tokens and encrypted browser sessions; full pages and domain providers retain their own acceptance gates",
+  "pull_request": "https://github.com/sampsonlor/ovs-webui/pull/60",
+  "run": "https://github.com/sampsonlor/ovs-webui/actions/runs/34827812912",
+  "head_sha": "3e336755bfc04c002294b3c120fb7df4a6b8c558",
+  "go_version": "1.27.1",
+  "sqlite_driver": "modernc.org/sqlite v1.58.0",
+  "schema_versions": {
+    "web": 4,
+    "manager": 4
+  },
+  "public_contract": {
+    "version": "1.1.0",
+    "paths": 114,
+    "operations": 131,
+    "scope_ids": 58,
+    "pages": 53,
+    "sha256": "9aa726d291a109d76084452e52af4e0601622ca69c261d76148efd90a4b8bb2e"
+  },
+  "runtime_jobs": [
+    {
+      "architecture": "amd64",
+      "runner": "ubuntu-24.04",
+      "job": "https://github.com/sampsonlor/ovs-webui/actions/runs/34827812912/job/103923892497",
+      "completed_at": "2026-09-14T09:28:19Z",
+      "tested_merge_sha": "a1400c1163f3c196c8414c4dff3f839be71582cf",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native architecture and Go formatting",
+          "conclusion": "success"
+        },
+        {
+          "name": "Vet and native race tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded protocol fuzzing",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build CGO-free daemon binaries",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real filesystem exhaustion and durable recovery",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install ephemeral OVS test prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real systemd, Unix peers and isolated OVS forwarding smoke test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real authentication, encrypted sessions and revocation across daemon restarts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Retain runtime evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ],
+      "race_test_cases": [
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/apidto",
+          "test": "TestUnknownResponseFieldsAndStatesRoundTrip"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/apidto",
+          "test": "TestUnionDTOsRemainJSON"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/authn",
+          "test": "TestKeyFileRequiresExplicitPrivateSingleLink"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/authn",
+          "test": "TestSecretDomainSeparationAndEnvelopeBinding"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestQueueBoundCancellationAndClassIsolation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestStrictSecurityCommandDelegatesOnlyRawPayload"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestStrictJSONAmbiguityAndBounds"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestProtocolManifestMatchesBounds"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestUnixHandshakeAndPerOperationAuthorization"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestPeerCredentialsCannotBeReplacedByHeaders"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestDefaultAuthorizerFailsClosed"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestTypedFramingAndRedactedFailures"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestClientCancellationDoesNotReplay"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestSocketOwnershipSingletonAndStaleRecovery"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/apicontract",
+          "test": "TestCompiledContract"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "test": "TestLostHandoffReplyAndNewDraftSurviveBothRestarts"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestHTTPAdmissionDurableReplayReceiptAndCurrentAuthority"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "test": "TestAuthoritySeparationAndDurableMetadata"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "test": "TestReceiptEvidenceIsOneAtomicWrite"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestProductionDefaultsAndContract"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestSlowHeaderIsBounded"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "FuzzDecodeStrict"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestStrictAdmissionAndStrongPreconditions"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestCanonicalFingerprintPreservesTypesAndExactNumbers"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestRestartReplayAndNoSecondMutation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestPrincipalDomainAuthorizationAndEpochIsolation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestCookieCSRFAndLogout"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestTimeRollbackExpiryAndTerminalRetention"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestConcurrentDuplicateAndAtomicPreconditionRejection"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestAcceptedRequiresJobInSameTransaction"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestLocalBootstrapAndPasswordGrantBoundary"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestSensitiveFingerprintAndOneTimeResponseNeverPersist"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestGatewayResultsAndUncertainOutcomeNeverRetry"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sessions",
+          "test": "TestEncryptedMappingsSurviveRestartWithoutPlaintext"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sessions",
+          "test": "TestTamperedEnvelopeAndWrongKeyCannotCreateIdentity"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestIndependentAdmissionBudgets"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestCursorScopeTamperAndExpiry"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestProblemSanitization"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestAcceptedAndSecretReplayCannotMisrouteReceipt"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestExplicitInitializationAndNoAutomaticRecreation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestLastLocalAdministratorAndStrongPreconditions"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestSettingsIndependentReadersAndSingleton"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketOriginNotificationsAndRevocation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestDamagedMissingAndMismatchedDatabasesFailClosed"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketRejectsRPCAndShutdownDrains"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestPrivatePathsAndReplacementProtection"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestAtomicMigrationBackupAndFailurePreservePriorData"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestConsistentWALBackupAndTamperRejection"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestUnknownCommitRequiresReconciliation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestOversizedBackupManifestIsRejected"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestBackupVerificationRejectsUnhashedSidecars"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestTransientProbeFailureDoesNotClaimReadyOrLatch"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketCounterCoalescing"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestHubBoundedQueuesAndOverflowRequiresResync"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestBusyCheckpointIsARecoverableWarning"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketOverflowSendsResyncAndCloses"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestCurrentPermissionsGrantCeilingAndRoleTemplates"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBrowserLoginOriginCookieAndReauthentication"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestTokenScopeOneTimeSecretAndReceiptRecovery"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestReadDeadlineAndWriterBusyAreBounded"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestCanceledQueueDoesNotLeakCapacity"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestWebDatabaseRestoreCannotUndoManagerLogout"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestCrashRecoveryFromRealProcessKill"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBrowserCannotSupplyGrantRoleOrDuplicateSession"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBootstrapDoesNotInventProductReadinessOrExposeErrors"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBootstrapExplainsVersionMismatch"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestStorageDegradationIsVisibleWithoutInventingReadiness"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestTokenCannotExpandScopeOrReadOtherOwnersToken"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestRestartIdleAbsoluteExpiryAndClockRollback"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestElevationDeadlineAndAuthEpochInvalidation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestRevocationSerializesWithAdmittedSecurityMutation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestPasswordChangeAndDisableRevokeAllCredentials"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestForgedIdentityModeAndUnsupportedObjectAuthority"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestCursorIsBoundToPrincipalPolicyAndScope"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestRateBudgetAndAuditRedaction"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestArgon2Calibration"
+        }
+      ],
+      "real_filesystem_full": {
+        "result": "passed",
+        "fixture": "dedicated 2 MiB tmpfs"
+      },
+      "artifact_id": 10341241244,
+      "artifact_sha256": "0863acf5cb548f0d52c7996747227208e0d6ea0f914c0610cd845ca7af40dfeb",
+      "smoke": {
+        "architecture": "x86_64",
+        "ovs": "ovs-vswitchd (Open vSwitch) 3.3.9",
+        "checks": [
+          "actual hardened systemd unit validation",
+          "root mgrd and non-root webd communicate through credential-checked IPC and HTTPS",
+          "public OpenAPI v1, structured Problem and closed production authority",
+          "TLS-only listener and unavailable business API",
+          "mgrd SIGKILL: systemd restart, stale socket recovery, webd liveness and OVS forwarding preserved",
+          "webd SIGKILL: independent restart and OVS forwarding preserved",
+          "graceful management shutdown preserves both OVS processes, native configuration and packet forwarding",
+          "separate private web and manager databases preserve committed fixture data across both process restarts",
+          "missing/corrupt manager DB and corrupt web DB produce explicit 503 storage degradation without recreation or OVS impact"
+        ]
+      },
+      "authentication_smoke": {
+        "architecture": "x86_64",
+        "logical_cpus": 4,
+        "argon2id": {
+          "memory_kib": 65536,
+          "iterations": 3,
+          "parallelism": 1,
+          "active_limit": 2
+        },
+        "metrics": {
+          "login_ms": 128,
+          "two_concurrent_login_ms": [
+            136,
+            135
+          ],
+          "mgrd_memory_peak_bytes": "159928320"
+        },
+        "checks": [
+          "explicit root bootstrap, no key overwrite, manager DB/key inaccessible to webd UID",
+          "real Local login, secure host-only cookie, login Origin and session-bound CSRF; grant never exposed",
+          "last administrator protection and durable user effect/Job/receipt with one correlation",
+          "scoped Bearer credential, session separation and original-request recovery without secret replay",
+          "current role reduction immediately narrows existing sessions and tokens",
+          "two concurrent 64 MiB Argon2id logins under the actual systemd memory limit",
+          "independent mgrd/webd SIGKILL recovery preserves the sealed session and original absolute expiry",
+          "web DB forgery fails authentication; restoring an old valid mapping cannot undo mgrd logout",
+          "persistent security audit and stored receipts contain no password, cookie, CSRF or token plaintext"
+        ]
+      }
+    },
+    {
+      "architecture": "arm64",
+      "runner": "ubuntu-24.04-arm",
+      "job": "https://github.com/sampsonlor/ovs-webui/actions/runs/34827812912/job/103923892394",
+      "completed_at": "2026-09-14T09:29:15Z",
+      "tested_merge_sha": "a1400c1163f3c196c8414c4dff3f839be71582cf",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native architecture and Go formatting",
+          "conclusion": "success"
+        },
+        {
+          "name": "Vet and native race tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded protocol fuzzing",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build CGO-free daemon binaries",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real filesystem exhaustion and durable recovery",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install ephemeral OVS test prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real systemd, Unix peers and isolated OVS forwarding smoke test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real authentication, encrypted sessions and revocation across daemon restarts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Retain runtime evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ],
+      "race_test_cases": [
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/apidto",
+          "test": "TestUnknownResponseFieldsAndStatesRoundTrip"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/apidto",
+          "test": "TestUnionDTOsRemainJSON"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/authn",
+          "test": "TestKeyFileRequiresExplicitPrivateSingleLink"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/authn",
+          "test": "TestSecretDomainSeparationAndEnvelopeBinding"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestQueueBoundCancellationAndClassIsolation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestStrictSecurityCommandDelegatesOnlyRawPayload"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestStrictJSONAmbiguityAndBounds"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestProtocolManifestMatchesBounds"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestUnixHandshakeAndPerOperationAuthorization"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestPeerCredentialsCannotBeReplacedByHeaders"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestDefaultAuthorizerFailsClosed"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestTypedFramingAndRedactedFailures"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestClientCancellationDoesNotReplay"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestSocketOwnershipSingletonAndStaleRecovery"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/apicontract",
+          "test": "TestCompiledContract"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "test": "TestLostHandoffReplyAndNewDraftSurviveBothRestarts"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestHTTPAdmissionDurableReplayReceiptAndCurrentAuthority"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "test": "TestAuthoritySeparationAndDurableMetadata"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "test": "TestReceiptEvidenceIsOneAtomicWrite"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestProductionDefaultsAndContract"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "TestSlowHeaderIsBounded"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "test": "FuzzDecodeStrict"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestStrictAdmissionAndStrongPreconditions"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestCookieCSRFAndLogout"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestCanonicalFingerprintPreservesTypesAndExactNumbers"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestRestartReplayAndNoSecondMutation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestPrincipalDomainAuthorizationAndEpochIsolation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestTimeRollbackExpiryAndTerminalRetention"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestConcurrentDuplicateAndAtomicPreconditionRejection"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestGatewayResultsAndUncertainOutcomeNeverRetry"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestAcceptedRequiresJobInSameTransaction"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sessions",
+          "test": "TestEncryptedMappingsSurviveRestartWithoutPlaintext"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/requests",
+          "test": "TestSensitiveFingerprintAndOneTimeResponseNeverPersist"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sessions",
+          "test": "TestTamperedEnvelopeAndWrongKeyCannotCreateIdentity"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestIndependentAdmissionBudgets"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestCursorScopeTamperAndExpiry"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestProblemSanitization"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestAcceptedAndSecretReplayCannotMisrouteReceipt"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketOriginNotificationsAndRevocation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestExplicitInitializationAndNoAutomaticRecreation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestSettingsIndependentReadersAndSingleton"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketRejectsRPCAndShutdownDrains"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestDamagedMissingAndMismatchedDatabasesFailClosed"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestPrivatePathsAndReplacementProtection"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestAtomicMigrationBackupAndFailurePreservePriorData"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestConsistentWALBackupAndTamperRejection"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestUnknownCommitRequiresReconciliation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestOversizedBackupManifestIsRejected"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestBackupVerificationRejectsUnhashedSidecars"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestTransientProbeFailureDoesNotClaimReadyOrLatch"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestBusyCheckpointIsARecoverableWarning"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketCounterCoalescing"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestHubBoundedQueuesAndOverflowRequiresResync"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/publicapi",
+          "test": "TestWebSocketOverflowSendsResyncAndCloses"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestLocalBootstrapAndPasswordGrantBoundary"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestReadDeadlineAndWriterBusyAreBounded"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestCanceledQueueDoesNotLeakCapacity"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "test": "TestCrashRecoveryFromRealProcessKill"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBrowserLoginOriginCookieAndReauthentication"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestLastLocalAdministratorAndStrongPreconditions"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestWebDatabaseRestoreCannotUndoManagerLogout"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBrowserCannotSupplyGrantRoleOrDuplicateSession"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBootstrapDoesNotInventProductReadinessOrExposeErrors"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestBootstrapExplainsVersionMismatch"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "test": "TestStorageDegradationIsVisibleWithoutInventingReadiness"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestCurrentPermissionsGrantCeilingAndRoleTemplates"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestTokenScopeOneTimeSecretAndReceiptRecovery"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestTokenCannotExpandScopeOrReadOtherOwnersToken"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestRestartIdleAbsoluteExpiryAndClockRollback"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestElevationDeadlineAndAuthEpochInvalidation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestRevocationSerializesWithAdmittedSecurityMutation"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestPasswordChangeAndDisableRevokeAllCredentials"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestForgedIdentityModeAndUnsupportedObjectAuthority"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestCursorIsBoundToPrincipalPolicyAndScope"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestRateBudgetAndAuditRedaction"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/auth",
+          "test": "TestArgon2Calibration"
+        }
+      ],
+      "real_filesystem_full": {
+        "result": "passed",
+        "fixture": "dedicated 2 MiB tmpfs"
+      },
+      "artifact_id": 10340748146,
+      "artifact_sha256": "5bee39c8ccdb99cf1c34f3bb63500be681983eca041427c1170b893b651bf763",
+      "smoke": {
+        "architecture": "aarch64",
+        "ovs": "ovs-vswitchd (Open vSwitch) 3.3.9",
+        "checks": [
+          "actual hardened systemd unit validation",
+          "root mgrd and non-root webd communicate through credential-checked IPC and HTTPS",
+          "public OpenAPI v1, structured Problem and closed production authority",
+          "TLS-only listener and unavailable business API",
+          "mgrd SIGKILL: systemd restart, stale socket recovery, webd liveness and OVS forwarding preserved",
+          "webd SIGKILL: independent restart and OVS forwarding preserved",
+          "graceful management shutdown preserves both OVS processes, native configuration and packet forwarding",
+          "separate private web and manager databases preserve committed fixture data across both process restarts",
+          "missing/corrupt manager DB and corrupt web DB produce explicit 503 storage degradation without recreation or OVS impact"
+        ]
+      },
+      "authentication_smoke": {
+        "architecture": "aarch64",
+        "logical_cpus": 4,
+        "argon2id": {
+          "memory_kib": 65536,
+          "iterations": 3,
+          "parallelism": 1,
+          "active_limit": 2
+        },
+        "metrics": {
+          "login_ms": 200,
+          "two_concurrent_login_ms": [
+            168,
+            166
+          ],
+          "mgrd_memory_peak_bytes": "159961088"
+        },
+        "checks": [
+          "explicit root bootstrap, no key overwrite, manager DB/key inaccessible to webd UID",
+          "real Local login, secure host-only cookie, login Origin and session-bound CSRF; grant never exposed",
+          "last administrator protection and durable user effect/Job/receipt with one correlation",
+          "scoped Bearer credential, session separation and original-request recovery without secret replay",
+          "current role reduction immediately narrows existing sessions and tokens",
+          "two concurrent 64 MiB Argon2id logins under the actual systemd memory limit",
+          "independent mgrd/webd SIGKILL recovery preserves the sealed session and original absolute expiry",
+          "web DB forgery fails authentication; restoring an old valid mapping cannot undo mgrd logout",
+          "persistent security audit and stored receipts contain no password, cookie, CSRF or token plaintext"
+        ]
+      }
+    }
+  ],
+  "prototype_regressions": [
+    {
+      "suite": "regression-results",
+      "test_cases": 208,
+      "failures": 0,
+      "skipped": 0,
+      "artifact_id": 10340955791,
+      "artifact_sha256": "d272088e366455ea9fc7a0523102718b122b1b11631f652da7a6f740e5e71012"
+    },
+    {
+      "suite": "integration-results",
+      "test_cases": 3,
+      "failures": 0,
+      "skipped": 0,
+      "artifact_id": 10341121018,
+      "artifact_sha256": "7d9865567a4e96e7bbcbf82bf8a6eeb037fa5ab0d1bb12d9b72052c22cb4ac29"
+    },
+    {
+      "suite": "browser-results",
+      "test_cases": 26,
+      "failures": 0,
+      "skipped": 0,
+      "artifact_id": 10341376015,
+      "artifact_sha256": "c1dca81ae32909b94fa94169cd04f17fe06df2011afabe960fa9daa6bc01cedb"
+    }
+  ]
+}

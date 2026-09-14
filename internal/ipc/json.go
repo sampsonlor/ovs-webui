@@ -123,6 +123,12 @@ func exactFields(value any, t reflect.Type) bool {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
+	// Raw operation bodies are validated by their compiled operation schema.
+	// ParseObject has already applied ambiguity and resource limits recursively;
+	// only this explicit raw type delegates field matching to that later step.
+	if t == reflect.TypeOf(json.RawMessage{}) {
+		return true
+	}
 	if value == nil {
 		return true
 	} // The typed decoder and semantic validator decide nullability.
