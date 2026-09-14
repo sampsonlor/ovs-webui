@@ -1,6 +1,6 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-14。P1 六批及整合已接受；#30 实现设计已通过 PR #56 合并，标签 `phase1-implementation-design-v0.1`。#31 Go/IPC 基础通过 PR #57 接受，标签 `phase1-go-runtime-v0.1`。#32 双 SQLite Repository 已通过 [PR #58](https://github.com/sampsonlor/ovs-webui/pull/58) 接受合并至 `7117620`，标签 `phase1-sqlite-repositories-v0.1`。当前审阅 [#33 正式 REST v1 与请求恢复](implementation/PUBLIC_API_v1.0.md) / [PR #59](https://github.com/sampsonlor/ovs-webui/pull/59)。共享库存 [PR #19](https://github.com/sampsonlor/ovs-webui/pull/19) 仍保留独立待审范围。
+更新：2026-09-14。P1 六批及整合已接受；#30 实现设计已通过 PR #56 合并，标签 `phase1-implementation-design-v0.1`。#31 Go/IPC 基础通过 PR #57 接受，标签 `phase1-go-runtime-v0.1`。#32 双 SQLite Repository 已通过 [PR #58](https://github.com/sampsonlor/ovs-webui/pull/58) 接受合并至 `7117620`，标签 `phase1-sqlite-repositories-v0.1`。#33 正式 REST v1 与请求恢复已通过 [PR #59](https://github.com/sampsonlor/ovs-webui/pull/59) 接受合并至 `9f641dd`，标签 `phase1-public-api-v1.0`。当前推进 [#34 mgrd Auth Grant 与每操作授权](implementation/AUTH_GRANTS_v0.1.md) / [PR #60](https://github.com/sampsonlor/ovs-webui/pull/60)，以[本批审阅记录](reviews/AUTH_GRANTS_v0.1.md)为验收入口。共享库存 [PR #19](https://github.com/sampsonlor/ovs-webui/pull/19) 仍保留独立待审范围。
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点](reviews/P1_IA_COVERAGE_v0.1.md)和各批记录。
 
@@ -28,7 +28,8 @@
 | Phase 1 实现设计 #30 | Go/IPC/双库、身份授权、Safe Apply/恢复、API 草案及全范围映射已接受；PR #56 已合并 | 各正式模块按设计独立实现与验收，Scope 原文保留 Draft |
 | Go 运行时与 IPC #31 | PR #57 已接受合并，#31 已关闭；原生双架构及 OVS 3.3.9 进程故障测试通过 | #34/#36 继续 Auth Grant 和真实 provider |
 | 双 SQLite Repository #32 | PR #58 已接受合并，#32 已关闭；双库与原生双架构故障测试通过 | 业务授权和配置状态机按后续任务交付 |
-| 正式 REST v1 / 请求恢复 #33 | PR #59 实现 113 路径 / 130 操作、全 Scope/IA 映射、运行时校验、持久幂等和 WS 提示流 | 本批技术验收与接受；#34 认证以及各业务 Gateway 继续接线 |
+| 正式 REST v1 / 请求恢复 #33 | PR #59 已接受合并，#33 已关闭；113 路径 / 130 操作、全 Scope/IA 映射、运行时校验、持久幂等和 WS 提示流已验收 | #34 认证以及各业务 Gateway 继续接线 |
+| mgrd Auth Grant / 每操作授权 #34 | PR #60 实现 Local 登录、当前权限与授权上限、二次认证、用户/角色及 Token 服务、加密浏览器会话；原生双架构各 76 项 Go race 与真实认证/重启恢复通过；兼容扩展至 114 路径 / 131 操作 | 本批等待用户接受；#20/#27/#28 完整页面、#35 SecretStore/证书与后续对象级 provider 仍分别验收 |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -37,7 +38,7 @@
 ## 架构原文对后续实现的约束
 
 1. **正式技术栈不同于当前原型。** Architecture §4、§16 规定 Go 的 `ovs-webd` / `ovs-mgrd`、Svelte 5 + TypeScript + Vite 静态 SPA、生产环境无 Node runtime。当前 React / Vinext 与 Node SQLite lab 是交互和契约验证工具。正式实现应沿批准栈迁移可复用的类型、状态语义和设计组件规格；如改变选型，需按基线 §1 形成 ADR。
-2. **生产授权仍未交付，双库基础已接受。** §6、§9 要求 web.db 保存用户意图，manager.db / mgrd 掌握最终授权、事务及 Audit。#32 建立持久存储，#33 接入正式传输与 API 回执；收到回执并不授予执行权。#34 等任务继续实现身份和授权；默认 public API 对受保护操作关闭。lab 的本地角色选择和单库合成执行不构成这项架构实现。
+2. **身份授权按独立批次验收，双库与正式 API 已接受。** §6、§9 要求 web.db 保存用户意图，manager.db / mgrd 掌握最终授权、事务及 Audit。#34 将 Local 身份、当前权限与安全管理服务接入 Go 双进程；只有显式初始化密钥与管理员并配置公共 Origin 后才启用，缺失依赖时拒绝认证。尚未接入的业务 provider 保持 unavailable。lab 的本地角色选择和单库合成执行不构成这项架构实现。
 3. **事务原生语义仍待真实 provider 验证。** §7 要求 touched-field OCC、OutcomeUnknown reconciliation、Commit 与 Applied 分离、确认窗依赖 Applied evidence、回滚前比较和跨 instance generation 禁止旧事务执行。现有自动检查验证的是合成服务和客户端契约；原型的递增 generation fixture 不应直接用作正式实例生命周期算法。
 4. **原生功能范围不能从现有表单反推。** §11 包括 native-tagged / native-untagged、空 trunks 的原生语义及字段级 Authority。当前 VLAN 集成切片只开放受限输入，对不支持的原生配置保留 Observe；未覆盖的能力需要后续明确交付，不能静默归一化。
 5. **正式 Release Gate 比现有 CI 更广。** §15 要求 amd64 / arm64、发行版矩阵、真实 OVSDB / ovs-vswitchd、恢复和安全测试。当前原生 Ubuntu amd64/arm64 的进程与存储测试补充了原型 CI；其他发行版及完整业务功能仍待各工程任务验收。
@@ -50,8 +51,8 @@
 
 ## 下一步
 
-审阅 #33 的正式 REST/OpenAPI、幂等恢复与通知流；接受后推进 #34 mgrd Auth Grant 和每操作 Capability Enforcement，再依次接入真实库存和 Ports/VLAN 安全闭环。PR #19 的库存与导航原型继续另行接受。
+审阅 #34 的 mgrd Auth Grant、每操作授权及会话恢复；接受后按工程依赖推进 #35 SecretStore、HTTPS 与证书安全激活，再接入真实库存和 Ports/VLAN 安全闭环。#20–#28 均属于 Phase 1，按其后端依赖与 #54 页面迁移逐项完成功能验收；不要求先把九项页面全部做完再推进认证基础。PR #19 的库存与导航原型继续另行接受。
 
-[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30/#31/#32 已完成，#29/#33 为 In Progress，其余工程任务为 Todo。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档；已有 #20–#28 保留用户/角色、AAA、Tokens 等完整功能验收。
+[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30/#31/#32/#33 已完成，#29/#34 为 In Progress，其余工程任务为 Todo。#20–#28 已统一加入 Phase 1 milestone，继续保留 Todo 与独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。

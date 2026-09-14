@@ -132,6 +132,10 @@ automatic key replacement.
 
 ## Validation
 
-The review matrix is [AUTH_GRANTS_v0.1](../reviews/AUTH_GRANTS_v0.1.md). Native
-Linux amd64/arm64, race tests, actual service/Unix peer/HTTPS and bounded password
-calibration evidence must pass before this batch is presented as complete.
+The completed technical matrix and retained execution evidence are in
+[AUTH_GRANTS_v0.1](../reviews/AUTH_GRANTS_v0.1.md). Native Linux amd64/arm64 each
+passed 76 top-level Go race cases plus real systemd/Unix peer/HTTPS login,
+concurrent password workloads, revocation and independent process recovery.
+The existing 208 regression, 3 integration and 26 browser tests, contract
+compatibility, type/lint checks and production build passed. User acceptance is
+still pending; this does not close the complete functional issues.
