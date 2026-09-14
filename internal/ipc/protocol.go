@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 const (
@@ -49,10 +51,16 @@ type HandshakeReply struct {
 }
 
 type Health struct {
-	State               string `json:"state"`
-	Scope               string `json:"scope"`
-	AuthenticationReady bool   `json:"authentication_ready"`
-	ConfigurationReady  bool   `json:"configuration_ready"`
+	State               string         `json:"state"`
+	Scope               string         `json:"scope"`
+	AuthenticationReady bool           `json:"authentication_ready"`
+	ConfigurationReady  bool           `json:"configuration_ready"`
+	Storage             *StorageHealth `json:"storage,omitempty"`
+}
+
+type StorageHealth struct {
+	Manager *repository.Status `json:"manager,omitempty"`
+	Web     *repository.Status `json:"web,omitempty"`
 }
 
 func BootstrapHealth() Health {

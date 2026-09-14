@@ -150,7 +150,8 @@ jobs:
           CGO_ENABLED: '1'
         run: |
           go vet ./...
-          go test -race -count=1 -timeout=45s ./...
+          go mod verify
+          go test -race -count=1 -timeout=90s ./...
       - name: Bounded protocol fuzzing
         run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
       - name: Build CGO-free daemon binaries
@@ -158,6 +159,9 @@ jobs:
           mkdir -p outputs/runtime
           go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-webd ./cmd/ovs-webd
           go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-mgrd ./cmd/ovs-mgrd
+          go test -c -o outputs/runtime/storage.test ./internal/repository/sqlite
+      - name: Real filesystem exhaustion and durable recovery
+        run: sudo -- python3 tests/daemon/storage_full.py outputs/runtime/storage.test
       - name: Install ephemeral OVS test prerequisites
         run: |
           sudo apt-get update

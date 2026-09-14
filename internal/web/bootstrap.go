@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 //go:embed assets/index.html
@@ -18,7 +19,7 @@ type ManagerProbe interface {
 	Probe(context.Context) (ipc.Health, error)
 }
 
-func BootstrapHandler(manager ManagerProbe) http.Handler {
+func BootstrapHandler(manager ManagerProbe, storage ...func(context.Context) repository.Status) http.Handler {
 	slots := make(chan struct{}, 16)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -57,7 +58,21 @@ func BootstrapHandler(manager ManagerProbe) http.Handler {
 				write(w, 503, ipc.Problem{Code: code})
 				return
 			}
-			write(w, 200, health)
+			if len(storage) > 0 && storage[0] != nil {
+				status := storage[0](ctx)
+				if health.Storage == nil {
+					health.Storage = &ipc.StorageHealth{}
+				}
+				health.Storage.Web = &status
+				if !status.Writable {
+					health.State = "degraded"
+				}
+			}
+			statusCode := 200
+			if health.State != "ready" {
+				statusCode = 503
+			}
+			write(w, statusCode, health)
 		default:
 			write(w, 404, ipc.Problem{Code: "NOT_AVAILABLE_IN_BOOTSTRAP"})
 		}
