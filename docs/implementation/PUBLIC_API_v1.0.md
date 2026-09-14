@@ -62,7 +62,7 @@ GET /api/v1/requests/{original_request_id}?domain=management&epoch={original_epo
 
 | 预算 | 实现行为 |
 | --- | --- |
-| HTTP body 1 MiB，处理 5 秒 | 拒绝超限，不排无界队列；连接层维持已有 64 连接上限 |
+| 动态 HTTP 请求/响应 1 MiB，处理 5 秒 | 拒绝超限，不排无界队列；固定内嵌 OpenAPI 文档独立提供；连接层维持已有 64 连接上限 |
 | read 8 / control 4 / heavy 2 / auth 4 | 独立 admission；大操作不会占用确认/恢复控制槽 |
 | WS 全局 16 / 每 principal 4 | 握手完成释放 REST 槽；首订阅 8 KiB、3 秒 |
 | 每 WS 256 条或 1 MiB | 超限发 resync.required 并关闭；不缓冲权威事务数据 |
@@ -77,6 +77,6 @@ TS `StreamTracker` 识别乱序、重复、gap、新 stream 及未知提示；`R
 
 本地已验证 Go HTTP/WebSocket/DTO/指纹测试，208 项回归、类型检查、lint 与 `pnpm build`。Windows 本地不会把跳过的 Linux 存储测试算作成功；原生 CI 执行 Linux amd64/arm64 的 vet、race、CGO-free daemon、真实 SQLite 重启/原子回执、磁盘满、systemd/Unix 权限及隔离 OVS 转发测试，并保留 Go JSON、smoke 和浏览器报告。
 
-完整 CI 与长期执行证据将在本批审阅记录中关联；本项接受后推进 **#34：认证、Session/Token、用户与角色授权**。
+[完整 CI 与审阅记录](../reviews/PUBLIC_API_v1.0.md)及[长期执行证据](../reviews/evidence/PUBLIC_API_v1.0.json)保留两种原生架构各 55 个顶层 Go 测试、实际磁盘满恢复、OVS 转发与全部原型回归的结果。证据明确标注其测试 head；PR 的最新提交仍须通过完整 CI 后才能接受。本项接受后推进 **#34：mgrd Auth Grant 与每操作 Capability Enforcement**。
 
 参考：[OpenAPI 3.1.1](https://spec.openapis.org/oas/v3.1.1.html)、[UUIDv7 RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7)、[jsonschema/v6](https://github.com/santhosh-tekuri/jsonschema)、[coder/websocket](https://github.com/coder/websocket)。

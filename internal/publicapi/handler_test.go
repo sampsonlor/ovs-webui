@@ -185,6 +185,11 @@ func TestGatewayResultsAndUncertainOutcomeNeverRetry(t *testing.T) {
 	if strings.Contains(w.Body.String(), "must-not-be-exposed") {
 		t.Fatal("invalid service data leaked")
 	}
+	h.gateway = testGateway{read: func(context.Context, Subject, Query) (Response, error) {
+		body, _ := json.Marshal(map[string]any{"snapshot_id": resource, "instance_generation": nil, "items": []any{}, "next_cursor": nil, "truncated": false, "future_data": strings.Repeat("x", 1<<20)})
+		return Response{Status: 200, Body: body}, nil
+	}}
+	assertProblem(t, h, call(h, "GET", "/api/v1/bridges", "", nil), 500, "INVALID_SERVICE_RESPONSE")
 }
 func TestIndependentAdmissionBudgets(t *testing.T) {
 	h := newTestHandler(t, Options{Authorizer: &testAuthority{}, Gateway: testGateway{}})

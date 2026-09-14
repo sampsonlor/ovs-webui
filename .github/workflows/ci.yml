@@ -157,6 +157,7 @@ jobs:
         env:
           CGO_ENABLED: '1'
         run: |
+          set -o pipefail
           go vet ./...
           go mod verify
           mkdir -p test-results

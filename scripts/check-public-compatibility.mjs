@@ -14,17 +14,20 @@ export function breakingChanges(before, after) {
   if (old === null || typeof old !== 'object') { if (!same(old, next)) fail(path); return; }
   if (next === null || typeof next !== 'object') { fail(path); return; }
   if (Array.isArray(old)) { if (!same(old, next)) fail(path); return; }
+  const containers = ['/paths','/schemas','/properties','/responses','/content','/headers'];
+  const isContainer = containers.some(suffix => path.endsWith(suffix)) || /^\/paths\/[^/]+$/.test(path);
   for (const [key, value] of Object.entries(old)) {
-   if (annotation(key)) continue;
+   // A property named description/title is data, not schema annotation.
+   if (!isContainer && annotation(key)) continue;
    if (!(key in next)) { fail(`${path}/${key}`); continue; }
-   if (key === 'required' && Array.isArray(value)) {
+   if (!isContainer && key === 'required' && Array.isArray(value)) {
     // Preserve old required fields and do not require any new input fields.
     // Response additions also use optional fields for older generated clients.
     if (!same([...value].sort((a,b)=>a.localeCompare(b)), [...next[key]].sort((a,b)=>a.localeCompare(b)))) fail(`${path}/${key}`);
-   } else if (['oneOf','anyOf'].includes(key)) {
+   } else if (!isContainer && ['oneOf','anyOf'].includes(key)) {
     if (!Array.isArray(next[key]) || next[key].length < value.length) fail(`${path}/${key}`);
     else value.forEach((item, i) => walk(item, next[key][i], `${path}/${key}/${i}`));
-   } else if (key === 'parameters') {
+   } else if (!isContainer && key === 'parameters') {
     for (const p of value) {
      const q = next[key]?.find(item => item.name === p.name && item.in === p.in);
      walk(p, q, `${path}/parameters/${p.in}:${p.name}`);
@@ -34,8 +37,6 @@ export function breakingChanges(before, after) {
   }
   // An added constraint on an existing schema can narrow it just as removal
   // can. Only container members and annotations can be added implicitly.
-  const containers = ['/paths','/schemas','/properties','/responses','/content','/headers'];
-  const isContainer = containers.some(suffix => path.endsWith(suffix)) || /^\/paths\/[^/]+$/.test(path);
   if (!isContainer) for (const key of Object.keys(next)) if (!(key in old) && !annotation(key)) fail(`${path}/added:${key}`);
  }
  if (before.openapi !== after.openapi || before.info.version.split('.')[0] !== after.info.version.split('.')[0]) fail('/version');

@@ -240,6 +240,11 @@ func (o *Operation) Decode(data []byte) (map[string]any, []byte, error) {
 	return value, canonical, err
 }
 func (o *Operation) ValidateResponse(status int, body []byte) error {
+	// The discovery document is served from a fixed embedded buffer separately.
+	// Dynamic resources must obey the same byte budget as management requests.
+	if len(body) > ipc.MaxBodyBytes {
+		return apitypes.Fail(500, "INVALID_SERVICE_RESPONSE")
+	}
 	schema, declared := o.Responses[status]
 	if declared && status == 204 && len(body) == 0 {
 		return nil

@@ -14,6 +14,8 @@ await test('public compatibility rejects removals, input requirements, narrowing
   c => c.paths['/candidate'].patch['x-request-domain'] = 'management',
   c => c.components.schemas.Id.enum = ['only-this'],
   c => delete c.components.schemas.RequestReceipt.properties.request_epoch,
+  c => c.components.schemas.LabelCommand.properties.description.type = 'boolean',
+  c => delete c.components.schemas.Problem.properties.title,
  ]) { const changed = structuredClone(contract); mutation(changed); assert.notEqual(breakingChanges(contract, changed).length, 0); }
 });
 await test('public compatibility accepts optional fields, unknown observed states and additional endpoints', () => {
