@@ -14,6 +14,7 @@ import shutil
 import signal
 import socket
 import ssl
+import sqlite3
 import subprocess
 import time
 import urllib.error
@@ -58,6 +59,8 @@ def main():
     unit_paths = [Path('/etc/systemd/system') / name for name in units.values()]
     account_name = f'ovs-ci-{suffix}'
     account_created = False
+    data_name = f'ovs-webui-ci-{suffix}'
+    data_root = Path('/var/lib') / data_name
     fixture.mkdir(mode=0o700)
     ovs = fixture / 'ovs'
     ovs.mkdir(mode=0o700)
@@ -74,6 +77,24 @@ def main():
             target = fixture / f'ovs-{service}'
             shutil.copyfile(source / f'ovs-{service}', target)
             target.chmod(0o755)
+        data_root.mkdir(mode=0o755)
+        manager_dir, web_dir = data_root / 'manager', data_root / 'web'
+        manager_dir.mkdir(mode=0o700)
+        web_dir.mkdir(mode=0o700)
+        os.chown(web_dir, account.pw_uid, account.pw_gid)
+        manager_database, web_database = manager_dir / 'manager.db', web_dir / 'web.db'
+        run(str(fixture / 'ovs-mgrd'), '--init-database', '--database', str(manager_database))
+        run('runuser', '-u', account_name, '--', str(fixture / 'ovs-webd'),
+            '--init-database', '--database', str(web_database))
+        with sqlite3.connect(manager_database) as connection:
+            connection.execute("INSERT INTO principals VALUES('fixture-user','synthetic-user',1,?)", (b'fixture-verifier',))
+        connection.close()
+        with sqlite3.connect(web_database) as connection:
+            connection.execute("INSERT INTO metadata VALUES('label','fixture-user','fixture-label',?)", (b'{"synthetic":true}',))
+        connection.close()
+        database_hashes = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in (manager_database, web_database)}
+        denied = subprocess.run(['runuser', '-u', account_name, '--', 'test', '-r', str(manager_database)], check=False)
+        assert denied.returncode != 0, 'webd identity can read manager authority'
         cert, key = fixture / 'server.crt', fixture / 'server.key'
         run('openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
             '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1,DNS:localhost',
@@ -87,7 +108,8 @@ def main():
         configuration = fixture / 'runtime.env'
         configuration.write_text(
             f'WEBD_UID={account.pw_uid}\nWEBD_GID={account.pw_gid}\nMANAGER_SOCKET={runtime}/mgrd.sock\n'
-            f'HTTPS_LISTEN=127.0.0.1:{port}\nTLS_CERT={cert}\nTLS_KEY={key}\n')
+            f'HTTPS_LISTEN=127.0.0.1:{port}\nTLS_CERT={cert}\nTLS_KEY={key}\n'
+            f'MANAGER_DATABASE={manager_database}\nWEB_DATABASE={web_database}\n')
         for service, name in units.items():
             template = (repo / 'packaging/systemd' / f'ovs-{service}.service').read_text()
             assert not re.search(r'^(PartOf|BindsTo|Requires|ExecStop)=', template, re.M)
@@ -96,6 +118,7 @@ def main():
             # the same prefix. Each test owns a dedicated service identity.
             rendered = template.replace('/run/ovs-webui', str(runtime))
             rendered = rendered.replace('RuntimeDirectory=ovs-webui', f'RuntimeDirectory={runtime_name}')
+            rendered = rendered.replace('StateDirectory=ovs-webui/', f'StateDirectory={data_name}/')
             rendered = rendered.replace('ovs-webui-web', account_name)
             rendered = rendered.replace('/etc/ovs-webui/runtime.env', str(configuration))
             rendered = rendered.replace(f'/usr/libexec/ovs-{service}', str(fixture / f'ovs-{service}'))
@@ -162,6 +185,7 @@ def main():
             result = json.loads(body)
             assert result['scope'] == 'runtime-bootstrap'
             assert not result['configuration_ready'] and not result['authentication_ready']
+            assert result['storage']['manager']['writable'] and result['storage']['web']['writable']
             return True
 
         run('systemctl', 'start', units['mgrd'], units['webd'])
@@ -196,6 +220,44 @@ def main():
         run('systemctl', 'stop', units['mgrd'])
         forwarding()
         checks.append('graceful management shutdown preserves both OVS processes, native configuration and packet forwarding')
+        for path, expected in database_hashes.items():
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == expected, 'committed database state changed across restarts'
+        checks.append('separate private web and manager databases preserve committed fixture data across both process restarts')
+
+        manager_original = manager_database.with_suffix('.original')
+        manager_database.rename(manager_original)
+        corruption = b'synthetic damaged manager database'
+        manager_database.write_bytes(corruption)
+        manager_database.chmod(0o600)
+        run('systemctl', 'start', units['mgrd'], units['webd'])
+
+        def degraded(component, code):
+            status, body = fetch('/readyz')
+            if status != 503:
+                return False
+            result = json.loads(body)
+            storage = result.get('storage', {}).get(component, {})
+            return storage.get('code') == code and storage.get('writable') is False
+
+        eventually(lambda: degraded('manager', 'STORAGE_INTEGRITY_FAILED'))
+        assert fetch('/healthz')[0] == 200
+        forwarding()
+        run('systemctl', 'stop', units['mgrd'])
+        assert manager_database.read_bytes() == corruption, 'damaged authority database was overwritten'
+        manager_database.rename(manager_database.with_suffix('.corrupt-evidence'))
+        run('systemctl', 'start', units['mgrd'])
+        eventually(lambda: degraded('manager', 'STORAGE_MISSING'))
+        assert not manager_database.exists(), 'missing authority database recreated automatically'
+        forwarding()
+        run('systemctl', 'stop', units['mgrd'], units['webd'])
+        # Restore only the unchanged, synthetic fixture to test the other fault.
+        manager_original.rename(manager_database)
+        web_database.write_bytes(b'synthetic damaged web database')
+        run('systemctl', 'start', units['mgrd'], units['webd'])
+        eventually(lambda: degraded('web', 'STORAGE_INTEGRITY_FAILED'))
+        assert fetch('/healthz')[0] == 200
+        forwarding()
+        checks.append('missing/corrupt manager DB and corrupt web DB produce explicit 503 storage degradation without recreation or OVS impact')
         result = {'architecture': os.uname().machine, 'ovs': run('ovs-vswitchd', '--version').splitlines()[0], 'checks': checks}
         destination = repo / 'test-results/go-runtime-smoke.json'
         destination.parent.mkdir(exist_ok=True)
@@ -219,6 +281,9 @@ def main():
         # These absolute paths were generated above under /run for this fixture.
         assert fixture.parent == Path('/run') and fixture.name.startswith('ovs-webui-fixture-')
         shutil.rmtree(fixture)
+        if data_root.exists():
+            assert data_root.parent == Path('/var/lib') and data_root.name == data_name
+            shutil.rmtree(data_root)
         if account_created:
             run('userdel', account_name, check=False)
             run('groupdel', account_name, check=False)

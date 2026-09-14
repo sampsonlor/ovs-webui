@@ -27,17 +27,22 @@ type Handler struct {
 	budgets    map[Class]*budget
 	inspect    func(context.Context) (Health, error)
 	logger     *slog.Logger
+	health     func(context.Context) Health
 }
 
-func NewHandler(protocol Protocol, authorizer Authorizer, logger *slog.Logger) *Handler {
+func NewHandler(protocol Protocol, authorizer Authorizer, logger *slog.Logger, probes ...func(context.Context) Health) *Handler {
 	if authorizer == nil {
 		authorizer = DenyAllAuthorizer{}
 	}
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
-	return &Handler{protocol: protocol, authorizer: authorizer, budgets: defaultBudgets(), logger: logger,
-		inspect: func(context.Context) (Health, error) { return BootstrapHealth(), nil }}
+	probe := func(context.Context) Health { return BootstrapHealth() }
+	if len(probes) > 0 && probes[0] != nil {
+		probe = probes[0]
+	}
+	return &Handler{protocol: protocol, authorizer: authorizer, budgets: defaultBudgets(), logger: logger, health: probe,
+		inspect: func(ctx context.Context) (Health, error) { return probe(ctx), nil }}
 }
 
 func HTTPServer(handler *Handler) *http.Server {
@@ -75,7 +80,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.problem(w, r, 400, "IPC_INVALID_REQUEST")
 			return
 		}
-		h.write(w, 200, BootstrapHealth())
+		h.write(w, 200, h.health(ctx))
 	case "/ipc/v1/handshake":
 		state.negotiated.Store(false)
 		release, err := h.budgets[Auth].acquire(ctx)

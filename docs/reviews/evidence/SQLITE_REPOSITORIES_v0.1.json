@@ -1,0 +1,260 @@
+{
+  "scope": "Dual SQLite storage foundation; receipt is not configuration admission, production restore or complete authentication",
+  "pull_request": "https://github.com/sampsonlor/ovs-webui/pull/58",
+  "run": "https://github.com/sampsonlor/ovs-webui/actions/runs/34812025289",
+  "head_sha": "b5689633e7eaf84a463ede6aa5faebd27dda11e7",
+  "go_version": "1.27.1",
+  "sqlite_driver": "modernc.org/sqlite v1.58.0",
+  "schema_versions": {
+    "web": 2,
+    "manager": 2
+  },
+  "runtime_jobs": [
+    {
+      "architecture": "amd64",
+      "runner": "ubuntu-24.04",
+      "job": "https://github.com/sampsonlor/ovs-webui/actions/runs/34812025289/job/103875111162",
+      "completed_at": "2026-09-14T06:09:01Z",
+      "tested_merge_sha": "0cf4828b6efda09b382a68cd9632c6b47d09e5cf",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native architecture and Go formatting",
+          "conclusion": "success"
+        },
+        {
+          "name": "Vet and native race tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded protocol fuzzing",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build CGO-free daemon binaries",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real filesystem exhaustion and durable recovery",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install ephemeral OVS test prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real systemd, Unix peers and isolated OVS forwarding smoke test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Retain runtime evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ],
+      "race_packages": [
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "duration": "3.179s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "duration": "1.837s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "duration": "6.943s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "duration": "1.015s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "duration": "4.007s"
+        }
+      ],
+      "real_filesystem_full": {
+        "test": "TestFilesystemFull",
+        "result": "passed",
+        "fixture": "dedicated 2 MiB tmpfs",
+        "evidence": "real tmpfs exhaustion preserved prior commit and required recovery"
+      },
+      "artifact_id": 10334549849,
+      "artifact_sha256": "04795565878c4d90d9ce08798df20718684568a1e7b90f76bdd14fe9c5cb5532",
+      "smoke": {
+        "architecture": "x86_64",
+        "ovs": "ovs-vswitchd (Open vSwitch) 3.3.9",
+        "checks": [
+          "actual hardened systemd unit validation",
+          "root mgrd and non-root webd communicate through credential-checked IPC and HTTPS",
+          "TLS-only listener and unavailable business API",
+          "mgrd SIGKILL: systemd restart, stale socket recovery, webd liveness and OVS forwarding preserved",
+          "webd SIGKILL: independent restart and OVS forwarding preserved",
+          "graceful management shutdown preserves both OVS processes, native configuration and packet forwarding",
+          "separate private web and manager databases preserve committed fixture data across both process restarts",
+          "missing/corrupt manager DB and corrupt web DB produce explicit 503 storage degradation without recreation or OVS impact"
+        ]
+      }
+    },
+    {
+      "architecture": "arm64",
+      "runner": "ubuntu-24.04-arm",
+      "job": "https://github.com/sampsonlor/ovs-webui/actions/runs/34812025289/job/103875111042",
+      "completed_at": "2026-09-14T06:08:16Z",
+      "tested_merge_sha": "0cf4828b6efda09b382a68cd9632c6b47d09e5cf",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native architecture and Go formatting",
+          "conclusion": "success"
+        },
+        {
+          "name": "Vet and native race tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Bounded protocol fuzzing",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build CGO-free daemon binaries",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real filesystem exhaustion and durable recovery",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install ephemeral OVS test prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real systemd, Unix peers and isolated OVS forwarding smoke test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Retain runtime evidence",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ],
+      "race_packages": [
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "duration": "3.158s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository",
+          "duration": "1.546s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/repository/sqlite",
+          "duration": "6.446s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/web",
+          "duration": "1.010s"
+        },
+        {
+          "package": "github.com/sampsonlor/ovs-webui/internal/ipc",
+          "duration": "4.020s"
+        }
+      ],
+      "real_filesystem_full": {
+        "test": "TestFilesystemFull",
+        "result": "passed",
+        "fixture": "dedicated 2 MiB tmpfs",
+        "evidence": "real tmpfs exhaustion preserved prior commit and required recovery"
+      },
+      "artifact_id": 10334744164,
+      "artifact_sha256": "40313b78050e83c76fbc43980c7bd115ea91767592a0d7e8f0b9f1691c238222",
+      "smoke": {
+        "architecture": "aarch64",
+        "ovs": "ovs-vswitchd (Open vSwitch) 3.3.9",
+        "checks": [
+          "actual hardened systemd unit validation",
+          "root mgrd and non-root webd communicate through credential-checked IPC and HTTPS",
+          "TLS-only listener and unavailable business API",
+          "mgrd SIGKILL: systemd restart, stale socket recovery, webd liveness and OVS forwarding preserved",
+          "webd SIGKILL: independent restart and OVS forwarding preserved",
+          "graceful management shutdown preserves both OVS processes, native configuration and packet forwarding",
+          "separate private web and manager databases preserve committed fixture data across both process restarts",
+          "missing/corrupt manager DB and corrupt web DB produce explicit 503 storage degradation without recreation or OVS impact"
+        ]
+      }
+    }
+  ],
+  "prototype_regressions": [
+    {
+      "suite": "regression-results",
+      "test_cases": 202,
+      "failures": 0,
+      "skipped": 0,
+      "artifact_id": 10334734115,
+      "artifact_sha256": "e369d1640c7a40c65db7d686686bf34bb5c353e52176bee361cecabfb53dd75a"
+    },
+    {
+      "suite": "integration-results",
+      "test_cases": 3,
+      "failures": 0,
+      "skipped": 0,
+      "artifact_id": 10334499875,
+      "artifact_sha256": "1d508a7739ec1fcacaf0375bc9df86c8e2358c7ef42535b1d08733793dce80f7"
+    },
+    {
+      "suite": "browser-results",
+      "test_cases": 26,
+      "failures": 0,
+      "skipped": 0,
+      "artifact_id": 10335605348,
+      "artifact_sha256": "27419ea43c260d43a63d2890f4c50713cf037c6c2c25832efa4604b24d42ecc4"
+    }
+  ]
+}

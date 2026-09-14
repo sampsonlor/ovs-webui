@@ -5,7 +5,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 ## Project status
 
 See [current status and architecture alignment](docs/STATUS.md) for the
-2026-09-09 inventory, source baselines, implementation design and review scope.
+2026-09-14 inventory, source baselines, implementation design and review scope.
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
@@ -30,7 +30,8 @@ interaction and contract review tools; they do not change that architecture.
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
 | Phase 1 implementation design v0.1               | Accepted · PR #56 merged            |
-| Go daemon foundation / typed IPC v0.1            | Implemented · Review pending · #31  |
+| Go daemon foundation / typed IPC v0.1            | Accepted · PR #57 merged            |
+| Dual SQLite repositories v0.1                   | Implemented · Review pending · #32  |
 
 The [Phase 1 implementation design](docs/implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
 maps all 58 Scope requirements and 53 approved IA pages to implementation owners
@@ -41,8 +42,12 @@ original remains Draft for Review; the design does not mark backend delivery com
 The [Go runtime foundation](docs/implementation/GO_RUNTIME_IPC_v0.1.md) now provides
 separate Linux daemons, HTTPS bootstrap resources, credential-checked Unix IPC,
 bounded requests and systemd supervision. Its native amd64/arm64 CI includes
-process failure and isolated OVS forwarding tests. Authentication, persistence,
-configuration providers and the Svelte product remain subsequent implementation work.
+process failure and isolated OVS forwarding tests. The
+[dual SQLite foundation](docs/implementation/SQLITE_REPOSITORIES_v0.1.md), reviewed
+separately in PR #58, adds private databases, atomic migrations, consistent backups
+and durable handoff receipts. Missing or damaged databases stop write admission;
+normal startup never replaces them with empty stores. Authentication, configuration
+providers and the Svelte product remain subsequent implementation work.
 
 The accepted Batch 01 path remains available:
 

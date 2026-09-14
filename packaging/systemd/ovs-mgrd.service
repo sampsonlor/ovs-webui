@@ -9,7 +9,9 @@ Type=simple
 User=root
 Group=ovs-webui-web
 EnvironmentFile=/etc/ovs-webui/runtime.env
-ExecStart=/usr/libexec/ovs-mgrd --socket=${MANAGER_SOCKET} --webd-uid=${WEBD_UID} --webd-gid=${WEBD_GID}
+ExecStart=/usr/libexec/ovs-mgrd --socket=${MANAGER_SOCKET} --webd-uid=${WEBD_UID} --webd-gid=${WEBD_GID} --database=${MANAGER_DATABASE}
+StateDirectory=ovs-webui/manager
+StateDirectoryMode=0700
 RuntimeDirectory=ovs-webui
 RuntimeDirectoryMode=0750
 RuntimeDirectoryPreserve=restart

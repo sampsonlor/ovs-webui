@@ -63,4 +63,4 @@ PR 的现有 Quality/build、隔离集成及浏览器 CI 继续提供原型回�
 - [x] 接受未发布 lab → 正式 API 的迁移、首个发布 baseline 与全站 API/UI parity 责任。
 - [x] PR #19 保持独立待审，其原型增量不阻止本次 Go/IPC 基础工程；确认 #31 准入。
 
-#30 设计冻结完成；#29 与 #31 为 In Progress，后者另有[实现审阅](../implementation/GO_RUNTIME_IPC_v0.1.md)。#52–#55 保留 Phase 1 Todo；#51 汇总发布证据。设计接受不等于正式功能、API 发布或产品 Phase 1 完成。
+#30 设计冻结完成，#31 [Go/IPC 实现](../implementation/GO_RUNTIME_IPC_v0.1.md)也已接受合并。#29 与 #32 为 In Progress，后者另有[双库实现审阅](../implementation/SQLITE_REPOSITORIES_v0.1.md)。#52–#55 保留 Phase 1 Todo；#51 汇总发布证据。设计接受不等于正式功能、API 发布或产品 Phase 1 完成。

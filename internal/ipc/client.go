@@ -27,7 +27,7 @@ func (c *Client) Probe(ctx context.Context) (Health, error) {
 	err := c.withConnection(ctx, func(conn net.Conn, reader *bufio.Reader) error {
 		return exchange(conn, reader, http.MethodGet, "/ipc/v1/health", "", nil, &health)
 	})
-	if err == nil && (health.State != "ready" || health.Scope != "runtime-bootstrap") {
+	if err == nil && ((health.State != "ready" && health.State != "degraded") || health.Scope != "runtime-bootstrap") {
 		err = errors.New("IPC_STATE_UNKNOWN")
 	}
 	return health, err
