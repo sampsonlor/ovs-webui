@@ -160,10 +160,17 @@ func VerifyBackup(ctx context.Context, directory string, kind repository.Kind) (
 		}
 	}
 	_ = f.Close()
-	if err != nil || manifest.Format != 1 || manifest.Kind != kind || manifest.SchemaVersion < 1 || manifest.SchemaVersion > len(migrations.For(kind)) {
+	if err != nil || manifest.Format != 1 || manifest.Kind != kind || !repository.ValidID(manifest.SoftwareVersion) || manifest.CreatedAt.IsZero() || manifest.SchemaVersion < 1 || manifest.SchemaVersion > len(migrations.For(kind)) {
 		return fail()
 	}
 	path = filepath.Join(directory, "database.sqlite")
+	// A sealed VACUUM snapshot is self-contained. Never replay an un-hashed
+	// sidecar when verifying the main file's checksum.
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		if _, err := os.Lstat(path + suffix); !errors.Is(err, os.ErrNotExist) {
+			return fail()
+		}
+	}
 	hash, err := fileHash(path)
 	if err != nil || hash != manifest.SHA256 {
 		return fail()

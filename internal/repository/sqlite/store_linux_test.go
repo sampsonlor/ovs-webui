@@ -365,6 +365,28 @@ func TestOversizedBackupManifestIsRejected(t *testing.T) {
 		t.Fatal("accepted a manifest with hidden trailing data")
 	}
 }
+func TestBackupVerificationRejectsUnhashedSidecars(t *testing.T) {
+	s := initialized(t, options(t))
+	directory, err := s.Backup(background)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		path := filepath.Join(directory, "database.sqlite") + suffix
+		if err = os.WriteFile(path, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = VerifyBackup(background, directory, repository.Web); err == nil {
+			t.Fatal("accepted a sidecar outside the snapshot checksum", suffix)
+		}
+		if err = os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = VerifyBackup(background, directory, repository.Web); err != nil {
+		t.Fatal("clean snapshot no longer verifiable", err)
+	}
+}
 func TestTransientProbeFailureDoesNotClaimReadyOrLatch(t *testing.T) {
 	s := initialized(t, options(t))
 	ctx, cancel := context.WithCancel(background)
