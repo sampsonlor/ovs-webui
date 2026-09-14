@@ -1,6 +1,6 @@
 # SecretStore / HTTPS 实现 v0.1
 
-任务 #35，前置 #34 已接受并合并为 `da24f62215940b113d1316bc5e60f55964b6f2c4`，接受标签 `phase1-auth-grants-v0.1`。本批实现 Go 安全基础；AD-09 完整页面仍由 #28 / #54 单独验收。
+任务 #35，前置 #34 已接受并合并为 `da24f62215940b113d1316bc5e60f55964b6f2c4`，接受标签 `phase1-auth-grants-v0.1`。本批实现 Go 安全基础；AD-09 证书页面由 #54 单独验收。#20 用户管理、#27 AAA、#28 API Token 仍保留各自完整功能验收。
 
 ## 消费者和存储
 
@@ -12,7 +12,7 @@
 
 AES-256-GCM、每条随机 96-bit nonce；AAD 包含数据库身份、格式版本、provider、consumer partition、secret ID、purpose 和 key_version。修改任一绑定或缺少相应版本密钥均拒绝解密。每分区最多 4096 条、单个明文最多 192 KiB。私有消费者显式解密，没有网络读取原始 secret 的接口。密码继续 Argon2id，API Token/Cookie/grant 查找继续只存 SHA256。
 
-master key 不进入数据库备份。`secret.Value` 默认 JSON/fmt/slog 表示均脱敏；两守护进程使用共同日志边界，仅允许固定事件及操作属性。证书 GET 仅包含指纹、SAN 对应主机、有效期、状态、revision/sequence 和 `private_key_configured`；私钥不进入 mgrd IPC、Job、receipt 或 Audit。`redact.Document` 提供普通诊断/导出共用边界；尚未实现的 Export/Support Bundle/Debug 服务仍拒绝访问，后续 #47/#48 必须沿用此边界。
+master key 不进入数据库备份。`secret.Value` 默认 JSON/fmt/slog 表示均脱敏；两守护进程使用共同日志边界，仅允许固定事件及操作属性。证书 GET 仅包含指纹、SAN 对应主机、有效期、状态、revision/sequence 和 `private_key_configured`；私钥不进入 mgrd IPC、Job、receipt 或 Audit。`redact.Document` 提供普通诊断/导出共用边界；尚未实现的 Export/Support Bundle/Debug 服务仍拒绝访问，后续 #37/#46/#48 按 Scope 映射沿用此边界。
 
 ## 初始化和运行
 
