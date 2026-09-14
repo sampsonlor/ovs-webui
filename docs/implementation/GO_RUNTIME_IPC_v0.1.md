@@ -1,6 +1,6 @@
 # Go 双进程与受控 IPC v0.1
 
-日期：2026-09-09。对应 [#31](https://github.com/sampsonlor/ovs-webui/issues/31)，状态：[PR #57 实现待审阅](https://github.com/sampsonlor/ovs-webui/pull/57)。
+实现日期：2026-09-09；接受日期：2026-09-14。对应 [#31](https://github.com/sampsonlor/ovs-webui/issues/31)，状态：[PR #57 已接受合并](https://github.com/sampsonlor/ovs-webui/pull/57)，merge `e61d36c`，标签 `phase1-go-runtime-v0.1`，#31 已关闭。以下保留本批接受时的范围；后续持久化增量见 [#32 双库](SQLITE_REPOSITORIES_v0.1.md)。
 
 前置设计 [PR #56](https://github.com/sampsonlor/ovs-webui/pull/56) 已按用户的下一步指令接受，并合并为 `e2e649e`，接受标签为 `phase1-implementation-design-v0.1`。Scope DOCX 仍保留 Draft for Review；PR #19 的共享库存原型独立待审。本次交付正式 Go 运行时的基础，不代表用户认证、持久化、OVS 配置或整站 Svelte 已完成。
 
@@ -15,7 +15,7 @@
 
 `/healthz` 只表明 webd 存活；`/readyz` 和 `/api/v1/runtime` 重新连接 mgrd、握手并读取 bootstrap 状态。相容时响应仍明确 `authentication_ready=false`、`configuration_ready=false`。mgrd 失联/版本不符返回 503，webd 的 liveness 与启动页继续可用。当前没有登录/配置端点，也没有把 lab 的合成角色作为正式身份。嵌入的启动说明不是完成的 Svelte 产品页面。
 
-基础运行时仅依赖 Go 标准库；所有正式二进制使用 `CGO_ENABLED=0` 构建。Go 版本来自 `go.mod`，当前为 1.27.1。SQLite 驱动在 #32 引入，当前不会创建空 manager.db 或接触 OVS。现有 React/lab/Sites 原型的运行和托管配置维持原有流程；这两个 Linux daemon 不运行在 Sites 的 Worker 环境中。
+基础运行时在 #31 接受时仅依赖 Go 标准库；所有正式二进制使用 `CGO_ENABLED=0` 构建。Go 版本来自 `go.mod`，为 1.27.1。SQLite 驱动由 #32 引入，正常启动仍不会创建空 manager.db 或接触 OVS。现有 React/lab/Sites 原型的运行和托管配置维持原有流程；这两个 Linux daemon 不运行在 Sites 的 Worker 环境中。
 
 ## 通信与资源约束
 
@@ -59,4 +59,4 @@ CGO_ENABLED=0 go build -o ovs-mgrd ./cmd/ovs-mgrd
 
 CI 只在一次性 runner 中安装 OVS 测试前提，使用独立 OVSDB、dummy datapath、唯一 systemd units 和合成文档地址。它不修改业务网络；实际 OVS 版本、架构、场景结果和服务日志分别保留为 `go-runtime-amd64` / `go-runtime-arm64` artifacts。以对应 PR 的实际 CI 结果为准；这证明基础进程隔离，不等于 #36/#39 的真实 provider 功能或整个支持矩阵资格验收。
 
-本批没有改变 Standard/Expert、桌面/平板/手机的交互职责；现有原型浏览器 CI 继续执行。#31 在本实现与上述 CI 证据获接受后关闭，再推进 #32 双库。#29 仍为 In Progress。
+本批没有改变 Standard/Expert、桌面/平板/手机的交互职责；现有原型浏览器 CI 继续执行。#31 已按用户继续下一步的指令接受并关闭，当前 #32 双库独立审阅；#29 仍为 In Progress。
