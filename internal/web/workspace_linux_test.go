@@ -5,6 +5,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http/httptest"
 	"net/url"
@@ -22,6 +23,19 @@ import (
 type workspaceProvider struct {
 	snapshot candidate.Snapshot
 	failure  error
+}
+
+type validationReadHook struct {
+	candidate.Manager
+	after func(context.Context) error
+}
+
+func (h validationReadHook) ReadCandidate(ctx context.Context, g string, in candidate.ReadRequest) (authn.Response, error) {
+	out, err := h.Manager.ReadCandidate(ctx, g, in)
+	if err == nil && in.ValidationID != "" {
+		err = h.after(ctx)
+	}
+	return out, err
 }
 
 func (p *workspaceProvider) Read(context.Context, string, map[string]string, url.Values, authn.Claims) (any, error) {
@@ -133,6 +147,38 @@ func TestWorkspaceHTTPConcurrentSavesLostRepliesValidationAndRevocation(t *testi
 	if !v.Usable || v.ExecutionReady {
 		t.Fatal(v)
 	}
+	// Simulate a committed save whose witness update has not reached mgrd yet,
+	// precisely between the manager's read and the webd response.
+	envelope, err := w.envelope(context.Background(), session["principal_id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapping, err := a.sessions.Load(context.Background(), cookie)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextID := workspaceID()
+	nextIntent := intent
+	nextIntent.Value.Tag = workspacePointer(21)
+	nextBody, _ := json.Marshal(map[string]any{"request_id": nextID, "operation": "stage", "intents": []candidate.Intent{nextIntent}})
+	prepared, err := manager.PrepareCandidate(context.Background(), mapping.Grant, candidate.PrepareRequest{Envelope: envelope, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: envelope.Epoch, RequestID: nextID, Precondition: `"` + envelope.Candidate.Revision + `"`, Payload: nextBody}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.manager = validationReadHook{Manager: manager, after: func(ctx context.Context) error {
+		return store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+			b, _ := json.Marshal(prepared)
+			_, err := tx.ExecContext(ctx, "UPDATE candidate_workspaces SET revision=?,sequence=?,envelope=? WHERE owner_id=?", prepared.Candidate.Revision, prepared.Sequence, b, prepared.Owner)
+			return err
+		})
+	}}
+	out = call("GET", "/validations/"+accepted.Resource.ID, nil, "", "")
+	_ = json.Unmarshal(out.Body.Bytes(), &v)
+	if out.Code != 200 || v.Usable {
+		t.Fatal("concurrent save returned stale usable validation", out.Code, out.Body.String())
+	}
+	w.manager = manager
+	e = read()
 	p.failure = apitypes.Fail(503, "PROVIDER_UNAVAILABLE")
 	replay := call("PATCH", "/candidate", bodies[winner], `"`+initial.Revision+`"`, "workspace")
 	if replay.Code != 200 || replay.Header().Get("Idempotency-Replayed") != "true" {

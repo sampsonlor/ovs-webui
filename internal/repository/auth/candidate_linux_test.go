@@ -212,4 +212,22 @@ func TestFormalValidationRejectsForgedOriginalAndForeignOwnership(t *testing.T) 
 	if err != nil || n != 0 {
 		t.Fatal("rejected command persisted a successful validation", n, err)
 	}
+	// Fail after Job creation but before Validation insertion. The enclosing
+	// manager transaction must also remove the Job, event, audit and receipt.
+	err = r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `CREATE TRIGGER fail_validation BEFORE INSERT ON candidate_validations BEGIN SELECT RAISE(ABORT,'synthetic_validation_failure'); END`)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.ValidateCandidate(testContext, g.Grant, validationRequest(e, g.Claims.RequestEpoch)); err == nil {
+		t.Fatal("injected validation write failure ignored")
+	}
+	err = r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error {
+		return q.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM candidate_validations)+(SELECT count(*) FROM jobs)+(SELECT count(*) FROM api_receipts)+(SELECT count(*) FROM evidence_records WHERE operation IN ('job-created','validate-candidate'))`).Scan(&n)
+	})
+	if err != nil || n != 0 {
+		t.Fatal("failed admission left partial validation evidence", n, err)
+	}
 }
