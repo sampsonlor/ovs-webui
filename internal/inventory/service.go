@@ -359,6 +359,16 @@ func one(v any) any {
 	return v
 }
 func textValue(v any) string { s, _ := one(v).(string); return s }
+func nativeType(row Row, column string, config bool) string {
+	value, known := row.Values[column].(string)
+	if !known || !config {
+		return "unknown"
+	}
+	if value == "" {
+		return "default"
+	}
+	return value
+}
 func ref(v *view, table, uuid string) map[string]any {
 	b := v.decision.Bindings[Key(table, uuid)]
 	return map[string]any{"kind": kindFor(table), "id": b.ManagementID}
@@ -431,14 +441,7 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 			ports = append(ports, ref(v, "Port", id))
 		}
 		out["port_refs"] = ports
-		datatype := textValue(row.Values["datapath_type"])
-		if !config {
-			datatype = "unknown"
-		}
-		if datatype == "" {
-			datatype = "default"
-		}
-		out["datapath_type"] = datatype
+		out["datapath_type"] = nativeType(row, "datapath_type", config)
 	case "Port":
 		bridge, ok := parent(v, "Bridge", "ports", b.UUID)
 		if !ok {
@@ -457,8 +460,14 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 		out["local_port"] = false
 		for _, id := range refs(row.Values["interfaces"]) {
 			iface := v.observation.Rows["Interface"][id]
-			if row.Values["name"] == bridge.Values["name"] && iface.Values["name"] == bridge.Values["name"] && textValue(iface.Values["type"]) == "internal" {
-				out["local_port"] = true
+			if row.Values["name"] == bridge.Values["name"] && iface.Values["name"] == bridge.Values["name"] {
+				typ, known := iface.Values["type"].(string)
+				if !known {
+					out["local_port"] = nil
+				} else if typ == "internal" {
+					out["local_port"] = true
+					break
+				}
 			}
 		}
 		var native any
@@ -510,15 +519,11 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 			return nil, apitypes.Fail(503, "INVENTORY_RELATION_UNKNOWN")
 		}
 		out["port_ref"] = ref(v, "Port", p.UUID)
-		typ := textValue(row.Values["type"])
-		if typ == "" {
-			typ = "default"
+		out["interface_type"] = nativeType(row, "type", config)
+		out["internal"] = nil
+		if typ, known := row.Values["type"].(string); known {
+			out["internal"] = typ == "internal"
 		}
-		if !config {
-			typ = "unknown"
-		}
-		out["interface_type"] = typ
-		out["internal"] = textValue(row.Values["type"]) == "internal"
 		out["options"] = map[string]any{}
 		if config {
 			if options, ok := row.Values["options"].(map[string]any); ok {

@@ -12,7 +12,7 @@
 | 有界观察与权限 | 原子快照、48 KiB 响应、cursor scope、过期/Unknown、当前 Token 字段过滤、缺 provider 不伪造默认 |
 | 故障与恢复 | 真实 OVSDB 失联/重连、mgrd SIGKILL、复制恢复、精确摘要人工核对与 Audit、manager restore 撤销 |
 
-功能提交 `7954f7c6e8d7368eba2acafcfe22c6f4f18a9e40` 的 [CI 34920821551](https://github.com/sampsonlor/ovs-webui/actions/runs/34920821551) 六项全部通过。长期证据保存在 [OVSDB_INVENTORY_v0.1.json](evidence/OVSDB_INVENTORY_v0.1.json)，包含实际测试的合并 SHA、原生架构、测试名称、schema 和 artifact 校验和、OVS binary 版本及测量值。后续文档提交的完整 CI 状态见 PR #62，不把文档提交与这份功能证据的 SHA 混用。
+功能提交 `7954f7c6e8d7368eba2acafcfe22c6f4f18a9e40` 的 [CI 34920821551](https://github.com/sampsonlor/ovs-webui/actions/runs/34920821551) 六项全部通过。长期证据保存在 [OVSDB_INVENTORY_v0.1.json](evidence/OVSDB_INVENTORY_v0.1.json)，包含实际测试的合并 SHA、原生架构、测试名称、schema 和 artifact 校验和、OVS binary 版本及测量值。后续提交的完整 CI 状态见 PR #62，不把最新提交与这份功能证据的 SHA 混用。
 
 | 检查 | 结果 |
 | --- | --- |

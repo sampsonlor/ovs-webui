@@ -22,7 +22,7 @@ Go 依赖锁定批准的 `github.com/ovn-kubernetes/libovsdb v0.8.1`，校验和
 
 ## Discovery 与一致性
 
-按实际 schema 发现所有 tables、columns、native type/cardinality/constraints、mutable、ephemeral、references（strong/weak 与 key/value 位置）及 indexes；版本仅为来源信息。必需关系列缺失返回 `OVSDB_CORE_SCHEMA_UNSUPPORTED`。可选 VLAN 列缺失时 native VLAN 为 null/unknown；未知观察值保留，不推断支持的写操作。
+按实际 schema 发现所有 tables、columns、native type/cardinality/constraints、mutable、ephemeral、references（strong/weak 与 key/value 位置）及 indexes；版本仅为来源信息。必需关系列缺失返回 `OVSDB_CORE_SCHEMA_UNSUPPORTED`。可选 VLAN 列缺失时 native VLAN 为 null/unknown；type/datapath_type 未观察到时保持 unknown，只有实际观察到空字符串才显示 default，无法判断的 internal/local_port 为 null。未知观察值保留，不推断支持的写操作。
 
 一次 monitor 同时包含 Open_vSwitch、Bridge、Port、Interface。采用 RFC 7047 原始 monitor/update 的全值替换语义，初始化与增量严格区分 insert/modify/delete，并核对更新的 old 值与缓存一致；整条事务更新后再验证引用并发布，禁止逐行呈现中间悬空关系。重连重新取 schema 与完整 monitor，旧流不补接到新流。重复/未知 UUID、前值不一致、孤儿、多父关系、超过预算或协议错误触发重新同步；绝不返回被截断却声称完整的图。
 

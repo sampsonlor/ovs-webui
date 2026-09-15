@@ -170,6 +170,53 @@ func TestStaleUnknownReconciliationAndFieldFiltering(t *testing.T) {
 	if _, err = empty.Read(context.Background(), "listPorts", nil, url.Values{}, c); err == nil {
 		t.Fatal("unavailable became empty list")
 	}
+	t.Run("missing types are unknown while observed empty strings retain native default semantics", func(t *testing.T) {
+		s, o, d, c := fixture(t)
+		for table, objects := range o.Rows {
+			for _, row := range objects {
+				row.Values["name"] = "synthetic-local"
+				if table == "Bridge" {
+					delete(row.Values, "datapath_type")
+				} else if table == "Interface" {
+					delete(row.Values, "type")
+				}
+			}
+		}
+		s.install(o, d)
+		contract, err := apicontract.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{"/bridges", "/interfaces", "/ports"} {
+			op, params, _ := contract.Match("GET", "/api/v1"+path)
+			result, err := s.Read(context.Background(), op.ID, params, url.Values{}, c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, _ := json.Marshal(result)
+			if err = op.ValidateResponse(200, encoded); err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range result.(map[string]any)["items"].([]map[string]any) {
+				if path == "/bridges" && item["datapath_type"] != "unknown" || path == "/interfaces" && (item["interface_type"] != "unknown" || item["internal"] != nil) || path == "/ports" && item["local_port"] != nil {
+					t.Fatalf("unobserved type inferred in %s: %v", path, item)
+				}
+			}
+		}
+		for _, row := range o.Rows["Interface"] {
+			row.Values["type"] = ""
+		}
+		s.install(o, d)
+		result, err := s.Read(context.Background(), "listInterfaces", nil, url.Values{}, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range result.(map[string]any)["items"].([]map[string]any) {
+			if item["interface_type"] != "default" || item["internal"] != false {
+				t.Fatal("explicit native empty type lost")
+			}
+		}
+	})
 }
 func TestObservationDoesNotChangeConfigRevision(t *testing.T) {
 	s, o, d, c := fixture(t)
