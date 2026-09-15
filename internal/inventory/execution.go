@@ -13,7 +13,6 @@ import (
 type ExecutionView struct {
 	Candidate   candidate.Snapshot
 	Observation Observation
-	Decision    Decision
 }
 
 func (s *Service) ExecutionView(ctx context.Context, bindings []candidate.Binding) (ExecutionView, error) {
@@ -32,7 +31,7 @@ func (s *Service) ExecutionView(ctx context.Context, bindings []candidate.Bindin
 			s.mu.RUnlock()
 			continue
 		}
-		value := ExecutionView{Candidate: plan, Observation: before.observation, Decision: before.decision}
+		value := ExecutionView{Candidate: plan, Observation: before.observation}
 		data, err := json.Marshal(value)
 		s.mu.RUnlock()
 		if err != nil {

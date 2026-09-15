@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -37,10 +38,18 @@ func (w *Workspace) ReserveExecution(ctx context.Context, s publicapi.Subject, i
 	// Mgrd authenticates the envelope and advances the monotonic witness before
 	// web.db's compare-and-freeze. A concurrent edit wins either this CAS or the
 	// later exact witness check; it cannot silently replace execution intent.
-	if _, err := w.manager.ReadCandidate(ctx, s.Credential, candidate.ReadRequest{Envelope: in.Envelope, ValidationID: in.ValidationID}); err != nil {
+	response, err := w.manager.ReadCandidate(ctx, s.Credential, candidate.ReadRequest{Envelope: in.Envelope, ValidationID: in.ValidationID})
+	if err != nil {
 		return nil, err
 	}
-	err := w.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	var validation candidate.Validation
+	if json.Unmarshal(response.Body, &validation) != nil || validation.ID != in.ValidationID || validation.CandidateID != in.Envelope.Candidate.ID || validation.CandidateRevision != in.Envelope.Candidate.Revision {
+		return nil, apitypes.Fail(503, "VALIDATION_RESPONSE_INVALID")
+	}
+	if !validation.Usable || validation.State != "passed" {
+		return nil, apitypes.Fail(409, "VALIDATION_NOT_USABLE")
+	}
+	err = w.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		current, err := loadWorkspace(ctx, tx, s.ID)
 		if err != nil {
 			return err

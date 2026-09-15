@@ -486,6 +486,47 @@ func TestNativeFieldExecution(t *testing.T) {
 			t.Fatal(string(b), f.proxy.sent.Load())
 		}
 	})
+	t.Run("SIGKILL_after_real_commit_before_durable_reply", func(t *testing.T) {
+		f := newFixture(t)
+		in := f.prepare([]string{"field-p1"}, 20)
+		input := nativeCrashInput{Root: f.root, Request: in, Grant: f.login.Grant, AllowIDs: []string{f.binding("field-p1").ManagementID, f.binding("field-p2").ManagementID}}
+		b, _ := json.Marshal(input)
+		path := filepath.Join(f.root, "synthetic-crash-input.json")
+		must(t, os.WriteFile(path, b, 0600))
+		f.cancel()
+		<-f.monitorDone
+		f.cancel = nil
+		must(t, f.store.Close())
+		f.store = nil
+		must(t, f.webStore.Close())
+		f.webStore = nil
+		cmd := exec.Command(os.Args[0], "-test.run=^TestNativeExecutionCrashChild$", "-test.v")
+		cmd.Env = append(os.Environ(), "OVS_NATIVE_CRASH_INPUT="+path)
+		output, err := cmd.CombinedOutput()
+		exit, ok := err.(*exec.ExitError)
+		if !ok || exit.ProcessState.Sys().(syscall.WaitStatus).Signal() != syscall.SIGKILL {
+			t.Fatal("missed real commit crash", err, string(output))
+		}
+		if f.proxy.sent.Load() != 1 || f.vs("get", "Port", "field-p1", "tag") != "20" {
+			t.Fatal("crash did not follow native commit")
+		}
+		store, err := sqlite.Open(context.Background(), f.options)
+		must(t, err)
+		var id, state string
+		must(t, store.Read(context.Background(), func(ctx context.Context, q *sql.Conn) error {
+			return q.QueryRowContext(ctx, "SELECT id,state FROM field_executions").Scan(&id, &state)
+		}))
+		must(t, store.Close())
+		if state != "committing" {
+			t.Fatal("reply was saved before crash", state)
+		}
+		cmd = exec.Command(os.Args[0], "-test.run=^TestNativeExecutionRecoveryChild$", "-test.v")
+		cmd.Env = append(os.Environ(), "OVS_EXECUTION_RECOVERY_ROOT="+f.root, "OVS_EXECUTION_RECOVERY_ID="+id)
+		output, err = cmd.CombinedOutput()
+		if err != nil || !bytes.Contains(output, []byte("recovered-committed-applied-unknown")) || f.proxy.sent.Load() != 1 {
+			t.Fatal(err, string(output), f.proxy.sent.Load())
+		}
+	})
 	t.Run("dropped_request_and_equal_after_image_are_ambiguous", func(t *testing.T) {
 		f := newFixture(t)
 		in := f.prepare([]string{"field-p1"}, 20)
@@ -536,6 +577,68 @@ func TestNativeFieldExecution(t *testing.T) {
 			t.Fatal("old plan written to replacement")
 		}
 	})
+}
+
+type nativeCrashInput struct {
+	Root, Grant string
+	Request     execution.Request
+	AllowIDs    []string
+}
+type crashAfterCommit struct{ *ovsdb.Executor }
+
+func (p crashAfterCommit) Commit(ctx context.Context, plan execution.Plan, before func() error) execution.Outcome {
+	o := p.Executor.Commit(ctx, plan, before)
+	if o.Commit == "committed" {
+		_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+		select {}
+	}
+	return o
+}
+func TestNativeExecutionCrashChild(t *testing.T) {
+	path := os.Getenv("OVS_NATIVE_CRASH_INPUT")
+	if path == "" {
+		t.Skip("separate process real commit SIGKILL helper")
+	}
+	b, err := os.ReadFile(path)
+	must(t, err)
+	var in nativeCrashInput
+	must(t, json.Unmarshal(b, &in))
+	if !strings.HasPrefix(in.Root, "/run/ovs-field-test-") {
+		t.Fatal("invalid isolated fixture")
+	}
+	f := &fixture{t: t, root: in.Root, conf: filepath.Join(in.Root, "conf.db"), proxySocket: filepath.Join(in.Root, "fault.sock")}
+	o := sqlite.Options{Path: filepath.Join(in.Root, "manager", "manager.db"), Kind: repository.Manager, SoftwareVersion: "native-execution-test"}
+	f.store, err = sqlite.Open(context.Background(), o)
+	must(t, err)
+	defer f.store.Close()
+	f.auth, err = auth.New(f.store, key)
+	must(t, err)
+	r, err := registry.New(f.store)
+	must(t, err)
+	f.inventory = inventory.New(r)
+	must(t, f.inventory.SetLocalVLANPorts(in.AllowIDs))
+	f.auth.WithInventory(f.inventory)
+	p, err := ovsdb.New(ovsdb.Options{Socket: f.proxySocket, DatabaseFile: f.conf, PeerUID: 0})
+	must(t, err)
+	f.ctx, f.cancel = context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); p.Run(f.ctx, f.inventory) }()
+	defer func() { f.cancel(); <-done }()
+	waitFor(t, func() bool { _, err := f.inventory.CandidateSnapshot(f.ctx, nil); return err == nil })
+	wo := sqlite.Options{Path: filepath.Join(in.Root, "web", "web.db"), Kind: repository.Web, SoftwareVersion: "native-execution-test"}
+	f.webStore, err = sqlite.Open(f.ctx, wo)
+	must(t, err)
+	defer f.webStore.Close()
+	w, err := web.NewWorkspace(f.webStore, f.auth)
+	must(t, err)
+	subject := publicapi.Subject{ID: in.Request.Envelope.Owner, Credential: in.Grant}
+	lease, err := w.ReserveExecution(f.ctx, subject, in.Request, isolatedSafety{f})
+	must(t, err)
+	e, err := f.auth.ConfigureExecution(crashAfterCommit{p.Executor(f.inventory)})
+	must(t, err)
+	_, err = e.Submit(f.ctx, in.Request, f.auth.ExecutionAuthorizer(in.Grant), lease)
+	must(t, err)
+	t.Fatal("native commit did not reach crash boundary")
 }
 
 func TestNativeExecutionRecoveryChild(t *testing.T) {

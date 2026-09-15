@@ -261,7 +261,7 @@ func (e *Engine) saveOutcome(ctx context.Context, id string, o execution.Outcome
 			return nil
 		}
 		state := stateFor(r, o)
-		if state == "recovery-required" && o.Applied == "pending" {
+		if state == "recovery-required" && o.Applied == "pending" && time.Since(r.Created) >= execution.AppliedFor {
 			o.Reason = "applied-budget-exhausted"
 		}
 		if candidate.Digest(r.Outcome) == candidate.Digest(o) && r.State == state {

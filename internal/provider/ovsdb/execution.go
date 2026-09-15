@@ -394,12 +394,21 @@ func decodeCommit(n nativePlan, p execution.Plan, body []byte) execution.Outcome
 	}
 	// A structured operation error means the entire native transaction aborted,
 	// including writes preceding the failing wait. Never retry an uncertain send.
-	for _, r := range results {
+	for index, r := range results {
+		if r == nil {
+			return out
+		}
 		if len(r["error"]) > 0 {
 			var code string
 			if json.Unmarshal(r["error"], &code) == nil && code != "" {
+				for _, tail := range results[index+1:] {
+					if tail != nil {
+						return out
+					}
+				}
 				return execution.Outcome{Commit: "rejected", Applied: "not-applied", Reason: "ovsdb-transaction-rejected"}
 			}
+			return out
 		}
 	}
 	if len(results) != len(n.Operations) {
@@ -407,7 +416,7 @@ func decodeCommit(n nativePlan, p execution.Plan, body []byte) execution.Outcome
 	}
 	for _, index := range n.CountIndexes {
 		var count int
-		if index >= len(results) || json.Unmarshal(results[index]["count"], &count) != nil || count != 1 {
+		if index < 0 || index >= len(results) || json.Unmarshal(results[index]["count"], &count) != nil || count != 1 {
 			return out
 		}
 	}
@@ -415,7 +424,7 @@ func decodeCommit(n nativePlan, p execution.Plan, body []byte) execution.Outcome
 		ID   []string    `json:"_uuid"`
 		Next json.Number `json:"next_cfg"`
 	}
-	if n.TargetIndex >= len(results) || json.Unmarshal(results[n.TargetIndex]["rows"], &rows) != nil || len(rows) != 1 || len(rows[0].ID) != 2 || rows[0].ID[0] != "uuid" || rows[0].ID[1] != p.Root {
+	if n.TargetIndex < 0 || n.TargetIndex >= len(results) || json.Unmarshal(results[n.TargetIndex]["rows"], &rows) != nil || len(rows) != 1 || len(rows[0].ID) != 2 || rows[0].ID[0] != "uuid" || rows[0].ID[1] != p.Root {
 		return out
 	}
 	target, err := rows[0].Next.Int64()
@@ -431,12 +440,18 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	out := prior
 	view, err := e.inventory.ExecutionView(ctx, candidate.Bindings(p.Envelope.Candidate))
 	if err != nil {
+		out.Applied = "unknown"
 		out.Reason = "provider-resync-required"
 		return out
 	}
 	if view.Candidate.Generation != p.Generation || view.Candidate.Schema != p.Schema || view.Observation.Evidence.Root != p.Root {
 		out.Applied = "unknown"
 		out.Reason = "identity-changed-recovery-required"
+		return out
+	}
+	if prior.Commit == "committed" && prior.Target != nil && view.Observation.Evidence.ObservedAt.Before(p.Prepared) {
+		out.Applied = "pending"
+		out.Reason = "awaiting-post-commit-observation"
 		return out
 	}
 	all, anyMarker := true, false

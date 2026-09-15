@@ -35,7 +35,7 @@
 | 真实 OVSDB Discovery / Inventory #36 | PR #62 已接受合并，#36 已关闭；实际 schema、原子 monitor、共享身份、字段权限和多证据生命周期核对；原生双架构各 104 项 Go race 及三份 schema 的真实 OVS/恢复场景通过 | #21/#22/#54 页面分别验收；写入继续由后续任务交付 |
 | 共享 Job / 请求 / Event / Audit #37 | PR #63 已接受合并，#37 已关闭；共享持久服务、取消与恢复、当前授权、脱敏、保留及分页导出；122 路径 / 139 操作 | 原生双架构各 113 项 Go race 及真实服务场景通过；#20/#27/#28/#54 页面和具体执行器分别验收 |
 | Candidate / Diff / Validation #38 | PR #64 已接受合并，#38 已关闭；正式持久草稿、三方 rebase、原生 schema / 当前授权校验、不可变 Validation/ChangeSet/Job/Audit 和请求恢复 | 原生双架构各 126 项 Go race 及三份 schema 中真实 HTTPS/IPC/OVS 场景通过；Apply #39、Safe Apply #40、前端 #41/#54 分别验收 |
-| OVSDB 字段执行 / OutcomeUnknown / Applied #39 | 当前单一特性分支实现中；typed native wait/update/mutate、当前授权与冻结、持久执行和只读重协调 | [实现与门控](implementation/OVSDB_EXECUTION_v0.1.md)、[审阅记录](reviews/OVSDB_EXECUTION_v0.1.md)；等待本分支最终 CI，公开高风险写入仍需 #40 |
+| OVSDB 字段执行 / OutcomeUnknown / Applied #39 | [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 交付；typed native wait/update/mutate、当前授权与冻结、持久执行和只读重协调；以最终 CI 通过并合并为验收落点 | [实现与门控](implementation/OVSDB_EXECUTION_v0.1.md)、[审阅记录](reviews/OVSDB_EXECUTION_v0.1.md)；公开高风险写入仍需 #40 |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -57,7 +57,7 @@
 
 ## 下一步
 
-#38 Candidate / Validation 的[正式实现](reviews/CANDIDATE_VALIDATION_v0.1.md)已接受；本轮先完成 main 归集和历史分支清理，后续推进 #39 OVSDB 字段级执行、OutcomeUnknown 与 Applied 证据，随后由 #40/#41 完成 Ports/VLAN 的真实安全闭环。#20–#28 均属于 Phase 1，按其后端依赖与 #54 页面迁移逐项完成功能验收；不要求先把九项页面全部做完再推进基础工程。本轮归集不提前完成这些功能任务。
+#38 已接受，main 归集已完成；#39 的[字段执行基础](reviews/OVSDB_EXECUTION_v0.1.md)由 PR #65 交付，随后推进 #40 Safe Apply / 健康与可达性 / 确认和回滚，再由 #41/#54 完成正式页面闭环。#20–#28 均属于 Phase 1，继续按其后端依赖逐项验收。开发仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
 
 [Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#38 已完成，#29 为 In Progress，其余工程任务为 Todo。#20–#28 已统一加入 Phase 1 milestone，继续保留 Todo 与独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 

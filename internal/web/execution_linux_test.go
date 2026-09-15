@@ -4,6 +4,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/url"
 	"testing"
@@ -62,6 +63,23 @@ func TestWorkspaceExecutionReservationSurvivesRestartAndBlocksNewEdits(t *testin
 		t.Fatal(err)
 	}
 	in := execution.Request{ID: workspaceID(), ValidationID: ack.Receipt.Resource.ID, Envelope: e}
+	p.snapshot.Policy = "changed-after-validation"
+	if _, err = w.ReserveExecution(ctx, s, in, fixtureSafety{}); auth.ErrorCode(err) != "VALIDATION_NOT_USABLE" {
+		t.Fatal(err)
+	}
+	if err = store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
+		var count int
+		if err := q.QueryRowContext(ctx, "SELECT count(*) FROM candidate_execution_reservations").Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			t.Fatal("unusable validation froze candidate")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p.snapshot.Policy = "reviewed"
 	if _, err = w.ReserveExecution(ctx, s, in, nil); err == nil {
 		t.Fatal("missing safety guard admitted")
 	}

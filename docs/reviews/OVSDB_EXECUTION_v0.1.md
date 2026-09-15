@@ -1,6 +1,6 @@
 # #39 字段执行审阅记录
 
-状态：实现完成，等待本分支最终 CI 与双架构 native OVS 验证。测试通过后按用户授权合并 main，并删除当前特性分支。
+交付入口：[PR #65](https://github.com/sampsonlor/ovs-webui/pull/65)。最终 CI 必须全部通过才生效；按用户授权合并 main 后删除本特性分支，不提前开放 #40 的安全门控。
 
 范围与取舍见[实现说明](../implementation/OVSDB_EXECUTION_v0.1.md)。这是一项正式后端基础验收；公开高风险 Apply、Safe Apply 确认、回滚与页面接入分别由 #40/#41/#54 完成。
 
@@ -14,7 +14,12 @@
 | 未收到请求、外部恰好写成目标值 | Ambiguous，保留字段保护，不自动重发 |
 | ovs-vswitchd 暂停 | Commit 已知，Applied 等待；恢复并观察 cur_cfg 后才能 Applied |
 | admitted / committing 后 SIGKILL | 前者 NotCommitted，后者 Ambiguous；两个边界均不自动重发 |
+| 实际 OVS commit 后、manager.db 保存回复前 SIGKILL | 独立恢复进程从提交标记证明 Committed；丢失 target 保持 Applied Unknown，原生写入仅一次 |
 | 数据库同 UUID 复制替换 | 拒绝旧计划；身份重新确认前不能证明 Applied |
 | 普通页面高风险入口 | SAFE_APPLY_REQUIRED，无绕过开关 |
 
 本地为 Windows：可执行的 Go 单元测试与 Linux 交叉编译先行检查；Linux 的 SQLite 安全权限、SIGKILL、原生 OVS 和双架构测试以 CI 为准。原型页面未改变，Standard/Expert、响应式职责沿用已接受基线；本批不新增移动端写事务。
+
+本地验收：215 项回归、3 项隔离集成、lint、typecheck、build、可运行 Go 测试及 Linux vet/编译通过。首轮 [CI 34954825617](https://github.com/sampsonlor/ovs-webui/actions/runs/34954825617) 的 amd64 全部检查通过（134 项顶层 Go race 与当时每 schema 七个 native 场景）；arm64 的新增执行测试通过，整包认证测试在原有密码哈希用例达到累计 180 秒限制。最终配置把认证核心与业务服务测试分为互补两组，每个测试仍执行一次，保留生产 Argon2 参数、race 检查及 180 秒组内限制。
+
+最终 native 矩阵为每架构三份 schema、每份八个场景，包含补充的真实提交后 SIGKILL。未设置专用环境时跳过的测试入口均由显式 native / 子进程步骤执行；文件系统耗尽同样由独立 tmpfs 步骤执行。最终检查及提交落点在 PR Checks、合并记录和 `phase1-ovsdb-execution-v0.1` 标签中追溯。

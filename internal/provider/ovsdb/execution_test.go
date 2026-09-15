@@ -89,6 +89,10 @@ func TestExecutionResultDoesNotInventCommitOrApplied(t *testing.T) {
 	if out.Commit != "rejected" || out.Applied != "not-applied" {
 		t.Fatal(out)
 	}
+	out = decodeCommit(n, p, []byte(`[{"error":"timed out"},{},null]`))
+	if out.Commit != "unknown" {
+		t.Fatal("malformed abort claimed not committed", out)
+	}
 }
 func TestExecutionRefusesUnknownDependencyAndMarkerCapacity(t *testing.T) {
 	d, v, e := executionFixture(t, "3.3.9")
