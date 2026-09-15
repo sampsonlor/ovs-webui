@@ -30,7 +30,7 @@ func seedJob(t *testing.T, r *Repository, c authn.LoginResult, state string) (ev
 	}, func(ctx context.Context, tx *sql.Tx) (requests.Mutation, error) {
 		var err error
 		j, err = evidence.CreateJob(ctx, tx, evidence.Job{ID: repository.NewID(), State: state, Cancellable: true, Handler: "provider", Applied: "unknown"})
-		return requests.Mutation{Status: 202, Body: json.RawMessage(`{}`), Job: &apitypes.Ref{Kind: "job", ID: j.ID}, Resource: &apitypes.Ref{Kind: "job", ID: j.ID}}, err
+		return requests.Mutation{Status: 202, Terminal: evidence.Terminal(state), Body: json.RawMessage(`{}`), Job: &apitypes.Ref{Kind: "job", ID: j.ID}, Resource: &apitypes.Ref{Kind: "job", ID: j.ID}}, err
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +47,13 @@ func TestSharedJobCancellationReplayCurrentAuthorityAndAudit(t *testing.T) {
 	queued, original := seedJob(t, r, admin, "queued")
 	if queued.Correlation != original.Receipt.CorrelationID {
 		t.Fatal("job/receipt correlation split")
+	}
+	limited := admin.Claims
+	limited.Capabilities = []string{"jobs.read"}
+	if err := r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error {
+		return checkRefs(ctx, q, limited, []apitypes.Ref{{Kind: "job", ID: queued.ID}})
+	}); err == nil {
+		t.Fatal("WS job reference bypassed original capability")
 	}
 	input := request(t, r, "POST", "/jobs/"+queued.ID+"/cancellations", map[string]any{}, "")
 	if _, err := r.ExecuteAuth(testContext, other.Grant, input); err == nil {
@@ -146,12 +153,32 @@ func TestSharedEvidenceRetentionProtectsUnresolvedReferencesAndRevokesCursor(t *
 	}); err != nil {
 		t.Fatal(err)
 	}
+	var expiredJob evidence.Job
+	if err := r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		expiredJob, err = evidence.CreateJob(ctx, tx, evidence.Job{Owner: admin.Claims.PrincipalID, Capability: "configuration.validate", Operation: "createValidation", State: "succeeded", Business: "success", Created: old})
+		if err != nil {
+			return err
+		}
+		_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "expired-job-completed", Result: "completed", Job: expiredJob.ID, Created: old})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	page := read(t, r, admin, "/audit?limit=1")
 	cursor := page["next_cursor"].(string)
 	if err := evidence.Prune(testContext, r.store, now); err != nil {
 		t.Fatal(err)
 	}
 	_ = read(t, r, admin, "/audit/"+protectedID)
+	if _, err := r.ReadAuth(testContext, admin.Grant, authn.Query{Method: "GET", URI: "/api/v1/jobs/" + expiredJob.ID}); err == nil {
+		t.Fatal("expired terminal job retained after its references were pruned")
+	}
+	jobs := read(t, r, admin, "/jobs")
+	if jobs["retention"].(map[string]any)["pruned_through_unix_ms"] == "0" {
+		t.Fatal("job pruning boundary hidden")
+	}
+
 	if _, err := r.ReadAuth(testContext, admin.Grant, authn.Query{Method: "GET", URI: "/api/v1/audit/" + expiredID}); err == nil {
 		t.Fatal("expired unreferenced audit retained")
 	}
@@ -197,5 +224,52 @@ func TestEvidenceFailureRollsBackSecurityEffectJobAndReceipt(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLegacyEvidenceImportPreservesReceiptIdentityAndJobSequence(t *testing.T) {
+	r, _ := fixture(t)
+	admin := login(t, r, "admin", false)
+	job, original := seedJob(t, r, admin, "succeeded")
+	auditID, eventID := repository.NewID(), repository.NewID()
+	if err := r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM evidence_records WHERE job_id=?", job.ID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM evidence_jobs WHERE id=?", job.ID); err != nil {
+			return err
+		}
+		old, _ := json.Marshal(map[string]any{"sequence": "7", "operation": "createValidation", "owner_id": admin.Claims.PrincipalID, "resource_ref": original.Receipt.Resource})
+		if _, err := tx.ExecContext(ctx, "UPDATE jobs SET document=? WHERE id=?", old, job.ID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO auth_audit VALUES(?,?,?,?,?,?,?,?)", auditID, admin.Claims.PrincipalID, admin.Claims.CredentialID, "createValidation", job.ID, "completed", original.Receipt.RequestID, time.Now().Unix()); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO events VALUES(?,?,?,?)", eventID, original.Receipt.CorrelationID, "legacy-job-completed", time.Now().Unix())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.InitializeEvidence(testContext); err != nil {
+		t.Fatal(err)
+	}
+	current := read(t, r, admin, "/jobs/"+job.ID)
+	if current["sequence"] != "7" || current["correlation_id"] != original.Receipt.CorrelationID || current["owner_id"] != admin.Claims.PrincipalID {
+		t.Fatal("legacy job identity changed", current)
+	}
+	audit := read(t, r, admin, "/audit/"+auditID)
+	if audit["job_id"] != job.ID || audit["correlation_id"] != original.Receipt.CorrelationID || audit["credential_id"] != admin.Claims.CredentialID || audit["request_epoch"] != original.Receipt.Epoch {
+		t.Fatal("legacy audit lost trusted receipt links", audit)
+	}
+	event := read(t, r, admin, "/events/"+eventID)
+	if event["origin"] != "Unknown" || event["actor_id"] != nil || event["correlation_id"] != original.Receipt.CorrelationID {
+		t.Fatal("legacy observation acquired an actor or lost its correlation", event)
+	}
+	if err := r.InitializeEvidence(testContext); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, r, admin, "/jobs/"+job.ID)["sequence"] != "7" {
+		t.Fatal("repeated migration changed job")
 	}
 }

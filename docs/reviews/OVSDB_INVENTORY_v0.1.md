@@ -1,6 +1,6 @@
 # OVSDB Discovery / Inventory 审阅 v0.1
 
-日期：2026-09-15。任务 [#36](https://github.com/sampsonlor/ovs-webui/issues/36) / [PR #62](https://github.com/sampsonlor/ovs-webui/pull/62)。实现与技术验收完成，等待用户接受；保持 Open / In Progress，未开始 #37。
+日期：2026-09-15。任务 [#36](https://github.com/sampsonlor/ovs-webui/issues/36) / [PR #62](https://github.com/sampsonlor/ovs-webui/pull/62)。2026-09-15 用户要求继续下一步，已接受本批；PR #62 合并为 `2a503b51f9a5670de3c3629a3ee726d42b8db7c3`，接受标签 `phase1-ovsdb-inventory-v0.1`。#36 已关闭 / Project Done，后续 #37 已进入实现。
 
 实现、运行方法与安全边界见 [OVSDB Inventory](../implementation/OVSDB_INVENTORY_v0.1.md)。
 
@@ -26,3 +26,5 @@
 当前 schema 矩阵加载到 CI 实际提供的 OVS binaries；分别报告 binary 与 schema 版本，不将其表述为三个产品版本的完整资格认证。发行版/内核/升级矩阵仍为 #51。#21/#22 和 #54 仍有页面验收，#36 不能提前关闭这些功能主单。
 
 Standard/Expert 的权限一致、桌面/平板/移动职责、键盘和高保真外观沿用既有已接受批次；本批只交付正式只读资源及恢复基础。写操作继续走后续 Candidate/Validation/Apply/Safe Apply，不开放直接 live-save。
+
+接受前再次核验：PR head `2fdf10657e3073af46c5af29a0e695d781961f09` 的 [CI 34921786421](https://github.com/sampsonlor/ovs-webui/actions/runs/34921786421) 六项全部成功，包括原生 amd64/arm64。前文功能证据的 SHA 保持原值，与接受时最终 head 分别记录。

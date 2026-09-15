@@ -163,6 +163,10 @@ func TestEvidencePagesScopeSnapshotFiltersAndWireContract(t *testing.T) {
 			t.Fatal(path, err)
 		}
 	}
+	filtered, err := Read(ctx, db, c, "listJobs", nil, url.Values{"origin": {"External"}}, key, now)
+	if err != nil || len(filtered.(map[string]any)["items"].([]map[string]any)) != 0 {
+		t.Fatal("job origin filter ignored", err)
+	}
 	q := url.Values{"limit": {"1"}, "correlation_id": {corr}}
 	first, err := Read(ctx, db, c, "listEvents", nil, q, key, now)
 	if err != nil {
@@ -216,6 +220,15 @@ func TestEvidencePagesScopeSnapshotFiltersAndWireContract(t *testing.T) {
 	})
 	if _, err = Read(ctx, db, c, "listJobs", nil, q, key, now); err == nil {
 		t.Fatal("mutable jobs mixed across pages")
+	}
+	limited := c
+	limited.Capabilities = []string{"jobs.read"}
+	if _, err = Read(ctx, db, limited, "readJob", map[string]string{"job_id": id}, nil, key, now); err == nil {
+		t.Fatal("original job capability no longer required")
+	}
+	visible, err := Read(ctx, db, limited, "listJobs", nil, url.Values{}, key, now)
+	if err != nil || len(visible.(map[string]any)["items"].([]map[string]any)) != 0 {
+		t.Fatal("job list exposed unavailable original capabilities", err)
 	}
 	other = c
 	other.PrincipalID = repository.NewID()

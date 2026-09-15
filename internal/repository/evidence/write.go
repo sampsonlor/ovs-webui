@@ -192,6 +192,9 @@ func saveJob(ctx context.Context, tx *sql.Tx, j *Job, insert bool) error {
 		if j.Sequence == "" {
 			j.Sequence = "1"
 		}
+		if n, err := strconv.ParseUint(j.Sequence, 10, 64); err != nil || n == 0 {
+			return apitypes.Fail(503, "JOB_SEQUENCE_INVALID")
+		}
 	} else {
 		sequence, err := strconv.ParseUint(j.Sequence, 10, 64)
 		if err != nil || sequence == 0 || sequence == ^uint64(0) {

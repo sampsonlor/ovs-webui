@@ -151,6 +151,15 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			if count == 0 {
 				return apitypes.Fail(404, "NOT_FOUND")
 			}
+			if ref.Kind == "job" {
+				var capability string
+				if err := q.QueryRowContext(ctx, "SELECT capability FROM evidence_jobs WHERE id=?", ref.ID).Scan(&capability); err != nil {
+					return err
+				}
+				if err := require(c, capability, false, 0); err != nil {
+					return err
+				}
+			}
 		case "event", "audit":
 			capability := "events.read"
 			if ref.Kind == "audit" {
