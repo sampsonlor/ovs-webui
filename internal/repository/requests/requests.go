@@ -96,7 +96,7 @@ func (r *Repository) Replay(ctx context.Context, c Command, authorize func(conte
 		out.Replayed = true
 		return nil
 	})
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, repository.ErrNotFound) {
 		return apitypes.Result{}, false, nil
 	}
 	return out, err == nil, err

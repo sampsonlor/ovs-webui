@@ -185,6 +185,7 @@ type Candidate struct {
 	ConflictSnapshotId        json.RawMessage            `json:"conflict_snapshot_id,omitempty"`
 	Diff                      []DiffField                `json:"diff,omitempty"`
 	Checks                    []Gate                     `json:"checks,omitempty"`
+	DiffTruncated             bool                       `json:"diff_truncated,omitempty"`
 	ExtraFields               map[string]json.RawMessage `json:"-"`
 }
 

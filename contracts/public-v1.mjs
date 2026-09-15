@@ -23,7 +23,7 @@ const revision = ref('Revision');
 // Additive Candidate/Validation read models; frozen v1 requests stay compatible.
 Object.assign(s.Candidate.properties, {
  current_instance_generation: nullable(id), current_config_revision: nullable(revision), conflict_snapshot_id: nullable(id),
- diff: array(ref('DiffField'), 512), checks: array(ref('Gate'), 512),
+ diff: array(ref('DiffField'), 512), checks: array(ref('Gate'), 512), diff_truncated: bool,
 });
 Object.assign(s.ObservedIntent.properties, { before: ref('NativeVlan'), dependency_revision: revision, schema_digest: string() });
 Object.assign(s.DiffField.properties, { current: {}, operation: string(), intent_id: id, conflict: bool });

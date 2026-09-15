@@ -215,7 +215,7 @@ func (r *Repository) ReadCandidate(ctx context.Context, credential string, in pl
 		}
 		var value any
 		if in.ValidationID == "" {
-			v := plan.Compare(in.Envelope.Candidate, snapshot)
+			v := plan.Review(in.Envelope.Candidate, snapshot)
 			if snapshotErr != nil {
 				v = plan.View{Candidate: in.Envelope.Candidate, Diff: []plan.Diff{}, Checks: []plan.Gate{candidateProblem(snapshotErr)}}
 				if len(v.Intents) > 0 {

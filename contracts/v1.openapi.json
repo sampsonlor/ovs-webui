@@ -28528,6 +28528,9 @@
             },
             "minItems": 0,
             "maxItems": 512
+          },
+          "diff_truncated": {
+            "type": "boolean"
           }
         },
         "required": [

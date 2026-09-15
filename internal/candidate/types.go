@@ -100,6 +100,7 @@ type View struct {
 	ConflictSnapshot  *string `json:"conflict_snapshot_id"`
 	Diff              []Diff  `json:"diff"`
 	Checks            []Gate  `json:"checks"`
+	DiffTruncated     bool    `json:"diff_truncated"`
 }
 
 // Snapshot is one coherent, immutable projection of mgrd's current monitor.

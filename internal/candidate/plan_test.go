@@ -192,3 +192,37 @@ func TestCandidateIntentAndRepresentationBudgetsPreservePriorDraft(t *testing.T)
 		t.Fatal("failed preparation changed draft")
 	}
 }
+
+func TestOversizedCurrentDiffKeepsDraftReadableAndPreventsUnreviewedRebase(t *testing.T) {
+	e, s, i := planFixture()
+	e = staged(t, e, s, i)
+	// Many independently changed native ports can exceed the response budget
+	// without the originally saved user intent exceeding its own budget.
+	for n := 0; n < 20; n++ {
+		copy := e.Candidate.Intents[0]
+		copy.ID = repository.NewID()
+		copy.Object.ManagementID = repository.NewID()
+		copy.Object.OVSUUID = repository.NewID()
+		port := s.Ports[i.Object.ManagementID]
+		port.Binding = copy.Object
+		port.VLAN.Trunks = make([]int, 1000)
+		for j := range port.VLAN.Trunks {
+			port.VLAN.Trunks[j] = j + 1
+		}
+		s.Ports[copy.Object.ManagementID] = port
+		e.Candidate.Intents = append(e.Candidate.Intents, copy)
+	}
+	if err := Budget(e); err != nil {
+		t.Fatal("test draft must fit", err)
+	}
+	v := Review(e.Candidate, s)
+	if !v.DiffTruncated || v.State != "review-limited" || v.ConflictSnapshot != nil || len(v.Intents) != 21 || !hasGate(v.Checks, "DIFF_BUDGET_EXCEEDED") {
+		t.Fatal("partial diff represented as complete", v)
+	}
+	if _, err := Prepare(e, Command{Operation: "rebase"}, s); err == nil {
+		t.Fatal("unreviewed oversized rebase allowed")
+	}
+	if _, err := Prepare(e, Command{Operation: "discard"}, Snapshot{}); err != nil {
+		t.Fatal("draft cannot be discarded", err)
+	}
+}

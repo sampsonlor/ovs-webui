@@ -107,7 +107,7 @@ func (w *Workspace) Read(ctx context.Context, s publicapi.Subject, q publicapi.Q
 			}
 			return w.authorize(ctx, s, "config.stage")
 		})
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, repository.ErrNotFound) {
 			err = apitypes.Fail(404, "NOT_FOUND")
 		}
 		if err != nil {
@@ -124,6 +124,26 @@ func (w *Workspace) Read(ctx context.Context, s publicapi.Subject, q publicapi.Q
 	response, err := w.manager.ReadCandidate(ctx, s.Credential, candidate.ReadRequest{Envelope: e, ValidationID: q.Path["validation_id"]})
 	if err != nil {
 		return out, err
+	}
+	if q.Operation.ID == "readValidation" {
+		// A concurrent save can commit after the envelope was loaded but before
+		// IPC returns. The latest web.db revision closes the witness-sync window.
+		current, err := w.envelope(ctx, s.ID)
+		if err != nil {
+			return out, err
+		}
+		if current.Candidate.Revision != e.Candidate.Revision {
+			var v candidate.Validation
+			if json.Unmarshal(response.Body, &v) != nil {
+				return out, apitypes.Fail(503, "VALIDATION_RESPONSE_INVALID")
+			}
+			v.Usable = false
+			v.Invalidations = append(v.Invalidations, candidate.Gate{Code: "CANDIDATE_CHANGED", State: "blocked", Reason: "CANDIDATE_CHANGED"})
+			response.Body, err = json.Marshal(v)
+			if err != nil {
+				return out, err
+			}
+		}
 	}
 	if q.Operation.ID == "readWorkspace" {
 		claims, err := w.auth.InspectAuth(ctx, s.Credential)

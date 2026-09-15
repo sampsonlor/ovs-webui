@@ -1,6 +1,7 @@
 package candidate
 
 import (
+	"encoding/json"
 	"slices"
 	"sort"
 
@@ -96,6 +97,21 @@ func Compare(c Candidate, s Snapshot) View {
 	return v
 }
 
+// Native Current may grow after a small draft was saved. Keep that draft
+// readable/removable without presenting a truncated comparison as complete.
+func Review(c Candidate, s Snapshot) View {
+	v := Compare(c, s)
+	b, _ := json.Marshal(v)
+	if len(b) > 47<<10 {
+		v.Diff = []Diff{}
+		v.DiffTruncated = true
+		v.ConflictSnapshot = nil
+		v.State = "review-limited"
+		v.Checks = []Gate{gate("DIFF_BUDGET_EXCEEDED", "blocked", "")}
+	}
+	return v
+}
+
 // Prepare preserves original values when editing an already-staged intent.
 // Rebase is the only operation that replaces a captured original; every changed
 // field group/dependency requires an explicit, snapshot-bound user choice.
@@ -167,6 +183,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 	case "discard":
 		c.Intents = []StoredIntent{}
 	case "rebase":
+		if Review(c, s).DiffTruncated {
+			return e, apitypes.Fail(429, "DIFF_BUDGET_EXCEEDED")
+		}
 		if c.Generation == nil || *c.Generation != s.Generation || cmd.Generation != s.Generation {
 			return e, apitypes.Fail(409, "GENERATION_RECONCILIATION_REQUIRED")
 		}
