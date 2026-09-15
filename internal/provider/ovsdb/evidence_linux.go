@@ -92,6 +92,7 @@ func witness(path string, pid int, prior inventory.FileWitness) inventory.FileWi
 			var target unix.Stat_t
 			if unix.Stat(fmt.Sprintf("/proc/%d/fd/%s", pid, e.Name()), &target) == nil && uint64(target.Dev) == w.Device && target.Ino == w.Inode {
 				w.ServerHasFile = true
+				w.ServerBinding = "observed-file-handle"
 				break
 			}
 		}
@@ -112,6 +113,7 @@ func witness(path string, pid int, prior inventory.FileWitness) inventory.FileWi
 					candidate, err := filepath.EvalSymlinks(arg)
 					if err == nil && candidate == canonical {
 						w.ServerHasFile = true
+						w.ServerBinding = "configured-process-argument"
 						break
 					}
 				}

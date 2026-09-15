@@ -150,7 +150,9 @@ def main():
                 payload = json.dumps(body).encode()
                 headers.update({'Content-Type': 'application/json', 'Origin': origin})
                 if method != 'GET' and path != '/sessions':
-                    headers.update({'X-OVS-CSRF-Token': csrf, 'X-OVS-Request-Epoch': epoch, 'Idempotency-Key': body['request_id']})
+                    headers['X-OVS-CSRF-Token'] = csrf
+                    if 'request_id' in body:
+                        headers.update({'X-OVS-Request-Epoch': epoch, 'Idempotency-Key': body['request_id']})
             request = urllib.request.Request(origin + '/api/v1' + path, data=payload, headers=headers, method=method)
             try:
                 response = urllib.request.urlopen(request, context=tls, timeout=8)
@@ -234,6 +236,10 @@ def main():
         token_command = {'request_id': request_id(), 'name': 'synthetic-inventory-observer',
                          'scopes': ['state.read', 'inventory.read'],
                          'expires_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + 3600))}
+        code, token, _ = call('/tokens', 'POST', token_command)
+        assert code == 403 and token['code'] == 'REAUTHENTICATION_REQUIRED', (code, token)
+        assert call('/session/reauthentication', 'POST', {'password': password})[0] == 200
+        token_command['request_id'] = request_id()
         code, token, _ = call('/tokens', 'POST', token_command)
         assert code == 201, (code, token)
         credentials.append(token['secret'])

@@ -149,6 +149,21 @@ func TestBoundedFramesAndDuplicateKeys(t *testing.T) {
 		t.Fatal("frame limit ignored")
 	}
 }
+func TestMonitorRejectsMismatchedBeforeImage(t *testing.T) {
+	d := schema(t, "3.3.9")
+	rows := inventory.Rows{"Port": {"00000000-0000-4000-8000-000000000001": {UUID: "00000000-0000-4000-8000-000000000001", Values: map[string]any{"name": "current"}}}}
+	if err := update(d, rows, []byte(`{"Port":{"00000000-0000-4000-8000-000000000001":{"old":{"name":"unobserved"},"new":{"name":"changed"}}}}`), false); err == nil {
+		t.Fatal("lost update silently accepted")
+	}
+	for _, method := range []string{"transact", "lock", "steal", "convert", "monitor_cond_change"} {
+		if request(nil, 1, method, []any{}) == nil {
+			t.Fatal("write/unknown method allowed")
+		}
+	}
+	if value := sanitize("Interface", "error", []any{"synthetic-password-must-not-leak"}); inventory.Digest(value) != inventory.Digest([]any{"provider-reported-error"}) {
+		t.Fatal("free-form diagnostic leaked")
+	}
+}
 func FuzzBoundedMonitorJSON(f *testing.F) {
 	f.Add([]byte(`{"method":"echo","params":[],"id":1}`))
 	f.Add([]byte(`{"id":1,"id":2}`))

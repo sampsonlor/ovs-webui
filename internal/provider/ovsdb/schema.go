@@ -236,6 +236,26 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 			if initial && hasOld || (!hasOld && !hasNew) || hasOld && !exists || !hasOld && exists {
 				return errors.New("OVSDB_MONITOR_INCONSISTENT")
 			}
+			if hasOld {
+				var old map[string]any
+				dec := json.NewDecoder(bytes.NewReader(change.Old))
+				dec.UseNumber()
+				if dec.Decode(&old) != nil {
+					return errors.New("OVSDB_ROW_INVALID")
+				}
+				for name, value := range old {
+					if !slices.Contains(selected[table], name) || d.native.Tables[table].Columns[name] == nil {
+						return errors.New("OVSDB_UNREQUESTED_COLUMN")
+					}
+					n, err := normalize(value, d.native.Tables[table].Columns[name])
+					if err != nil {
+						return err
+					}
+					if inventory.Digest(sanitize(table, name, n)) != inventory.Digest(prior.Values[name]) {
+						return errors.New("OVSDB_MONITOR_INCONSISTENT")
+					}
+				}
+			}
 			if !hasNew {
 				delete(rows[table], id)
 				count--
@@ -262,22 +282,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 				if err != nil {
 					return err
 				}
-				// Unknown option keys can hold reusable secrets. They are never retained,
-				// hashed into public revisions, logged, or exported from this adapter.
-				if table == "Interface" && name == "options" {
-					m, ok := n.(map[string]any)
-					if !ok {
-						return errors.New("OVSDB_OPTIONS_INVALID")
-					}
-					safe := map[string]any{}
-					for k, v := range m {
-						if slices.Contains([]string{"peer", "remote_ip", "local_ip", "dst_port", "key"}, k) {
-							safe[k] = v
-						}
-					}
-					n = safe
-				}
-				prior.Values[name] = n
+				prior.Values[name] = sanitize(table, name, n)
 			}
 			b, _ := json.Marshal(prior)
 			if len(b) > inventory.MaxRowBytes {
@@ -289,6 +294,30 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 	// A whole monitor transaction is validated before publication, never a row
 	// callback exposing dangling intermediate Bridge -> Port -> Interface links.
 	return nil
+}
+func sanitize(table, name string, n any) any {
+	if table != "Interface" {
+		return n
+	}
+	if name == "options" {
+		safe := map[string]any{}
+		m, _ := n.(map[string]any)
+		for k, v := range m {
+			if slices.Contains([]string{"peer", "remote_ip", "local_ip", "dst_port", "key"}, k) {
+				safe[k] = v
+			}
+		}
+		return safe
+	}
+	// Native free-form errors may contain command options. Publish their presence
+	// rather than forwarding a daemon's potentially sensitive diagnostic text.
+	if name == "error" {
+		if len(references(n)) > 0 {
+			return []any{"provider-reported-error"}
+		}
+		return []any{}
+	}
+	return n
 }
 func references(v any) []string {
 	out := []string{}

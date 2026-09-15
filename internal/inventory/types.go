@@ -66,6 +66,7 @@ type FileWitness struct {
 	Digest        string `json:"digest"`
 	PriorMatches  bool   `json:"prior_matches"`
 	ServerHasFile bool   `json:"server_has_file"`
+	ServerBinding string `json:"server_binding"`
 }
 type Evidence struct {
 	Endpoint   string      `json:"endpoint"`
@@ -127,5 +128,6 @@ func EvidenceDigest(e Evidence) string {
 	e.Continuous = false
 	e.Peer = ""
 	e.File.PriorMatches = false
+	e.File.ServerBinding = "" // hardened service vs root CLI may use different witnesses
 	return Digest(e)
 }

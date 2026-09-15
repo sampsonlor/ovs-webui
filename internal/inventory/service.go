@@ -289,7 +289,7 @@ func (s *Service) status(v *view, fresh, availability, reason string) map[string
 		out["reviewed_evidence_digest"] = v.decision.PendingDigest
 		out["coverage"] = coverage(v)
 		out["schema_digest"] = v.observation.Schema.Digest
-		out["continuity_evidence"] = map[string]any{"root_uuid": v.observation.Evidence.Root, "anchor_count": len(v.observation.Evidence.Anchors), "file_available": v.observation.Evidence.File.Available, "server_has_file": v.observation.Evidence.File.ServerHasFile, "file_prefix_continues": v.observation.Evidence.File.PriorMatches, "monitor_continuous": v.observation.Evidence.Continuous}
+		out["continuity_evidence"] = map[string]any{"root_uuid": v.observation.Evidence.Root, "anchor_count": len(v.observation.Evidence.Anchors), "file_available": v.observation.Evidence.File.Available, "server_file_bound": v.observation.Evidence.File.ServerHasFile, "file_binding_method": v.observation.Evidence.File.ServerBinding, "file_prefix_continues": v.observation.Evidence.File.PriorMatches, "monitor_continuous": v.observation.Evidence.Continuous}
 		for _, root := range v.observation.Rows["Open_vSwitch"] {
 			out["ovs_progress"] = map[string]any{"next_cfg": one(root.Values["next_cfg"]), "cur_cfg": one(root.Values["cur_cfg"]), "source": source(v, fresh, "ovsdb-progress")}
 		}
