@@ -68,6 +68,11 @@ func Append(ctx context.Context, tx *sql.Tx, r Record) (string, error) {
 	if r.Collection == "audit" {
 		limit = MaxAudit
 	}
+	// New work yields before the hard cap so admitted work can record its
+	// completion or recovery. Only trusted lifecycle writers use this reserve.
+	if !r.Critical {
+		limit -= ReservedControlRecords
+	}
 	if count >= limit {
 		return "", apitypes.Fail(429, "EVIDENCE_CAPACITY_REACHED")
 	}
@@ -164,7 +169,11 @@ func CreateJob(ctx context.Context, tx *sql.Tx, j Job) (Job, error) {
 	if err := tx.QueryRowContext(ctx, "SELECT count(*),coalesce(sum(j.state='queued'),0),coalesce(sum(j.state IN ('running','cancel-requested')),0) FROM jobs j").Scan(&total, &queued, &running); err != nil {
 		return Job{}, err
 	}
-	if total >= MaxJobs || j.State == "queued" && queued >= MaxQueued || j.State == "running" && running >= MaxRunning {
+	jobLimit := MaxJobs
+	if !ControlOperation(j.Operation) {
+		jobLimit -= ReservedControlRecords
+	}
+	if total >= jobLimit || j.State == "queued" && queued >= MaxQueued || j.State == "running" && running >= MaxRunning {
 		return Job{}, apitypes.Fail(429, "JOB_CAPACITY_REACHED")
 	}
 	if Terminal(j.State) {
@@ -180,7 +189,7 @@ func CreateJob(ctx context.Context, tx *sql.Tx, j Job) (Job, error) {
 	if err := saveJob(ctx, tx, &j, true); err != nil {
 		return Job{}, err
 	}
-	_, err := Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-created", Object: j.Resource, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: j.Created})
+	_, err := Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-created", Critical: ControlOperation(j.Operation), Object: j.Resource, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: j.Created})
 	return j, err
 }
 func saveJob(ctx context.Context, tx *sql.Tx, j *Job, insert bool) error {
@@ -299,7 +308,7 @@ func ChangeJob(ctx context.Context, tx *sql.Tx, id, expected string, t Transitio
 			return Job{}, err
 		}
 	}
-	_, err = Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-state-changed", Object: j.Resource, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: now})
+	_, err = Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-state-changed", Critical: true, Object: j.Resource, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: now})
 	return j, err
 }
 func completeReceipts(ctx context.Context, tx *sql.Tx, j Job, now time.Time) error {

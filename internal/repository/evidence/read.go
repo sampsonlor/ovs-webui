@@ -250,5 +250,5 @@ func Read(ctx context.Context, q Query, c authn.Claims, op string, path map[stri
 	if collection == "audit" {
 		days, capacity = 180, MaxAudit
 	}
-	return map[string]any{"snapshot_id": cur.Snapshot, "instance_generation": nil, "items": items, "next_cursor": next, "truncated": more, "source": source(now, "Manager"), "coverage": "authorized-retained-records", "export_format": "json", "retention": map[string]any{"days": days, "max_records": capacity, "protected_records_retained": true, "pruned_through_unix_ms": strconv.FormatInt(pruned, 10)}, "page_budget_bytes": PageBytes}, nil
+	return map[string]any{"snapshot_id": cur.Snapshot, "instance_generation": nil, "items": items, "next_cursor": next, "truncated": more, "source": source(now, "Manager"), "coverage": "authorized-retained-records", "export_format": "json", "retention": map[string]any{"days": days, "max_records": capacity, "protected_records_retained": true, "reserved_control_records": ReservedControlRecords, "pruned_through_unix_ms": strconv.FormatInt(pruned, 10)}, "page_budget_bytes": PageBytes}, nil
 }

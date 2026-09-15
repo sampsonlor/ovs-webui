@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	MaxJobs    = 100000
-	MaxEvents  = 100000
-	MaxAudit   = 500000
-	MaxQueued  = 16
-	MaxRunning = 2
-	PageBytes  = 40 << 10
+	MaxJobs                = 100000
+	MaxEvents              = 100000
+	MaxAudit               = 500000
+	MaxQueued              = 16
+	MaxRunning             = 2
+	PageBytes              = 40 << 10
+	ReservedControlRecords = 128
 )
 
 type Request struct {
@@ -85,6 +86,7 @@ type Record struct {
 	Reason        string         `json:"reason_code,omitempty"`
 	Created       time.Time      `json:"created_at"`
 	DedupKey      string         `json:"-"`
+	Critical      bool           `json:"-"`
 	Details       map[string]any `json:"-"`
 }
 
@@ -112,3 +114,7 @@ func Operation(op string) bool {
 	}
 	return false
 }
+
+// Only these already-authorized control operations may admit a new receipt/job
+// into reserved space. This classification grants no permission by itself.
+func ControlOperation(op string) bool { return op == "cancelJob" || op == "confirmCertificate" }

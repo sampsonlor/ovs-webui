@@ -216,7 +216,11 @@ func (r *Repository) Execute(ctx context.Context, c Command, reauthorize func(co
 		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM api_receipts").Scan(&count); err != nil {
 			return err
 		}
-		if count >= MaxReceipts {
+		limit := MaxReceipts
+		if r.domain == "management" && !evidence.ControlOperation(c.Operation) {
+			limit -= evidence.ReservedControlRecords
+		}
+		if count >= limit {
 			return apitypes.Fail(429, "RESOURCE_BUDGET_EXCEEDED")
 		}
 		correlation := repository.NewID()

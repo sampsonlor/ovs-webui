@@ -26,7 +26,7 @@
 
 取消本人且当前仍有原操作 capability 的任务，还要求 `jobs.cancel`。未发送的 queued Job 可原子变为 cancelled；运行中的任务只能记录 cancel-requested。取消命令自身的成功 Job 表示请求已记录，通过 resource_ref 指向目标 Job。重试返回原取消 receipt，不再执行第二次。
 
-通用服务保守限制 2 个运行中 Job、16 个等待 Job和 100k 条保留 Job。终态的同步安全管理回执不占运行槽；TLS 恢复定时器不依赖通用队列。执行器必须使用 mgrd 的当前授权与受控 provider，SQL 生命周期方法不提供任意命令执行能力。本批没有添加配置或诊断工作调度器；#38/#39/#46 接入各自真实执行器及更细的业务入场检查。
+通用服务保守限制 2 个运行中 Job、16 个等待 Job 和 100k 条保留 Job。终态的同步安全管理回执不占运行槽；TLS 恢复定时器不依赖通用队列。执行器必须使用 mgrd 的当前授权与受控 provider，SQL 生命周期方法不提供任意命令执行能力。本批没有添加配置或诊断工作调度器；#38/#39/#46 接入各自真实执行器及更细的业务入场检查。
 
 启动时分批导入旧记录，保留 ID、Job sequence、已知 credential 和唯一匹配 receipt 的 correlation。无可信来源的旧记录明确为 Unknown；不能根据 owner 或文本猜测操作者。每批最多 128 条，可在中断后继续。通用 running/cancel-requested Job 恢复为 needs-attention，保留原 receipt 未解决状态；重复启动不重复产生恢复事件。TLS Job 使用其专门恢复路径。
 
@@ -64,6 +64,6 @@ Public v1 增量版本为 1.4.0，共 122 路径 / 139 操作，保持冻结 v1.
 
 每分钟在 manager writer 内执行有界维护，每集合最多回收 256 条。活跃 Job、同 correlation 的未解决任务、活跃 transaction journal 引用的记录受到保护；仍有记录引用或未完成 receipt 的 Job 也保留。证据写入者必须填充真实 Job/transaction/correlation 引用，不能只把引用放入日志文本。终态 Job 因关联 Audit 可保留超过 30 天。删除旧记录、更新可见 `pruned_through_unix_ms`、更换 retention epoch 在同一事务中完成。
 
-墙钟倒退暂停回收，不使历史记录提前到期。容量不足拒绝新写，绝不按压力丢弃 unresolved evidence；存储错误沿用 #32 的 degraded/recovery 行为。有界 writer 队列和磁盘满恢复仍由正式 SQLite 服务验收。健康页面与更多运维提示由 #45/#54 接入。
+墙钟倒退暂停回收，不使历史记录提前到期。普通 Event/Audit、Job 和 management receipt 提前在各自硬上限前 128 条停止新入场，为已接受任务的状态结束、重启核对和 TLS 恢复留出记录空间。经过当前授权的 cancelJob / confirmCertificate 可以在预留空间内保存控制请求及其回执；workspace receipt 保留既有规则。受信任恢复写入仍受集合硬上限约束。预留量在列表 retention 中可见。容量不足拒绝新写，绝不按压力丢弃 unresolved evidence；存储错误沿用 #32 的 degraded/recovery 行为。有界 writer 队列和磁盘满恢复仍由正式 SQLite 服务验收。健康页面与更多运维提示由 #45/#54 接入。
 
 技术验收、双架构结果与长期证据见 [本批审阅](../reviews/SHARED_EVIDENCE_v0.1.md)。

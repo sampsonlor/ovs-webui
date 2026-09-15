@@ -12,7 +12,7 @@
 | 当前权限 | 跨用户 Job 读取/取消拒绝、撤销后拒绝重放、原操作 capability 与 WS 引用、受限 Token 拒绝 Audit/Job |
 | 列表与导出 | REST 列表/详情、过滤、快照上界、权限与 cursor 绑定、版本/TTL/回收 410、分页 JSON 导出 |
 | 保留与升级 | 活跃引用保护、终态及过期记录回收、边界可见、时钟倒退停止清理、旧 ID/correlation/sequence 导入与重启幂等 |
-| 故障与容量 | Job 队列和证据容量拒绝、SQL 回滚、既有真实磁盘满、writer 压力和双 daemon 恢复测试 |
+| 故障与容量 | Job 队列和证据容量拒绝、普通容量耗尽时已接受任务仍能写入终态证据、SQL 回滚、既有真实磁盘满、writer 压力和双 daemon 恢复测试 |
 
 本地 typecheck、全仓 lint、208 项回归、契约生成与不可变基线兼容检查、生产构建及可移植 SQLite Evidence 测试已通过。Linux vet 也已通过；原生 race、真实 OVS、认证与 TLS 恢复结果待 CI 完成后记录。
 

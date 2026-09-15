@@ -45,7 +45,7 @@ func Recover(ctx context.Context, store *sqlite.Store, now time.Time) error {
 			if _, err = ChangeJob(ctx, tx, id, j.Sequence, Transition{State: "needs-attention", Dispatch: "unknown", Business: "unknown", Reason: "manager-restarted-reconciliation-required"}, now); err != nil {
 				return err
 			}
-			if _, err = Append(ctx, tx, Record{Collection: "audit", Origin: "Manager", Capability: j.Capability, Operation: "job-recovery-required", Object: j.Resource, Job: j.ID, Transaction: j.Transaction, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: "recovery-required", Created: now}); err != nil {
+			if _, err = Append(ctx, tx, Record{Collection: "audit", Origin: "Manager", Capability: j.Capability, Operation: "job-recovery-required", Critical: true, Object: j.Resource, Job: j.ID, Transaction: j.Transaction, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: "recovery-required", Created: now}); err != nil {
 				return err
 			}
 		}

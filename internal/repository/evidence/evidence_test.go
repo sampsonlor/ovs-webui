@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/apicontract"
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/migrations"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -259,7 +260,7 @@ func TestJobAndRecordAdmissionBudgetsFailWithoutPartialWrites(t *testing.T) {
 		t.Fatal("failed admission left a job")
 	}
 	write(t, db, func(tx *sql.Tx) error {
-		_, err := tx.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100000) INSERT INTO evidence_records(id,collection,created_at_ms,correlation_id,operation,source,fingerprint,document) SELECT 'synthetic-'||x,'event',0,'synthetic','seed','Unknown','synthetic',x'7b7d' FROM n`)
+		_, err := tx.Exec(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<?) INSERT INTO evidence_records(id,collection,created_at_ms,correlation_id,operation,source,fingerprint,document) SELECT 'synthetic-'||x,'event',0,'synthetic','seed','Unknown','synthetic',x'7b7d' FROM n`, MaxEvents-ReservedControlRecords-MaxQueued)
 		return err
 	})
 	tx, _ = db.BeginTx(ctx, nil)
@@ -270,5 +271,30 @@ func TestJobAndRecordAdmissionBudgetsFailWithoutPartialWrites(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "EVIDENCE_CAPACITY_REACHED") {
 		t.Fatal(err)
+	}
+	// Saturated ordinary evidence must not prevent an already-admitted job
+	// from durably recording its terminal outcome and freeing its queue slot.
+	var id string
+	if err = db.QueryRow("SELECT id FROM evidence_jobs LIMIT 1").Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	write(t, db, func(tx *sql.Tx) error {
+		j, err := LoadJob(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		_, err = ChangeJob(ctx, tx, id, j.Sequence, Transition{State: "cancelled", Business: "cancelled", Reason: "cancelled-before-dispatch"}, time.Now())
+		return err
+	})
+	j, err := LoadJob(ctx, db, id)
+	if err != nil || j.State != "cancelled" {
+		t.Fatal("ordinary capacity blocked admitted job completion", err)
+	}
+	write(t, db, func(tx *sql.Tx) error {
+		_, err := CreateJob(ctx, tx, Job{Owner: c.PrincipalID, Capability: "jobs.cancel", Operation: "cancelJob", State: "succeeded", Business: "success", Resource: &apitypes.Ref{Kind: "job", ID: id}})
+		return err
+	})
+	if err = db.QueryRow("SELECT count(*) FROM evidence_records WHERE collection='event'").Scan(&count); err != nil || count != MaxEvents-ReservedControlRecords+2 {
+		t.Fatal("control reserve not bounded", err, count)
 	}
 }

@@ -120,7 +120,7 @@ func (r *Repository) Bootstrap(ctx context.Context, username, password string) e
 	})
 }
 func (r *Repository) audit(ctx context.Context, tx *sql.Tx, c authn.Claims, op, target, result, requestID string, refs ...*apitypes.Ref) error {
-	record := evidence.Record{Collection: "audit", Origin: "Manager", Actor: c.PrincipalID, Credential: c.CredentialID, Operation: op, Result: result, RequestID: requestID, Created: r.now()}
+	record := evidence.Record{Collection: "audit", Origin: "Manager", Critical: op == "tls-recovery" || evidence.ControlOperation(op), Actor: c.PrincipalID, Credential: c.CredentialID, Operation: op, Result: result, RequestID: requestID, Created: r.now()}
 	if len(refs) > 0 {
 		record.Object = refs[0]
 	}
