@@ -125,6 +125,9 @@ def main():
             rendered = rendered.replace('ovs-webui-web', account_name)
             rendered = rendered.replace('/etc/ovs-webui/runtime.env', str(config))
             rendered = rendered.replace(f'/usr/libexec/ovs-{service}', str(fixture / f'ovs-{service}'))
+            if service == 'mgrd':
+                rendered = rendered.replace('--database=${MANAGER_DATABASE}',
+                    f'--database=${{MANAGER_DATABASE}} --ovsdb-socket={fixture}/unconfigured.sock --ovsdb-file={fixture}/absent.db')
             rendered = rendered.replace('After=network.target ovs-mgrd.service', f'After=network.target {units["mgrd"]}')
             (Path('/etc/systemd/system') / name).write_text(rendered)
         run('systemctl', 'daemon-reload')

@@ -125,6 +125,9 @@ def main():
             rendered = rendered.replace('After=network.target ovs-mgrd.service', f'After=network.target {units["mgrd"]}')
             if service == 'webd':
                 rendered = rendered.replace('--public-origin=${PUBLIC_ORIGIN}', f'--public-origin=${{PUBLIC_ORIGIN}} --tls-trust-file={roots}')
+            else:
+                rendered = rendered.replace('--database=${MANAGER_DATABASE}',
+                    f'--database=${{MANAGER_DATABASE}} --ovsdb-socket={fixture}/unconfigured.sock --ovsdb-file={fixture}/absent.db')
             (Path('/etc/systemd/system') / name).write_text(rendered)
         run('systemctl', 'daemon-reload')
         run('systemd-analyze', 'verify', '--man=no', *map(str, unit_paths))
