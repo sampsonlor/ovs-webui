@@ -143,12 +143,36 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			var count int
 			query := "SELECT count(*) FROM api_receipts WHERE principal_id=? AND request_id=?"
 			if ref.Kind == "job" {
-				query = "SELECT count(*) FROM api_receipts WHERE principal_id=? AND json_extract(receipt,'$.job_ref.id')=?"
+				query = "SELECT count(*) FROM evidence_jobs WHERE owner_id=? AND id=?"
 			}
 			if err := q.QueryRowContext(ctx, query, c.PrincipalID, ref.ID).Scan(&count); err != nil {
 				return err
 			}
 			if count == 0 {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
+			if ref.Kind == "job" {
+				var capability string
+				if err := q.QueryRowContext(ctx, "SELECT capability FROM evidence_jobs WHERE id=?", ref.ID).Scan(&capability); err != nil {
+					return err
+				}
+				if err := require(c, capability, false, 0); err != nil {
+					return err
+				}
+			}
+		case "event", "audit":
+			capability := "events.read"
+			if ref.Kind == "audit" {
+				capability = "audit.read"
+			}
+			if err := require(c, capability, false, 0); err != nil {
+				return err
+			}
+			var count int
+			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM evidence_records WHERE collection=? AND id=?", ref.Kind, ref.ID).Scan(&count); err != nil {
+				return err
+			}
+			if count != 1 {
 				return apitypes.Fail(404, "NOT_FOUND")
 			}
 		case "token":

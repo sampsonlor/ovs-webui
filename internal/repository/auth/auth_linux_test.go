@@ -276,7 +276,16 @@ func TestRestartIdleAbsoluteExpiryAndClockRollback(t *testing.T) {
 	r.now = func() time.Time { return future }
 	_, err = r.InspectAuth(testContext, c.Grant)
 	wantCode(t, err, "CREDENTIAL_EXPIRED_OR_REVOKED")
-	r.now = func() time.Time { return time.Now().Add(-time.Second) }
+	// Compare against the persisted boundary, not elapsed wall time while a
+	// loaded race-test runner opens the database and evaluates expiry.
+	var persisted int64
+	if err = r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error {
+		return q.QueryRowContext(ctx, "SELECT high_watermark_ms FROM auth_state WHERE singleton=1").Scan(&persisted)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rollback := time.UnixMilli(persisted - 1)
+	r.now = func() time.Time { return rollback }
 	_, err = r.InspectAuth(testContext, c.Grant)
 	wantCode(t, err, "AUTH_CLOCK_UNSAFE")
 	r.now = time.Now

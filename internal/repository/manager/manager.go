@@ -10,7 +10,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 )
 
@@ -102,10 +104,23 @@ func (r *Repository) Receive(ctx context.Context, h repository.Handoff) (reposit
 		if _, err = tx.ExecContext(ctx, "INSERT INTO jobs VALUES(?,?,'pending-validation',?)", repository.NewID(), h.TransactionID, []byte(`{}`)); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT INTO audit VALUES(?,?,'handoff-received',?)", repository.NewID(), h.RequestID, now); err != nil {
+		event := evidence.Record{Collection: "event", Origin: "Unknown", Operation: "handoff-received", Correlation: h.CorrelationID, Transaction: h.TransactionID, Result: "received", Reason: "transport-only-not-authorized", Created: time.Unix(now, 0).UTC()}
+		if apitypes.UUID(h.RequestID) {
+			event.RequestID = h.RequestID
+		}
+		eventID, e := evidence.Append(ctx, tx, event)
+		if e != nil {
+			return e
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO events VALUES(?,?,'handoff-received',?)", eventID, h.CorrelationID, now); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO events VALUES(?,?,'handoff-received',?)", repository.NewID(), h.CorrelationID, now)
+		event.Collection = "audit"
+		auditID, err := evidence.Append(ctx, tx, event)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "INSERT INTO audit VALUES(?,?,'handoff-received',?)", auditID, h.RequestID, now)
 		return err
 	})
 	if err != nil {

@@ -17,6 +17,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 )
 
 var etagPattern = regexp.MustCompile(`^"[A-Za-z0-9_-]{1,128}"$`)
@@ -73,12 +74,12 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 			value, err = r.token(ctx, tx, path["token_id"])
 		case "readCertificate":
 			value, err = r.certificate(ctx, tx, path["certificate_id"])
-		case "readJob":
-			value, err = r.job(ctx, tx, c, path["job_id"])
 		case "readRequestReceipt":
 			value, err = r.receipt(ctx, tx, c, path["request_id"], query)
 		default:
-			if inventory.Operation(op.ID) && r.inventory != nil {
+			if evidence.Operation(op.ID) {
+				value, err = evidence.Read(ctx, tx, c, op.ID, path, query, r.key, r.now())
+			} else if inventory.Operation(op.ID) && r.inventory != nil {
 				value, err = r.inventory.Read(ctx, op.ID, path, query, c)
 			} else {
 				return apitypes.Fail(503, "DOMAIN_SERVICE_UNAVAILABLE")
@@ -285,31 +286,6 @@ func (r *Repository) allowPrior(ctx context.Context, q querier, c authn.Claims, 
 		}
 	}
 	return apitypes.Fail(403, "OPERATION_DENIED")
-}
-func (r *Repository) job(ctx context.Context, q querier, c authn.Claims, id string) (map[string]any, error) {
-	var blob, receiptJSON []byte
-	var state string
-	err := q.QueryRowContext(ctx, "SELECT j.document,j.state,r.receipt FROM jobs j JOIN api_receipts r ON json_extract(r.receipt,'$.job_ref.id')=j.id WHERE j.id=? AND r.principal_id=? AND j.transaction_id IS NULL", id, c.PrincipalID).Scan(&blob, &state, &receiptJSON)
-	if err != nil {
-		return nil, err
-	}
-	var doc struct {
-		Operation string        `json:"operation"`
-		OwnerID   string        `json:"owner_id"`
-		Resource  *apitypes.Ref `json:"resource_ref"`
-		Sequence  string        `json:"sequence"`
-	}
-	var receipt apitypes.Receipt
-	if json.Unmarshal(blob, &doc) != nil || json.Unmarshal(receiptJSON, &receipt) != nil || doc.OwnerID != c.PrincipalID {
-		return nil, apitypes.Fail(503, "AUTH_EVIDENCE_INVALID")
-	}
-	if err = r.allowPrior(ctx, q, c, doc.Operation, doc.Resource); err != nil {
-		return nil, err
-	}
-	if doc.Sequence == "" {
-		doc.Sequence = "1"
-	}
-	return map[string]any{"id": id, "sequence": doc.Sequence, "state": state, "operation": doc.Operation, "owner_id": doc.OwnerID, "resource_ref": doc.Resource, "cancellable": false, "correlation_id": receipt.CorrelationID}, nil
 }
 
 // Authentication errors cross IPC as stable codes only, never SQL or secrets.

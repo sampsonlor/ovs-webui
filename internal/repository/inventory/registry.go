@@ -13,6 +13,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	domain "github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	evidenceRepo "github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 )
 
@@ -222,19 +223,36 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 			if _, err = tx.ExecContext(ctx, "DELETE FROM inventory_reconciliations WHERE id IN (SELECT id FROM inventory_reconciliations ORDER BY created_at DESC,id DESC LIMIT -1 OFFSET 256)"); err != nil {
 				return err
 			}
-			var auditCount int
-			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM auth_audit").Scan(&auditCount); err != nil {
+			record := evidenceRepo.Record{Collection: "audit", Origin: "Manager", Operation: "inventory-" + out.Reason, Object: &apitypes.Ref{Kind: "generation", ID: out.Generation}, Correlation: out.Generation, Result: "recorded"}
+			auditID, e := evidenceRepo.Append(ctx, tx, record)
+			if e != nil {
+				return e
+			}
+			if _, err = tx.ExecContext(ctx, "INSERT INTO auth_audit VALUES(?,NULL,NULL,?,?,'recorded',NULL,?)", auditID, "inventory-"+out.Reason, out.Generation, time.Now().Unix()); err != nil {
 				return err
 			}
-			if auditCount >= 100000 {
-				return apitypes.Fail(503, "AUTH_AUDIT_CAPACITY_REACHED")
+			record.Collection = "event"
+			eventID, e := evidenceRepo.Append(ctx, tx, record)
+			if e != nil {
+				return e
 			}
-			if _, err = tx.ExecContext(ctx, "INSERT INTO auth_audit VALUES(?,NULL,NULL,?,?,'recorded',NULL,?)", repository.NewID(), "inventory-"+out.Reason, out.Generation, time.Now().Unix()); err != nil {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO events VALUES(?,?,?,?)", eventID, out.Generation, "inventory-"+out.Reason, time.Now().Unix()); err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, "INSERT INTO events VALUES(?,?,?,?)", repository.NewID(), out.Generation, "inventory-"+out.Reason, time.Now().Unix()); err != nil {
+		}
+		var last string
+		err = tx.QueryRowContext(ctx, "SELECT digest FROM evidence_inventory_snapshot WHERE singleton=1").Scan(&last)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		digest := domain.Digest(o.Rows)
+		if last != "" && last != digest {
+			if _, err = evidenceRepo.Append(ctx, tx, evidenceRepo.Record{Collection: "event", Origin: "External", Operation: "ovsdb-inventory-changed", Object: &apitypes.Ref{Kind: "generation", ID: out.Generation}, Correlation: out.Generation, Result: "observed"}); err != nil {
 				return err
 			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO evidence_inventory_snapshot VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET digest=excluded.digest", digest); err != nil {
+			return err
 		}
 		blob, _ := json.Marshal(out.Evidence)
 		_, err = tx.ExecContext(ctx, "INSERT INTO inventory_state VALUES(1,?,?,?,?,?,0) ON CONFLICT(singleton) DO UPDATE SET generation=excluded.generation,state=excluded.state,reason=excluded.reason,evidence=excluded.evidence,pending_digest=excluded.pending_digest,restore_required=0", out.Generation, out.State, out.Reason, blob, out.PendingDigest)

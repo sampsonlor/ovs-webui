@@ -17,6 +17,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 )
 
@@ -38,6 +39,7 @@ func New(store *sqlite.Store) *Repository {
 
 type Command struct {
 	Principal, Epoch, Domain, ID, Operation, Method, URI, Precondition string
+	Credential, Capability                                             string
 	Payload                                                            json.RawMessage
 	Sensitive                                                          bool
 	// Supplied by the authority's SecretStore; never accepted from HTTP or
@@ -214,8 +216,16 @@ func (r *Repository) Execute(ctx context.Context, c Command, reauthorize func(co
 		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM api_receipts").Scan(&count); err != nil {
 			return err
 		}
-		if count >= MaxReceipts {
+		limit := MaxReceipts
+		if r.domain == "management" && !evidence.ControlOperation(c.Operation) {
+			limit -= evidence.ReservedControlRecords
+		}
+		if count >= limit {
 			return apitypes.Fail(429, "RESOURCE_BUDGET_EXCEEDED")
+		}
+		correlation := repository.NewID()
+		if r.domain == "management" {
+			ctx = evidence.WithRequest(ctx, evidence.Request{Principal: c.Principal, Credential: c.Credential, Capability: c.Capability, Operation: c.Operation, Domain: c.Domain, Epoch: c.Epoch, ID: c.ID, Correlation: correlation})
 		}
 		result, err := mutate(ctx, tx)
 		if err != nil {
@@ -236,7 +246,7 @@ func (r *Repository) Execute(ctx context.Context, c Command, reauthorize func(co
 				return apitypes.Fail(500, "JOB_NOT_DURABLE")
 			}
 		}
-		receipt := apitypes.Receipt{RequestID: c.ID, Domain: c.Domain, Epoch: c.Epoch, State: "accepted", Effect: "unknown", Resource: result.Resource, Job: result.Job, CorrelationID: repository.NewID()}
+		receipt := apitypes.Receipt{RequestID: c.ID, Domain: c.Domain, Epoch: c.Epoch, State: "accepted", Effect: "unknown", Resource: result.Resource, Job: result.Job, CorrelationID: correlation}
 		if result.Resource != nil {
 			receipt.Effect = "linked-resource"
 		}
@@ -298,7 +308,13 @@ func (r *Repository) Find(ctx context.Context, principal, epoch, id string, auth
 // receipts are preserved even under pressure; new admission must fail instead.
 func (r *Repository) Prune(ctx context.Context) error {
 	return r.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "DELETE FROM api_receipts WHERE completed_at_ms IS NOT NULL AND completed_at_ms<?", r.now().Add(-30*24*time.Hour).UnixMilli())
+		query := "DELETE FROM api_receipts WHERE rowid IN (SELECT rowid FROM api_receipts WHERE completed_at_ms IS NOT NULL AND completed_at_ms<?"
+		if r.domain == "management" {
+			query += ` AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=json_extract(api_receipts.receipt,'$.job_ref.id'))
+ AND NOT EXISTS(SELECT 1 FROM evidence_records e WHERE e.request_id=api_receipts.request_id)`
+		}
+		query += " ORDER BY completed_at_ms LIMIT 256)"
+		_, err := tx.ExecContext(ctx, query, r.now().Add(-30*24*time.Hour).UnixMilli())
 		return err
 	})
 }

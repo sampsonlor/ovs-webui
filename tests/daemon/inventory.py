@@ -248,6 +248,33 @@ def main():
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 
+        # Shared evidence runs through the real HTTPS -> Unix IPC -> manager
+        # authority. Inventory-only tokens cannot inspect jobs or audit data.
+        assert call('/audit', bearer=token['secret'])[0] == 403
+        assert call('/jobs', bearer=token['secret'])[0] == 403
+        role_command = {'request_id': request_id(), 'name': 'synthetic-evidence-role', 'capabilities': ['state.read']}
+        code, accepted, _ = call('/roles', 'POST', role_command)
+        assert code == 202, (code, accepted)
+        shared_job = get('/jobs/' + accepted['job_id'])
+        assert shared_job['state'] == 'succeeded' and shared_job['business_outcome'] == 'success'
+        assert shared_job['applied_outcome'] == 'not-applicable' and shared_job['confirmation_state'] == 'not-applicable'
+        assert shared_job['correlation_id'] == accepted['correlation_id']
+        audit = get('/audit?correlation_id=' + accepted['correlation_id'])
+        assert len(audit['items']) == 1 and audit['items'][0]['job_id'] == accepted['job_id']
+        assert audit['items'][0]['request_id'] == role_command['request_id']
+        audit_id = audit['items'][0]['id']
+        assert get('/audit/' + audit_id)['id'] == audit_id
+        assert get('/audit/export?correlation_id=' + accepted['correlation_id'])['items'][0]['id'] == audit_id
+        assert get('/jobs/export?filter=createRole')['items'][0]['id'] == accepted['job_id']
+        linked_events = get('/events?correlation_id=' + accepted['correlation_id'])['items']
+        assert linked_events and linked_events[0]['job_id'] == accepted['job_id']
+        assert get('/events/' + linked_events[0]['id'])['id'] == linked_events[0]['id']
+        external = get('/events?origin=External')['items']
+        assert external and all(item['actor_id'] is None and item['origin'] == 'External' for item in external)
+        serialized = json.dumps([audit, linked_events, shared_job])
+        assert all(secret not in serialized for secret in credentials)
+        metrics['shared_evidence_verified'] = True
+
         vsctl('del-port', 'br-inv', 'inv-p1')
         eventually(lambda: call('/ports/' + original['management_id'])[0] == 404)
         vsctl('add-port', 'br-inv', 'inv-p1', '--', 'set', 'Interface', 'inv-p1', 'type=dummy')
