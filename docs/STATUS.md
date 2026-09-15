@@ -33,7 +33,7 @@
 | SecretStore / HTTPS #35 | PR #61 已接受合并，#35 已关闭；分区 AEAD、密钥轮换、恢复授权撤销、证书候选与有界激活已验收 | #54 证书页面、#20/#27/#28 各功能主单和 #48 备份编排仍独立验收 |
 | 真实 OVSDB Discovery / Inventory #36 | PR #62 已接受合并，#36 已关闭；实际 schema、原子 monitor、共享身份、字段权限和多证据生命周期核对；原生双架构各 104 项 Go race 及三份 schema 的真实 OVS/恢复场景通过 | #21/#22/#54 页面分别验收；写入继续由后续任务交付 |
 | 共享 Job / 请求 / Event / Audit #37 | PR #63 已接受合并，#37 已关闭；共享持久服务、取消与恢复、当前授权、脱敏、保留及分页导出；122 路径 / 139 操作 | 原生双架构各 113 项 Go race 及真实服务场景通过；#20/#27/#28/#54 页面和具体执行器分别验收 |
-| Candidate / Diff / Validation #38 | 正式私有持久草稿、三方 rebase、原生 schema 与当前授权校验、不可变 Validation/Job/Audit 已进入实现验证 | 原生双架构 CI 及本批用户接受待完成；Apply #39、Safe Apply #40、前端 #41/#54 分别验收 |
+| Candidate / Diff / Validation #38 | PR #64 实现与技术验收完成，等待用户接受；正式持久草稿、三方 rebase、原生 schema / 当前授权校验、不可变 Validation/ChangeSet/Job/Audit 和请求恢复 | 原生双架构各 126 项 Go race 及三份 schema 中真实 HTTPS/IPC/OVS 场景通过；Apply #39、Safe Apply #40、前端 #41/#54 分别验收 |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -55,8 +55,8 @@
 
 ## 下一步
 
-接受 #37 共享持久证据服务的[技术验收](reviews/SHARED_EVIDENCE_v0.1.md)后，推进 #38 Candidate / Validation，随后构建 Ports/VLAN 的真实安全闭环。#20–#28 均属于 Phase 1，按其后端依赖与 #54 页面迁移逐项完成功能验收；不要求先把九项页面全部做完再推进基础工程。PR #19 的库存与导航原型继续另行接受。
+当前验收 #38 Candidate / Validation 的[正式实现](reviews/CANDIDATE_VALIDATION_v0.1.md)，本批接受后推进 #39 OVSDB 字段级执行、OutcomeUnknown 与 Applied 证据，随后由 #40/#41 完成 Ports/VLAN 的真实安全闭环。#20–#28 均属于 Phase 1，按其后端依赖与 #54 页面迁移逐项完成功能验收；不要求先把九项页面全部做完再推进基础工程。PR #19 的库存与导航原型继续另行接受。
 
-[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30/#31/#32/#33/#34/#35/#36 已完成，#29/#37 为 In Progress，其余工程任务为 Todo。#20–#28 已统一加入 Phase 1 milestone，继续保留 Todo 与独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
+[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#37 已完成，#29/#38 为 In Progress，其余工程任务为 Todo。#20–#28 已统一加入 Phase 1 milestone，继续保留 Todo 与独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。
