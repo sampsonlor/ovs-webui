@@ -2,7 +2,6 @@ package inventory
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ func TestCandidateProjectionKeepsNativeFieldsAndRelevantDependencies(t *testing.
 		}
 	}
 	row := o.Rows["Port"][binding.OVSUUID]
-	row.Values["tag"] = []any{json.Number("10")}
+	row.Values["tag"] = []any{"10"}
 	for n, table := range o.Schema.Tables {
 		if table.Name == "Port" {
 			for j, c := range table.Columns {

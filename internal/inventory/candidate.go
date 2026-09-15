@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
@@ -38,6 +39,14 @@ func integers(v any) ([]int, bool) {
 	for _, v := range values {
 		var n int64
 		switch x := v.(type) {
+		case string:
+			// The OVSDB adapter preserves exact signed native integers as decimal
+			// strings. Narrow to the VLAN range only at this domain boundary.
+			var err error
+			n, err = strconv.ParseInt(x, 10, 64)
+			if err != nil {
+				return nil, false
+			}
 		case int:
 			n = int64(x)
 		case int64:
