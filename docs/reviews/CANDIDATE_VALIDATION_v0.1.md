@@ -1,6 +1,6 @@
 # Candidate / Validation 审阅 v0.1
 
-日期：2026-09-15。任务 [#38](https://github.com/sampsonlor/ovs-webui/issues/38)，[PR #64](https://github.com/sampsonlor/ovs-webui/pull/64)。**实现与技术验收完成，等待用户接受。** 前置 #37 / PR #63 已接受合并为 `ba8a4ee`，标签 `phase1-shared-evidence-v0.1`。
+日期：2026-09-15。任务 [#38](https://github.com/sampsonlor/ovs-webui/issues/38)，[PR #64](https://github.com/sampsonlor/ovs-webui/pull/64)。**用户已接受，PR #64 已合并至 `3bbf167`，接受标签 `phase1-candidate-validation-v0.1`。** 前置 #37 / PR #63 已接受合并为 `ba8a4ee`，标签 `phase1-shared-evidence-v0.1`。
 
 正式服务可按用户保存 Candidate，显示 Original / Current / Yours 三方 Diff，并生成不可变 Validation、typed ChangeSet、Job、Audit 和原请求 receipt。首个 intent 是 `port.vlan.set`。实现与边界见 [Candidate / Diff / Validation](../implementation/CANDIDATE_VALIDATION_v0.1.md)。
 
@@ -34,4 +34,4 @@
 
 Validation 的历史 state 与当前 usable 分开；Job succeeded 不替代 Validation passed，Validation passed 也不代表 OVS 已提交或 Applied。`execution_ready` 始终 false，风险为 connectivity-unknown-safe-apply-required；保存和验证没有 OVSDB 写操作。root Port allowlist 只声明 VLAN 字段归属。
 
-技术验收通过；#38 保持 Open / Project In Progress，PR #64 待用户接受后合并。#39 OVSDB 字段级执行、OutcomeUnknown 与 Applied 证据保持 Todo，随后由 #40/#41 完成安全执行和前端闭环。
+用户验收通过；#38 已关闭，Project 为 Done。PR #64 接受提交 `6467d4f` 的[最终 CI](https://github.com/sampsonlor/ovs-webui/actions/runs/34942852032)六项全部通过，合并后源树与接受提交一致。#39 OVSDB 字段级执行、OutcomeUnknown 与 Applied 证据保持 Todo，随后由 #40/#41 完成安全执行和前端闭环。

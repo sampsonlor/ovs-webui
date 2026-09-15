@@ -122,7 +122,7 @@ void test('storage evidence retains a known carrier fault while missing counters
     { ...network, scope: 'Port/bond-uplink' },
     'complete',
   );
-  assert.doesNotMatch(other.finding + other.raw, /enp129s0f1|carrier down/);
+  assert.doesNotMatch(other.finding + other.raw, /enp130s0f1|carrier down/);
 });
 
 void test('output limits, actual excerpt counts and truncation are preserved in export', () => {

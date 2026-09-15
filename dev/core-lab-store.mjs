@@ -3,7 +3,10 @@ import { randomUUID, createHash } from 'node:crypto';
 import { createContractValidator } from '../scripts/core-validator.mjs';
 import { CoreLabValidation } from './core-lab-validation.mjs';
 import { CoreLabTransactions } from './core-lab-transactions.mjs';
-import { ports as prototypePorts, nativeVlanFields } from '../lib/ovs-model.ts';
+import {
+  corePorts as prototypePorts,
+  nativeVlanFields,
+} from '../lib/ovs-model.ts';
 
 const now = () => new Date().toISOString();
 const id = (prefix) => `${prefix}-${randomUUID()}`;

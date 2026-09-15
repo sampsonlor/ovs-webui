@@ -1,17 +1,17 @@
 # Documentation index
 
-Start with [current status](STATUS.md), the
-[Phase 1 implementation design](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
-and its [review disposition](reviews/PHASE1_DESIGN_v0.1.md), accepted in PR #56.
-The [Go runtime and IPC foundation](implementation/GO_RUNTIME_IPC_v0.1.md) for #31
-was accepted in PR #57. The [dual SQLite repositories](implementation/SQLITE_REPOSITORIES_v0.1.md)
-for #32 were accepted in PR #58, tagged `phase1-sqlite-repositories-v0.1`.
-The current review is [public REST v1 and durable request recovery](implementation/PUBLIC_API_v1.0.md)
-for #33 / PR #59, with [all Scope/page mappings](../contracts/v1.coverage.json).
-The [six-batch integration review](reviews/INTEGRATION_v0.2.md) was accepted and
-merged in PR #18. The [53-page approved IA coverage inventory](reviews/P1_IA_COVERAGE_v0.1.md)
-records that baseline; [shared inventory PR #19](https://github.com/sampsonlor/ovs-webui/pull/19)
-remains a separate pending review.
+Start with [current status](STATUS.md) and the
+[main consolidation review](reviews/MAIN_CONSOLIDATION_2026-09-15.md).
+Phase 1 engineering tasks #30–#38 have been accepted in PRs #56–#64, most recently
+[Candidate / Diff / Validation](implementation/CANDIDATE_VALIDATION_v0.1.md)
+and its [review disposition](reviews/CANDIDATE_VALIDATION_v0.1.md).
+The [implementation design](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
+and [all Scope/page mappings](../contracts/v1.coverage.json) retain the full delivery boundary.
+The [shared inventory and object navigation review](reviews/SHARED_INVENTORY_v0.1.md)
+and [53-page prototype coverage inventory](reviews/P1_IA_COVERAGE_v0.2.md) describe PR #19,
+reconciled with the accepted backend for this consolidation.
+The [six-batch integration review](reviews/INTEGRATION_v0.2.md) was accepted in PR #18,
+tagged `prototype-p1-integration-v0.2` at `176bca1`.
 The [Capabilities review](reviews/CAPABILITIES_v0.1.md) is accepted in PR #17,
 tagged `prototype-capabilities-v0.1` at `862b19a`.
 The accepted [CI baseline](reviews/CI_BROWSER_BASELINE_v0.1.md) records PR #16

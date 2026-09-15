@@ -1,3 +1,4 @@
+import { inventoryPorts, portPresentations } from './inventory-model.ts';
 import type { P1View } from '../app/prototype-model';
 
 export type Mode = 'standard' | 'expert';
@@ -11,6 +12,8 @@ export type View =
   | 'safe-apply'
   | 'evidence'
   | 'responsive'
+  | 'interface-detail'
+  | 'object-unavailable'
   | P1View;
 export type VlanMode = 'access' | 'trunk' | 'native-tagged';
 export type VlanValue = { mode: VlanMode; tag: number | null; trunks: string };
@@ -29,88 +32,11 @@ export type Port = {
   uuid: string;
 };
 
-// Synthetic fixtures from the frozen P0 prototype. No device is connected.
-export const ports: Port[] = [
-  {
-    name: 'uplink-01',
-    state: 'Up',
-    speed: '100 Gbps',
-    vlan: 'Trunk · 10, 20, 120',
-    config: { mode: 'trunk', tag: null, trunks: '10, 20, 120' },
-    bridge: 'br-fabric',
-    interfaceName: 'enp65s0f0',
-    provider: 'system',
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: '84a9…1fc2',
-  },
-  {
-    name: 'server-07',
-    state: 'Up',
-    speed: '25 Gbps',
-    vlan: 'Access · 120',
-    config: { mode: 'access', tag: 120, trunks: '' },
-    bridge: 'br-fabric',
-    interfaceName: 'enp129s0f1',
-    provider: 'system',
-    authority: 'OVS',
-    scope: 'Manage',
-    uuid: '29fd…8a71',
-  },
-  {
-    name: 'server-08',
-    state: 'Down',
-    speed: '—',
-    vlan: 'Access · 120',
-    config: { mode: 'access', tag: 120, trunks: '' },
-    bridge: 'br-fabric',
-    interfaceName: 'enp129s0f2',
-    provider: 'system',
-    authority: 'OVS',
-    scope: 'Basic Manage',
-    uuid: '742e…53b1',
-  },
-  {
-    name: 'bond-storage',
-    state: 'Up',
-    speed: '50 Gbps',
-    vlan: 'Trunk · 300–319',
-    config: { mode: 'trunk', tag: null, trunks: '300-319' },
-    bridge: 'br-storage',
-    interfaceName: 'enp130s0f0, enp130s0f1',
-    members: ['enp130s0f0', 'enp130s0f1'],
-    provider: 'system',
-    authority: 'OVS',
-    scope: 'Basic Manage',
-    uuid: '83cb…41c9',
-  },
-  {
-    name: 'rep0',
-    state: 'Unknown',
-    speed: 'Unknown',
-    vlan: 'Provider-owned',
-    config: { mode: 'access', tag: null, trunks: '' },
-    bridge: 'br-offload',
-    interfaceName: 'pf0hpf',
-    provider: 'SmartNIC',
-    authority: 'External',
-    scope: 'Observe',
-    uuid: '2e13…c0d7',
-  },
-  {
-    name: 'mgmt0',
-    state: 'Up',
-    speed: '1 Gbps',
-    vlan: 'Native · 4094',
-    config: { mode: 'native-tagged', tag: 4094, trunks: '4094' },
-    bridge: 'br-mgmt',
-    interfaceName: 'eno1',
-    provider: 'system',
-    authority: 'OVS',
-    scope: 'Basic Manage',
-    uuid: 'b12c…832a',
-  },
-];
+export const ports: Port[] = portPresentations;
+// The persisted lab remains the original six-Port contract slice.
+export const corePorts: Port[] = ports.filter((port) =>
+  inventoryPorts.some((item) => item.uuid === port.uuid && item.core),
+);
 
 export function vlanLabel(value: VlanValue): string {
   if (value.mode === 'access') return `Access · VLAN ${value.tag ?? 'unset'}`;

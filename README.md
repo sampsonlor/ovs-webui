@@ -5,7 +5,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 ## Project status
 
 See [current status and architecture alignment](docs/STATUS.md) for the
-2026-09-14 inventory, source baselines, implementation design and review scope.
+2026-09-15 inventory, source baselines, implementation design and review scope.
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
@@ -31,7 +31,9 @@ interaction and contract review tools; they do not change that architecture.
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
 | Phase 1 implementation design v0.1               | Accepted · PR #56 merged            |
 | Go daemon foundation / typed IPC v0.1            | Accepted · PR #57 merged            |
-| Dual SQLite repositories v0.1                   | Implemented · Review pending · #32  |
+| Dual SQLite repositories v0.1                   | Accepted · PR #58 merged            |
+| REST v1, authorization, secrets, inventory, evidence and Candidate · #33–#38 | Accepted · PRs #59–#64 merged |
+| Shared prototype inventory and object navigation | PR #19 · Consolidation CI gate |
 
 The [Phase 1 implementation design](docs/implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
 maps all 58 Scope requirements and 53 approved IA pages to implementation owners
@@ -46,13 +48,14 @@ process failure and isolated OVS forwarding tests. The
 [dual SQLite foundation](docs/implementation/SQLITE_REPOSITORIES_v0.1.md), accepted
 in PR #58, adds private databases, atomic migrations, consistent backups
 and durable handoff receipts. Missing or damaged databases stop write admission;
-normal startup never replaces them with empty stores. Authentication, configuration
-providers and the Svelte product remain subsequent implementation work.
+normal startup never replaces them with empty stores. Tasks #34–#38 add current
+authorization, SecretStore/TLS, real OVSDB discovery, durable evidence and Candidate
+validation. OVS configuration execution and the Svelte product retain subsequent gates.
 
-The current [public REST v1 review](docs/implementation/PUBLIC_API_v1.0.md), PR #59,
+The accepted [public REST v1 review](docs/implementation/PUBLIC_API_v1.0.md), PR #59,
 adds OpenAPI runtime validation, generated DTOs, durable request idempotency and
 bounded WebSocket invalidation hints. The catalog covers all 58 Scope IDs and
-53 pages; authentication and real business services retain their separate gates.
+53 pages; connected business services and their remaining gates are tracked in current status.
 Protected endpoints fail closed until the owning services are connected.
 
 The accepted Batch 01 path remains available:
@@ -123,11 +126,22 @@ for exceptions, responsive responsibilities and engineering evidence. PR #17 is
 merged at `862b19a`, tagged `prototype-capabilities-v0.1`; the persistence lab does
 not execute this native action.
 
-The [six-batch integration review](docs/reviews/INTEGRATION_v0.2.md) now checks
+The accepted [six-batch integration review](docs/reviews/INTEGRATION_v0.2.md) checks
 cross-domain transaction ownership and unifies Bond editor / WebMCP validation.
-It awaits separate acceptance. The [approved IA coverage inventory](docs/reviews/P1_IA_COVERAGE_v0.1.md)
-maps all 53 page IDs and records remaining inventory, routing and production
-service gaps; acceptance of six batches does not imply whole-site completion.
+PR #18 is merged at `176bca1`, tagged `prototype-p1-integration-v0.2`.
+
+The current [shared inventory review](docs/reviews/SHARED_INVENTORY_v0.1.md)
+unifies 4 Bridges, 10 Ports and 13 attached Interfaces in one bounded synthetic
+snapshot. Fixed UUID references retain instance and generation across object URL
+reloads and browser history; missing targets remain explicit. Bridge, Port, Bond,
+Interface and evidence links share this resolver. The new Interface context is
+read-only, and the persistence lab retains its original six-Port scope and data.
+This slice is included in the authorized main consolidation, gated by the latest
+complete CI results. Object URL recovery does not persist prototype
+Candidate or transaction state. The updated
+[approved IA coverage inventory](docs/reviews/P1_IA_COVERAGE_v0.2.md) maps all 53
+page IDs and records remaining full-inventory, service-routing and production
+gaps; acceptance of six batches does not imply whole-site completion.
 
 The 2026-09-05 integration retains all three P1 batches and the Design System
 branch. Bridge/Bond and VLAN use one Candidate and transaction lock. Diagnostics
@@ -224,7 +238,7 @@ Track accepted work and upcoming slices on the public
 Pull requests and main updates run the pinned toolchain, contract checks, full
 repository lint, TypeScript, regression tests, process-recovery integration tests,
 Chromium workflow / UI template checks and the production build. `CI Gate` requires
-all three jobs to succeed. JUnit reports and browser failure evidence are retained
+all five prerequisite jobs to succeed, including native Go runtime checks on amd64 and arm64. JUnit reports and browser failure evidence are retained
 for 7 days; traces omit network and DOM snapshots to avoid recording session tokens.
 The `ci-integration` environment uses disposable Linux runners and per-test SQLite
 databases; it has no production credentials or real OVS executor.

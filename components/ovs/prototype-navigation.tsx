@@ -39,6 +39,8 @@ const domains = [
       'ports',
       'port-detail',
       'vlan-edit',
+      'interface-detail',
+      'object-unavailable',
       'bonds',
       'bond-edit',
       'bond-detail',
