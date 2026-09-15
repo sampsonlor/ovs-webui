@@ -1,10 +1,10 @@
 # 批准 IA 页面覆盖盘点 v0.2
 
-日期：2026-09-08。依据为归档的 [Approved IA v1.0](../baselines/OVS_WebUI_UI_Information_Architecture_Page_Inventory_v1.0.docx) §6、[Architecture v1.0.1](../baselines/OVS_WebUI_Architecture_Baseline_v1.0.1.docx) 及当前原型代码。根目录同名 Draft 不替换批准版；独立 Phase 1 Scope 原文仍缺失。
+日期：2026-09-08。依据为归档的 [Approved IA v1.0](../baselines/OVS_WebUI_UI_Information_Architecture_Page_Inventory_v1.0.docx) §6、[Architecture v1.0.1](../baselines/OVS_WebUI_Architecture_Baseline_v1.0.1.docx) 及当前原型代码。根目录同名 Draft 不替换批准版；本表保留 2026-09-08 原型覆盖快照；Scope 原文于 2026-09-09 另行归档，正式工程进度见[当前进度](../STATUS.md)。
 
 **P1 六批接受不等于批准 IA 全部完成。** 下表逐项覆盖 53 个 Page ID：14 项独立、17 项局部、22 项未实现。“独立”表示已有独立原型 View；“局部”表示职责位于合并页、对象详情或共享流程；“未实现”表示没有可交付的对应工作流。独立 View 也只覆盖下列有限原型范围，不表示该 IA 页全部验收或已实现正式服务。已与批准原文的 53 个唯一 Page ID 逐一核对，无遗漏或额外编号。
 
-本轮共享库存切片尚待接受；SW-07 增加独立只读关系上下文，因此独立 View 计数增加 1，完整原生字段编辑仍缺失。原生对象已支持按实例、UUID 与 generation 的可刷新 fragment URL，其他资源仍主要使用会话 View；表中 route 是批准 IA 建议路径，正式 SPA path 尚未实现。P1-01 至 P1-12 是批次演示步骤，不能与 IA Page ID 一对一计数。
+共享库存切片在 2026-09-15 纳入用户授权的 main 归集复验；SW-07 增加独立只读关系上下文，因此独立 View 计数增加 1，完整原生字段编辑仍缺失。原生对象已支持按实例、UUID 与 generation 的可刷新 fragment URL，其他资源仍主要使用会话 View；表中 route 是批准 IA 建议路径，正式 SPA path 尚未实现。P1-01 至 P1-12 是批次演示步骤，不能与 IA Page ID 一对一计数。
 
 | Page ID | 批准页面 / 建议 route | 覆盖 | 现有入口和关键缺口 |
 | --- | --- | --- | --- |
@@ -66,6 +66,6 @@
 
 共享关系来源、冲突 fixture 的显式纠正、稳定对象 URL 与缺失目标行为详见[共享库存审阅](SHARED_INVENTORY_v0.1.md)。最初的[盘点 v0.1](P1_IA_COVERAGE_v0.1.md)保留 PR #18 接受时的范围和缺口；此处 53 个 Page ID 未增删。
 
-1. 接受共享库存与导航切片后，准备 Go `ovs-webd` / `ovs-mgrd`、Svelte 5 静态 SPA 的正式 Ports/VLAN 纵向切片设计，明确只读身份、权限、双库、Candidate、Applied evidence 与恢复服务。
+1. Go `ovs-webd` / `ovs-mgrd` 的实现设计及 #30–#38 正式基础已接受；本表仍记录原型页面的接线缺口，不因后端完成自动将页面标记为验收完成。后续执行与正式 Svelte 页面按 #39–#55 分别交付。
 2. Bridge/Bond 确认后仍需真正的权威观察来更新库存；Job/Event/Audit 稳定资源路由和完整集合不能由对象 fragment 导航代替。
 3. 在正式服务依赖明确后补 Interfaces、VLAN 与 Visibility 页面；管理网络、认证、备份、TLS 和 Lifecycle 保留高风险权限与恢复要求。OpenFlow、DPDK/Offload 维持各自已接受的 Observe 边界。

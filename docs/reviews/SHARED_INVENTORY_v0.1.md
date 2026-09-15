@@ -1,6 +1,6 @@
 # 共享对象库存与导航审阅 v0.1
 
-日期：2026-09-08。**Disposition：本轮实现等待用户审阅接受。** 前置六批整合 PR #18 已获接受并合并至 `176bca1`，注释标签为 `prototype-p1-integration-v0.2`。本轮不改变批准架构、Phase 1 能力范围或配置事务流程。
+原实现日期：2026-09-08；归集复验：2026-09-15。**Disposition：用户已授权将完成工作归集至 main；PR #19 必须通过与当前后端合并后的完整 CI 才能落入 main。** 前置六批整合 PR #18 已获接受并合并至 `176bca1`，注释标签为 `prototype-p1-integration-v0.2`。本轮不改变批准架构、Phase 1 能力范围或配置事务流程。
 
 ## 交付范围
 
@@ -35,7 +35,7 @@
 
 SQLite lab 通过 `corePorts` 保持原六个 Port 的契约切片；不覆盖已有数据库中的库存、ID、generation、Candidate 或事务。新建隔离 lab 从共享定义取样，但 lab 的资源 ID/实例是自己的。合成对象 URL不能套用到 lab 资源；从 P1 指向 lab Port 的跨实例跳转给出明确说明。进入 lab 的 Ports 后按其实际资源选择。
 
-正式的 Interface 字段编辑、完整库存和 provider、稳定 Job/Event/Audit 服务路由，以及 Go webd/mgrd + Svelte 5 正式 SPA 仍未交付。当前 fragment URL 是原型导航，不是新的 REST 合约或批准 SPA path 变更。
+截至原审阅日，正式库存/provider 与 Job/Event/Audit 服务尚未交付；本轮归集已包含 #30–#38 的 Go 正式基础。此原型尚未连接这些服务，Interface 字段编辑、正式页面路由与 Svelte 5 SPA 仍需分别交付。当前 fragment URL 是原型导航，不是新的 REST 合约或批准 SPA path 变更。
 
 ## Review Gate 与证据
 
@@ -64,4 +64,4 @@ PR 的 Linux CI 将再次对提交版本运行全部检查；本地合成测试�
 
 ## 下一步
 
-本轮接受后，准备批准技术栈上的正式 Ports/VLAN 纵向切片设计：明确只读库存身份、webd/mgrd 权限边界、双库职责、Candidate 契约、Applied evidence 和恢复资源的接入顺序。后续 Interface 完整页面与统一 Jobs/Events/Audit 应使用这些服务资源，避免继续扩张互不相通的 fixture。剩余 53 项页面覆盖见 [更新盘点 v0.2](P1_IA_COVERAGE_v0.2.md)。
+正式实现设计及 #30–#38 已另行接受；归集后的检查见[main 归集记录](MAIN_CONSOLIDATION_2026-09-15.md)。后续由 #39/#40 交付真实执行与恢复，由 #41/#54 接入正式前端。后续 Interface 完整页面与统一 Jobs/Events/Audit 应使用这些服务资源，避免继续扩张互不相通的 fixture。剩余 53 项页面覆盖见 [更新盘点 v0.2](P1_IA_COVERAGE_v0.2.md)。

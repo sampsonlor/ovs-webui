@@ -5,7 +5,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 ## Project status
 
 See [current status and architecture alignment](docs/STATUS.md) for the
-2026-09-08 inventory, source baselines, interaction fixes and review scope.
+2026-09-15 inventory, source baselines, implementation design and review scope.
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
@@ -16,7 +16,7 @@ interaction and contract review tools; they do not change that architecture.
 | Baseline                                          | Status                             |
 | ------------------------------------------------- | ---------------------------------- |
 | Architecture Baseline v1.0.1                      | Approved source retained           |
-| Phase 1 Scope v1.0                                | Approved upstream reference        |
+| Phase 1 Scope v1.0                                | Original received · Draft for Review |
 | UI Information Architecture + Page Inventory v1.0 | Approved Baseline                  |
 | P0 Low-Fidelity UX Baseline v0.1                  | Frozen                             |
 | P1 Low-Fidelity Prototype Plan v0.1               | Draft for Review                   |
@@ -29,6 +29,34 @@ interaction and contract review tools; they do not change that architecture.
 | Full lint and browser CI · #6 / #7                | Accepted · PR #16 merged           |
 | Design System v0.1 + shared change control        | Accepted for integration           |
 | Core Ports/VLAN API contract v0.1                 | Integration draft                  |
+| Phase 1 implementation design v0.1               | Accepted · PR #56 merged            |
+| Go daemon foundation / typed IPC v0.1            | Accepted · PR #57 merged            |
+| Dual SQLite repositories v0.1                   | Accepted · PR #58 merged            |
+| REST v1, authorization, secrets, inventory, evidence and Candidate · #33–#38 | Accepted · PRs #59–#64 merged |
+| Shared prototype inventory and object navigation | PR #19 · Consolidation CI gate |
+
+The [Phase 1 implementation design](docs/implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)
+maps all 58 Scope requirements and 53 approved IA pages to implementation owners
+and review gates. It includes the accepted dual-process runtime design, identity,
+authorization, transaction recovery and API migration. The received Scope
+original remains Draft for Review; the design does not mark backend delivery complete.
+
+The [Go runtime foundation](docs/implementation/GO_RUNTIME_IPC_v0.1.md) now provides
+separate Linux daemons, HTTPS bootstrap resources, credential-checked Unix IPC,
+bounded requests and systemd supervision. Its native amd64/arm64 CI includes
+process failure and isolated OVS forwarding tests. The
+[dual SQLite foundation](docs/implementation/SQLITE_REPOSITORIES_v0.1.md), accepted
+in PR #58, adds private databases, atomic migrations, consistent backups
+and durable handoff receipts. Missing or damaged databases stop write admission;
+normal startup never replaces them with empty stores. Tasks #34–#38 add current
+authorization, SecretStore/TLS, real OVSDB discovery, durable evidence and Candidate
+validation. OVS configuration execution and the Svelte product retain subsequent gates.
+
+The accepted [public REST v1 review](docs/implementation/PUBLIC_API_v1.0.md), PR #59,
+adds OpenAPI runtime validation, generated DTOs, durable request idempotency and
+bounded WebSocket invalidation hints. The catalog covers all 58 Scope IDs and
+53 pages; connected business services and their remaining gates are tracked in current status.
+Protected endpoints fail closed until the owning services are connected.
 
 The accepted Batch 01 path remains available:
 
@@ -108,7 +136,8 @@ snapshot. Fixed UUID references retain instance and generation across object URL
 reloads and browser history; missing targets remain explicit. Bridge, Port, Bond,
 Interface and evidence links share this resolver. The new Interface context is
 read-only, and the persistence lab retains its original six-Port scope and data.
-This slice awaits acceptance. Object URL recovery does not persist prototype
+This slice is included in the authorized main consolidation, gated by the latest
+complete CI results. Object URL recovery does not persist prototype
 Candidate or transaction state. The updated
 [approved IA coverage inventory](docs/reviews/P1_IA_COVERAGE_v0.2.md) maps all 53
 page IDs and records remaining full-inventory, service-routing and production
@@ -209,7 +238,7 @@ Track accepted work and upcoming slices on the public
 Pull requests and main updates run the pinned toolchain, contract checks, full
 repository lint, TypeScript, regression tests, process-recovery integration tests,
 Chromium workflow / UI template checks and the production build. `CI Gate` requires
-all three jobs to succeed. JUnit reports and browser failure evidence are retained
+all five prerequisite jobs to succeed, including native Go runtime checks on amd64 and arm64. JUnit reports and browser failure evidence are retained
 for 7 days; traces omit network and DOM snapshots to avoid recording session tokens.
 The `ci-integration` environment uses disposable Linux runners and per-test SQLite
 databases; it has no production credentials or real OVS executor.

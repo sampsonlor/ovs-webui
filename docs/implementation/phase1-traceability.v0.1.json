@@ -1,0 +1,2520 @@
+{
+  "status": "proposed",
+  "date": "2026-09-09",
+  "source_authority": {
+    "architecture": "Approved",
+    "ia": "Approved",
+    "scope": "Draft for Review"
+  },
+  "source_hashes": {
+    "scope": "d9fe23b0ee348c8680e8993eac12d0a79d769b5c816a066dcb81c6aecd87df81",
+    "architecture": "27638d3bca2bb5f0b657c0fab462c254a19b6136df9c79f148de369de44d6c42",
+    "ia": "d84b81275874c0fa15b5cae10b0cc87e908cd98b0e0108ee92727bf6f0e28900"
+  },
+  "scope_requirements": [
+    {
+      "id": "P1-PLAT-01",
+      "name": "Two-process runtime",
+      "level": "Required",
+      "boundary": "`ovs-webd` 非特权；`ovs-mgrd` 为 typed privileged helper；Unix socket；protocol/version handshake。",
+      "issues": [
+        31
+      ],
+      "pages": [
+        "AD-11"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-02",
+      "name": "Field/Domain Authority",
+      "level": "Required",
+      "boundary": "OVSDB、OpenFlow、rtnetlink、ethtool/sysfs/devlink、appctl 等按 Domain Field 定义 Authority/source/provenance/freshness。",
+      "issues": [
+        36,
+        44,
+        45,
+        47
+      ],
+      "pages": [
+        "SW-01",
+        "VI-01",
+        "AD-01"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-03",
+      "name": "OVS Semantic Operation Layer",
+      "level": "Required",
+      "boundary": "libovsdb 上层实现 OVS 原生对象语义；禁止 generic CRUD 直接暴露到 Domain/API。",
+      "issues": [
+        36,
+        38,
+        39,
+        42,
+        43
+      ],
+      "pages": [
+        "SW-02",
+        "SW-05",
+        "CH-02"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-04",
+      "name": "Schema/Capability Discovery",
+      "level": "Required",
+      "boundary": "启动和重连时读取 schema constraints/capability；功能由 capability 决定而非 distro/版本字符串硬编码。",
+      "issues": [
+        36,
+        45
+      ],
+      "pages": [
+        "AD-01"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G4"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-05",
+      "name": "Dual SQLite",
+      "level": "Required",
+      "boundary": "web.db 保存用户意图/UI metadata；manager.db 保存安全权威、事务、Audit、lifecycle；不做跨库 2PC。",
+      "issues": [
+        32,
+        34,
+        37,
+        38
+      ],
+      "pages": [
+        "CH-01",
+        "AD-06",
+        "AD-11"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-06",
+      "name": "SecretStore",
+      "level": "Required",
+      "boundary": "不可逆 credential 只存 hash；可复用 secret 用 AEAD；按消费者权限分区；API write-only/replace-only。",
+      "issues": [
+        35
+      ],
+      "pages": [
+        "AD-07",
+        "AD-09"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-07",
+      "name": "Candidate Workspace",
+      "level": "Required",
+      "boundary": "server-persisted、per-user、base revision + typed ChangeSet；浏览器关闭可恢复。",
+      "issues": [
+        38,
+        41
+      ],
+      "pages": [
+        "CH-01"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-08",
+      "name": "OCC / Safe Apply / Rollback",
+      "level": "Required",
+      "boundary": "字段级 CAS；高风险操作 Safe Apply；compare-before-rollback；支持 Rollback Conflict。",
+      "issues": [
+        38,
+        39,
+        40
+      ],
+      "pages": [
+        "CH-02",
+        "CH-03",
+        "CH-04"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-09",
+      "name": "Commit vs Applied",
+      "level": "Required",
+      "boundary": "OVSDB commit 与 ovs-vswitchd applied 分离；使用 next_cfg/cur_cfg 或等价 Applied evidence。",
+      "issues": [
+        39,
+        40
+      ],
+      "pages": [
+        "CH-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-10",
+      "name": "OutcomeUnknown recovery",
+      "level": "Required",
+      "boundary": "commit reply 丢失时进入 OutcomeUnknown，resync/reconcile 后判定，不盲目 retry。",
+      "issues": [
+        39,
+        40,
+        37
+      ],
+      "pages": [
+        "CH-03",
+        "OP-05"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-11",
+      "name": "Instance Generation",
+      "level": "Required",
+      "boundary": "识别新/同一 OVSDB generation；旧 Candidate/Profile/Safe Apply 不跨 generation 静默执行。",
+      "issues": [
+        36,
+        38,
+        40,
+        48
+      ],
+      "pages": [
+        "CH-04",
+        "AD-04"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-PLAT-12",
+      "name": "Bounded resource/backpressure",
+      "level": "Required",
+      "boundary": "所有 cache/queue/query/output 有界；关键配置路径优先；Degraded Management Mode。",
+      "issues": [
+        31,
+        32,
+        37,
+        44,
+        45,
+        46
+      ],
+      "pages": [
+        "AD-10",
+        "AD-11"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-01",
+      "name": "Bridge / Port / Interface",
+      "level": "Manage",
+      "boundary": "完整 CRUD/关联管理；保留 Bridge→Port→Interface；Standard/Expert 双视图；Create/Delete 服从 strong reference、local internal interface、immutable name 等 OVS 语义。",
+      "issues": [
+        21,
+        36,
+        42
+      ],
+      "pages": [
+        "SW-01",
+        "SW-02",
+        "SW-03",
+        "SW-04",
+        "SW-05",
+        "SW-06",
+        "SW-07"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-02",
+      "name": "VLAN",
+      "level": "Manage",
+      "boundary": "Access、Trunk、Native VLAN Trunk；Native egress Tagged/Untagged；Advanced 暴露 QinQ/dot1q-tunnel；保留 tag/trunks/cvlans/vlan_mode。",
+      "issues": [
+        22,
+        38,
+        39,
+        40,
+        42
+      ],
+      "pages": [
+        "SW-05",
+        "SW-08"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-03",
+      "name": "Bond / LACP",
+      "level": "Manage",
+      "boundary": "active-backup、balance-slb、balance-tcp；member add/remove；LACP active/passive/off；校验 balance-tcp/LACP/fallback/flood_vlans 等 OVS 约束。",
+      "issues": [
+        42
+      ],
+      "pages": [
+        "SW-09"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-04",
+      "name": "STP / RSTP",
+      "level": "Basic Manage",
+      "boundary": "Bridge enable/disable、root/priority/status、基础 Port cost/priority/edge；STP/RSTP 互斥；明确 unsupported port 和 upstream caveat。",
+      "issues": [
+        23,
+        43
+      ],
+      "pages": [
+        "SW-10"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-05",
+      "name": "IGMP / MLD Snooping",
+      "level": "Basic Manage",
+      "boundary": "基础 enable/status、group/port 视图和 OVS 原生基础配置；不做高级 multicast policy。",
+      "issues": [
+        43
+      ],
+      "pages": [
+        "SW-11"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-06",
+      "name": "Port Profile / Drift",
+      "level": "Manage",
+      "boundary": "managed_fields、revision/applied_revision、per-port override、Drift、Accept Current/Reapply/Detach；不自动 reconcile。",
+      "issues": [
+        32,
+        38,
+        43
+      ],
+      "pages": [
+        "CH-01",
+        "CH-04",
+        "SW-05"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-07",
+      "name": "Mirror / SPAN",
+      "level": "Manage",
+      "boundary": "MirrorSession 一等对象；仅 OVS 原生 source/destination/VLAN 能力；Packet Capture 归 Diagnostics。",
+      "issues": [
+        43
+      ],
+      "pages": [
+        "SW-13"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-08",
+      "name": "QoS / Queue",
+      "level": "Basic Manage",
+      "boundary": "OVS 原生 QoS/Queue 关系、基础 rate 参数、统计；未知 other_config 保留；无高层 policy compiler。",
+      "issues": [
+        43
+      ],
+      "pages": [
+        "SW-14"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-09",
+      "name": "Tunnel",
+      "level": "Manage",
+      "boundary": "静态 VXLAN/Geneve/GRE 等 capability-driven CRUD；`remote_ip=flow`/`key=flow`/controller-owned 默认只读。",
+      "issues": [
+        43
+      ],
+      "pages": [
+        "SW-12"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-10",
+      "name": "Protected Port / Isolation",
+      "level": "Manage if native",
+      "boundary": "只开放当前 OVS 原生 protected/isolation 能力；不模拟 Port Security/DHCP Snooping/DAI/Storm Control。",
+      "issues": [
+        43,
+        45
+      ],
+      "pages": [
+        "SW-15"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-11",
+      "name": "OpenFlow",
+      "level": "Observe + limited Expert Manage",
+      "boundary": "flows/groups/meters/controller/table viewer；仅明确 local-managed bridge 允许 raw Expert 修改；controller-owned/unknown ownership 只读。",
+      "issues": [
+        47,
+        53
+      ],
+      "pages": [
+        "SW-16",
+        "SW-17",
+        "SW-18",
+        "SW-19"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-12",
+      "name": "DPDK",
+      "level": "Observe",
+      "boundary": "enabled/datapath/ports/devargs/NUMA/hugepages/PMD/CPU/RXQ/drops/offload；不提供 enable、driver bind 或完整 tuning。",
+      "issues": [
+        47
+      ],
+      "pages": [
+        "VI-06"
+      ],
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-13",
+      "name": "Hardware Offload / SmartNIC",
+      "level": "Observe",
+      "boundary": "PF/VF/representor、capability、configured/active/partial/fallback/failure/stats；不执行 switchdev/SR-IOV restructuring。",
+      "issues": [
+        47
+      ],
+      "pages": [
+        "VI-07"
+      ],
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G4"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-14",
+      "name": "sFlow / NetFlow / IPFIX",
+      "level": "Manage",
+      "boundary": "OVS 原生 exporter config/state/diagnostics；不提供 collector、存储或时序分析。",
+      "issues": [
+        26,
+        43
+      ],
+      "pages": [
+        "VI-08"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-15",
+      "name": "Endpoint / FDB / ARP/ND / LLDP",
+      "level": "Observe",
+      "boundary": "本机 MAC/FDB/neighbour/可观察 LLDP，global search 与一跳 Local Topology；不做 CMDB/资产库/递归发现。",
+      "issues": [
+        24,
+        25,
+        44,
+        52
+      ],
+      "pages": [
+        "OV-02",
+        "VI-01",
+        "VI-02",
+        "VI-03",
+        "VI-04"
+      ],
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SW-16",
+      "name": "Management Interface",
+      "level": "Explicit Manage",
+      "boundary": "显式创建/迁移；物理口加入 Bridge 时将 host IP/routes 迁移到 internal interface；必须 Safe Apply + reachability check。",
+      "issues": [
+        49
+      ],
+      "pages": [
+        "AD-02"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-01",
+      "name": "Unified State Cache",
+      "level": "Required",
+      "boundary": "事件驱动优先、分级轮询补充；每字段 source/provenance/timestamp/freshness；RAM-only。",
+      "issues": [
+        44
+      ],
+      "pages": [
+        "VI-05",
+        "OP-01"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-02",
+      "name": "Event Timeline",
+      "level": "Required",
+      "boundary": "仅持久化有运维意义的状态变化；dedupe/coalesce/flap count；Event 与 Audit 分离。",
+      "issues": [
+        37
+      ],
+      "pages": [
+        "OP-02"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-03",
+      "name": "Health Engine",
+      "level": "Required",
+      "boundary": "Healthy/Degraded/Critical/Unknown；确定性、可解释；不做黑盒评分。",
+      "issues": [
+        45
+      ],
+      "pages": [
+        "OP-01"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-04",
+      "name": "Diagnostics",
+      "level": "Required",
+      "boundary": "Connectivity / OVS / Hardware / Services typed operations；Read-only/Active/Disruptive 风险分层；无任意 shell。",
+      "issues": [
+        46
+      ],
+      "pages": [
+        "OP-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-05",
+      "name": "Packet Capture",
+      "level": "Required",
+      "boundary": "作为临时 Diagnostic Job；有 timeout/size/cancel；不与持久 Mirror 混为一类。",
+      "issues": [
+        46
+      ],
+      "pages": [
+        "OP-03",
+        "OP-05"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-06",
+      "name": "Support Bundle",
+      "level": "Required",
+      "boundary": "OVS-centric bundle：OVS/config/state、相关 Linux 网络/硬件、Health/Event/Audit/transactions/capabilities；中央脱敏。",
+      "issues": [
+        46
+      ],
+      "pages": [
+        "OP-07"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-07",
+      "name": "Self-Observability",
+      "level": "Required",
+      "boundary": "结构化日志→journald；webd/mgrd/DB/SecretStore/Provider/queue/resource health；受控 Debug Mode。",
+      "issues": [
+        31,
+        45
+      ],
+      "pages": [
+        "AD-11"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-OPS-08",
+      "name": "Pagination / streaming",
+      "level": "Required",
+      "boundary": "flows/FDB/conntrack/events/audit/jobs/endpoints 等大集合支持 cursor pagination；重输出可 streaming/truncated。",
+      "issues": [
+        33,
+        37,
+        44,
+        47,
+        52
+      ],
+      "pages": [
+        "OV-02",
+        "OP-02",
+        "OP-04",
+        "OP-06",
+        "VI-02",
+        "SW-17"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G3",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-01",
+      "name": "Local authentication",
+      "level": "Required",
+      "boundary": "至少一个 break-glass admin；password verifier 由 manager.db/ovs-mgrd 权威管理；Argon2id。",
+      "issues": [
+        20,
+        34
+      ],
+      "pages": [
+        "AD-06"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-02",
+      "name": "TACACS+",
+      "level": "Required",
+      "boundary": "Phase 1 外部 AAA provider；AAA 自身配置必须可 test/confirm，不能删除最后可用登录路径。",
+      "issues": [
+        27,
+        34,
+        35
+      ],
+      "pages": [
+        "AD-07"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-03",
+      "name": "RBAC / Capability",
+      "level": "Required",
+      "boundary": "Role→Capability；mgrd 最终 enforcement；webd 只能前置检查，不能自行铸造 privileged authorization。",
+      "issues": [
+        20,
+        34
+      ],
+      "pages": [
+        "AD-06",
+        "AD-01"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-04",
+      "name": "Auth Grant / Session",
+      "level": "Required",
+      "boundary": "浏览器 session 与 mgrd-issued auth grant 关联；高风险 re-auth 创建短时 elevated grant。",
+      "issues": [
+        34,
+        35
+      ],
+      "pages": [
+        "AD-06",
+        "CH-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-05",
+      "name": "API Token",
+      "level": "Required",
+      "boundary": "一次显示 plaintext；持久只存 hash/scope/owner/expiry/last-use metadata；支持 revoke。",
+      "issues": [
+        28,
+        34
+      ],
+      "pages": [
+        "AD-08"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-06",
+      "name": "HTTPS",
+      "level": "Required",
+      "boundary": "HTTPS 默认；bootstrap self-signed；证书 candidate validate/activate；trusted reverse proxy；same-origin CORS。",
+      "issues": [
+        35
+      ],
+      "pages": [
+        "AD-09"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-07",
+      "name": "Secret handling",
+      "level": "Required",
+      "boundary": "SECRET 不通过 GET 回显；中央 redaction 应用于 API/Audit/Event/log/Support Bundle/export。",
+      "issues": [
+        35,
+        37,
+        46,
+        48
+      ],
+      "pages": [
+        "AD-07",
+        "AD-09",
+        "OP-06",
+        "OP-07"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-SEC-08",
+      "name": "Audit Core",
+      "level": "Required",
+      "boundary": "所有管理操作、结果、外部检测到的 config change 结构化审计；actor 不可证明时 External/Unknown。",
+      "issues": [
+        37,
+        34
+      ],
+      "pages": [
+        "OP-06"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G3",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-01",
+      "name": "REST API v1",
+      "level": "Required",
+      "boundary": "`/api/v1/...`；正式 UI 所有生产管理动作可通过公共 API 完成。",
+      "issues": [
+        33,
+        41,
+        54
+      ],
+      "pages": [
+        "CH-01",
+        "CH-03",
+        "AD-08"
+      ],
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "UX"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-02",
+      "name": "OpenAPI",
+      "level": "Required",
+      "boundary": "随版本发布；作为兼容性契约；同 major additive-only。",
+      "issues": [
+        33,
+        51
+      ],
+      "pages": [
+        "AD-12"
+      ],
+      "acceptance_gates": [
+        "G2"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-03",
+      "name": "WebSocket",
+      "level": "Required",
+      "boundary": "仅 realtime state/event/progress；不作为普通 RPC 或唯一 Job 状态源。",
+      "issues": [
+        33,
+        37,
+        44,
+        54
+      ],
+      "pages": [
+        "VI-05",
+        "OP-02",
+        "OP-05",
+        "CH-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G6",
+        "UX"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-04",
+      "name": "Error Model",
+      "level": "Required",
+      "boundary": "稳定 HTTP status + machine code + details + correlation_id。",
+      "issues": [
+        33,
+        37,
+        54
+      ],
+      "pages": [
+        "OP-05",
+        "CH-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "UX"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-05",
+      "name": "Idempotency",
+      "level": "Required",
+      "boundary": "适用写操作支持 Idempotency-Key/天然幂等；不替代 OVSDB OutcomeUnknown reconciliation。",
+      "issues": [
+        33,
+        37,
+        38,
+        39
+      ],
+      "pages": [
+        "CH-01",
+        "CH-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-06",
+      "name": "Async Job",
+      "level": "Required",
+      "boundary": "长操作 202 + job_id；REST Job resource 权威；支持 cancel（能力允许时）。",
+      "issues": [
+        37,
+        33
+      ],
+      "pages": [
+        "OP-04",
+        "OP-05"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-API-07",
+      "name": "External platform boundary",
+      "level": "Required",
+      "boundary": "允许外部 Controller/Orchestrator 调用 API；本项目不反向依赖 ESXi/Proxmox/OpenStack/K8s 专有 API。",
+      "issues": [
+        33,
+        36,
+        44
+      ],
+      "pages": [
+        "AD-01",
+        "AD-12"
+      ],
+      "acceptance_gates": [
+        "G2",
+        "G3"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-01",
+      "name": "OVS Lifecycle",
+      "level": "Manage",
+      "boundary": "识别 OVS version/source、available update、preflight、async upgrade、daemon transition、schema/capability rediscovery、health validation。",
+      "issues": [
+        49
+      ],
+      "pages": [
+        "AD-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-02",
+      "name": "Lifecycle provider boundary",
+      "level": "Required",
+      "boundary": "只管理 OVS；不修改 Linux repo、不升级 kernel/OS；custom/unknown source 可 observe-only。",
+      "issues": [
+        49
+      ],
+      "pages": [
+        "AD-03"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-03",
+      "name": "Checkpoint",
+      "level": "Required",
+      "boundary": "单个 rolling Last Known Good；只有成功/确认事务更新；独立文件+checksum/manifest。",
+      "issues": [
+        40,
+        48
+      ],
+      "pages": [
+        "CH-05"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-04",
+      "name": "Config Export/Import",
+      "level": "Required",
+      "boundary": "deterministic Git-friendly export；默认 Merge + diff；Exact Restore 高风险；secrets 缺失不清空。",
+      "issues": [
+        48
+      ],
+      "pages": [
+        "AD-05"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-05",
+      "name": "Management Backup/Restore",
+      "level": "Required",
+      "boundary": "备份 web.db/manager.db/management config/history/checkpoint/SecretStore ciphertext/manifest；默认不含 master key。",
+      "issues": [
+        32,
+        35,
+        48
+      ],
+      "pages": [
+        "AD-04"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-06",
+      "name": "Reconciliation after restore",
+      "level": "Required",
+      "boundary": "恢复或重装后重新识别 OVS generation；不得自动重放旧配置。",
+      "issues": [
+        36,
+        48
+      ],
+      "pages": [
+        "AD-04",
+        "CH-04"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "P1-LIFE-07",
+      "name": "WebUI service recovery",
+      "level": "Required",
+      "boundary": "systemd supervision；mgrd pending transaction 从 durable journal 恢复；manager.db 异常进入 fail-safe degraded/read-only。",
+      "issues": [
+        31,
+        32,
+        40,
+        50
+      ],
+      "pages": [
+        "AD-11"
+      ],
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5"
+      ],
+      "delivery_status": "not-implemented"
+    }
+  ],
+  "pages": [
+    {
+      "id": "OV-01",
+      "name": "Dashboard",
+      "route": "/",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "单节点总览：OVS/管理面健康、端口与 Bridge 摘要、未确认 Safe Apply、Drift、关键事件。所有卡片可深链到责任页面。",
+      "gates": "Read。无配置写入；Critical/Unknown/Stale 必须显式。",
+      "issues": [
+        36,
+        37,
+        45,
+        54
+      ],
+      "service": "read model / shared health and evidence",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`dashboard`；共享 Health、Capabilities、Candidate 和 Safe Apply 摘要；库存仍为合成子集"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OV-02",
+      "name": "Search Results",
+      "route": "/search",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "统一搜索 Bridge、Port、Interface、VLAN、MAC、IP、Job、Event、Audit；按对象类型和新鲜度分组。",
+      "gates": "结果按对象权限过滤；不提供命令执行。",
+      "issues": [
+        52,
+        54
+      ],
+      "service": "search service / authorized cross-resource query",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "当前列表筛选不是跨对象、权限过滤的统一搜索"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-01",
+      "name": "Switching Overview",
+      "route": "/switching",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "逻辑拓扑与容量摘要；按 Bridge 展开 Port/Interface 关系、控制权与异常。",
+      "gates": "Read。大规模对象按需加载，不做无限拓扑渲染。",
+      "issues": [
+        36,
+        42,
+        44,
+        54
+      ],
+      "service": "inventory / native relations and state",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`switching-overview`；Bridge → Port → Interface 样例；未统一完整库存"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-02",
+      "name": "Bridges",
+      "route": "/switching/bridges",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "Bridge 列表、创建、筛选与删除入口；显示 datapath type、controller authority、端口数与健康。",
+      "gates": "Stage/Apply。创建为 Elevated；删除或影响管理路径为 High/Critical。",
+      "issues": [
+        42,
+        54
+      ],
+      "service": "native Bridge semantic operations",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`bridges`；筛选及创建意图；删除、高风险依赖尚未覆盖"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-03",
+      "name": "Bridge Detail",
+      "route": "/switching/bridges/{id}",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "Bridge 配置、Port 成员、STP/RSTP、multicast、controller 与事件；Expert 展示 UUID、other_config、来源。",
+      "gates": "普通编辑 Elevated；删除、datapath 变更与控制权切换必须强校验。",
+      "issues": [
+        42,
+        43,
+        54
+      ],
+      "service": "Bridge relations and native feature domains",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`bridge-detail`；关系、RSTP 摘要和 Candidate；完整 multicast/controller 字段和删除缺失"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-04",
+      "name": "Ports",
+      "route": "/switching/ports",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "统一 Port 清单：alias/name、类型、Bridge、链路、VLAN、Bond、速率、来源与 freshness；支持受控批量操作。",
+      "gates": "Read/Stage/Apply。批量操作先显示影响集合；管理口相关动作强制 Safe Apply。",
+      "issues": [
+        36,
+        42,
+        54
+      ],
+      "service": "Managed Port inventory and bounded bulk operations",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`ports`；六个样例及 lab 读取；未实现受控批量变更、完整库存"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-05",
+      "name": "Port Detail",
+      "route": "/switching/ports/{id}",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "核心对象页。Overview、Status、VLAN、Members/Interfaces、Statistics、Events、Audit；检测 Standard 无法表达的高级配置。",
+      "gates": "VLAN/alias 等 Elevated；迁移/删除管理路径为 Critical；不覆盖未知字段。",
+      "issues": [
+        37,
+        42,
+        44,
+        54
+      ],
+      "service": "Port config, state, events and audit",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`port-detail` / `vlan-edit`；核心 VLAN 流程；完整 Interface/Statistics/Event/Audit 子资源缺失"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-06",
+      "name": "Interfaces",
+      "route": "/switching/interfaces",
+      "level": "Manage / Expert primary",
+      "responsibility": "原生 Interface 一级资源清单；显示 type、ofport、admin/link、PCI/DPDK 关联与 provider provenance。",
+      "gates": "Read/Stage/Apply。只开放语义操作，不提供通用 OVSDB CRUD。",
+      "issues": [
+        21,
+        36,
+        42,
+        54
+      ],
+      "service": "native Interface inventory and permissions",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "对象详情显示成员与关系；一级清单、来源与字段权限待实现"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-07",
+      "name": "Interface Detail",
+      "route": "/switching/interfaces/{id}",
+      "level": "Manage / Expert primary",
+      "responsibility": "Interface 原生属性与运行态；允许支持字段的受控编辑，创建通常由 Port/Tunnel/Bond 工作流完成。",
+      "gates": "不可变 name/引用关系显式；危险 type/attachment 变更需 High risk policy。",
+      "issues": [
+        21,
+        36,
+        42,
+        54
+      ],
+      "service": "Interface identity, fields and semantic operations",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Bond 成员证据；缺独立资源、原生属性及受控编辑"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-08",
+      "name": "VLANs",
+      "route": "/switching/vlans",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "VLAN 视图与 Port membership 编辑；支持 access、trunk、native-tagged、native-untagged；显示 configured vs effective。",
+      "gates": "Stage/Apply。冲突与 all-VLANs 语义必须明确；管理口 VLAN 变更强制 Safe Apply。",
+      "issues": [
+        22,
+        38,
+        39,
+        40,
+        42,
+        54
+      ],
+      "service": "native VLAN membership and safe transaction",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Port 内编辑和受限 lab；跨 Port membership、native-untagged、空 trunks 完整语义待实现"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-09",
+      "name": "Bonds & LACP",
+      "route": "/switching/bonds",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "创建/编辑 Bond、成员、bond_mode、LACP 与健康；验证 balance-tcp/LACP、fallback 与 SLB 限制。",
+      "gates": "Stage/Apply。成员变化 Elevated；涉及唯一上联/管理路径时 High。",
+      "issues": [
+        42,
+        54
+      ],
+      "service": "Port Bond/LACP operations and native validators",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`bonds` / `bond-detail` / `bond-edit`；创建、编辑、成员与异常；正式 fallback/SLB/原生组合校验待接入"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-10",
+      "name": "STP / RSTP",
+      "route": "/switching/spanning-tree",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "Bridge 级 enable/disable、基础参数与 Port 状态；禁止 STP/RSTP 同时开启，标注不支持的 Port 类型与上游 caveat。",
+      "gates": "Stage/Apply。启停为 Elevated；不承诺超出 OVS 原生实现的可靠性。",
+      "issues": [
+        23,
+        43,
+        54
+      ],
+      "service": "native STP/RSTP policy and runtime",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Bridge RSTP 摘要及 staged toggle；缺专页、互斥与 Port 类型限制完整工作流"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-11",
+      "name": "Multicast",
+      "route": "/switching/multicast",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "OVS 原生 multicast/IGMP snooping 能力的基础配置与状态；不可用时说明 capability。",
+      "gates": "Stage/Apply。只开放已验证字段；高级映射只读并保留。",
+      "issues": [
+        43,
+        54
+      ],
+      "service": "multicast native config and group/port observations",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺能力证据、原生字段配置及未知映射保留"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-12",
+      "name": "Tunnels",
+      "route": "/switching/tunnels",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "创建常用 OVS 原生 Tunnel Port，管理 type、local/remote、key 与状态；高级 option 在 Expert 中可见。",
+      "gates": "Stage/Apply。创建/删除 Elevated；不自动配置外部 underlay。",
+      "issues": [
+        43,
+        54
+      ],
+      "service": "static Tunnel Port operations; dynamic options Observe",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺 Tunnel Port 语义操作、受控 options 与外部 underlay 说明"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-13",
+      "name": "Mirrors",
+      "route": "/switching/mirrors",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "创建/编辑 Mirror 的 source/destination/selectors；显示引用 Port 和循环/冲突校验。",
+      "gates": "Stage/Apply。普通变更 Elevated；大范围镜像显示性能影响。",
+      "issues": [
+        43,
+        54
+      ],
+      "service": "MirrorSession config and reference validation",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺 source/destination、引用/循环校验与影响审阅"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-14",
+      "name": "QoS & Queues",
+      "route": "/switching/qos",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "常用 QoS/Queue 模型、Port 绑定与运行摘要；高级或未知 queue discipline 只读保留。",
+      "gates": "Stage/Apply。参数验证与能力门控；不伪造宿主机 tc 能力。",
+      "issues": [
+        43,
+        54
+      ],
+      "service": "QoS/Queue native fields and relationships",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺 Queue 模型、Port 绑定和 provider 门禁"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-15",
+      "name": "Isolation",
+      "route": "/switching/isolation",
+      "level": "Manage if native / Standard + Expert",
+      "responsibility": "仅展示和配置 OVS 原生、语义明确的 protected/isolation 能力；不模拟 DHCP snooping、DAI、storm control。",
+      "gates": "Capability present 才显示写入口；否则 Observe/Unavailable。",
+      "issues": [
+        43,
+        45,
+        54
+      ],
+      "service": "native isolation capability and guarded mutation",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Capabilities 中 `br-native-demo` protected Port 演示；无独立页或真实目标 provider"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-16",
+      "name": "OpenFlow Overview",
+      "route": "/switching/openflow",
+      "level": "Observe / Expert enhanced",
+      "responsibility": "pipeline 摘要、table/flow/group/meter 数量、controller authority 与 freshness；大表按需查询。",
+      "gates": "Read。外部 Controller 管理的状态默认只读。",
+      "issues": [
+        47,
+        54
+      ],
+      "service": "OpenFlow pipeline observation provider",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "`openflow-viewer` 合并观察；bounded 查询、来源、authority；完整 pipeline 汇总待补"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-17",
+      "name": "Flows",
+      "route": "/switching/openflow/flows",
+      "level": "Observe + / Manage if local",
+      "responsibility": "分页/过滤查看 flows；仅对明确 local-managed Bridge 在 Expert Mode 提供有限、受控的 native flow 操作。",
+      "gates": "Read 默认；conditional write 为 High，必须显示 ownership、raw diff 与回滚限制。",
+      "issues": [
+        47,
+        53,
+        54
+      ],
+      "service": "Observe; separate conditional local flow operation",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Viewer 内过滤/分页/导出；当前接受边界为 Observe，无条件写入口"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-18",
+      "name": "Groups & Meters",
+      "route": "/switching/openflow/groups-meters",
+      "level": "Observe / Expert",
+      "responsibility": "分页查看 groups/meters 与关联 flow；不把 runtime pipeline 误称为 OVSDB 配置。",
+      "gates": "Read。Phase 1 不提供通用写入。",
+      "issues": [
+        47,
+        54
+      ],
+      "service": "groups/meters Observe only",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "尚无完整分页集合和关联 flow 视图；不提供通用写入"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "SW-19",
+      "name": "Controllers",
+      "route": "/switching/openflow/controllers",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "Controller endpoints、连接状态、role/ownership 与影响 Bridge；用于解释为何某些对象只读。",
+      "gates": "Read。Phase 1 不承担 Controller/NMS 职责。",
+      "issues": [
+        47,
+        54
+      ],
+      "service": "controller endpoint/role/ownership Observe",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Viewer 保留 ownership/context；缺专门 endpoint/role/connection 清单"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-01",
+      "name": "Endpoints Overview",
+      "route": "/visibility/endpoints",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "MAC/IP/LLDP 线索的聚合入口，按 Bridge/Port/VLAN 跳转；不臆测未被可靠来源证明的绑定。",
+      "gates": "Read。显示 source、last seen、freshness、truncated。",
+      "issues": [
+        24,
+        44,
+        52,
+        54
+      ],
+      "service": "endpoint evidence aggregation and one-hop links",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺可靠 MAC/IP/LLDP 来源关联"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-02",
+      "name": "FDB",
+      "route": "/visibility/fdb",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "分页/过滤 FDB，支持 MAC、VLAN、Bridge、Port 检索与导出；大型集合按需查询。",
+      "gates": "Read。不得把截断结果表示为完整集合。",
+      "issues": [
+        24,
+        44,
+        54
+      ],
+      "service": "bounded FDB queries and export",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺按对象查询、分页、截断与导出"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-03",
+      "name": "Neighbors",
+      "route": "/visibility/neighbors",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "Linux neighbor/ARP/NDP 状态、接口、IP/MAC、state 与来源；链接到关联 Port/Interface。",
+      "gates": "Read。Unknown/Stale 与空结果严格区分。",
+      "issues": [
+        25,
+        44,
+        54
+      ],
+      "service": "rtnetlink neighbor source and identity",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺 Linux ARP/NDP provider 和 freshness 状态"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-04",
+      "name": "LLDP",
+      "route": "/visibility/lldp",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "在 provider 可用时显示邻居 chassis/port/system 信息与 last seen；缺失时解释原因。",
+      "gates": "Read。Phase 1 不负责部署或修改外部 LLDP daemon。",
+      "issues": [
+        25,
+        44,
+        54
+      ],
+      "service": "optional LLDP source with explicit absence",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺可选 provider 及缺失原因；不部署外部 daemon"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-05",
+      "name": "Statistics",
+      "route": "/visibility/statistics",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "Port/Interface counters 与短时趋势，支持对象过滤；WebSocket 更新可合并，非时序监控平台。",
+      "gates": "Read。明确采样时间、coalesced 与 reset 语义。",
+      "issues": [
+        26,
+        44,
+        54
+      ],
+      "service": "shared counters, reset and short RAM trends",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "对象和加速页有限运行摘要；缺统一 counters、reset/coalesced 与短时趋势"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-06",
+      "name": "DPDK",
+      "route": "/visibility/dpdk",
+      "level": "Observe + / Manage if native",
+      "responsibility": "显示 build、hugepages、NUMA、port、PMD/RXQ 基础状态与 prerequisites；前置条件完整时可受控 enable/disable。",
+      "gates": "Read 默认。Enable 为 High；不安装软件、不改仓库/GRUB/驱动、不隐式 reboot。",
+      "issues": [
+        47,
+        54
+      ],
+      "service": "DPDK Observe provider; no enable/tuning",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G4",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "`acceleration-overview` 合并只读证据；无正式采集、专页或 enable executor"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-07",
+      "name": "Hardware Offload",
+      "route": "/visibility/offload",
+      "level": "Observe + / Manage if native",
+      "responsibility": "展示 offload 能力、representor、driver/devlink 证据与状态；只有 provider 声明可验证/可回滚时才显示写入口。",
+      "gates": "Read 默认。Conditional write 走 validation 与 Safe Apply；缺硬件不阻塞 Core GA。",
+      "issues": [
+        47,
+        54
+      ],
+      "service": "hardware/offload Observe; no switchdev/SR-IOV mutation",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G4",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "同一加速页；硬件/driver/provider 证据样例，保持 Observe"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "VI-08",
+      "name": "Telemetry",
+      "route": "/visibility/telemetry",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "OVS 原生 sFlow/IPFIX 等 exporter 的基础配置与状态；高级字段可见并保留。",
+      "gates": "Stage/Apply。写入由 capability 决定；不内置长期时序存储。",
+      "issues": [
+        26,
+        43,
+        54
+      ],
+      "service": "sFlow/NetFlow/IPFIX native exporter operations",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺 sFlow/IPFIX 原生 exporter 配置"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-01",
+      "name": "Health",
+      "route": "/operations/health",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "OVS、Bridge/Port、provider、State Cache、webd/mgrd、SQLite、SecretStore 与资源压力健康树。",
+      "gates": "Read。显示影响范围与降级策略；不把 Unavailable 伪装成 Down。",
+      "issues": [
+        45,
+        54
+      ],
+      "service": "deterministic Health and management component state",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`system-health`；六域共享观察和恢复入口；需正式健康服务及持久化"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-02",
+      "name": "Events",
+      "route": "/operations/events",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "Domain Event 时间线、严重度、对象、来源、freshness 与 correlation_id；从事件跳对象、Job、Diagnostics、Audit。",
+      "gates": "Read。Event 与 Audit/Application Log 严格分离。",
+      "issues": [
+        37,
+        54
+      ],
+      "service": "persistent coalesced Event resource",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "`evidence` 和 Health 时间线；Event 类型独立，缺独立查询、对象过滤和持久化流"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-03",
+      "name": "Diagnostics",
+      "route": "/operations/diagnostics",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "允许列表式 ping、connectivity、provider/OVS 状态采集和受限 dump；支持 timeout、取消、流式与截断提示。",
+      "gates": "Diagnostics capability。低影响动作 Elevated；disruptive 动作需 High、二次确认。",
+      "issues": [
+        46,
+        54
+      ],
+      "service": "typed read/active/disruptive diagnostics and capture Job",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`diagnostics-hub` / `diagnostic-run`；受限模板、参数与异常；缺正式受控执行器"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-04",
+      "name": "Jobs",
+      "route": "/operations/jobs",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "异步 Job 列表、状态、进度、owner、启动时间与 correlation_id；可恢复浏览器断线后的操作上下文。",
+      "gates": "Read；取消仅限 cancellable Job。权限与原操作一致。",
+      "issues": [
+        37,
+        54
+      ],
+      "service": "persistent Job list, ownership and cancellation policy",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "诊断和 Safe Apply 各有 Job 上下文；缺统一列表和真实 owner/权限"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-05",
+      "name": "Job Detail",
+      "route": "/operations/jobs/{id}",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "显示 state machine、输入摘要、结果、错误模型、关联 ChangeSet/Safe Apply/Audit/Event；包含 OutcomeUnknown/RecoveryRequired。",
+      "gates": "Read；取消/重试必须由服务端状态允许，OutcomeUnknown 禁止盲目重试。",
+      "issues": [
+        37,
+        54
+      ],
+      "service": "authoritative Job detail and linked resources",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "诊断结果与事务恢复；缺统一稳定 ID 路由和跨刷新资源"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-06",
+      "name": "Audit",
+      "route": "/operations/audit",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "谁在何时对什么对象提出/应用/确认/回滚了什么；链接 transaction、job、event 与 diff，不展示 secret。",
+      "gates": "Audit read capability；不可编辑。导出受 retention/敏感数据策略控制。",
+      "issues": [
+        37,
+        54
+      ],
+      "service": "manager-authoritative immutable Audit query/export",
+      "acceptance_gates": [
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "`evidence` 中独立 Audit 类型；lab 保存核心事务证据，未覆盖所有 P1 资源/权限/retention"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "OP-07",
+      "name": "Support Bundle",
+      "route": "/operations/support-bundle",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "选择范围、生成、查看 redaction 摘要并下载 bundle；包含 self-health/provider 状态与受限日志。",
+      "gates": "Support capability。生成 Elevated；secret 中央脱敏不可绕过。",
+      "issues": [
+        46,
+        54
+      ],
+      "service": "bounded redacted OVS Support Bundle Job",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "单次诊断 JSON 导出不是结构化、脱敏的 Support Bundle"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "CH-01",
+      "name": "Candidate Workspace",
+      "route": "/changes/workspace",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "聚合当前用户/协作范围内的 staged changes，按对象分组；支持移除、继续编辑、discard、保存草稿。",
+      "gates": "Stage capability。此页本身不改变 OVS；权限在 staging 和 apply 时都重新验证。",
+      "issues": [
+        38,
+        54
+      ],
+      "service": "webd persisted per-user Candidate and handoff",
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`workspace`；共享单对象 Candidate；多对象分组、协作和完整草稿服务待实现"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "CH-02",
+      "name": "Diff & Validation",
+      "route": "/changes/workspace/diff",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "human-readable field diff、影响对象、capability、风险、依赖与 OCC 结果；Expert 可见 native/raw 证据。",
+      "gates": "Stage/Apply。验证失败阻止提交；未知高级字段必须 preserve 或明确冲突。",
+      "issues": [
+        37,
+        38,
+        54
+      ],
+      "service": "mgrd validation and immutable semantic Diff",
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`diff`；revision、原因、冲突与安全门禁；正式 typed policy/未知字段保留待接入"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "CH-03",
+      "name": "Apply / Safe Apply",
+      "route": "/changes/apply/{id}",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "呈现 Validated→Committed→Applied→Health Checked→Awaiting Confirmation→Confirmed/Rolled Back 全状态。",
+      "gates": "Apply capability。高风险需 re-auth、Safe Apply、倒计时和明确 Confirm/Rollback。",
+      "issues": [
+        39,
+        40,
+        54
+      ],
+      "service": "mgrd journal, Applied, health and protected rollback",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`safe-apply`；确认/回滚/Unknown 与 lab 恢复；正式 mgrd watchdog 和 Applied evidence 未接入"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "CH-04",
+      "name": "Drift & Conflicts",
+      "route": "/changes/drift",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "展示 baseline/current/candidate 三方字段差异；提供 Rebase、Keep External、Discard Candidate，不静默覆盖。",
+      "gates": "Stage/Apply。字段级 OCC；冲突解决后必须重新验证与预览。",
+      "issues": [
+        38,
+        43,
+        54
+      ],
+      "service": "candidate conflict and Profile Drift services",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Diff 中三方 VLAN、受限 topology rebase；缺独立共享 drift 清单/真实观察"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "CH-05",
+      "name": "Checkpoints",
+      "route": "/changes/checkpoints",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "创建、比较、导出与受控恢复配置 checkpoint；明确 WebUI metadata 与 OVS 配置边界。",
+      "gates": "Create/compare Elevated；restore High/Critical，先生成 Candidate 并走 Safe Apply。",
+      "issues": [
+        40,
+        48,
+        54
+      ],
+      "service": "single rolling LKG and explicit restore-to-Candidate",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "事务内部恢复前提不等于可创建、比较、导出、恢复的 checkpoint 资源"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-01",
+      "name": "Capabilities",
+      "route": "/admin/capabilities",
+      "level": "Observe + / Manage if native",
+      "responsibility": "统一解释 Enabled、Available、Missing Prerequisites、Unsupported、Unknown；说明谁可 enable、是否需 restart/reboot、能否 rollback。",
+      "gates": "Read 默认。仅 capability 声明 can_enable 时提供写入口；不做通用 Host Admin。",
+      "issues": [
+        45,
+        54
+      ],
+      "service": "field capability registry and evidence/maturity gates",
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G3",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "独立",
+        "evidence": "`capabilities`；五状态、来源、四 Gate；真实 provider/权限/step-up 和持久化缺失"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-02",
+      "name": "Management Network",
+      "route": "/admin/management-network",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "管理 internal interface、IP、route 与物理口迁移；以完整 management-path migration 呈现。",
+      "gates": "Critical。必须 pre-check、Safe Apply、reachability check、倒计时、reauth 与恢复路径。",
+      "issues": [
+        49,
+        54
+      ],
+      "service": "typed management-path migration with reachability",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "`mgmt0` 样例不等于 internal interface/IP/route 的完整管理路径迁移"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-03",
+      "name": "OVS Lifecycle",
+      "route": "/admin/ovs-lifecycle",
+      "level": "Manage if native / Standard + Expert",
+      "responsibility": "显示版本/service/package provider；受支持平台可执行 restart/upgrade Job，其他平台只 Observe/说明。",
+      "gates": "Lifecycle admin。High/Critical；不管理整个 Linux 仓库、内核、固件或任意包。",
+      "issues": [
+        49,
+        54
+      ],
+      "service": "OVS-only package/service lifecycle provider",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Capabilities 解释 executor 缺失；无 restart/upgrade Job 工作流"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-04",
+      "name": "Backup & Restore",
+      "route": "/admin/backup-restore",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "管理 web.db、manager.db、管理配置、checkpoint 与 SecretStore 密文的结构化备份；恢复后执行 instance reconciliation。",
+      "gates": "Backup Elevated；restore Critical + reauth。恢复旧管理数据不自动重放旧 OVS 配置。",
+      "issues": [
+        48,
+        54
+      ],
+      "service": "dual-DB management backup and generation reconciliation",
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺双库与 SecretStore 结构化备份、恢复和 instance reconciliation"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-05",
+      "name": "Configuration Export / Import",
+      "route": "/admin/configuration",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "OVS 配置导出/导入，与管理面 Backup 分离；Import 先转为 Candidate、显示兼容与未知字段。",
+      "gates": "Export Read；Import Elevated/High，必须 diff、validation、OCC、Safe Apply。",
+      "issues": [
+        48,
+        54
+      ],
+      "service": "deterministic OVS export, Merge and Exact Restore",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺 OVS 配置导入 → Candidate；不能用诊断导出替代"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-06",
+      "name": "Users & Roles",
+      "route": "/admin/access/users",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "本地 principals、角色与 capability assignment；显示 effective permissions，不由 webd 自行创造授权。",
+      "gates": "Security admin。High；禁止删除最后可用管理员，所有变更写 Audit。",
+      "issues": [
+        20,
+        34,
+        54
+      ],
+      "service": "mgrd principal/role/capability authority",
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "lab 本地角色切换只是测试身份，无正式 principal/capability 管理"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-07",
+      "name": "AAA",
+      "route": "/admin/access/aaa",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "本地/TACACS+ 等认证链、测试与 fallback；secret 使用 write-only/replace 语义。",
+      "gates": "Security admin。High/Critical；保存前测试，保留 break-glass/local fallback，防止自锁。",
+      "issues": [
+        27,
+        34,
+        35,
+        54
+      ],
+      "service": "Local/TACACS+ chain, test/confirm and SecretStore",
+      "acceptance_gates": [
+        "G1",
+        "G3",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺认证链、测试、fallback 与 SecretStore"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-08",
+      "name": "API Tokens",
+      "route": "/admin/access/api-tokens",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "创建、scope、到期、撤销与 last used；token 只在创建时显示一次，服务端仅存 hash。",
+      "gates": "Self-service/scoped admin。Elevated；scope 不得超过 actor effective capability。",
+      "issues": [
+        28,
+        34,
+        54
+      ],
+      "service": "scoped token create/revoke/expiry and one-time secret",
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "lab 会话 token 不是 scoped API Token 管理"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-09",
+      "name": "TLS & Certificates",
+      "route": "/admin/access/tls",
+      "level": "Manage / Standard + Expert",
+      "responsibility": "证书链、到期、替换与连接预检；private key 走 SecretStore，不在 API/Audit/Bundle 中回显。",
+      "gates": "Security admin。High；替换需验证和回退，避免失去 Web/API 访问。",
+      "issues": [
+        35,
+        54
+      ],
+      "service": "TLS candidate validate/activate and key partition",
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺证书链、write-only private key 和连接预检/恢复"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-10",
+      "name": "System Settings",
+      "route": "/admin/settings",
+      "level": "Basic Manage / Standard + Expert",
+      "responsibility": "语言、时区呈现、retention、事件与刷新策略等管理面设置；用户偏好与系统策略分开。",
+      "gates": "System admin。普通设置 Elevated；资源/retention 变化显示影响。",
+      "issues": [
+        31,
+        32,
+        34,
+        45,
+        54
+      ],
+      "service": "web preferences vs mgrd retention/risk/resource policy",
+      "acceptance_gates": [
+        "G1",
+        "G2",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "Standard/Expert 是信息深度，不替代系统策略或 retention"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-11",
+      "name": "Management Plane",
+      "route": "/admin/management-plane",
+      "level": "Observe + / Basic Manage",
+      "responsibility": "webd/mgrd、DB、SecretStore、provider、queues、resource pressure 与 Debug Mode；支持受控 service action。",
+      "gates": "Read；Debug/restart 需 Admin、Audit、自动过期；不能关闭 secret redaction。",
+      "issues": [
+        31,
+        45,
+        54
+      ],
+      "service": "self-health, audited expiring Debug and own-service actions",
+      "acceptance_gates": [
+        "G1",
+        "G4",
+        "G5",
+        "G6",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "局部",
+        "evidence": "Health 组件责任与降级说明；缺独立页、受控 Debug/restart 与正式服务"
+      },
+      "delivery_status": "not-implemented"
+    },
+    {
+      "id": "AD-12",
+      "name": "About & Support",
+      "route": "/admin/about",
+      "level": "Observe / Standard + Expert",
+      "responsibility": "版本、build、OVS schema compatibility、平台 support tier、许可证、文档与 issue 入口。",
+      "gates": "Read。不得用版本白名单替代 capability discovery。",
+      "issues": [
+        50,
+        54,
+        55
+      ],
+      "service": "build/platform/schema/license and versioned help metadata",
+      "acceptance_gates": [
+        "G2",
+        "G4",
+        "UX"
+      ],
+      "prototype": {
+        "coverage": "未实现",
+        "evidence": "缺统一 build/schema/platform tier、许可与支持页"
+      },
+      "delivery_status": "not-implemented"
+    }
+  ]
+}

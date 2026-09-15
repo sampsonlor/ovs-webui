@@ -1,0 +1,1450 @@
+{
+  "contract_version": "1.5.0",
+  "scope": [
+    {
+      "id": "P1-PLAT-01",
+      "name": "Two-process runtime",
+      "paths": [
+        "/runtime"
+      ],
+      "operations": [
+        "readRuntime"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-02",
+      "name": "Field/Domain Authority",
+      "paths": [
+        "/capabilities",
+        "/validations"
+      ],
+      "operations": [
+        "listCapabilities",
+        "createValidation"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-03",
+      "name": "OVS Semantic Operation Layer",
+      "paths": [
+        "/candidate",
+        "/transactions"
+      ],
+      "operations": [
+        "readCandidate",
+        "changeCandidate",
+        "createTransaction",
+        "listTransactions"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-04",
+      "name": "Schema/Capability Discovery",
+      "paths": [
+        "/capabilities",
+        "/interfaces"
+      ],
+      "operations": [
+        "listCapabilities",
+        "listInterfaces"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-05",
+      "name": "Dual SQLite",
+      "paths": [
+        "/workspace",
+        "/requests/{request_id}"
+      ],
+      "operations": [
+        "readWorkspace",
+        "readRequestReceipt"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-06",
+      "name": "SecretStore",
+      "paths": [
+        "/certificates",
+        "/tokens"
+      ],
+      "operations": [
+        "listCertificates",
+        "createCertificate",
+        "listTokens",
+        "createToken"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-07",
+      "name": "Candidate Workspace",
+      "paths": [
+        "/candidate",
+        "/workspace"
+      ],
+      "operations": [
+        "readCandidate",
+        "changeCandidate",
+        "readWorkspace"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-08",
+      "name": "OCC / Safe Apply / Rollback",
+      "paths": [
+        "/transactions/{transaction_id}/decisions"
+      ],
+      "operations": [
+        "decideTransaction"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-09",
+      "name": "Commit vs Applied",
+      "paths": [
+        "/transactions/{transaction_id}"
+      ],
+      "operations": [
+        "readTransaction"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-10",
+      "name": "OutcomeUnknown recovery",
+      "paths": [
+        "/transactions/{transaction_id}/reconciliations"
+      ],
+      "operations": [
+        "reconcileTransaction"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-11",
+      "name": "Instance Generation",
+      "paths": [
+        "/ports",
+        "/requests/{request_id}"
+      ],
+      "operations": [
+        "listPorts",
+        "readRequestReceipt"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-PLAT-12",
+      "name": "Bounded resource/backpressure",
+      "paths": [
+        "/stream",
+        "/jobs"
+      ],
+      "operations": [
+        "subscribeResourceChanges",
+        "listJobs"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-01",
+      "name": "Bridge / Port / Interface",
+      "paths": [
+        "/bridges",
+        "/ports",
+        "/interfaces",
+        "/candidate"
+      ],
+      "operations": [
+        "listBridges",
+        "listPorts",
+        "listInterfaces",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-02",
+      "name": "VLAN",
+      "paths": [
+        "/vlans",
+        "/candidate"
+      ],
+      "operations": [
+        "listVlans",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-03",
+      "name": "Bond / LACP",
+      "paths": [
+        "/bonds",
+        "/candidate"
+      ],
+      "operations": [
+        "listBonds",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-04",
+      "name": "STP / RSTP",
+      "paths": [
+        "/spanning-tree",
+        "/candidate"
+      ],
+      "operations": [
+        "listSpanningTree",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-05",
+      "name": "IGMP / MLD Snooping",
+      "paths": [
+        "/multicast",
+        "/candidate"
+      ],
+      "operations": [
+        "listMulticast",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-06",
+      "name": "Port Profile / Drift",
+      "paths": [
+        "/profiles",
+        "/drift",
+        "/candidate"
+      ],
+      "operations": [
+        "listProfiles",
+        "createProfile",
+        "listDrift",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-07",
+      "name": "Mirror / SPAN",
+      "paths": [
+        "/mirrors",
+        "/candidate"
+      ],
+      "operations": [
+        "listMirrors",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-08",
+      "name": "QoS / Queue",
+      "paths": [
+        "/qos",
+        "/candidate"
+      ],
+      "operations": [
+        "listQos",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-09",
+      "name": "Tunnel",
+      "paths": [
+        "/tunnels",
+        "/candidate"
+      ],
+      "operations": [
+        "listTunnels",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-10",
+      "name": "Protected Port / Isolation",
+      "paths": [
+        "/isolation",
+        "/candidate"
+      ],
+      "operations": [
+        "listIsolation",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-11",
+      "name": "OpenFlow",
+      "paths": [
+        "/openflow/flows",
+        "/openflow/groups",
+        "/openflow/meters",
+        "/openflow/commands"
+      ],
+      "operations": [
+        "listOpenflowFlows",
+        "listOpenflowGroups",
+        "listOpenflowMeters",
+        "executeOpenFlow"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-12",
+      "name": "DPDK",
+      "paths": [
+        "/dpdk"
+      ],
+      "operations": [
+        "listDpdk"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-13",
+      "name": "Hardware Offload / SmartNIC",
+      "paths": [
+        "/offload"
+      ],
+      "operations": [
+        "listOffload"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-14",
+      "name": "sFlow / NetFlow / IPFIX",
+      "paths": [
+        "/telemetry",
+        "/candidate"
+      ],
+      "operations": [
+        "listTelemetry",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-15",
+      "name": "Endpoint / FDB / ARP/ND / LLDP",
+      "paths": [
+        "/endpoints",
+        "/fdb",
+        "/neighbors",
+        "/lldp"
+      ],
+      "operations": [
+        "listEndpoints",
+        "listFdb",
+        "listNeighbors",
+        "listLldp"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SW-16",
+      "name": "Management Interface",
+      "paths": [
+        "/management-network",
+        "/candidate"
+      ],
+      "operations": [
+        "readManagementNetwork",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-01",
+      "name": "Unified State Cache",
+      "paths": [
+        "/statistics",
+        "/health"
+      ],
+      "operations": [
+        "listStatistics",
+        "readHealth"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-02",
+      "name": "Event Timeline",
+      "paths": [
+        "/events"
+      ],
+      "operations": [
+        "listEvents"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-03",
+      "name": "Health Engine",
+      "paths": [
+        "/health"
+      ],
+      "operations": [
+        "readHealth"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-04",
+      "name": "Diagnostics",
+      "paths": [
+        "/diagnostics"
+      ],
+      "operations": [
+        "createDiagnostic"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-05",
+      "name": "Packet Capture",
+      "paths": [
+        "/captures"
+      ],
+      "operations": [
+        "createCapture"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-06",
+      "name": "Support Bundle",
+      "paths": [
+        "/support-bundles"
+      ],
+      "operations": [
+        "createSupportBundle"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-07",
+      "name": "Self-Observability",
+      "paths": [
+        "/runtime",
+        "/health"
+      ],
+      "operations": [
+        "readRuntime",
+        "readHealth"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-OPS-08",
+      "name": "Pagination / streaming",
+      "paths": [
+        "/stream",
+        "/ports"
+      ],
+      "operations": [
+        "subscribeResourceChanges",
+        "listPorts"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-01",
+      "name": "Local authentication",
+      "paths": [
+        "/sessions",
+        "/users"
+      ],
+      "operations": [
+        "createSession",
+        "listUsers",
+        "createUser"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-02",
+      "name": "TACACS+",
+      "paths": [
+        "/aaa"
+      ],
+      "operations": [
+        "readAAA",
+        "configureAAA"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-03",
+      "name": "RBAC / Capability",
+      "paths": [
+        "/roles",
+        "/capabilities"
+      ],
+      "operations": [
+        "listRoles",
+        "createRole",
+        "listCapabilities"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-04",
+      "name": "Auth Grant / Session",
+      "paths": [
+        "/sessions",
+        "/session"
+      ],
+      "operations": [
+        "createSession",
+        "readSession",
+        "deleteSession"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-05",
+      "name": "API Token",
+      "paths": [
+        "/tokens"
+      ],
+      "operations": [
+        "listTokens",
+        "createToken"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-06",
+      "name": "HTTPS",
+      "paths": [
+        "/certificates"
+      ],
+      "operations": [
+        "listCertificates",
+        "createCertificate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-07",
+      "name": "Secret handling",
+      "paths": [
+        "/certificates",
+        "/tokens"
+      ],
+      "operations": [
+        "listCertificates",
+        "createCertificate",
+        "listTokens",
+        "createToken"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-SEC-08",
+      "name": "Audit Core",
+      "paths": [
+        "/audit"
+      ],
+      "operations": [
+        "listAudit"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-01",
+      "name": "REST API v1",
+      "paths": [
+        "/contract"
+      ],
+      "operations": [
+        "readContract"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-02",
+      "name": "OpenAPI",
+      "paths": [
+        "/openapi.json"
+      ],
+      "operations": [
+        "readOpenAPI"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-03",
+      "name": "WebSocket",
+      "paths": [
+        "/stream"
+      ],
+      "operations": [
+        "subscribeResourceChanges"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-04",
+      "name": "Error Model",
+      "paths": [
+        "/contract"
+      ],
+      "operations": [
+        "readContract"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-05",
+      "name": "Idempotency",
+      "paths": [
+        "/requests/{request_id}"
+      ],
+      "operations": [
+        "readRequestReceipt"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-06",
+      "name": "Async Job",
+      "paths": [
+        "/jobs",
+        "/jobs/{job_id}"
+      ],
+      "operations": [
+        "listJobs",
+        "readJob"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-API-07",
+      "name": "External platform boundary",
+      "paths": [
+        "/contract",
+        "/openapi.json"
+      ],
+      "operations": [
+        "readContract",
+        "readOpenAPI"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-01",
+      "name": "OVS Lifecycle",
+      "paths": [
+        "/ovs-lifecycle/commands"
+      ],
+      "operations": [
+        "changeOVSLifecycle"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-02",
+      "name": "Lifecycle provider boundary",
+      "paths": [
+        "/ovs-lifecycle/preflights"
+      ],
+      "operations": [
+        "preflightOVSLifecycle"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-03",
+      "name": "Checkpoint",
+      "paths": [
+        "/checkpoints"
+      ],
+      "operations": [
+        "listCheckpoints",
+        "createCheckpoint"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-04",
+      "name": "Config Export/Import",
+      "paths": [
+        "/configuration/exports",
+        "/configuration/imports"
+      ],
+      "operations": [
+        "exportConfiguration",
+        "importConfiguration"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-05",
+      "name": "Management Backup/Restore",
+      "paths": [
+        "/backups",
+        "/restores"
+      ],
+      "operations": [
+        "listBackups",
+        "createBackup",
+        "createRestore"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-06",
+      "name": "Reconciliation after restore",
+      "paths": [
+        "/restores",
+        "/transactions/{transaction_id}/reconciliations"
+      ],
+      "operations": [
+        "createRestore",
+        "reconcileTransaction"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "P1-LIFE-07",
+      "name": "WebUI service recovery",
+      "paths": [
+        "/runtime"
+      ],
+      "operations": [
+        "readRuntime"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    }
+  ],
+  "pages": [
+    {
+      "id": "OV-01",
+      "name": "Dashboard",
+      "paths": [
+        "/health",
+        "/ports",
+        "/workspace"
+      ],
+      "operations": [
+        "readHealth",
+        "listPorts",
+        "readWorkspace"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OV-02",
+      "name": "Search Results",
+      "paths": [
+        "/search",
+        "/topology"
+      ],
+      "operations": [
+        "searchResources",
+        "readTopology"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-01",
+      "name": "Switching Overview",
+      "paths": [
+        "/bridges",
+        "/ports",
+        "/interfaces"
+      ],
+      "operations": [
+        "listBridges",
+        "listPorts",
+        "listInterfaces"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-02",
+      "name": "Bridges",
+      "paths": [
+        "/bridges",
+        "/candidate"
+      ],
+      "operations": [
+        "listBridges",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-03",
+      "name": "Bridge Detail",
+      "paths": [
+        "/bridges/{bridge_id}",
+        "/ports"
+      ],
+      "operations": [
+        "readBridge",
+        "listPorts"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-04",
+      "name": "Ports",
+      "paths": [
+        "/ports",
+        "/candidate"
+      ],
+      "operations": [
+        "listPorts",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-05",
+      "name": "Port Detail",
+      "paths": [
+        "/ports/{port_id}",
+        "/candidate"
+      ],
+      "operations": [
+        "readPort",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-06",
+      "name": "Interfaces",
+      "paths": [
+        "/interfaces"
+      ],
+      "operations": [
+        "listInterfaces"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-07",
+      "name": "Interface Detail",
+      "paths": [
+        "/interfaces/{interface_id}"
+      ],
+      "operations": [
+        "readInterface"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-08",
+      "name": "VLANs",
+      "paths": [
+        "/vlans",
+        "/candidate"
+      ],
+      "operations": [
+        "listVlans",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-09",
+      "name": "Bonds & LACP",
+      "paths": [
+        "/bonds",
+        "/candidate"
+      ],
+      "operations": [
+        "listBonds",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-10",
+      "name": "STP / RSTP",
+      "paths": [
+        "/spanning-tree",
+        "/candidate"
+      ],
+      "operations": [
+        "listSpanningTree",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-11",
+      "name": "Multicast",
+      "paths": [
+        "/multicast",
+        "/candidate"
+      ],
+      "operations": [
+        "listMulticast",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-12",
+      "name": "Tunnels",
+      "paths": [
+        "/tunnels",
+        "/candidate"
+      ],
+      "operations": [
+        "listTunnels",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-13",
+      "name": "Mirrors",
+      "paths": [
+        "/mirrors",
+        "/candidate"
+      ],
+      "operations": [
+        "listMirrors",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-14",
+      "name": "QoS & Queues",
+      "paths": [
+        "/qos",
+        "/candidate"
+      ],
+      "operations": [
+        "listQos",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-15",
+      "name": "Isolation",
+      "paths": [
+        "/isolation",
+        "/candidate"
+      ],
+      "operations": [
+        "listIsolation",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-16",
+      "name": "OpenFlow Overview",
+      "paths": [
+        "/openflow/flows",
+        "/capabilities"
+      ],
+      "operations": [
+        "listOpenflowFlows",
+        "listCapabilities"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-17",
+      "name": "Flows",
+      "paths": [
+        "/openflow/flows",
+        "/openflow/preflights",
+        "/openflow/commands"
+      ],
+      "operations": [
+        "listOpenflowFlows",
+        "preflightOpenFlow",
+        "executeOpenFlow"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-18",
+      "name": "Groups & Meters",
+      "paths": [
+        "/openflow/groups",
+        "/openflow/meters"
+      ],
+      "operations": [
+        "listOpenflowGroups",
+        "listOpenflowMeters"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "SW-19",
+      "name": "Controllers",
+      "paths": [
+        "/openflow/controllers",
+        "/candidate"
+      ],
+      "operations": [
+        "listOpenflowControllers",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-01",
+      "name": "Endpoints Overview",
+      "paths": [
+        "/endpoints"
+      ],
+      "operations": [
+        "listEndpoints"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-02",
+      "name": "FDB",
+      "paths": [
+        "/fdb"
+      ],
+      "operations": [
+        "listFdb"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-03",
+      "name": "Neighbors",
+      "paths": [
+        "/neighbors"
+      ],
+      "operations": [
+        "listNeighbors"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-04",
+      "name": "LLDP",
+      "paths": [
+        "/lldp"
+      ],
+      "operations": [
+        "listLldp"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-05",
+      "name": "Statistics",
+      "paths": [
+        "/statistics",
+        "/stream"
+      ],
+      "operations": [
+        "listStatistics",
+        "subscribeResourceChanges"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-06",
+      "name": "DPDK",
+      "paths": [
+        "/dpdk"
+      ],
+      "operations": [
+        "listDpdk"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-07",
+      "name": "Hardware Offload",
+      "paths": [
+        "/offload"
+      ],
+      "operations": [
+        "listOffload"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "VI-08",
+      "name": "Telemetry",
+      "paths": [
+        "/telemetry",
+        "/candidate"
+      ],
+      "operations": [
+        "listTelemetry",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-01",
+      "name": "Health",
+      "paths": [
+        "/health"
+      ],
+      "operations": [
+        "readHealth"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-02",
+      "name": "Events",
+      "paths": [
+        "/events"
+      ],
+      "operations": [
+        "listEvents"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-03",
+      "name": "Diagnostics",
+      "paths": [
+        "/diagnostics/templates",
+        "/diagnostics",
+        "/captures"
+      ],
+      "operations": [
+        "listDiagnosticsTemplates",
+        "createDiagnostic",
+        "createCapture"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-04",
+      "name": "Jobs",
+      "paths": [
+        "/jobs"
+      ],
+      "operations": [
+        "listJobs"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-05",
+      "name": "Job Detail",
+      "paths": [
+        "/jobs/{job_id}",
+        "/jobs/{job_id}/cancellations"
+      ],
+      "operations": [
+        "readJob",
+        "cancelJob"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-06",
+      "name": "Audit",
+      "paths": [
+        "/audit"
+      ],
+      "operations": [
+        "listAudit"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "OP-07",
+      "name": "Support Bundle",
+      "paths": [
+        "/support-bundles",
+        "/artifacts/{artifact_id}"
+      ],
+      "operations": [
+        "createSupportBundle",
+        "readArtifact"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "CH-01",
+      "name": "Candidate Workspace",
+      "paths": [
+        "/workspace",
+        "/candidate"
+      ],
+      "operations": [
+        "readWorkspace",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "CH-02",
+      "name": "Diff & Validation",
+      "paths": [
+        "/validations",
+        "/validations/{validation_id}"
+      ],
+      "operations": [
+        "createValidation",
+        "readValidation"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "CH-03",
+      "name": "Apply / Safe Apply",
+      "paths": [
+        "/transactions",
+        "/transactions/{transaction_id}",
+        "/transactions/{transaction_id}/decisions"
+      ],
+      "operations": [
+        "createTransaction",
+        "listTransactions",
+        "readTransaction",
+        "decideTransaction"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "CH-04",
+      "name": "Drift & Conflicts",
+      "paths": [
+        "/drift",
+        "/candidate"
+      ],
+      "operations": [
+        "listDrift",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "CH-05",
+      "name": "Checkpoints",
+      "paths": [
+        "/checkpoints"
+      ],
+      "operations": [
+        "listCheckpoints",
+        "createCheckpoint"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-01",
+      "name": "Capabilities",
+      "paths": [
+        "/capabilities"
+      ],
+      "operations": [
+        "listCapabilities"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-02",
+      "name": "Management Network",
+      "paths": [
+        "/management-network",
+        "/candidate"
+      ],
+      "operations": [
+        "readManagementNetwork",
+        "readCandidate",
+        "changeCandidate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-03",
+      "name": "OVS Lifecycle",
+      "paths": [
+        "/ovs-lifecycle",
+        "/ovs-lifecycle/commands"
+      ],
+      "operations": [
+        "readOVSLifecycle",
+        "changeOVSLifecycle"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-04",
+      "name": "Backup & Restore",
+      "paths": [
+        "/backups",
+        "/restores"
+      ],
+      "operations": [
+        "listBackups",
+        "createBackup",
+        "createRestore"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-05",
+      "name": "Configuration Export / Import",
+      "paths": [
+        "/configuration/exports",
+        "/configuration/imports",
+        "/artifacts"
+      ],
+      "operations": [
+        "exportConfiguration",
+        "importConfiguration",
+        "uploadArtifactPart"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-06",
+      "name": "Users & Roles",
+      "paths": [
+        "/users",
+        "/roles",
+        "/session"
+      ],
+      "operations": [
+        "listUsers",
+        "createUser",
+        "listRoles",
+        "createRole",
+        "readSession",
+        "deleteSession"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-07",
+      "name": "AAA",
+      "paths": [
+        "/aaa"
+      ],
+      "operations": [
+        "readAAA",
+        "configureAAA"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-08",
+      "name": "API Tokens",
+      "paths": [
+        "/tokens"
+      ],
+      "operations": [
+        "listTokens",
+        "createToken"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-09",
+      "name": "TLS & Certificates",
+      "paths": [
+        "/certificates"
+      ],
+      "operations": [
+        "listCertificates",
+        "createCertificate"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-10",
+      "name": "System Settings",
+      "paths": [
+        "/settings"
+      ],
+      "operations": [
+        "readSettings",
+        "changeSettings"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-11",
+      "name": "Management Plane",
+      "paths": [
+        "/runtime",
+        "/health"
+      ],
+      "operations": [
+        "readRuntime",
+        "readHealth"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    },
+    {
+      "id": "AD-12",
+      "name": "About & Support",
+      "paths": [
+        "/about",
+        "/contract",
+        "/openapi.json"
+      ],
+      "operations": [
+        "readAbout",
+        "readContract",
+        "readOpenAPI"
+      ],
+      "status": "transport-contract; service acceptance remains with linked engineering issue"
+    }
+  ]
+}

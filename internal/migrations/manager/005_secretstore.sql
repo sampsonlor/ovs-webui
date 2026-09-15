@@ -1,0 +1,4 @@
+CREATE TABLE secret_records(partition TEXT NOT NULL, id TEXT NOT NULL, purpose TEXT NOT NULL, provider TEXT NOT NULL, key_version INTEGER NOT NULL, envelope BLOB NOT NULL, PRIMARY KEY(partition,id)) STRICT;
+CREATE TABLE tls_certificates(id TEXT PRIMARY KEY, principal_id TEXT NOT NULL REFERENCES principals(id), revision TEXT NOT NULL, descriptor BLOB NOT NULL, state TEXT NOT NULL, sequence INTEGER NOT NULL DEFAULT 1) STRICT;
+CREATE TABLE tls_authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision TEXT NOT NULL, active_id TEXT NOT NULL DEFAULT '', trial_id TEXT NOT NULL DEFAULT '', job_id TEXT NOT NULL DEFAULT '', principal_id TEXT NOT NULL DEFAULT '', request_id TEXT NOT NULL DEFAULT '', boot_id TEXT NOT NULL DEFAULT '', started_ns INTEGER NOT NULL DEFAULT 0, deadline_ns INTEGER NOT NULL DEFAULT 0, deadline_wall INTEGER NOT NULL DEFAULT 0) STRICT;
+INSERT INTO tls_authority(singleton,revision) VALUES(1,lower(hex(randomblob(16))));

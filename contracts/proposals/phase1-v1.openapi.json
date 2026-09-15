@@ -1,0 +1,2800 @@
+{
+  "openapi": "3.1.1",
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "info": {
+    "title": "OVS WebUI Phase 1 core API proposal",
+    "version": "1.0.0-design.1",
+    "description": "Proposed for review in issue #30. Core vertical-slice design only; not a released contract or running backend. Full Phase 1 endpoint parity is owned by #33 and the Scope traceability matrix."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "BrowserSession": []
+    },
+    {
+      "ApiToken": []
+    }
+  ],
+  "paths": {
+    "/sessions": {
+      "post": {
+        "operationId": "createSession",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        },
+        "security": [],
+        "description": "Validate same-origin login, rate limits and Local/TACACS+ before setting Secure/HttpOnly/SameSite cookie. Never return a mgrd grant."
+      }
+    },
+    "/session": {
+      "get": {
+        "operationId": "readSession",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteSession",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Successful operation; no response body."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "description": "Idempotently revoke the current browser session; requires CSRF and Origin checks."
+      }
+    },
+    "/workspace": {
+      "get": {
+        "operationId": "readWorkspace",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ports": {
+      "get": {
+        "operationId": "listPorts",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortsPage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ]
+      }
+    },
+    "/ports/{port_id}": {
+      "get": {
+        "operationId": "readPort",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Port"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "port_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ]
+      }
+    },
+    "/candidate": {
+      "get": {
+        "operationId": "readCandidate",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Candidate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Strong candidate representation tag.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "changeCandidate",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Candidate"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "New strong representation tag.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateCommand"
+              }
+            }
+          }
+        },
+        "x-request-domain": "workspace",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required with browser Cookie authentication; token clients do not use Cookie CSRF."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Strong ETag from this candidate representation."
+          }
+        ]
+      }
+    },
+    "/validations": {
+      "post": {
+        "operationId": "createValidation",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidationCommand"
+              }
+            }
+          }
+        },
+        "x-request-domain": "management",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required with browser Cookie authentication; token clients do not use Cookie CSRF."
+          }
+        ]
+      }
+    },
+    "/validations/{validation_id}": {
+      "get": {
+        "operationId": "readValidation",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Validation"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "validation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ]
+      }
+    },
+    "/transactions": {
+      "post": {
+        "operationId": "createTransaction",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionCommand"
+              }
+            }
+          }
+        },
+        "x-request-domain": "management",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required with browser Cookie authentication; token clients do not use Cookie CSRF."
+          }
+        ]
+      }
+    },
+    "/transactions/{transaction_id}": {
+      "get": {
+        "operationId": "readTransaction",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ]
+      }
+    },
+    "/transactions/{transaction_id}/decisions": {
+      "post": {
+        "operationId": "decideTransaction",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionCommand"
+              }
+            }
+          }
+        },
+        "x-request-domain": "management",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required with browser Cookie authentication; token clients do not use Cookie CSRF."
+          }
+        ]
+      }
+    },
+    "/transactions/{transaction_id}/reconciliations": {
+      "post": {
+        "operationId": "reconcileTransaction",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationCommand"
+              }
+            }
+          }
+        },
+        "x-request-domain": "management",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required with browser Cookie authentication; token clients do not use Cookie CSRF."
+          }
+        ]
+      }
+    },
+    "/requests/{request_id}": {
+      "get": {
+        "operationId": "readRequestReceipt",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestReceipt"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestDomain"
+            }
+          },
+          {
+            "name": "epoch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "description": "Historical epoch for read-only recovery; omitted means current."
+          }
+        ]
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "operationId": "readJob",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ]
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "listEvents",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "correlation_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ]
+      }
+    },
+    "/audit": {
+      "get": {
+        "operationId": "listAudit",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidencePage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "correlation_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ]
+      }
+    },
+    "/stream": {
+      "get": {
+        "operationId": "subscribeResourceChanges",
+        "responses": {
+          "default": {
+            "description": "Stable Problem; unknown effect never proves Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "101": {
+            "description": "Successful operation; no response body."
+          }
+        },
+        "description": "Same-origin authenticated WebSocket hints. REST is authoritative. Bounded queues, permission rechecks and explicit resync required on gap/expiry.",
+        "x-server-message-schema": {
+          "$ref": "#/components/schemas/StreamEnvelope"
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BrowserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-ovs_session"
+      },
+      "ApiToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Scoped API token, separate from browser Session and never a mgrd Auth Grant."
+      }
+    },
+    "schemas": {
+      "Id": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "description": "Management UUIDv4. Names and OVS row UUIDs are separate identities."
+      },
+      "RequestId": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "description": "UUIDv7; new-command age and epoch are validated before admission."
+      },
+      "Revision": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "Opaque equality token; never sort or increment."
+      },
+      "Sequence": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$",
+        "description": "Monotonic only within the same resource."
+      },
+      "DateTime": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "RequestDomain": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "management"
+        ]
+      },
+      "ObservedRequestDomain": {
+        "type": "string",
+        "x-known-values": [
+          "workspace",
+          "management"
+        ]
+      },
+      "ResourceRef": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "additionalProperties": true
+      },
+      "ObjectBinding": {
+        "type": "object",
+        "properties": {
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "table": {
+            "type": "string",
+            "enum": [
+              "Bridge",
+              "Port",
+              "Interface"
+            ]
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "management_id",
+          "ovs_uuid",
+          "table",
+          "instance_generation"
+        ],
+        "additionalProperties": false
+      },
+      "ObservedBinding": {
+        "type": "object",
+        "properties": {
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "table": {
+            "type": "string",
+            "x-known-values": [
+              "Bridge",
+              "Port",
+              "Interface"
+            ]
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "management_id",
+          "ovs_uuid",
+          "table",
+          "instance_generation"
+        ],
+        "additionalProperties": true
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness": {
+            "type": "string",
+            "x-known-values": [
+              "fresh",
+              "stale",
+              "unknown",
+              "unavailable"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "x-known-values": [
+              "proven",
+              "partial",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "provider_id",
+          "authority",
+          "observed_at",
+          "freshness",
+          "confidence"
+        ],
+        "additionalProperties": true
+      },
+      "NativeVlan": {
+        "type": "object",
+        "properties": {
+          "vlan_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4095
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trunks": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4095
+            },
+            "minItems": 0,
+            "maxItems": 4096
+          },
+          "cvlans": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4095
+            },
+            "minItems": 0,
+            "maxItems": 4096
+          }
+        },
+        "required": [
+          "vlan_mode",
+          "tag",
+          "trunks",
+          "cvlans"
+        ],
+        "additionalProperties": true
+      },
+      "VlanObservation": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "string",
+            "x-known-values": [
+              "known",
+              "unknown",
+              "unavailable",
+              "unsupported"
+            ]
+          },
+          "native": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NativeVlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "availability",
+          "native",
+          "source",
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "VlanInput": {
+        "description": "Empty trunks retains native all-VLAN meaning. dot1q-tunnel is Advanced and capability/validator gated. Ordinary UI accepts VLAN 1..4094; observations retain native 0/4095.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "vlan_mode": {
+                "const": "access",
+                "type": "string"
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4094
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              },
+              "cvlans": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "vlan_mode",
+              "tag",
+              "trunks",
+              "cvlans"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "vlan_mode": {
+                "const": "trunk",
+                "type": "string"
+              },
+              "tag": {
+                "type": "null"
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 4094,
+                "uniqueItems": true
+              },
+              "cvlans": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "vlan_mode",
+              "tag",
+              "trunks",
+              "cvlans"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "vlan_mode": {
+                "const": "native-tagged",
+                "type": "string"
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4094
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 4094,
+                "uniqueItems": true
+              },
+              "cvlans": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "vlan_mode",
+              "tag",
+              "trunks",
+              "cvlans"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "vlan_mode": {
+                "const": "native-untagged",
+                "type": "string"
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4094
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 4094,
+                "uniqueItems": true
+              },
+              "cvlans": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "vlan_mode",
+              "tag",
+              "trunks",
+              "cvlans"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "vlan_mode": {
+                "const": "dot1q-tunnel",
+                "type": "string"
+              },
+              "tag": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4094
+              },
+              "trunks": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              },
+              "cvlans": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4094
+                },
+                "minItems": 0,
+                "maxItems": 4094,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "vlan_mode",
+              "tag",
+              "trunks",
+              "cvlans"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "VlanIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "port.vlan.set"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "value": {
+            "$ref": "#/components/schemas/VlanInput"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "ObservedIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "x-known-values": [
+              "port.vlan.set"
+            ]
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "value": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "value"
+        ],
+        "additionalProperties": true
+      },
+      "Port": {
+        "type": "object",
+        "properties": {
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "config_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "name": {
+            "type": "string"
+          },
+          "bridge_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "interface_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "minItems": 1,
+            "maxItems": 128
+          },
+          "kind": {
+            "type": "string",
+            "x-known-values": [
+              "single",
+              "bond"
+            ]
+          },
+          "vlan": {
+            "$ref": "#/components/schemas/VlanObservation"
+          },
+          "ovs_link_state": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "$ref": "#/components/schemas/Source"
+              }
+            },
+            "required": [
+              "value",
+              "source"
+            ],
+            "additionalProperties": true
+          },
+          "linux_carrier": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "$ref": "#/components/schemas/Source"
+              }
+            },
+            "required": [
+              "value",
+              "source"
+            ],
+            "additionalProperties": true
+          },
+          "allowed_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0,
+            "maxItems": 128
+          }
+        },
+        "required": [
+          "management_id",
+          "ovs_uuid",
+          "instance_generation",
+          "config_revision",
+          "name",
+          "bridge_ref",
+          "interface_refs",
+          "kind",
+          "vlan",
+          "ovs_link_state",
+          "linux_carrier",
+          "allowed_operations"
+        ],
+        "additionalProperties": true
+      },
+      "PortsPage": {
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "x-known-values": [
+              "complete",
+              "degraded",
+              "truncated"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Port"
+            },
+            "minItems": 0,
+            "maxItems": 500
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "instance_generation",
+          "source",
+          "availability",
+          "items",
+          "next_cursor",
+          "truncated"
+        ],
+        "additionalProperties": true
+      },
+      "Candidate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "instance_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base_config_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "empty",
+              "dirty",
+              "stale",
+              "conflict",
+              "reconciliation-required"
+            ]
+          },
+          "intents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObservedIntent"
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "consumed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "instance_generation",
+          "base_config_revision",
+          "state",
+          "intents",
+          "consumed_by"
+        ],
+        "additionalProperties": true
+      },
+      "Resolution": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "choice": {
+            "type": "string",
+            "enum": [
+              "keep-current",
+              "keep-mine"
+            ]
+          }
+        },
+        "required": [
+          "intent_id",
+          "choice"
+        ],
+        "additionalProperties": false
+      },
+      "CandidateCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "$ref": "#/components/schemas/RequestId"
+              },
+              "operation": {
+                "const": "stage",
+                "type": "string"
+              },
+              "intents": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/VlanIntent"
+                },
+                "minItems": 1,
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "request_id",
+              "operation",
+              "intents"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "$ref": "#/components/schemas/RequestId"
+              },
+              "operation": {
+                "const": "remove",
+                "type": "string"
+              },
+              "intent_ids": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Id"
+                },
+                "minItems": 1,
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "request_id",
+              "operation",
+              "intent_ids"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "$ref": "#/components/schemas/RequestId"
+              },
+              "operation": {
+                "const": "discard",
+                "type": "string"
+              }
+            },
+            "required": [
+              "request_id",
+              "operation"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "$ref": "#/components/schemas/RequestId"
+              },
+              "operation": {
+                "const": "rebase",
+                "type": "string"
+              },
+              "instance_generation": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "current_config_revision": {
+                "$ref": "#/components/schemas/Revision"
+              },
+              "conflict_snapshot_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resolutions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Resolution"
+                },
+                "minItems": 0,
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "request_id",
+              "operation",
+              "instance_generation",
+              "current_config_revision",
+              "conflict_snapshot_id",
+              "resolutions"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Gate": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "allowed",
+              "blocked",
+              "unknown"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "state",
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "principal_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "effective_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0,
+            "maxItems": 256
+          },
+          "expires_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "csrf_token": {
+            "type": "string",
+            "description": "Session-bound CSRF value; not a mgrd grant. Do not log."
+          },
+          "request_epochs": {
+            "type": "object",
+            "properties": {
+              "workspace": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "management": {
+                "$ref": "#/components/schemas/Id"
+              }
+            },
+            "required": [
+              "workspace",
+              "management"
+            ],
+            "additionalProperties": true
+          },
+          "server_time": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "required": [
+          "principal_id",
+          "display_name",
+          "effective_capabilities",
+          "expires_at",
+          "csrf_token",
+          "request_epochs",
+          "server_time"
+        ],
+        "additionalProperties": true
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "local",
+              "tacacs"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "provider",
+          "username",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "Workspace": {
+        "type": "object",
+        "properties": {
+          "server_time": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "request_epochs": {
+            "type": "object",
+            "properties": {
+              "workspace": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "management": {
+                "$ref": "#/components/schemas/Id"
+              }
+            },
+            "required": [
+              "workspace",
+              "management"
+            ],
+            "additionalProperties": true
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Candidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_transaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gate"
+            },
+            "minItems": 0,
+            "maxItems": 128
+          }
+        },
+        "required": [
+          "server_time",
+          "request_epochs",
+          "candidate",
+          "latest_validation",
+          "latest_transaction",
+          "gates"
+        ],
+        "additionalProperties": true
+      },
+      "ValidationCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "candidate_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidate_revision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "request_id",
+          "candidate_id",
+          "candidate_revision"
+        ],
+        "additionalProperties": false
+      },
+      "DiffField": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "field": {
+            "type": "string"
+          },
+          "before": {},
+          "after": {},
+          "authority": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "field",
+          "before",
+          "after",
+          "authority"
+        ],
+        "additionalProperties": true
+      },
+      "Validation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidate_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidate_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "config_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "policy_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "expires_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "job_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "queued",
+              "running",
+              "passed",
+              "blocked",
+              "expired",
+              "failed"
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gate"
+            },
+            "minItems": 0,
+            "maxItems": 512
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiffField"
+            },
+            "minItems": 0,
+            "maxItems": 512
+          }
+        },
+        "required": [
+          "id",
+          "candidate_id",
+          "candidate_revision",
+          "instance_generation",
+          "config_revision",
+          "policy_revision",
+          "expires_at",
+          "job_ref",
+          "state",
+          "checks",
+          "diff"
+        ],
+        "additionalProperties": true
+      },
+      "TransactionCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "candidate_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidate_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "validation_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "apply",
+              "safe-apply"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "request_id",
+          "candidate_id",
+          "candidate_revision",
+          "validation_id",
+          "mode",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "rollback"
+            ]
+          },
+          "expected_sequence": {
+            "$ref": "#/components/schemas/Sequence"
+          }
+        },
+        "required": [
+          "request_id",
+          "decision",
+          "expected_sequence"
+        ],
+        "additionalProperties": false
+      },
+      "ReconciliationCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "AppliedEvidence": {
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "type": "string"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cfg_target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cur_cfg": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "waiting",
+              "proven",
+              "unknown",
+              "unavailable",
+              "failed"
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "provider_id",
+          "instance_generation",
+          "observed_at",
+          "next_cfg_target",
+          "cur_cfg",
+          "state",
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/Sequence"
+          },
+          "phase": {
+            "type": "string",
+            "x-known-values": [
+              "admitted",
+              "preflight",
+              "committing",
+              "applying",
+              "health-check",
+              "awaiting-confirmation",
+              "rolling-back",
+              "settled",
+              "recovery-required"
+            ]
+          },
+          "knowledge": {
+            "type": "string",
+            "x-known-values": [
+              "known",
+              "outcome-unknown"
+            ]
+          },
+          "commit_outcome": {
+            "type": "string",
+            "x-known-values": [
+              "not-started",
+              "committed",
+              "not-committed",
+              "ambiguous"
+            ]
+          },
+          "applied_outcome": {
+            "type": "string",
+            "x-known-values": [
+              "unknown",
+              "applied",
+              "not-applied"
+            ]
+          },
+          "safe_apply": {
+            "type": "string",
+            "x-known-values": [
+              "not-required",
+              "preparing",
+              "awaiting-confirmation",
+              "confirmed",
+              "rolling-back",
+              "rolled-back",
+              "rollback-conflict",
+              "recovery-required"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "x-known-values": [
+              "healthy",
+              "degraded",
+              "critical",
+              "unknown"
+            ]
+          },
+          "applied_evidence": {
+            "$ref": "#/components/schemas/AppliedEvidence"
+          },
+          "confirmation_deadline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "server_time": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0,
+            "maxItems": 32
+          },
+          "job_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "correlation_id": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "id",
+          "instance_generation",
+          "sequence",
+          "phase",
+          "knowledge",
+          "commit_outcome",
+          "applied_outcome",
+          "safe_apply",
+          "health",
+          "applied_evidence",
+          "confirmation_deadline",
+          "server_time",
+          "allowed_actions",
+          "job_ref",
+          "correlation_id"
+        ],
+        "additionalProperties": true
+      },
+      "Accepted": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "request_domain": {
+            "$ref": "#/components/schemas/ObservedRequestDomain"
+          },
+          "request_epoch": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "job_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "resource_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "correlation_id": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "request_id",
+          "request_domain",
+          "request_epoch",
+          "job_id",
+          "resource_ref",
+          "correlation_id"
+        ],
+        "additionalProperties": true
+      },
+      "RequestReceipt": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "request_domain": {
+            "$ref": "#/components/schemas/ObservedRequestDomain"
+          },
+          "request_epoch": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "accepted",
+              "rejected",
+              "unresolved"
+            ]
+          },
+          "command_effect": {
+            "type": "string",
+            "x-known-values": [
+              "not-started",
+              "unknown",
+              "linked-resource"
+            ]
+          },
+          "resource_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correlation_id": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "request_id",
+          "request_domain",
+          "request_epoch",
+          "state",
+          "command_effect",
+          "resource_ref",
+          "job_ref",
+          "correlation_id"
+        ],
+        "additionalProperties": true
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/Sequence"
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "needs-attention"
+            ]
+          },
+          "operation": {
+            "type": "string"
+          },
+          "owner_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "resource_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancellable": {
+            "type": "boolean"
+          },
+          "correlation_id": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "state",
+          "operation",
+          "owner_id",
+          "resource_ref",
+          "cancellable",
+          "correlation_id"
+        ],
+        "additionalProperties": true
+      },
+      "EvidenceEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "kind": {
+            "type": "string",
+            "x-known-values": [
+              "event",
+              "audit"
+            ]
+          },
+          "occurred_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "code": {
+            "type": "string"
+          },
+          "object_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "Centrally redacted summary; never SECRET."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "occurred_at",
+          "code",
+          "object_refs",
+          "correlation_id",
+          "summary"
+        ],
+        "additionalProperties": true
+      },
+      "EvidencePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceEntry"
+            },
+            "minItems": 0,
+            "maxItems": 500
+          },
+          "snapshot_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "snapshot_id",
+          "next_cursor",
+          "truncated"
+        ],
+        "additionalProperties": true
+      },
+      "StreamEnvelope": {
+        "type": "object",
+        "properties": {
+          "stream_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/Sequence"
+          },
+          "type": {
+            "type": "string",
+            "x-known-values": [
+              "resource.changed",
+              "state.coalesced",
+              "resync.required",
+              "heartbeat"
+            ]
+          },
+          "resource_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resource_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "stream_id",
+          "sequence",
+          "type",
+          "resource_ref",
+          "resource_version",
+          "observed_at",
+          "correlation_id"
+        ],
+        "additionalProperties": true
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "correlation_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_domain": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedRequestDomain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "command_effect": {
+            "type": "string",
+            "x-known-values": [
+              "not-started",
+              "unknown",
+              "linked-resource"
+            ]
+          },
+          "resource_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "correlation_id",
+          "request_id",
+          "request_domain",
+          "command_effect",
+          "resource_ref",
+          "details"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "x-review-status": "proposed",
+  "x-source-issue": 30
+}
