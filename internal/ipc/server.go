@@ -89,7 +89,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.tlsOperation(w, r)
-	case "/ipc/v1/operations/auth.authenticate", "/ipc/v1/operations/auth.inspect", "/ipc/v1/operations/auth.check", "/ipc/v1/operations/auth.reauthenticate", "/ipc/v1/operations/auth.revoke", "/ipc/v1/operations/security.read", "/ipc/v1/operations/security.execute":
+	case "/ipc/v1/operations/auth.authenticate", "/ipc/v1/operations/auth.inspect", "/ipc/v1/operations/auth.check", "/ipc/v1/operations/auth.reauthenticate", "/ipc/v1/operations/auth.revoke", "/ipc/v1/operations/security.read", "/ipc/v1/operations/security.execute", "/ipc/v1/operations/inventory.read":
 		if !state.negotiated.Load() {
 			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")
 			return

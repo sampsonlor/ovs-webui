@@ -167,6 +167,25 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			if err := require(c, "role.read", false, 0); err != nil {
 				return err
 			}
+		case "bridge", "port", "interface", "bond":
+			if err := require(c, "inventory.read", false, 0); err != nil {
+				return err
+			}
+			var state string
+			if err := q.QueryRowContext(ctx, "SELECT state FROM inventory_state WHERE singleton=1").Scan(&state); err != nil {
+				return apitypes.Fail(503, "OBJECT_AUTHORITY_UNAVAILABLE")
+			}
+			if state != "confirmed" {
+				return apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
+			}
+			table := map[string]string{"bridge": "Bridge", "port": "Port", "interface": "Interface", "bond": "Port"}[ref.Kind]
+			var count int
+			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM identities i JOIN inventory_state s ON s.generation=i.generation WHERE i.management_id=? AND i.table_name=? AND i.state='active'", ref.ID, table).Scan(&count); err != nil {
+				return err
+			}
+			if count != 1 {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
 		case "certificate":
 			if err := require(c, "certificate.read", false, 0); err != nil {
 				return err

@@ -122,7 +122,7 @@ jobs:
   go-runtime:
     name: Go runtime (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -184,6 +184,11 @@ jobs:
         run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
       - name: Encrypted TLS identity, fresh connection confirmation and real recovery deadline
         run: sudo -- python3 tests/daemon/tls_lifecycle.py --bin-dir outputs/runtime
+      - name: Native OVSDB inventory, identity reconciliation and upstream schema matrix
+        run: |
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --schema-version "$schema"
+          done
       - name: Retain runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -197,6 +202,8 @@ jobs:
             test-results/go-auth-journal.log
             test-results/go-tls-smoke.json
             test-results/go-tls-journal.log
+            test-results/go-inventory-*.json
+            test-results/go-inventory-*-journal.log
           if-no-files-found: ignore
           retention-days: 7
 

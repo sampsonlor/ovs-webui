@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.2.0', description: 'Phase 1 public transport baseline with local authentication, scoped credentials and certificate activation recovery. Authentication and domain services are enabled only after their independent implementation gates; a documented operation is not permission or proof of provider availability.' };
+api.info = { title: 'OVS WebUI public API', version: '1.3.0', description: 'Phase 1 public transport with authentication, certificate activation recovery and bounded read-only OVSDB inventory. A documented operation is not permission or proof of provider availability; switching writes remain gated.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -125,6 +125,8 @@ api.paths['/requests/{request_id}'].get.parameters.find(p => p.name === 'epoch')
 api.paths['/stream'].get['x-service-state'] = 'transport';
 add('/contract', 'get', 'readContract', 'ContractInfo', '', 33, { public: true });
 add('/runtime', 'get', 'readRuntime', 'Runtime', '', 31, { public: true });
+add('/inventory', 'get', 'readInventory', 'Resource', 'inventory.read', 36);
+add('/inventory/schema', 'get', 'readInventorySchema', 'ResourcePage', 'inventory.read', 36, { page: true });
 add('/session/reauthentication', 'post', 'reauthenticateSession', 'Session', 'session.read', 34, { body: 'Reauthentication', status: 200, sensitive: true });
 // OpenAPI itself is a document, not a management resource.
 api.paths['/openapi.json'] = { get: { operationId: 'readOpenAPI', security: [], 'x-capability': '', 'x-service-issue': 33, 'x-service-state': 'transport', parameters: [], responses: { 200: { description: 'OpenAPI 3.1.1 document', content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } } } };

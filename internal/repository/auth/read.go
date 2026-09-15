@@ -15,6 +15,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apicontract"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
@@ -77,7 +78,11 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 		case "readRequestReceipt":
 			value, err = r.receipt(ctx, tx, c, path["request_id"], query)
 		default:
-			return apitypes.Fail(503, "DOMAIN_SERVICE_UNAVAILABLE")
+			if inventory.Operation(op.ID) && r.inventory != nil {
+				value, err = r.inventory.Read(ctx, op.ID, path, query, c)
+			} else {
+				return apitypes.Fail(503, "DOMAIN_SERVICE_UNAVAILABLE")
+			}
 		}
 		if errors.Is(err, sql.ErrNoRows) {
 			return apitypes.Fail(404, "NOT_FOUND")

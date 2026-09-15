@@ -13,6 +13,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apicontract"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
@@ -28,6 +29,12 @@ type Repository struct {
 	gate, passwords chan struct{}
 	now             func() time.Time
 	tlsNow          func() tlscontrol.Clock
+	inventory       inventory.Reader
+}
+
+func (r *Repository) WithInventory(reader inventory.Reader) *Repository {
+	r.inventory = reader
+	return r
 }
 
 func New(store *sqlite.Store, key []byte) (*Repository, error) {

@@ -14,13 +14,17 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
+	ovsprovider "github.com/sampsonlor/ovs-webui/internal/provider/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
+	registry "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/secrets"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
@@ -42,6 +46,11 @@ func run() int {
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
 	rotateSecret := flag.Bool("rotate-secret-key", false, "Offline privileged key rotation, retaining old versions")
 	restore := flag.Bool("prepare-restore-security", false, "Offline: rotate restored auth/request epochs and revoke all grants/tokens; run with webd reconciliation")
+	ovsSocket := flag.String("ovsdb-socket", "/run/openvswitch/db.sock", "Read-only local OVSDB Unix socket")
+	ovsFile := flag.String("ovsdb-file", "/var/lib/openvswitch/conf.db", "Canonical database file for lifecycle evidence (no symlinks)")
+	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
+	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
+	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.SoftwareVersion())
@@ -49,7 +58,7 @@ func run() int {
 	}
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
 	actions := 0
-	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *initSecret, *rotateSecret, *restore} {
+	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
 		if enabled {
 			actions++
 		}
@@ -188,6 +197,58 @@ func run() int {
 			logger.Error("service_start_failed", "code", "TLS_RECOVERY_UNAVAILABLE")
 			return 1
 		}
+	}
+	var inventoryService *inventory.Service
+	if storageErr == nil {
+		reg, err := registry.New(store)
+		if err != nil {
+			logger.Error("inventory_start_failed", "code", "INVENTORY_STORAGE_UNAVAILABLE")
+			return 1
+		}
+		inventoryService = inventory.New(reg)
+		if *ovsUID >= 1<<32-1 {
+			logger.Error("inventory_start_failed", "code", "OVSDB_PEER_INVALID")
+			return 2
+		}
+		provider, err := ovsprovider.New(ovsprovider.Options{Socket: *ovsSocket, DatabaseFile: *ovsFile, PeerUID: uint32(*ovsUID)})
+		if err != nil {
+			logger.Error("inventory_start_failed", "code", "OVSDB_ENDPOINT_INVALID")
+			return 2
+		}
+		providerCtx, cancelProvider := context.WithCancel(ctx)
+		defer cancelProvider()
+		providerDone := make(chan struct{})
+		go func() { defer close(providerDone); provider.Run(providerCtx, inventoryService) }()
+		if *acceptEvidence != "" {
+			deadline := time.NewTimer(8 * time.Second)
+			defer deadline.Stop()
+			tick := time.NewTicker(50 * time.Millisecond)
+			defer tick.Stop()
+			for !inventoryService.Observed() {
+				select {
+				case <-ctx.Done():
+					return 1
+				case <-deadline.C:
+					logger.Error("reconciliation_failed", "code", "OVSDB_NOT_OBSERVED")
+					return 1
+				case <-tick.C:
+				}
+			}
+			cancelProvider()
+			<-providerDone
+			if err = inventoryService.Accept(ctx, *acceptEvidence, *acceptReason); err != nil {
+				logger.Error("reconciliation_failed", "code", auth.ErrorCode(err))
+				return 1
+			}
+			logger.Info("inventory_reconciliation_completed", "configuration_written", false)
+			return 0
+		}
+		if authentication != nil {
+			authentication.WithInventory(inventoryService)
+		}
+	} else if *acceptEvidence != "" {
+		logger.Error("reconciliation_failed", "code", "INVENTORY_STORAGE_UNAVAILABLE")
+		return 1
 	}
 	listener, err := ipc.ListenUnix(ipc.SocketOptions{Path: *socket, OwnerUID: 0, GroupGID: uint32(*gid), PeerUID: uint32(*uid)})
 	if err != nil {

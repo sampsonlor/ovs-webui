@@ -84,7 +84,7 @@ func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
 		}
 		err = h.auth.RevokeAuth(r.Context(), credential)
 		out = struct{}{}
-	case "security.read":
+	case "security.read", "inventory.read":
 		var in authn.Query
 		if !h.decode(w, r, &in) {
 			return
@@ -139,6 +139,10 @@ func (c *Client) RevokeAuth(ctx context.Context, g string) error {
 }
 func (c *Client) ReadAuth(ctx context.Context, g string, in authn.Query) (out authn.Response, err error) {
 	err = c.callAuth(ctx, "security.read", g, in, &out)
+	return
+}
+func (c *Client) ReadInventory(ctx context.Context, g string, in authn.Query) (out authn.Response, err error) {
+	err = c.callAuth(ctx, "inventory.read", g, in, &out)
 	return
 }
 func (c *Client) ExecuteAuth(ctx context.Context, g string, in authn.Command) (out apitypes.Result, err error) {

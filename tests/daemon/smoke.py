@@ -122,6 +122,11 @@ def main():
             rendered = rendered.replace('ovs-webui-web', account_name)
             rendered = rendered.replace('/etc/ovs-webui/runtime.env', str(configuration))
             rendered = rendered.replace(f'/usr/libexec/ovs-{service}', str(fixture / f'ovs-{service}'))
+            if service == 'mgrd':
+                # This bootstrap/storage fixture requires no provider writes to
+                # manager.db. Never connect accidentally to the runner's OVS.
+                rendered = rendered.replace('--database=${MANAGER_DATABASE}',
+                    f'--database=${{MANAGER_DATABASE}} --ovsdb-socket={ovs}/unconfigured.sock --ovsdb-file={ovs}/conf.db')
             rendered = rendered.replace('After=network.target ovs-mgrd.service', f'After=network.target {units["mgrd"]}')
             (Path('/etc/systemd/system') / name).write_text(rendered)
         run('systemctl', 'daemon-reload')
