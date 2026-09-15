@@ -334,6 +334,10 @@ def main():
         assert bad.returncode != 0
         run(mgrd, '--database', str(manager_db), '--ovsdb-socket', str(db_socket), '--ovsdb-file', str(conf),
             '--reconcile-ovsdb', digest, '--reconciliation-reason', 'synthetic reviewed copy restore')
+        # Independent root-operated maintenance scenario: earlier deliberate
+        # restarts must not consume this fixture's next start-limit budget.
+        # The production unit and its automatic crash-restart limits are intact.
+        run('systemctl', 'reset-failed', units['mgrd'])
         run('systemctl', 'start', units['mgrd'])
         page = eventually(lambda: observed_ports(lambda p: p['source']['freshness'] == 'fresh'))
         assert page['instance_generation'] != generation
@@ -358,6 +362,7 @@ def main():
         generation = page['instance_generation']
         run('systemctl', 'stop', units['mgrd'])
         run(mgrd, '--database', str(manager_db), '--prepare-restore-security')
+        run('systemctl', 'reset-failed', units['mgrd'])
         run('systemctl', 'start', units['mgrd'])
         eventually(lambda: call('/runtime', anonymous=True)[0] == 200)
         assert call('/inventory')[0] == 401
