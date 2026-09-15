@@ -290,6 +290,12 @@ def main():
         recreated = eventually(lambda: next((p for p in get('/ports')['items'] if p['name'] == 'inv-p1'), None))
         assert recreated['management_id'] != original['management_id'] and recreated['ovs_uuid'] != original['ovs_uuid']
         assert recreated['instance_generation'] == generation
+
+        lifecycle_validation = metrics['candidate_validation']['validation_id_for_lifecycle_checks']
+        invalid = get('/validations/' + lifecycle_validation)
+        assert not invalid['usable'] and any(g['code'] == 'OBJECT_BINDING_CHANGED' for g in invalid['invalidations'])
+        assert get('/candidate')['state'] == 'reconciliation-required'
+        metrics['candidate_validation']['recreated_object_invalidated'] = True
         with sqlite3.connect(manager_db) as db:
             assert db.execute('SELECT state FROM identities WHERE management_id=?', (original['management_id'],)).fetchone() == ('tombstone',)
         checks.append('delete/recreate with the same name gets a new native UUID and management ID; old ID is tombstoned and returns 404')
@@ -332,6 +338,10 @@ def main():
         page = eventually(lambda: observed_ports(lambda p: p['source']['freshness'] == 'fresh'))
         assert page['instance_generation'] != generation
         assert call('/ports/' + recreated['management_id'])[0] == 404
+
+        invalid = get('/validations/' + lifecycle_validation)
+        assert not invalid['usable'] and any(g['code'] == 'GENERATION_RECONCILIATION_REQUIRED' for g in invalid['invalidations'])
+        metrics['candidate_validation']['real_generation_change_invalidated'] = True
         generation = page['instance_generation']
         with sqlite3.connect(manager_db) as db:
             assert db.execute("SELECT count(*) FROM auth_audit WHERE operation='inventory-explicit-reconciliation'").fetchone()[0] == 1

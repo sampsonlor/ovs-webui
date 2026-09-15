@@ -32,6 +32,8 @@ Validation 的 `state` 保留当时结果；`usable/invalidations` 在每次 RES
 
 由于不存在跨库原子提交，草稿刚提交而 witness 同步应答丢失的窗口由当前 web.db revision 检查关闭；下一次读取/验证重新同步。离线保存的回执可恢复，新的验证不会绕过 mgrd。候选原始快照和 validation 记录包含配置数据，受当前 owner 与 configuration.read 控制；Audit 只记录固定元数据，不携带原生 options、密码或 grant。
 
+大尺寸 Current Diff 超过响应预算时，GET Candidate 保留完整私有意图，返回 `diff_truncated: true`、`review-limited` 和阻止继续比较的 gate；不返回可供 rebase 使用的 conflict snapshot。用户仍可移除或丢弃意图，不能把部分比较当作完整审阅。
+
 默认预算：32 intents、40 KiB 私有 envelope、48 KiB validation representation、10,000 个 workspace、10,000 个 validation/outbox；容量不足拒绝新入场。公共请求最大 1 MiB 不承诺每个合法大数组都能放入当前资源预算。历史 validation 引用的 Job 不被共享 TTL 回收删除；当前批次达到持久记录上限后拒绝新增，不宣称已交付完整配置历史清理或恢复编排。
 
 迁移只新增 web 006 / manager 008；已有 SQL 迁移和 v1.0.0 契约 baseline 保持不变。公共契约 1.5.0 增加可读字段，IPC 1.4 增加三个固定 typed 操作并校验严格版本/摘要配对。

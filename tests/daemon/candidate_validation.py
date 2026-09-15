@@ -165,4 +165,5 @@ def verify_candidate(call, get, vsctl, units, manager_db, web_db,
         serialized = ''.join(bytes(row[0]).decode() for row in db.execute('SELECT envelope FROM candidate_workspaces'))
         assert all(secret not in serialized for secret in credentials)
     return {'verified': True, 'validation_count': counts['validations'], 'principal_count': 2,
+            'validation_id_for_lifecycle_checks': recovered['resource_ref']['id'],
             'native_live_tag_after_candidate_operations': 39, 'checks': notes}
