@@ -40,6 +40,9 @@ func (r *Repository) PrepareRestore(ctx context.Context) error {
 		if _, err = tx.ExecContext(ctx, "UPDATE api_authority SET epoch=?,high_watermark_ms=? WHERE singleton=1", repository.NewID(), now.UnixMilli()); err != nil {
 			return err
 		}
+		if _, err = tx.ExecContext(ctx, "UPDATE inventory_state SET state='reconciliation-required',reason='management-restore',restore_required=1,pending_digest='' WHERE singleton=1"); err != nil {
+			return err
+		}
 		return r.audit(ctx, tx, authn.Claims{}, "restore-security", "", "completed", "")
 	})
 }

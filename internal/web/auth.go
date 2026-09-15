@@ -10,6 +10,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -200,7 +201,16 @@ func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q public
 	if len(q.Values) > 0 {
 		uri += "?" + q.Values.Encode()
 	}
-	result, err := a.manager.ReadAuth(ctx, s.Credential, authn.Query{Method: q.Operation.Method, URI: uri})
+	input := authn.Query{Method: q.Operation.Method, URI: uri}
+	var result authn.Response
+	var err error
+	if reader, ok := a.manager.(interface {
+		ReadInventory(context.Context, string, authn.Query) (authn.Response, error)
+	}); ok && inventory.Operation(q.Operation.ID) {
+		result, err = reader.ReadInventory(ctx, s.Credential, input)
+	} else {
+		result, err = a.manager.ReadAuth(ctx, s.Credential, input)
+	}
 	if err != nil {
 		return publicapi.Response{}, authError(err)
 	}

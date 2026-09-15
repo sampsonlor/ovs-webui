@@ -1,6 +1,6 @@
 {
   "major": 1,
-  "minor": 2,
+  "minor": 3,
   "transport": "HTTP/1.1 over a credential-checked Unix stream socket",
   "handshake": "/ipc/v1/handshake",
   "handshake_fields": ["protocol_major", "protocol_minor", "software_version", "schema_digest"],
@@ -15,6 +15,7 @@
     {"name":"auth.reauthenticate","queue":"auth","request":["password"]},
     {"name":"auth.revoke","queue":"control","request":{}},
     {"name":"security.read","queue":"read","request":["method","uri"]},
+    {"name":"inventory.read","queue":"read","request":["method","uri"],"authority":"current operation capability, inventory.read, identity and configuration field filtering; no raw provider queries"},
     {"name":"security.execute","queue":"heavy","request":["method","uri","epoch","request_id","precondition","payload"]},
     {"name":"tls.execute","queue":"heavy","request":["method","uri","epoch","request_id","precondition","candidate","served_id"],"authority":"compiled certificate operation, current elevated grant; metadata only"},
     {"name":"tls.state","queue":"control","request":{},"authority":"trusted webd consumer; durable previously authorized activation and recovery"}
