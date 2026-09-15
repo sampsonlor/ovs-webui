@@ -38,10 +38,15 @@ type Intent struct {
 	Value     VLAN    `json:"value"`
 }
 type StoredIntent struct {
-	Intent
-	Before     VLAN   `json:"before"`
-	Dependency string `json:"dependency_revision"`
-	Schema     string `json:"schema_digest"`
+	// IPC fields are explicit: strict request decoding deliberately does not
+	// infer encoding/json's anonymous-field promotion rules.
+	ID         string  `json:"intent_id"`
+	Operation  string  `json:"operation"`
+	Object     Binding `json:"object"`
+	Value      VLAN    `json:"value"`
+	Before     VLAN    `json:"before"`
+	Dependency string  `json:"dependency_revision"`
+	Schema     string  `json:"schema_digest"`
 }
 type Candidate struct {
 	ID           string         `json:"id"`

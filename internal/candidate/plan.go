@@ -155,9 +155,11 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 				}
 			}
 			if index >= 0 {
-				c.Intents[index].Intent = in
+				// Identity and operation already match; editing keeps the
+				// original native values and their captured dependencies.
+				c.Intents[index].Value = in.Value
 			} else {
-				c.Intents = append(c.Intents, StoredIntent{Intent: in, Before: normalize(p.VLAN), Dependency: p.Dependency, Schema: s.Schema})
+				c.Intents = append(c.Intents, StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Value: in.Value, Before: normalize(p.VLAN), Dependency: p.Dependency, Schema: s.Schema})
 			}
 		}
 		if len(c.Intents) > MaxIntents {
