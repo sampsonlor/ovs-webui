@@ -24,11 +24,11 @@ Go 依赖锁定批准的 `github.com/ovn-kubernetes/libovsdb v0.8.1`，校验和
 
 按实际 schema 发现所有 tables、columns、native type/cardinality/constraints、mutable、ephemeral、references（strong/weak 与 key/value 位置）及 indexes；版本仅为来源信息。必需关系列缺失返回 `OVSDB_CORE_SCHEMA_UNSUPPORTED`。可选 VLAN 列缺失时 native VLAN 为 null/unknown；未知观察值保留，不推断支持的写操作。
 
-一次 monitor 同时包含 Open_vSwitch、Bridge、Port、Interface。采用 RFC 7047 原始 monitor/update 的全值替换语义，初始化与增量严格区分 insert/modify/delete；整条事务更新后再验证引用并发布，禁止逐行呈现中间悬空关系。重连重新取 schema 与完整 monitor，旧流不补接到新流。重复/未知 UUID、孤儿、多父关系、超过预算或协议错误触发重新同步；绝不返回被截断却声称完整的图。
+一次 monitor 同时包含 Open_vSwitch、Bridge、Port、Interface。采用 RFC 7047 原始 monitor/update 的全值替换语义，初始化与增量严格区分 insert/modify/delete，并核对更新的 old 值与缓存一致；整条事务更新后再验证引用并发布，禁止逐行呈现中间悬空关系。重连重新取 schema 与完整 monitor，旧流不补接到新流。重复/未知 UUID、前值不一致、孤儿、多父关系、超过预算或协议错误触发重新同步；绝不返回被截断却声称完整的图。
 
 仅采集明确的列集合；schema 接口标出 `monitored`。当前 counters、Linux carrier、硬件 provider、OpenFlow 规则不在此覆盖范围。Port 链路聚合状态和 Linux carrier 保持 Unknown/Unavailable，不能用一个成员 Interface 的 link_state 代替。
 
-Interface options 仅保留 peer、remote_ip、local_ip、dst_port、key 五个非凭据语义键；其余键不进入缓存、revision、API、日志或普通导出。本批不采集 external_ids/other_config 等开放元数据。所有实际观察字段携带 provider/authority/observed_at/freshness/confidence，schema mutable 不等于用户可写权限，配置 ownership 未经额外证据保持 unknown。Controller 引用不赋予其所有 OVSDB 列的所有权。
+Interface options 仅保留 peer、remote_ip、local_ip、dst_port、key 五个非凭据语义键；其余键不进入缓存、revision、API、日志或普通导出。Interface.error 非空时仅保留 provider-reported-error 标记，不转发可能含敏感内容的自由文本。本批不采集 external_ids/other_config 等开放元数据。所有实际观察字段携带 provider/authority/observed_at/freshness/confidence，schema mutable 不等于用户可写权限，配置 ownership 未经额外证据保持 unknown。Controller 引用不赋予其所有 OVSDB 列的所有权。
 
 ## 身份与 generation
 
@@ -36,7 +36,7 @@ management_id 由 mgrd 生成 UUIDv4；绑定 `(generation, table, ovs_uuid)`。
 
 generation 是持久随机 UUIDv4，不能由版本、PID、system-id、server_id 或 row _version 单独产生。核对证据包括：配置 endpoint/database、schema digest、Open_vSwitch root UUID、已观察 row anchors、monitor 连续性、本机 boot ID、endpoint peer PID/start time、文件 dev/inode，以及已观察文件尾段的后续一致性。
 
-文件 witness 每次最多读 4 KiB：保存此前 offset/length/hash，再确认这些字节仍存在且相同。它可识别原 inode 上的回退；inode 改变也不能仅凭 root UUID 相同就延续。确认 OVSDB peer UID，并尽量匹配 server 的 open file；systemd 没有 CAP_SYS_PTRACE 时通过 endpoint 进程 argv 的规范数据库路径补充绑定证据，不增加进程权限，也不记录 argv 内容。
+文件 witness 每次最多读 4 KiB：保存此前 offset/length/hash，再确认这些字节仍存在且相同。它可识别原 inode 上的回退；inode 改变也不能仅凭 root UUID 相同就延续。确认 OVSDB peer UID，并尽量匹配 server 的 open file；systemd 没有 CAP_SYS_PTRACE 时通过 endpoint 进程 argv 的规范数据库路径补充绑定证据，不增加进程权限，也不记录 argv 内容。API 的 file_binding_method 区分 observed-file-handle 与 configured-process-argument，后者不宣称已观察到打开的文件句柄。
 
 | 证据 | 结果 |
 | --- | --- |
