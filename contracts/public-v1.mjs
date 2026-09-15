@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.3.0', description: 'Phase 1 public transport with authentication, certificate activation recovery and bounded read-only OVSDB inventory. A documented operation is not permission or proof of provider availability; switching writes remain gated.' };
+api.info = { title: 'OVS WebUI public API', version: '1.4.0', description: 'Phase 1 public transport with authentication, read-only OVSDB inventory and shared durable Job/Event/Audit services. A documented operation is not permission or proof of provider availability; switching writes remain gated.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -127,6 +127,15 @@ add('/contract', 'get', 'readContract', 'ContractInfo', '', 33, { public: true }
 add('/runtime', 'get', 'readRuntime', 'Runtime', '', 31, { public: true });
 add('/inventory', 'get', 'readInventory', 'Resource', 'inventory.read', 36);
 add('/inventory/schema', 'get', 'readInventorySchema', 'ResourcePage', 'inventory.read', 36, { page: true });
+const evidenceFilters = [param('correlation_id', 'query', id), param('object_id', 'query', id), param('job_id', 'query', id), param('origin', 'query', choices('Manager', 'External', 'Unknown'))];
+for (const [path, kind, capability] of [['events', 'event', 'event.read'], ['audit', 'audit', 'audit.read']]) {
+ const list = api.paths[`/${path}`].get;
+ list.parameters.push(param('filter', 'query', string(1024)), ...structuredClone(evidenceFilters.filter(p => p.name !== 'correlation_id')));
+ add(`/${path}/{${kind}_id}`, 'get', `read${nameOfEvidence(kind)}`, 'Resource', capability, 37, { kind });
+ add(`/${path}/export`, 'get', `export${nameOfEvidence(path)}`, 'ResourcePage', capability, 37, { kind, page: true, query: evidenceFilters });
+}
+function nameOfEvidence(value) { return value[0].toUpperCase() + value.slice(1); }
+add('/jobs/export', 'get', 'exportJobs', 'JobPage', 'job.read', 37, { kind: 'job', page: true, query: evidenceFilters });
 add('/session/reauthentication', 'post', 'reauthenticateSession', 'Session', 'session.read', 34, { body: 'Reauthentication', status: 200, sensitive: true });
 // OpenAPI itself is a document, not a management resource.
 api.paths['/openapi.json'] = { get: { operationId: 'readOpenAPI', security: [], 'x-capability': '', 'x-service-issue': 33, 'x-service-state': 'transport', parameters: [], responses: { 200: { description: 'OpenAPI 3.1.1 document', content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } } } };
@@ -149,6 +158,7 @@ for (const [path, kind, schema, issue] of resources) {
  add(`/${path}`, 'get', `list${name(path)}`, page, cap, issue, { page: true, kind });
  if (!api.paths[`/${path}/{${kind}_id}`]) add(`/${path}/{${kind}_id}`, 'get', `read${name(kind)}`, schema, cap, issue, { kind });
 }
+api.paths['/jobs'].get.parameters.push(...structuredClone(evidenceFilters));
 for (const [path, op, issue, cap] of [['health','readHealth',45,'state.read'],['management-network','readManagementNetwork',49,'state.read'],['ovs-lifecycle','readOVSLifecycle',49,'state.read'],['aaa','readAAA',34,'access.read'],['settings','readSettings',54,'workspace.read'],['about','readAbout',55,'state.read'],['topology','readTopology',52,'state.read']]) add(`/${path}`, 'get', op, 'Resource', cap, issue);
 add('/search','get','searchResources','ResourcePage','state.read',52,{page:true,query:[param('q','query',string(256),true)]});
 for (const [path, op, body, cap, issue, options] of [

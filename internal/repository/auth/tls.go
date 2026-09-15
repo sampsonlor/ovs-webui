@@ -11,6 +11,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
@@ -59,6 +60,7 @@ func (r *Repository) ExecuteTLS(ctx context.Context, credential string, input tl
 	}
 	payload, _ := json.Marshal(input)
 	command := requests.Command{Principal: c.PrincipalID, Epoch: input.Epoch, Domain: "management", ID: input.RequestID, Operation: op.ID, Method: input.Method, URI: input.URI, Precondition: input.Precondition, Payload: payload, Sensitive: true, FingerprintKey: r.key}
+	command.Credential, command.Capability = c.CredentialID, aliases[op.Capability]
 	check := func(ctx context.Context) error {
 		return r.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
 			var err error
@@ -134,14 +136,20 @@ func (r *Repository) ExecuteTLS(ctx context.Context, credential string, input tl
 		}
 		result.Resource = &apitypes.Ref{Kind: "certificate", ID: id}
 		result.Job = &apitypes.Ref{Kind: "job", ID: jobID}
-		doc, _ := json.Marshal(map[string]any{"operation": op.ID, "owner_id": c.PrincipalID, "resource_ref": result.Resource})
-		if _, err = tx.ExecContext(ctx, "INSERT INTO jobs VALUES(?,NULL,?,?)", jobID, state, doc); err != nil {
+		job := evidence.Job{ID: jobID, Resource: result.Resource, State: state, Business: "success", Reason: "tls-metadata-recorded", Created: r.now()}
+		if op.ID == "activateCertificate" {
+			job.Handler = "tls-activation"
+			job.Business = "unknown"
+			job.Confirmation = "pending"
+			job.Reason = "awaiting-fresh-connection-confirmation"
+		}
+		if _, err = evidence.CreateJob(ctx, tx, job); err != nil {
 			return result, err
 		}
 		if _, err = tx.ExecContext(ctx, "UPDATE auth_state SET revision=? WHERE singleton=1", repository.NewID()); err != nil {
 			return result, err
 		}
-		if err = r.audit(ctx, tx, c, op.ID, id, "success", input.RequestID); err != nil {
+		if err = r.audit(ctx, tx, c, op.ID, id, "success", input.RequestID, result.Resource, result.Job); err != nil {
 			return result, err
 		}
 		return result, r.touch(ctx, tx, credential, c)
@@ -185,12 +193,20 @@ func (r *Repository) finishTLS(ctx context.Context, tx *sql.Tx, s tlscontrol.Sta
 		targetState = "active"
 		active = s.TrialID
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE jobs SET state=?,document=CAST(json_set(document,'$.sequence','2') AS BLOB) WHERE id=?", state, s.JobID); err != nil {
+	job, err := evidence.LoadJob(ctx, tx, s.JobID)
+	if err != nil {
+		return err
+	}
+	confirmation, business := "expired", "failure"
+	if confirmed {
+		confirmation, business = "confirmed", "success"
+	}
+	if _, err := evidence.ChangeJob(ctx, tx, job.ID, job.Sequence, evidence.Transition{State: state, Business: business, Confirmation: confirmation, Reason: targetState}, r.now()); err != nil {
 		return err
 	}
 	var blob []byte
 	var principal, request, epoch string
-	err := tx.QueryRowContext(ctx, "SELECT receipt,principal_id,request_id,epoch FROM api_receipts WHERE domain='management' AND json_extract(receipt,'$.job_ref.id')=?", s.JobID).Scan(&blob, &principal, &request, &epoch)
+	err = tx.QueryRowContext(ctx, "SELECT receipt,principal_id,request_id,epoch FROM api_receipts WHERE domain='management' AND json_extract(receipt,'$.job_ref.id')=?", s.JobID).Scan(&blob, &principal, &request, &epoch)
 	if err != nil {
 		return err
 	}
@@ -217,7 +233,9 @@ func (r *Repository) finishTLS(ctx context.Context, tx *sql.Tx, s tlscontrol.Sta
 	if _, err = tx.ExecContext(ctx, "UPDATE auth_state SET revision=? WHERE singleton=1", repository.NewID()); err != nil {
 		return err
 	}
-	return r.audit(ctx, tx, authn.Claims{PrincipalID: principal}, "tls-recovery", s.TrialID, targetState, request)
+	actor := evidence.RequestFrom(ctx)
+	ctx = evidence.WithRequest(ctx, evidence.Request{Principal: actor.Principal, Credential: actor.Credential, Capability: job.Capability, Operation: "tls-recovery", ID: request, Domain: "management", Epoch: epoch, Correlation: job.Correlation})
+	return r.audit(ctx, tx, authn.Claims{PrincipalID: actor.Principal, CredentialID: actor.Credential}, "tls-recovery", s.TrialID, targetState, request, job.Resource, &apitypes.Ref{Kind: "job", ID: job.ID})
 }
 func (r *Repository) MaintainTLS(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)

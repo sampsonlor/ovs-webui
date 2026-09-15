@@ -273,8 +273,13 @@ func run() int {
 		return health
 	}).WithAuthentication(authService)
 	if authentication != nil {
+		if err := authentication.InitializeEvidence(ctx); err != nil {
+			logger.Error("service_start_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
 		handler.WithTLS(authentication)
 		go authentication.MaintainTLS(ctx)
+		go authentication.MaintainEvidence(ctx)
 	}
 	server := ipc.HTTPServer(handler)
 	logger.Info("service_started", "scope", "runtime-bootstrap", "configuration_ready", false)

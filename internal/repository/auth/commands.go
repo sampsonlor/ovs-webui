@@ -14,6 +14,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 )
 
@@ -51,7 +52,7 @@ func (r *Repository) checkOperation(ctx context.Context, q querier, credential s
 		return c, err
 	}
 	// Receipt/job access is checked against ownership and its original operation.
-	if op.ID != "readRequestReceipt" && op.ID != "readJob" {
+	if op.ID != "readRequestReceipt" && !evidence.Operation(op.ID) {
 		if err = checkRefs(ctx, q, c, refs); err != nil {
 			return c, err
 		}
@@ -71,6 +72,9 @@ func (r *Repository) ExecuteAuth(ctx context.Context, credential string, input a
 	op, path, query, err := r.operation(input.Method, input.URI)
 	if err != nil {
 		return out, err
+	}
+	if op.ID == "cancelJob" {
+		return r.cancelJob(ctx, credential, input)
 	}
 	if !securityCommand(op.ID) || op.Domain != "management" {
 		return out, apitypes.Fail(503, "DOMAIN_SERVICE_UNAVAILABLE")
@@ -119,6 +123,7 @@ func (r *Repository) ExecuteAuth(ctx context.Context, credential string, input a
 		return out, err
 	}
 	command := requests.Command{Principal: c.PrincipalID, Epoch: input.Epoch, Domain: "management", ID: input.RequestID, Operation: op.ID, Method: input.Method, URI: input.URI, Precondition: input.Precondition, Payload: body, Sensitive: op.Sensitive, FingerprintKey: r.key, SecretResponse: op.SecretResponse}
+	command.Credential, command.Capability = c.CredentialID, aliases[op.Capability]
 	// Gate is held through authorization, durable receipt and security mutation.
 	// A queued revoke wins before execution; completed effects remain evidenced.
 	authorize := func(ctx context.Context) error {
@@ -418,15 +423,14 @@ func (r *Repository) mutate(ctx context.Context, tx *sql.Tx, c authn.Claims, op 
 	if result.Status == 202 {
 		jobID := repository.NewID()
 		result.Job = &apitypes.Ref{Kind: "job", ID: jobID}
-		document, _ := json.Marshal(map[string]any{"operation": op.ID, "owner_id": c.PrincipalID, "resource_ref": result.Resource})
-		if _, err := tx.ExecContext(ctx, "INSERT INTO jobs VALUES(?,NULL,'succeeded',?)", jobID, document); err != nil {
+		if _, err := evidence.CreateJob(ctx, tx, evidence.Job{ID: jobID, Resource: result.Resource, State: "succeeded", Business: "success", Reason: "security-operation-completed", Created: r.now()}); err != nil {
 			return result, err
 		}
 	}
 	if _, err := tx.ExecContext(ctx, "UPDATE auth_state SET revision=? WHERE singleton=1", repository.NewID()); err != nil {
 		return result, err
 	}
-	if err := r.audit(ctx, tx, c, op.ID, id, "success", requestID); err != nil {
+	if err := r.audit(ctx, tx, c, op.ID, id, "success", requestID, result.Resource, result.Job); err != nil {
 		return result, err
 	}
 	return result, nil

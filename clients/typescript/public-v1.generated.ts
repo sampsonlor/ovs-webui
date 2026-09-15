@@ -150,6 +150,11 @@ export interface Operations {
   readRuntime: { method: "GET"; path: "/runtime"; body: never; response: Runtime };
   readInventory: { method: "GET"; path: "/inventory"; body: never; response: Resource };
   readInventorySchema: { method: "GET"; path: "/inventory/schema"; body: never; response: ResourcePage };
+  readEvent: { method: "GET"; path: "/events/{event_id}"; body: never; response: Resource };
+  exportEvents: { method: "GET"; path: "/events/export"; body: never; response: ResourcePage };
+  readAudit: { method: "GET"; path: "/audit/{audit_id}"; body: never; response: Resource };
+  exportAudit: { method: "GET"; path: "/audit/export"; body: never; response: ResourcePage };
+  exportJobs: { method: "GET"; path: "/jobs/export"; body: never; response: JobPage };
   reauthenticateSession: { method: "POST"; path: "/session/reauthentication"; body: Reauthentication; response: Session };
   readOpenAPI: { method: "GET"; path: "/openapi.json"; body: never; response: { [key: string]: unknown } };
   listBridges: { method: "GET"; path: "/bridges"; body: never; response: BridgePage };

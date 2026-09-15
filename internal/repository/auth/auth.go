@@ -16,6 +16,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
@@ -118,15 +119,24 @@ func (r *Repository) Bootstrap(ctx context.Context, username, password string) e
 		return r.audit(ctx, tx, authn.Claims{PrincipalID: id}, "bootstrap", id, "success", "")
 	})
 }
-func (r *Repository) audit(ctx context.Context, tx *sql.Tx, c authn.Claims, op, target, result, requestID string) error {
-	var n int
-	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM auth_audit").Scan(&n); err != nil {
+func (r *Repository) audit(ctx context.Context, tx *sql.Tx, c authn.Claims, op, target, result, requestID string, refs ...*apitypes.Ref) error {
+	record := evidence.Record{Collection: "audit", Origin: "Manager", Actor: c.PrincipalID, Credential: c.CredentialID, Operation: op, Result: result, RequestID: requestID, Created: r.now()}
+	if len(refs) > 0 {
+		record.Object = refs[0]
+	}
+	if len(refs) > 1 && refs[1] != nil {
+		record.Job = refs[1].ID
+	}
+	if record.Object == nil && apitypes.ManagementID(target) {
+		record.Object = &apitypes.Ref{Kind: "security-resource", ID: target}
+	}
+	id, err := evidence.Append(ctx, tx, record)
+	if err != nil {
 		return err
 	}
-	if n >= 100000 {
-		return apitypes.Fail(429, "AUTH_AUDIT_CAPACITY_REACHED")
-	}
-	_, err := tx.ExecContext(ctx, "INSERT INTO auth_audit VALUES(?,?,?,?,?,?,?,?)", repository.NewID(), c.PrincipalID, c.CredentialID, op, target, result, requestID, r.now().Unix())
+	// Compatibility projection for accepted recovery tools; the shared record
+	// above is the authority and owns capacity, retention and public redaction.
+	_, err = tx.ExecContext(ctx, "INSERT INTO auth_audit VALUES(?,?,?,?,?,?,?,?)", id, c.PrincipalID, c.CredentialID, op, target, result, requestID, r.now().Unix())
 	return err
 }
 func (r *Repository) clock(ctx context.Context, q querier) (string, string, error) {
