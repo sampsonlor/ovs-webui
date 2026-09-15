@@ -148,6 +148,27 @@ func TestDependencyAndGenerationChangesNeverUseGlobalRevisionAsConflictGate(t *t
 	if _, err := Prepare(e, cmd, s); err == nil {
 		t.Fatal("rebase relinked old OVS identity")
 	}
+	t.Run("identity_loss_dominates_field_conflict_in_either_order", func(t *testing.T) {
+		e, s, i := planFixture()
+		other := i
+		other.ID = repository.NewID()
+		other.Object.ManagementID = repository.NewID()
+		other.Object.OVSUUID = repository.NewID()
+		p := s.Ports[i.Object.ManagementID]
+		p.Binding = other.Object
+		s.Ports[other.Object.ManagementID] = p
+		e = staged(t, staged(t, e, s, i), s, other)
+		delete(s.Ports, i.Object.ManagementID)
+		p.VLAN.Tag = ptr(39)
+		s.Ports[other.Object.ManagementID] = p
+		for range 2 {
+			v := Compare(e.Candidate, s)
+			if v.State != "reconciliation-required" || !hasGate(v.Checks, "OBJECT_BINDING_CHANGED") || !hasGate(v.Checks, "FIELD_CONFLICT") {
+				t.Fatal("later field conflict hid the missing native identity", v)
+			}
+			e.Candidate.Intents[0], e.Candidate.Intents[1] = e.Candidate.Intents[1], e.Candidate.Intents[0]
+		}
+	})
 }
 func TestSignedOriginalsRejectTamperingPrincipalSwitchAndDuplicateTargets(t *testing.T) {
 	e, s, i := planFixture()

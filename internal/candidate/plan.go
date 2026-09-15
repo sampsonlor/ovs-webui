@@ -78,7 +78,9 @@ func Compare(c Candidate, s Snapshot) View {
 		p, problem := comparison(i, s)
 		if problem != "" {
 			v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
-			v.State = "conflict"
+			if v.State != "reconciliation-required" {
+				v.State = "conflict"
+			}
 			if problem == "GENERATION_RECONCILIATION_REQUIRED" || problem == "OBJECT_BINDING_CHANGED" {
 				v.State = "reconciliation-required"
 			}
