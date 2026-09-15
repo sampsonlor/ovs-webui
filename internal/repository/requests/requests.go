@@ -64,6 +64,43 @@ func (r *Repository) Epoch(ctx context.Context) (string, error) {
 	})
 	return epoch, err
 }
+
+// Replay checks an original receipt before preparing new provider-dependent
+// work. Authorization runs outside the database read (important for webd IPC).
+// Execute still repeats this lookup atomically before admitting any mutation.
+func (r *Repository) Replay(ctx context.Context, c Command, authorize func(context.Context) error) (apitypes.Result, bool, error) {
+	var out apitypes.Result
+	if authorize == nil {
+		return out, false, apitypes.Fail(503, "AUTH_UNAVAILABLE")
+	}
+	if err := authorize(ctx); err != nil {
+		return out, false, err
+	}
+	digest, err := fingerprint(c)
+	if err != nil {
+		return out, false, err
+	}
+	err = r.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
+		var prior string
+		var body, receipt []byte
+		if err := q.QueryRowContext(ctx, "SELECT fingerprint,status,response,receipt FROM api_receipts WHERE principal_id=? AND epoch=? AND domain=? AND request_id=?", c.Principal, c.Epoch, c.Domain, c.ID).Scan(&prior, &out.Status, &body, &receipt); err != nil {
+			return err
+		}
+		if digest != prior {
+			return apitypes.Fail(409, "IDEMPOTENCY_MISMATCH")
+		}
+		if json.Unmarshal(receipt, &out.Receipt) != nil {
+			return repository.ErrUnavailable
+		}
+		out.Body = body
+		out.Replayed = true
+		return nil
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return apitypes.Result{}, false, nil
+	}
+	return out, err == nil, err
+}
 func fingerprint(c Command) (string, error) {
 	var payload any
 	decoder := json.NewDecoder(bytes.NewReader(c.Payload))

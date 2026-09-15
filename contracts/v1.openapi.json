@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "Phase 1 public transport with authentication, read-only OVSDB inventory and shared durable Job/Event/Audit services. A documented operation is not permission or proof of provider availability; switching writes remain gated."
   },
   "servers": [
@@ -28241,6 +28241,17 @@
           "value": {
             "type": "object",
             "additionalProperties": true
+          },
+          "before": {
+            "$ref": "#/components/schemas/NativeVlan"
+          },
+          "dependency_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "schema_digest": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           }
         },
         "required": [
@@ -28471,6 +28482,52 @@
                 "type": "null"
               }
             ]
+          },
+          "current_instance_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_config_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conflict_snapshot_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiffField"
+            },
+            "minItems": 0,
+            "maxItems": 512
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gate"
+            },
+            "minItems": 0,
+            "maxItems": 512
           }
         },
         "required": [
@@ -28638,6 +28695,9 @@
           },
           "reason": {
             "type": "string"
+          },
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
           }
         },
         "required": [
@@ -28835,6 +28895,18 @@
           "after": {},
           "authority": {
             "type": "string"
+          },
+          "current": {},
+          "operation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "conflict": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -28899,6 +28971,28 @@
             },
             "minItems": 0,
             "maxItems": 512
+          },
+          "changeset_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "usable": {
+            "type": "boolean"
+          },
+          "invalidations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gate"
+            },
+            "minItems": 0,
+            "maxItems": 512
+          },
+          "risk": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "execution_ready": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -28914,7 +29008,8 @@
           "checks",
           "diff"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "description": "Immutable evaluation state with dynamically rechecked usable/invalidations. A successful Job can contain a blocked validation. Candidate, credential, policy, generation, schema, touched fields and dependencies invalidate use. Actual dispatch remains a separate preflight gate."
       },
       "TransactionCommand": {
         "type": "object",

@@ -142,7 +142,7 @@ def main():
         tls = ssl.create_default_context(cafile=str(cert))
         cookie, csrf, epoch = '', '', ''
 
-        def call(path, method='GET', body=None, bearer=None, anonymous=False):
+        def call(path, method='GET', body=None, bearer=None, anonymous=False, extra_headers=None, drop_response=False):
             headers, payload = {}, None
             if not anonymous:
                 headers['Authorization' if bearer else 'Cookie'] = 'Bearer ' + bearer if bearer else cookie
@@ -153,12 +153,15 @@ def main():
                     headers['X-OVS-CSRF-Token'] = csrf
                     if 'request_id' in body:
                         headers.update({'X-OVS-Request-Epoch': epoch, 'Idempotency-Key': body['request_id']})
+            headers.update(extra_headers or {})
             request = urllib.request.Request(origin + '/api/v1' + path, data=payload, headers=headers, method=method)
             try:
                 response = urllib.request.urlopen(request, context=tls, timeout=8)
             except urllib.error.HTTPError as error:
                 response = error
             with response:
+                if drop_response:
+                    return response.status, None, response.headers
                 raw = response.read()
                 return response.status, (json.loads(raw) if raw else None), response.headers
 
@@ -274,6 +277,12 @@ def main():
         serialized = json.dumps([audit, linked_events, shared_job])
         assert all(secret not in serialized for secret in credentials)
         metrics['shared_evidence_verified'] = True
+        from candidate_validation import verify_candidate
+        metrics['candidate_validation'] = verify_candidate(
+            call, get, vsctl, units, manager_db, web_db,
+            lambda: stop_ovs('db'), start_db, eventually, credentials)
+        checks.append('formal Candidate and Validation acceptance passed on the real HTTPS/IPC/OVSDB path; detailed checks in metrics.candidate_validation')
+
 
         vsctl('del-port', 'br-inv', 'inv-p1')
         eventually(lambda: call('/ports/' + original['management_id'])[0] == 404)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 )
 
 func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +25,7 @@ func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
 		class = Auth
 	case "auth.revoke":
 		class = Control
-	case "security.execute":
+	case "security.execute", "candidate.prepare", "candidate.validate":
 		class = Heavy
 	}
 	free, err := h.budgets[class].acquire(r.Context())
@@ -53,6 +54,32 @@ func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
 	}
 	var out any
 	switch op {
+	case "candidate.prepare", "candidate.read", "candidate.validate":
+		manager, ok := h.auth.(candidate.Manager)
+		if !ok {
+			h.problem(w, r, 503, "CANDIDATE_SERVICE_UNAVAILABLE")
+			return
+		}
+		switch op {
+		case "candidate.prepare":
+			var in candidate.PrepareRequest
+			if !h.decode(w, r, &in) {
+				return
+			}
+			out, err = manager.PrepareCandidate(r.Context(), credential, in)
+		case "candidate.read":
+			var in candidate.ReadRequest
+			if !h.decode(w, r, &in) {
+				return
+			}
+			out, err = manager.ReadCandidate(r.Context(), credential, in)
+		case "candidate.validate":
+			var in candidate.ValidateRequest
+			if !h.decode(w, r, &in) {
+				return
+			}
+			out, err = manager.ValidateCandidate(r.Context(), credential, in)
+		}
 	case "auth.authenticate":
 		var in authn.Login
 		if !h.decode(w, r, &in) {
@@ -147,5 +174,17 @@ func (c *Client) ReadInventory(ctx context.Context, g string, in authn.Query) (o
 }
 func (c *Client) ExecuteAuth(ctx context.Context, g string, in authn.Command) (out apitypes.Result, err error) {
 	err = c.callAuth(ctx, "security.execute", g, in, &out)
+	return
+}
+func (c *Client) PrepareCandidate(ctx context.Context, g string, in candidate.PrepareRequest) (out candidate.Envelope, err error) {
+	err = c.callAuth(ctx, "candidate.prepare", g, in, &out)
+	return
+}
+func (c *Client) ReadCandidate(ctx context.Context, g string, in candidate.ReadRequest) (out authn.Response, err error) {
+	err = c.callAuth(ctx, "candidate.read", g, in, &out)
+	return
+}
+func (c *Client) ValidateCandidate(ctx context.Context, g string, in candidate.ValidateRequest) (out apitypes.Result, err error) {
+	err = c.callAuth(ctx, "candidate.validate", g, in, &out)
 	return
 }

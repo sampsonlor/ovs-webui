@@ -19,10 +19,10 @@ import (
 )
 
 var selected = map[string][]string{
-	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version"},
-	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable"},
-	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode"},
-	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "error"},
+	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids"},
+	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "external_ids"},
+	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "external_ids"},
+	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
 
@@ -75,6 +75,9 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			if t == "Port" {
+				c.VLANCompatible, c.VLANModes = vlanConstraint(name, col)
+			}
 			for pos, b := range map[string]*native.BaseType{"key": col.TypeObj.Key, "value": col.TypeObj.Value} {
 				if b != nil && b.Type == native.TypeUUID {
 					ref, _ := b.RefTable()

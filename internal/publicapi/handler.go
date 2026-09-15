@@ -181,7 +181,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if op.ID == "readContract" {
-		respond(w, 200, map[string]any{"major": 1, "version": "1.4.0", "openapi_url": "/api/v1/openapi.json", "service_state": "availability-reported-by-runtime-and-domain-services", "request_domains": []string{"workspace", "management"}}, "application/json")
+		respond(w, 200, map[string]any{"major": 1, "version": "1.5.0", "openapi_url": "/api/v1/openapi.json", "service_state": "availability-reported-by-runtime-and-domain-services", "request_domains": []string{"workspace", "management"}}, "application/json")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -235,7 +235,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		refs := []apitypes.Ref{}
 		for _, id := range path {
-			refs = append(refs, apitypes.Ref{Kind: op.ResourceKind, ID: id})
+			// The selected receipt domain owns its principal/resource check. A
+			// workspace receipt does not have a duplicate row in manager.db.
+			if op.ID != "readRequestReceipt" {
+				refs = append(refs, apitypes.Ref{Kind: op.ResourceKind, ID: id})
+			}
 		}
 		if err = h.authorizer.Allow(ctx, subject, op.Capability, refs); err != nil {
 			fail(err)

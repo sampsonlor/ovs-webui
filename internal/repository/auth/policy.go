@@ -139,6 +139,31 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			return apitypes.Fail(422, "INVALID_RESOURCE_SCOPE")
 		}
 		switch ref.Kind {
+		case "candidate":
+			if err := require(c, "workspace.read", false, 0); err != nil {
+				return err
+			}
+			if err := require(c, "configuration.read", false, 0); err != nil {
+				return err
+			}
+			var count int
+			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM candidate_witnesses WHERE owner_id=? AND candidate_id=?", c.PrincipalID, ref.ID).Scan(&count); err != nil {
+				return err
+			}
+			if count != 1 {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
+		case "validation":
+			if err := require(c, "config.validate", false, 0); err != nil {
+				return err
+			}
+			var count int
+			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM candidate_validations WHERE owner_id=? AND id=?", c.PrincipalID, ref.ID).Scan(&count); err != nil {
+				return err
+			}
+			if count != 1 {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
 		case "request", "job":
 			var count int
 			query := "SELECT count(*) FROM api_receipts WHERE principal_id=? AND request_id=?"
