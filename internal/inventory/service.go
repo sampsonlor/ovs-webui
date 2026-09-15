@@ -26,13 +26,14 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
-	registry Registry
-	mu       sync.RWMutex
-	current  *view
-	failure  string
-	id       string
-	key      []byte
-	now      func() time.Time
+	registry  Registry
+	mu        sync.RWMutex
+	current   *view
+	failure   string
+	id        string
+	key       []byte
+	now       func() time.Time
+	localVLAN map[string]bool
 }
 
 func New(r Registry) *Service {

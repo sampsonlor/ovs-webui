@@ -108,11 +108,14 @@ type VlanIntent struct {
 	Value     VlanInput     `json:"value"`
 }
 type ObservedIntent struct {
-	IntentId    Id                         `json:"intent_id"`
-	Operation   string                     `json:"operation"`
-	Object      ObservedBinding            `json:"object"`
-	Value       map[string]json.RawMessage `json:"value"`
-	ExtraFields map[string]json.RawMessage `json:"-"`
+	IntentId           Id                         `json:"intent_id"`
+	Operation          string                     `json:"operation"`
+	Object             ObservedBinding            `json:"object"`
+	Value              map[string]json.RawMessage `json:"value"`
+	Before             NativeVlan                 `json:"before,omitempty"`
+	DependencyRevision Revision                   `json:"dependency_revision,omitempty"`
+	SchemaDigest       string                     `json:"schema_digest,omitempty"`
+	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
 func (v *ObservedIntent) UnmarshalJSON(data []byte) error {
@@ -170,14 +173,20 @@ func (v PortsPage) MarshalJSON() ([]byte, error) {
 }
 
 type Candidate struct {
-	Id                 Id                         `json:"id"`
-	Revision           Revision                   `json:"revision"`
-	InstanceGeneration json.RawMessage            `json:"instance_generation"`
-	BaseConfigRevision json.RawMessage            `json:"base_config_revision"`
-	State              string                     `json:"state"`
-	Intents            []ObservedIntent           `json:"intents"`
-	ConsumedBy         json.RawMessage            `json:"consumed_by"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	Id                        Id                         `json:"id"`
+	Revision                  Revision                   `json:"revision"`
+	InstanceGeneration        json.RawMessage            `json:"instance_generation"`
+	BaseConfigRevision        json.RawMessage            `json:"base_config_revision"`
+	State                     string                     `json:"state"`
+	Intents                   []ObservedIntent           `json:"intents"`
+	ConsumedBy                json.RawMessage            `json:"consumed_by"`
+	CurrentInstanceGeneration json.RawMessage            `json:"current_instance_generation,omitempty"`
+	CurrentConfigRevision     json.RawMessage            `json:"current_config_revision,omitempty"`
+	ConflictSnapshotId        json.RawMessage            `json:"conflict_snapshot_id,omitempty"`
+	Diff                      []DiffField                `json:"diff,omitempty"`
+	Checks                    []Gate                     `json:"checks,omitempty"`
+	DiffTruncated             bool                       `json:"diff_truncated,omitempty"`
+	ExtraFields               map[string]json.RawMessage `json:"-"`
 }
 
 func (v *Candidate) UnmarshalJSON(data []byte) error {
@@ -198,6 +207,7 @@ type Gate struct {
 	Code        string                     `json:"code"`
 	State       string                     `json:"state"`
 	Reason      string                     `json:"reason"`
+	IntentId    Id                         `json:"intent_id,omitempty"`
 	ExtraFields map[string]json.RawMessage `json:"-"`
 }
 
@@ -265,6 +275,10 @@ type DiffField struct {
 	Before      json.RawMessage            `json:"before"`
 	After       json.RawMessage            `json:"after"`
 	Authority   string                     `json:"authority"`
+	Current     json.RawMessage            `json:"current,omitempty"`
+	Operation   string                     `json:"operation,omitempty"`
+	IntentId    Id                         `json:"intent_id,omitempty"`
+	Conflict    bool                       `json:"conflict,omitempty"`
 	ExtraFields map[string]json.RawMessage `json:"-"`
 }
 
@@ -289,6 +303,11 @@ type Validation struct {
 	State              string                     `json:"state"`
 	Checks             []Gate                     `json:"checks"`
 	Diff               []DiffField                `json:"diff"`
+	ChangesetId        Id                         `json:"changeset_id,omitempty"`
+	Usable             bool                       `json:"usable,omitempty"`
+	Invalidations      []Gate                     `json:"invalidations,omitempty"`
+	Risk               string                     `json:"risk,omitempty"`
+	ExecutionReady     bool                       `json:"execution_ready,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

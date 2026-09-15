@@ -126,6 +126,7 @@ func Prune(ctx context.Context, store *sqlite.Store, now time.Time) error {
  AND NOT EXISTS(SELECT 1 FROM transaction_journal t WHERE t.transaction_id=j.transaction_id AND t.state NOT IN ('succeeded','failed','cancelled','completed'))
  AND NOT EXISTS(SELECT 1 FROM api_receipts r WHERE json_extract(r.receipt,'$.job_ref.id')=j.id AND r.completed_at_ms IS NULL)
  AND NOT EXISTS(SELECT 1 FROM evidence_records r WHERE r.job_id=j.id)
+ AND NOT EXISTS(SELECT 1 FROM candidate_validations v WHERE v.job_id=j.id)
  AND NOT EXISTS(SELECT 1 FROM evidence_jobs k JOIN jobs other ON other.id=k.id WHERE json_extract(k.document,'$.resource_ref.id')=j.id AND other.state NOT IN ('succeeded','failed','cancelled'))
  ORDER BY e.completed_at_ms,e.id LIMIT 256) RETURNING json_extract(document,'$.completed_at')`, now.Add(-30*24*time.Hour).UnixMilli())
 		if err != nil {

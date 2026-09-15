@@ -51,6 +51,7 @@ func run() int {
 	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
+	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.SoftwareVersion())
@@ -206,6 +207,14 @@ func run() int {
 			return 1
 		}
 		inventoryService = inventory.New(reg)
+		var vlanIDs []string
+		if *localVLANPorts != "" {
+			vlanIDs = strings.Split(*localVLANPorts, ",")
+		}
+		if err = inventoryService.SetLocalVLANPorts(vlanIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_VLAN_AUTHORITY")
+			return 2
+		}
 		if *ovsUID >= 1<<32-1 {
 			logger.Error("inventory_start_failed", "code", "OVSDB_PEER_INVALID")
 			return 2

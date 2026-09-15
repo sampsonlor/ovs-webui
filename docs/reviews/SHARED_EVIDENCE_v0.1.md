@@ -1,6 +1,6 @@
 # 共享持久证据服务审阅 v0.1
 
-日期：2026-09-15。任务 [#37](https://github.com/sampsonlor/ovs-webui/issues/37) / [PR #63](https://github.com/sampsonlor/ovs-webui/pull/63)。实现与技术验收完成；本批保持 Open / In Progress，等待用户接受，未开始 #38。
+日期：2026-09-15。任务 [#37](https://github.com/sampsonlor/ovs-webui/issues/37) / [PR #63](https://github.com/sampsonlor/ovs-webui/pull/63)。实现与技术验收完成；用户已接受，PR #63 合并至 `ba8a4eed5fdf2d3470d3670b6be38c1ba6b8ec97`，接受标签 `phase1-shared-evidence-v0.1`；#37 已关闭并在看板标为 Done，#38 已开始。
 
 实现与边界见 [共享 Job、请求、Event 与 Audit](../implementation/SHARED_EVIDENCE_v0.1.md)。
 

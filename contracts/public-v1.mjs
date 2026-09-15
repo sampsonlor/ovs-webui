@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.4.0', description: 'Phase 1 public transport with authentication, read-only OVSDB inventory and shared durable Job/Event/Audit services. A documented operation is not permission or proof of provider availability; switching writes remain gated.' };
+api.info = { title: 'OVS WebUI public API', version: '1.5.0', description: 'Phase 1 public transport with authentication, read-only OVSDB inventory and shared durable Job/Event/Audit services. A documented operation is not permission or proof of provider availability; switching writes remain gated.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -20,6 +20,19 @@ const bool = { type: 'boolean' };
 const id = ref('Id');
 const object = ref('ObjectBinding');
 const revision = ref('Revision');
+// Additive Candidate/Validation read models; frozen v1 requests stay compatible.
+Object.assign(s.Candidate.properties, {
+ current_instance_generation: nullable(id), current_config_revision: nullable(revision), conflict_snapshot_id: nullable(id),
+ diff: array(ref('DiffField'), 512), checks: array(ref('Gate'), 512), diff_truncated: bool,
+});
+Object.assign(s.ObservedIntent.properties, { before: ref('NativeVlan'), dependency_revision: revision, schema_digest: string() });
+Object.assign(s.DiffField.properties, { current: {}, operation: string(), intent_id: id, conflict: bool });
+Object.assign(s.Gate.properties, { intent_id: id });
+Object.assign(s.Validation.properties, {
+ changeset_id: id, usable: bool, invalidations: array(ref('Gate'), 512), risk: string(), execution_ready: bool,
+});
+s.Validation.description = 'Immutable evaluation state with dynamically rechecked usable/invalidations. A successful Job can contain a blocked validation. Candidate, credential, policy, generation, schema, touched fields and dependencies invalidate use. Actual dispatch remains a separate preflight gate.';
+
 const strMap = { type: 'object', maxProperties: 32, additionalProperties: string(1024) };
 s.Id = { type: 'string', format: 'uuid', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' };
 s.RequestId = { ...s.Id, pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' };

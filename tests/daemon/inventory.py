@@ -142,7 +142,7 @@ def main():
         tls = ssl.create_default_context(cafile=str(cert))
         cookie, csrf, epoch = '', '', ''
 
-        def call(path, method='GET', body=None, bearer=None, anonymous=False):
+        def call(path, method='GET', body=None, bearer=None, anonymous=False, extra_headers=None, drop_response=False):
             headers, payload = {}, None
             if not anonymous:
                 headers['Authorization' if bearer else 'Cookie'] = 'Bearer ' + bearer if bearer else cookie
@@ -153,12 +153,15 @@ def main():
                     headers['X-OVS-CSRF-Token'] = csrf
                     if 'request_id' in body:
                         headers.update({'X-OVS-Request-Epoch': epoch, 'Idempotency-Key': body['request_id']})
+            headers.update(extra_headers or {})
             request = urllib.request.Request(origin + '/api/v1' + path, data=payload, headers=headers, method=method)
             try:
                 response = urllib.request.urlopen(request, context=tls, timeout=8)
             except urllib.error.HTTPError as error:
                 response = error
             with response:
+                if drop_response:
+                    return response.status, None, response.headers
                 raw = response.read()
                 return response.status, (json.loads(raw) if raw else None), response.headers
 
@@ -274,6 +277,12 @@ def main():
         serialized = json.dumps([audit, linked_events, shared_job])
         assert all(secret not in serialized for secret in credentials)
         metrics['shared_evidence_verified'] = True
+        from candidate_validation import verify_candidate
+        metrics['candidate_validation'] = verify_candidate(
+            call, get, vsctl, units, manager_db, web_db,
+            lambda: stop_ovs('db'), start_db, eventually, credentials)
+        checks.append('formal Candidate and Validation acceptance passed on the real HTTPS/IPC/OVSDB path; detailed checks in metrics.candidate_validation')
+
 
         vsctl('del-port', 'br-inv', 'inv-p1')
         eventually(lambda: call('/ports/' + original['management_id'])[0] == 404)
@@ -281,6 +290,12 @@ def main():
         recreated = eventually(lambda: next((p for p in get('/ports')['items'] if p['name'] == 'inv-p1'), None))
         assert recreated['management_id'] != original['management_id'] and recreated['ovs_uuid'] != original['ovs_uuid']
         assert recreated['instance_generation'] == generation
+
+        lifecycle_validation = metrics['candidate_validation']['validation_id_for_lifecycle_checks']
+        invalid = get('/validations/' + lifecycle_validation)
+        assert not invalid['usable'] and any(g['code'] == 'OBJECT_BINDING_CHANGED' for g in invalid['invalidations'])
+        assert get('/candidate')['state'] == 'reconciliation-required'
+        metrics['candidate_validation']['recreated_object_invalidated'] = True
         with sqlite3.connect(manager_db) as db:
             assert db.execute('SELECT state FROM identities WHERE management_id=?', (original['management_id'],)).fetchone() == ('tombstone',)
         checks.append('delete/recreate with the same name gets a new native UUID and management ID; old ID is tombstoned and returns 404')
@@ -319,10 +334,18 @@ def main():
         assert bad.returncode != 0
         run(mgrd, '--database', str(manager_db), '--ovsdb-socket', str(db_socket), '--ovsdb-file', str(conf),
             '--reconcile-ovsdb', digest, '--reconciliation-reason', 'synthetic reviewed copy restore')
+        # Independent root-operated maintenance scenario: earlier deliberate
+        # restarts must not consume this fixture's next start-limit budget.
+        # The production unit and its automatic crash-restart limits are intact.
+        run('systemctl', 'reset-failed', units['mgrd'])
         run('systemctl', 'start', units['mgrd'])
         page = eventually(lambda: observed_ports(lambda p: p['source']['freshness'] == 'fresh'))
         assert page['instance_generation'] != generation
         assert call('/ports/' + recreated['management_id'])[0] == 404
+
+        invalid = get('/validations/' + lifecycle_validation)
+        assert not invalid['usable'] and any(g['code'] == 'GENERATION_RECONCILIATION_REQUIRED' for g in invalid['invalidations'])
+        metrics['candidate_validation']['real_generation_change_invalidated'] = True
         generation = page['instance_generation']
         with sqlite3.connect(manager_db) as db:
             assert db.execute("SELECT count(*) FROM auth_audit WHERE operation='inventory-explicit-reconciliation'").fetchone()[0] == 1
@@ -339,6 +362,7 @@ def main():
         generation = page['instance_generation']
         run('systemctl', 'stop', units['mgrd'])
         run(mgrd, '--database', str(manager_db), '--prepare-restore-security')
+        run('systemctl', 'reset-failed', units['mgrd'])
         run('systemctl', 'start', units['mgrd'])
         eventually(lambda: call('/runtime', anonymous=True)[0] == 200)
         assert call('/inventory')[0] == 401

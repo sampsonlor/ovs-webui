@@ -24,11 +24,13 @@ type Authentication struct {
 	manager      authn.Manager
 	sessions     *sessions.Repository
 	certificates *ManagedTLS
+	workspace    *Workspace
 }
 
 func NewAuthentication(manager authn.Manager, sessions *sessions.Repository) *Authentication {
 	return &Authentication{manager: manager, sessions: sessions}
 }
+func (a *Authentication) WithWorkspace(w *Workspace) *Authentication { a.workspace = w; return a }
 func (a *Authentication) WithCertificates(c *ManagedTLS) *Authentication {
 	a.certificates = c
 	return a
@@ -194,6 +196,13 @@ func (a *Authentication) Session(ctx context.Context, s publicapi.Subject, q pub
 	return out, nil
 }
 func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q publicapi.Query) (publicapi.Response, error) {
+	if q.Operation.ID == "readCandidate" || q.Operation.ID == "readWorkspace" || q.Operation.ID == "readValidation" || q.Operation.ID == "readRequestReceipt" && q.Values.Get("domain") == "workspace" {
+		if a.workspace == nil {
+			return publicapi.Response{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")
+		}
+		out, err := a.workspace.Read(ctx, s, q)
+		return out, authError(err)
+	}
 	uri := q.Operation.Path
 	for key, id := range q.Path {
 		uri = strings.ReplaceAll(uri, "{"+key+"}", id)
@@ -227,6 +236,13 @@ func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q public
 	return publicapi.Response{Status: result.Status, Body: result.Body, ETag: result.ETag}, nil
 }
 func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q publicapi.Query, c requests.Command) (apitypes.Result, error) {
+	if q.Operation.ID == "changeCandidate" || q.Operation.ID == "createValidation" {
+		if a.workspace == nil {
+			return apitypes.Result{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")
+		}
+		out, err := a.workspace.Execute(ctx, s, q, c)
+		return out, authError(err)
+	}
 	if q.Operation.ID == "createCertificate" || q.Operation.ID == "activateCertificate" || q.Operation.ID == "confirmCertificate" {
 		if a.certificates == nil {
 			return apitypes.Result{}, apitypes.Fail(503, "TLS_STORE_UNAVAILABLE")

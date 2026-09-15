@@ -155,6 +155,9 @@ func run() int {
 	if sessionKeys, keyErr := security.sessionKeys(false); keyErr == nil && storageErr == nil && *origin != "" {
 		if sessionStore, err := sessions.NewWithKeys(ctx, store, sessionKeys); err == nil {
 			authentication = web.NewAuthentication(client, sessionStore).WithCertificates(managed)
+			if workspace, e := web.NewWorkspace(store, client); e == nil {
+				authentication.WithWorkspace(workspace)
+			}
 		}
 	}
 	if authentication == nil {
