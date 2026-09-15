@@ -139,6 +139,17 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			return apitypes.Fail(422, "INVALID_RESOURCE_SCOPE")
 		}
 		switch ref.Kind {
+		case "transaction":
+			if err := require(c, "configuration.read", false, 0); err != nil {
+				return err
+			}
+			var owner string
+			if err := q.QueryRowContext(ctx, "SELECT owner_id FROM field_executions WHERE id=?", ref.ID).Scan(&owner); err != nil {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
+			if owner != c.PrincipalID {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
 		case "candidate":
 			if err := require(c, "workspace.read", false, 0); err != nil {
 				return err

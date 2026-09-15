@@ -162,7 +162,7 @@ func CreateJob(ctx context.Context, tx *sql.Tx, j Job) (Job, error) {
 	if j.Reason == "" {
 		j.Reason = "admitted"
 	}
-	if !apitypes.ManagementID(j.ID) || !apitypes.ManagementID(j.Owner) || !apitypes.ManagementID(j.Correlation) || !code(j.Operation) || !code(j.Capability) || !validRef(j.Resource) || !optionalID(j.ChangeSet) || !optionalID(j.Transaction) || !optionalID(j.Credential) || !optionalRequest(j.RequestID) || !optionalID(j.RequestEpoch) || (j.State != "queued" && j.State != "running" && !Terminal(j.State) && j.State != "needs-attention") || (j.Handler != "none" && j.Handler != "tls-activation" && j.Handler != "provider") {
+	if !apitypes.ManagementID(j.ID) || !apitypes.ManagementID(j.Owner) || !apitypes.ManagementID(j.Correlation) || !code(j.Operation) || !code(j.Capability) || !validRef(j.Resource) || !optionalID(j.ChangeSet) || !optionalID(j.Transaction) || !optionalID(j.Credential) || !optionalRequest(j.RequestID) || !optionalID(j.RequestEpoch) || (j.State != "queued" && j.State != "running" && !Terminal(j.State) && j.State != "needs-attention") || (j.Handler != "none" && j.Handler != "tls-activation" && j.Handler != "provider" && j.Handler != "field-execution") {
 		return Job{}, apitypes.Fail(422, "INVALID_JOB")
 	}
 	var total, queued, running int
@@ -267,6 +267,9 @@ func ChangeJob(ctx context.Context, tx *sql.Tx, id, expected string, t Transitio
 		valid = t.State == "running" || t.State == "cancelled" || t.State == "failed" || t.State == "needs-attention"
 	case "running", "cancel-requested", "needs-attention":
 		valid = t.State == "cancel-requested" || t.State == "needs-attention" || Terminal(t.State)
+		// The typed field executor persists distinct dispatch/applied phases.
+		// Generic jobs still cannot claim a new running phase after restart.
+		valid = valid || j.Handler == "field-execution" && t.State == "running" && j.State == "running"
 	}
 	if !valid || !code(t.Reason) {
 		return Job{}, apitypes.Fail(422, "INVALID_JOB_TRANSITION")

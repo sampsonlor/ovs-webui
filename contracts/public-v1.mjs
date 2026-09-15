@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.5.0', description: 'Phase 1 public transport with authentication, read-only OVSDB inventory and shared durable Job/Event/Audit services. A documented operation is not permission or proof of provider availability; switching writes remain gated.' };
+api.info = { title: 'OVS WebUI public API', version: '1.6.0', description: 'Phase 1 public transport with authentication, OVSDB inventory, Candidate/Validation, durable field-execution evidence and Job/Event/Audit services. Public switching admission remains gated on Safe Apply; Applied evidence does not prove health or confirmation.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -211,7 +211,14 @@ for (const [path, op, body, cap, issue, options] of [
 
 // Artifact data is fetched separately from bounded JSON management responses.
 add('/artifacts/{artifact_id}','get','readArtifact','Resource','artifact.read',48);
-api['x-boundaries'] = { switching_changes: 'candidate-validation-transaction-evidence', websocket: 'notifications-only; REST resync is authoritative', dpdk_offload: 'observe', openflow_write: 'conditional service gate #53', authentication: 'mgrd per-operation authority #34', public_release: 'transport baseline does not claim product GA' };
+api['x-boundaries'] = { switching_changes: 'candidate-validation-transaction-evidence; public admission requires Safe Apply #40', websocket: 'notifications-only; REST resync is authoritative', dpdk_offload: 'observe', openflow_write: 'conditional service gate #53', authentication: 'mgrd per-operation authority #34', public_release: 'transport baseline does not claim product GA' };
+s.Transaction.properties.field_execution_state = string(64);
+s.Transaction.properties.candidate_id = id;
+s.Transaction.properties.candidate_revision = id;
+s.Transaction.properties.validation_id = id;
+for (const path of ['/transactions', '/transactions/{transaction_id}', '/transactions/{transaction_id}/reconciliations']) {
+ for (const op of Object.values(api.paths[path])) if (['listTransactions', 'readTransaction', 'reconcileTransaction'].includes(op.operationId)) op['x-service-state'] = 'implemented';
+}
 
 export const pagePaths = {
  'OV-01':['/health','/ports','/workspace'], 'OV-02':['/search','/topology'], 'SW-01':['/bridges','/ports','/interfaces'], 'SW-02':['/bridges','/candidate'], 'SW-03':['/bridges/{bridge_id}','/ports'],

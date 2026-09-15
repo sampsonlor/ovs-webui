@@ -372,6 +372,10 @@ type Transaction struct {
 	AllowedActions       []string                   `json:"allowed_actions"`
 	JobRef               ResourceRef                `json:"job_ref"`
 	CorrelationId        Id                         `json:"correlation_id"`
+	FieldExecutionState  string                     `json:"field_execution_state,omitempty"`
+	CandidateId          Id                         `json:"candidate_id,omitempty"`
+	CandidateRevision    Id                         `json:"candidate_revision,omitempty"`
+	ValidationId         Id                         `json:"validation_id,omitempty"`
 	ExtraFields          map[string]json.RawMessage `json:"-"`
 }
 

@@ -38,7 +38,8 @@ Implement P1 in this order and do not begin a later batch before the current rev
 - Use `pnpm` and preserve `pnpm-lock.yaml`.
 - Run `pnpm build` before presenting a completed prototype batch.
 - Keep synthetic fixtures free of personal, customer, credential, and production-network data.
-- Use focused feature branches such as `feat/p1-batch-01-bridge-bond`.
+- Keep at most one active feature branch alongside `main`, using a focused `codex/` branch.
+- Once the task's required tests and CI pass, merge the tested head into `main`, verify the merged result, and delete the completed feature branch locally and remotely. The user has authorized this delivery sequence; retain the annotated accepted baseline.
 - Keep `main` in a reviewable state and record accepted baselines with annotated tags.
 - Do not change `.openai/hosting.json` or site access unless the task explicitly requires a deployment change.
 

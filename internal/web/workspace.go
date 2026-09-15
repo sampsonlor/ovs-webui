@@ -224,6 +224,13 @@ func (w *Workspace) Execute(ctx context.Context, s publicapi.Subject, q publicap
 		if current.Candidate.Revision != e.Candidate.Revision || c.Precondition != `"`+current.Candidate.Revision+`"` {
 			return requests.Mutation{}, apitypes.Fail(412, "ETAG_MISMATCH")
 		}
+		var reservations int
+		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM candidate_execution_reservations WHERE owner_id=?", s.ID).Scan(&reservations); err != nil {
+			return requests.Mutation{}, err
+		}
+		if reservations != 0 {
+			return requests.Mutation{}, apitypes.Fail(409, "CANDIDATE_RESERVED")
+		}
 		blob, _ := json.Marshal(prepared)
 		body, _ := json.Marshal(prepared.Candidate)
 		if _, err = tx.ExecContext(ctx, "UPDATE candidate_workspaces SET revision=?,sequence=?,envelope=? WHERE owner_id=? AND revision=?", prepared.Candidate.Revision, prepared.Sequence, blob, s.ID, e.Candidate.Revision); err != nil {
