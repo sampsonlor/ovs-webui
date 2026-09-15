@@ -146,7 +146,11 @@ func Read(ctx context.Context, q Query, c authn.Claims, op string, path map[stri
 	if err := q.QueryRowContext(ctx, "SELECT retention_epoch,revision,CASE ? WHEN 'event' THEN event_pruned_through WHEN 'audit' THEN audit_pruned_through ELSE job_pruned_through END FROM evidence_state WHERE singleton=1", collection).Scan(&epoch, &version, &pruned); err != nil {
 		return nil, err
 	}
-	cur := cursor{Principal: c.PrincipalID, Permission: c.Revision, Operation: op, Filter: values.Get("filter"), Correlation: values.Get("correlation_id"), Object: values.Get("object_id"), Job: values.Get("job_id"), Origin: values.Get("origin"), Limit: limit, Epoch: epoch, Revision: version, Snapshot: repository.NewID(), Expires: now.Add(30 * time.Second).UnixMilli()}
+	permission := hash(struct {
+		Revision, Epoch string
+		Capabilities    []string
+	}{c.Revision, c.Epoch, c.Capabilities})
+	cur := cursor{Principal: c.PrincipalID, Permission: permission, Operation: op, Filter: values.Get("filter"), Correlation: values.Get("correlation_id"), Object: values.Get("object_id"), Job: values.Get("job_id"), Origin: values.Get("origin"), Limit: limit, Epoch: epoch, Revision: version, Snapshot: repository.NewID(), Expires: now.Add(30 * time.Second).UnixMilli()}
 	if collection != "job" {
 		if err := q.QueryRowContext(ctx, "SELECT coalesce(max(sequence),0) FROM evidence_records WHERE collection=?", collection).Scan(&cur.Upper); err != nil {
 			return nil, err

@@ -43,7 +43,7 @@ Public v1 增量版本为 1.4.0，共 122 路径 / 139 操作，保持冻结 v1.
 
 表中后续简写路径同属 `/api/v1`。既有 Reader 模板包含 Event/Audit 全局读取权限；这不授予读取其他用户 Job 的权限。Standard/Expert 不改变权限。对象、Job、事务、Event/Audit 和原请求通过稳定 ID 相互关联；完整页面与点击路由仍由各功能主单及 #54 实现。
 
-集合接受 operation 子串 `filter`、`correlation_id`、`object_id`、`job_id`、`origin`（Manager/External/Unknown）、`limit` 和 `cursor`。默认 100、最多 500 条；实际响应另有 40 KiB items 预算及既有 48 KiB IPC 响应限制。先授权后分页，不输出未授权总数。cursor 经 AEAD 保护，绑定主体、当前权限版本、接口、过滤、limit、保留 epoch 和 30 秒有效期。Event/Audit 以 sequence 上界固定快照，后续追加不混入旧页；Job 变化或记录回收使相关 cursor 返回 410。
+集合接受 operation 子串 `filter`、`correlation_id`、`object_id`、`job_id`、`origin`（Manager/External/Unknown）、`limit` 和 `cursor`。默认 100、最多 500 条；实际响应另有 40 KiB items 预算及既有 48 KiB IPC 响应限制。先授权后分页，不输出未授权总数。cursor 经 AEAD 保护，绑定主体、认证 epoch、当前权限版本及 effective capability 集合、接口、过滤、limit、保留 epoch 和 30 秒有效期。Event/Audit 以 sequence 上界固定快照，后续追加不混入旧页；Job 变化或记录回收使相关 cursor 返回 410。
 
 导出使用相同权限和分页机制返回 JSON，显式标注 `authorized-retained-records`、`truncated`、`next_cursor` 和保留范围。导出不承诺包含已回收记录，也不生成无限大下载文件。大于一页的调用方必须按 cursor 读取；过期后重新开始，不拼接两个快照。
 

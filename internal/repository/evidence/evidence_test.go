@@ -197,6 +197,11 @@ func TestEvidencePagesScopeSnapshotFiltersAndWireContract(t *testing.T) {
 	if _, err = Read(ctx, db, other, "listEvents", nil, q, key, now); err == nil {
 		t.Fatal("revoked permission cursor")
 	}
+	other = c
+	other.Capabilities = []string{"events.read"}
+	if _, err = Read(ctx, db, other, "listEvents", nil, q, key, now); err == nil {
+		t.Fatal("cursor crossed credential capability ceilings at the same policy revision")
+	}
 	if _, err = Read(ctx, db, c, "exportEvents", nil, q, key, now); err == nil {
 		t.Fatal("cursor scope changed")
 	}
