@@ -18,6 +18,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
+	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
 )
 
 var etagPattern = regexp.MustCompile(`^"[A-Za-z0-9_-]{1,128}"$`)
@@ -76,6 +77,8 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 			value, err = r.certificate(ctx, tx, path["certificate_id"])
 		case "readRequestReceipt":
 			value, err = r.receipt(ctx, tx, c, path["request_id"], query)
+		case "listTransactions", "readTransaction":
+			value, err = executions.Read(ctx, tx, c, op.ID, path, query, r.key, r.now())
 		default:
 			if evidence.Operation(op.ID) {
 				value, err = evidence.Read(ctx, tx, c, op.ID, path, query, r.key, r.now())

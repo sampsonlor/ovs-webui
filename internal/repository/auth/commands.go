@@ -76,6 +76,18 @@ func (r *Repository) ExecuteAuth(ctx context.Context, credential string, input a
 	if op.ID == "cancelJob" {
 		return r.cancelJob(ctx, credential, input)
 	}
+	if op.ID == "reconcileTransaction" {
+		return r.reconcileFields(ctx, credential, input)
+	}
+	if op.ID == "createTransaction" {
+		if _, _, err = r.candidateCommand(input, "createTransaction"); err != nil {
+			return out, err
+		}
+		if _, err = r.CheckAuth(ctx, credential, authn.Check{Capability: op.Capability}); err != nil {
+			return out, err
+		}
+		return out, apitypes.Fail(409, "SAFE_APPLY_REQUIRED")
+	}
 	if !securityCommand(op.ID) || op.Domain != "management" {
 		return out, apitypes.Fail(503, "DOMAIN_SERVICE_UNAVAILABLE")
 	}

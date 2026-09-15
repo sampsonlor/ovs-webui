@@ -254,6 +254,12 @@ func run() int {
 		}
 		if authentication != nil {
 			authentication.WithInventory(inventoryService)
+			fields, err := authentication.ConfigureExecution(provider.Executor(inventoryService))
+			if err != nil || fields.Recover(ctx) != nil {
+				logger.Error("service_start_failed", "code", "EXECUTION_RECOVERY_UNAVAILABLE")
+				return 1
+			}
+			go fields.Maintain(ctx)
 		}
 	} else if *acceptEvidence != "" {
 		logger.Error("reconciliation_failed", "code", "INVENTORY_STORAGE_UNAVAILABLE")

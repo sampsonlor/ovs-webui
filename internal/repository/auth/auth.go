@@ -17,6 +17,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
+	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
@@ -31,6 +32,7 @@ type Repository struct {
 	now             func() time.Time
 	tlsNow          func() tlscontrol.Clock
 	inventory       inventory.Reader
+	fields          *executions.Engine
 }
 
 func (r *Repository) WithInventory(reader inventory.Reader) *Repository {

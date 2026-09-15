@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.5.0",
-    "description": "Phase 1 public transport with authentication, read-only OVSDB inventory and shared durable Job/Event/Audit services. A documented operation is not permission or proof of provider availability; switching writes remain gated."
+    "version": "1.6.0",
+    "description": "Phase 1 public transport with authentication, OVSDB inventory, Candidate/Validation, durable field-execution evidence and Job/Event/Audit services. Public switching admission remains gated on Safe Apply; Applied evidence does not prove health or confirmation."
   },
   "servers": [
     {
@@ -2218,7 +2218,7 @@
         "summary": "listTransactions",
         "x-capability": "config.read",
         "x-service-issue": 39,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "transaction",
         "parameters": [
           {
@@ -2604,7 +2604,7 @@
         ],
         "x-capability": "config.read",
         "x-service-issue": 39,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "transaction"
       }
     },
@@ -3058,7 +3058,7 @@
         ],
         "x-capability": "config.read",
         "x-service-issue": 39,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "transaction"
       }
     },
@@ -29263,6 +29263,20 @@
           },
           "correlation_id": {
             "$ref": "#/components/schemas/Id"
+          },
+          "field_execution_state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "candidate_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "candidate_revision": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "validation_id": {
+            "$ref": "#/components/schemas/Id"
           }
         },
         "required": [
@@ -33432,7 +33446,7 @@
   "x-source-issue": 30,
   "x-contract-baseline": "v1.0.0",
   "x-boundaries": {
-    "switching_changes": "candidate-validation-transaction-evidence",
+    "switching_changes": "candidate-validation-transaction-evidence; public admission requires Safe Apply #40",
     "websocket": "notifications-only; REST resync is authoritative",
     "dpdk_offload": "observe",
     "openflow_write": "conditional service gate #53",

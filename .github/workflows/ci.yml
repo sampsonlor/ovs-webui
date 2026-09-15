@@ -148,7 +148,7 @@ jobs:
         run: |
           go version
           test "$(go env GOARCH)" = "$EXPECTED_ARCH"
-          unformatted=$(gofmt -l cmd internal)
+          unformatted=$(gofmt -l cmd internal tests/daemon/field_execution)
           if [ -n "$unformatted" ]; then
             printf '%s\n' "$unformatted"
             exit 1
@@ -172,6 +172,7 @@ jobs:
           go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-webd ./cmd/ovs-webd
           go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-mgrd ./cmd/ovs-mgrd
           go test -c -o outputs/runtime/storage.test ./internal/repository/sqlite
+          go test -c -o outputs/runtime/execution.test ./tests/daemon/field_execution
       - name: Real filesystem exhaustion and durable recovery
         run: sudo -- python3 tests/daemon/storage_full.py outputs/runtime/storage.test
       - name: Install ephemeral OVS test prerequisites
@@ -189,6 +190,14 @@ jobs:
           for schema in 3.3.9 3.7.1 4.0.0; do
             sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --schema-version "$schema"
           done
+      - name: Native field execution, lost replies, Applied evidence and process recovery
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeFieldExecution$' -test.v -test.timeout=120s \
+              | go tool test2json -p "native-field-execution-$schema" | tee "test-results/go-execution-$schema.json"
+          done
       - name: Retain runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -204,6 +213,7 @@ jobs:
             test-results/go-tls-journal.log
             test-results/go-inventory-*.json
             test-results/go-inventory-*-journal.log
+            test-results/go-execution-*.json
           if-no-files-found: ignore
           retention-days: 7
 
