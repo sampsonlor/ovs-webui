@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
 
 type connectionKey struct{}
@@ -25,6 +26,7 @@ type authenticatedConn interface {
 
 type Handler struct {
 	auth       authn.Manager
+	tlsManager tlscontrol.Manager
 	protocol   Protocol
 	authorizer Authorizer
 	budgets    map[Class]*budget
@@ -34,6 +36,7 @@ type Handler struct {
 }
 
 func (h *Handler) WithAuthentication(manager authn.Manager) *Handler { h.auth = manager; return h }
+func (h *Handler) WithTLS(manager tlscontrol.Manager) *Handler       { h.tlsManager = manager; return h }
 
 func NewHandler(protocol Protocol, authorizer Authorizer, logger *slog.Logger, probes ...func(context.Context) Health) *Handler {
 	if authorizer == nil {
@@ -80,6 +83,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	r = r.WithContext(ctx)
 	switch r.URL.Path {
+	case "/ipc/v1/operations/tls.execute", "/ipc/v1/operations/tls.state":
+		if !state.negotiated.Load() {
+			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")
+			return
+		}
+		h.tlsOperation(w, r)
 	case "/ipc/v1/operations/auth.authenticate", "/ipc/v1/operations/auth.inspect", "/ipc/v1/operations/auth.check", "/ipc/v1/operations/auth.reauthenticate", "/ipc/v1/operations/auth.revoke", "/ipc/v1/operations/security.read", "/ipc/v1/operations/security.execute":
 		if !state.negotiated.Load() {
 			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")

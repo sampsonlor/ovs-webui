@@ -17,6 +17,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
+	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
 
 type Repository struct {
@@ -26,6 +27,7 @@ type Repository struct {
 	key             []byte
 	gate, passwords chan struct{}
 	now             func() time.Time
+	tlsNow          func() tlscontrol.Clock
 }
 
 func New(store *sqlite.Store, key []byte) (*Repository, error) {
@@ -36,7 +38,7 @@ func New(store *sqlite.Store, key []byte) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Repository{store: store, receipts: requests.New(store), contract: c, key: append([]byte{}, key...), gate: make(chan struct{}, 1), passwords: make(chan struct{}, 2), now: time.Now}, nil
+	return &Repository{store: store, receipts: requests.New(store), contract: c, key: append([]byte{}, key...), gate: make(chan struct{}, 1), passwords: make(chan struct{}, 2), now: time.Now, tlsNow: tlscontrol.Now}, nil
 }
 func (r *Repository) lock(ctx context.Context) (func(), error) {
 	select {

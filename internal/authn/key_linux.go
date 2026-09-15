@@ -27,7 +27,7 @@ func KeyFile(path string, initialize bool) ([]byte, error) {
 	if unix.Fstat(dir, &ds) != nil || ds.Uid != uint32(os.Geteuid()) || ds.Mode&0077 != 0 {
 		return nil, fail
 	}
-	flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_CLOEXEC
+	flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_CLOEXEC | unix.O_NONBLOCK
 	if initialize {
 		flags = unix.O_WRONLY | unix.O_CREAT | unix.O_EXCL | unix.O_NOFOLLOW | unix.O_CLOEXEC
 	}

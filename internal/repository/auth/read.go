@@ -43,6 +43,11 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 	if err = op.ValidateParameters(path, query, func(string) []string { return nil }); err != nil {
 		return out, err
 	}
+	if op.ID == "listCertificates" || op.ID == "readCertificate" {
+		if _, err = r.TLSState(ctx); err != nil {
+			return out, err
+		}
+	}
 	unlock, err := r.lock(ctx)
 	if err != nil {
 		return out, err
@@ -57,7 +62,7 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 		switch op.ID {
 		case "readSession":
 			value = c // Private claims; webd adds its CSRF and workspace epoch.
-		case "listUsers", "listRoles", "listTokens":
+		case "listUsers", "listRoles", "listTokens", "listCertificates":
 			value, err = r.list(ctx, tx, c, op, query)
 		case "readUser":
 			value, err = r.user(ctx, tx, path["user_id"])
@@ -65,6 +70,8 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 			value, err = r.role(ctx, tx, path["role_id"])
 		case "readToken":
 			value, err = r.token(ctx, tx, path["token_id"])
+		case "readCertificate":
+			value, err = r.certificate(ctx, tx, path["certificate_id"])
 		case "readJob":
 			value, err = r.job(ctx, tx, c, path["job_id"])
 		case "readRequestReceipt":
@@ -181,6 +188,8 @@ func (r *Repository) list(ctx context.Context, tx *sql.Tx, c authn.Claims, op *a
 		rows, err = tx.QueryContext(ctx, "SELECT p.id FROM principals p JOIN auth_principals a ON a.principal_id=p.id WHERE p.id>? AND instr(lower(p.name),lower(?))>0 ORDER BY p.id LIMIT ?", cur.After, filter, limit+1)
 	case "listRoles":
 		rows, err = tx.QueryContext(ctx, "SELECT role_id FROM auth_roles WHERE role_id>? AND instr(lower(name),lower(?))>0 ORDER BY role_id LIMIT ?", cur.After, filter, limit+1)
+	case "listCertificates":
+		rows, err = tx.QueryContext(ctx, "SELECT id FROM tls_certificates WHERE id>? AND instr(lower(descriptor),lower(?))>0 ORDER BY id LIMIT ?", cur.After, filter, limit+1)
 	case "listTokens":
 		all := slices.Contains(c.Capabilities, "access.tokens.manage")
 		rows, err = tx.QueryContext(ctx, "SELECT a.id FROM auth_tokens a JOIN api_tokens t ON t.token_hash=a.token_hash WHERE a.id>? AND instr(lower(a.name),lower(?))>0 AND (? OR t.principal_id=?) ORDER BY a.id LIMIT ?", cur.After, filter, all, c.PrincipalID, limit+1)
@@ -214,6 +223,8 @@ func (r *Repository) list(ctx context.Context, tx *sql.Tx, c authn.Claims, op *a
 			item, err = r.user(ctx, tx, id)
 		case "listRoles":
 			item, err = r.role(ctx, tx, id)
+		case "listCertificates":
+			item, err = r.certificate(ctx, tx, id)
 		case "listTokens":
 			item, err = r.token(ctx, tx, id)
 		}
@@ -281,6 +292,7 @@ func (r *Repository) job(ctx context.Context, q querier, c authn.Claims, id stri
 		Operation string        `json:"operation"`
 		OwnerID   string        `json:"owner_id"`
 		Resource  *apitypes.Ref `json:"resource_ref"`
+		Sequence  string        `json:"sequence"`
 	}
 	var receipt apitypes.Receipt
 	if json.Unmarshal(blob, &doc) != nil || json.Unmarshal(receiptJSON, &receipt) != nil || doc.OwnerID != c.PrincipalID {
@@ -289,7 +301,10 @@ func (r *Repository) job(ctx context.Context, q querier, c authn.Claims, id stri
 	if err = r.allowPrior(ctx, q, c, doc.Operation, doc.Resource); err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": id, "sequence": "1", "state": state, "operation": doc.Operation, "owner_id": doc.OwnerID, "resource_ref": doc.Resource, "cancellable": false, "correlation_id": receipt.CorrelationID}, nil
+	if doc.Sequence == "" {
+		doc.Sequence = "1"
+	}
+	return map[string]any{"id": id, "sequence": doc.Sequence, "state": state, "operation": doc.Operation, "owner_id": doc.OwnerID, "resource_ref": doc.Resource, "cancellable": false, "correlation_id": receipt.CorrelationID}, nil
 }
 
 // Authentication errors cross IPC as stable codes only, never SQL or secrets.

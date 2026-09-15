@@ -167,6 +167,17 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			if err := require(c, "role.read", false, 0); err != nil {
 				return err
 			}
+		case "certificate":
+			if err := require(c, "certificate.read", false, 0); err != nil {
+				return err
+			}
+			var count int
+			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM tls_certificates WHERE id=?", ref.ID).Scan(&count); err != nil {
+				return err
+			}
+			if count != 1 {
+				return apitypes.Fail(404, "NOT_FOUND")
+			}
 		default:
 			// Field/ownership decisions belong to the real domain authority. Until it
 			// is implemented, even Administrator cannot obtain a fabricated admission.

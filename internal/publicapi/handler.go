@@ -26,6 +26,7 @@ type Subject struct {
 	ID, PermissionRevision, CredentialKind, CSRFToken string
 	Credential                                        string `json:"-"`
 	SessionCookie                                     string `json:"-"`
+	TLSIdentity                                       string `json:"-"`
 }
 type Authorizer interface {
 	Authenticate(context.Context, *http.Request) (Subject, error)
@@ -180,7 +181,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if op.ID == "readContract" {
-		respond(w, 200, map[string]any{"major": 1, "version": "1.1.0", "openapi_url": "/api/v1/openapi.json", "service_state": "availability-reported-by-runtime-and-domain-services", "request_domains": []string{"workspace", "management"}}, "application/json")
+		respond(w, 200, map[string]any{"major": 1, "version": "1.2.0", "openapi_url": "/api/v1/openapi.json", "service_state": "availability-reported-by-runtime-and-domain-services", "request_domains": []string{"workspace", "management"}}, "application/json")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -257,6 +258,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := Query{Operation: op, Path: path, Values: query}
+	if op.ID == "activateCertificate" {
+		w.Header().Set("Connection", "close")
+	}
 	var body []byte
 	var value map[string]any
 	if op.Body != nil {
