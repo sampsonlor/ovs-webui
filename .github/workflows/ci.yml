@@ -162,7 +162,7 @@ jobs:
           go mod verify
           mkdir -p test-results
           # Keep production Argon2id cost and the existing per-group deadline.
-          # The growing auth package exceeded 180s cumulatively on arm64. Two
+          # The growing auth package exceeded 180s cumulatively on arm64. Three
           # complementary name filters run every auth test exactly once; other
           # packages retain the complete normal suite, with no global skip.
           auth_package=$(go list ./internal/repository/auth)
@@ -191,6 +191,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch
+      - name: Native Safe Apply rollback and crash matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeSafeApply$' -test.v -test.timeout=120s \
+              | go tool test2json -p "native-safe-apply-$schema" | tee "test-results/go-safe-apply-$schema.json"
+          done
+      - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
+        run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
@@ -210,16 +220,6 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeFieldExecution$' -test.v -test.timeout=120s \
               | go tool test2json -p "native-field-execution-$schema" | tee "test-results/go-execution-$schema.json"
           done
-      - name: Native Safe Apply rollback and crash matrix
-        run: |
-          set -o pipefail
-          for schema in 3.3.9 3.7.1 4.0.0; do
-            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
-              outputs/runtime/execution.test -test.run '^TestNativeSafeApply$' -test.v -test.timeout=120s \
-              | go tool test2json -p "native-safe-apply-$schema" | tee "test-results/go-safe-apply-$schema.json"
-          done
-      - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
-        run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
       - name: Retain runtime evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

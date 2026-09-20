@@ -134,6 +134,13 @@ func TestNativeSafeApply(t *testing.T) {
 		if len(f.envelope().Candidate.Intents) != 0 || f.vs("get", "Port", "field-p1", "tag") != "20" {
 			t.Fatal("confirmed result lost")
 		}
+		var storedID string
+		must(t, f.webStore.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+			return q.QueryRowContext(ctx, "SELECT id FROM candidate_workspaces WHERE owner_id=?", f.login.Claims.PrincipalID).Scan(&storedID)
+		}))
+		if storedID != f.envelope().Candidate.ID {
+			t.Fatal("workspace index and sealed Candidate diverged")
+		}
 	})
 	t.Run("rollback_restores_touched_fields_and_preserves_unrelated", func(t *testing.T) {
 		f := newFixture(t)

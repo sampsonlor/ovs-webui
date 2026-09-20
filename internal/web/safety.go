@@ -159,7 +159,7 @@ func (w *Workspace) recoverSafeWorkspace(ctx context.Context, s publicapi.Subjec
 			return apitypes.Fail(409, "WORKSPACE_RESERVATION_CHANGED")
 		}
 		b, _ := json.Marshal(next)
-		if _, err = tx.ExecContext(ctx, "UPDATE candidate_workspaces SET candidate_id=?,revision=?,sequence=?,envelope=? WHERE owner_id=?", next.Candidate.ID, next.Candidate.Revision, next.Sequence, b, s.ID); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE candidate_workspaces SET id=?,revision=?,sequence=?,envelope=? WHERE owner_id=?", next.Candidate.ID, next.Candidate.Revision, next.Sequence, b, s.ID); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM candidate_execution_reservations WHERE owner_id=? AND request_id=?", s.ID, in.Command.RequestID); err != nil {
