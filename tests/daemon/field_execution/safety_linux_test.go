@@ -20,6 +20,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apicontract"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
@@ -107,7 +108,16 @@ func TestNativeSafeApply(t *testing.T) {
 		f.cancel()
 		<-f.monitorDone
 		f.cancel = nil
+		var cancel context.CancelFunc
+		f.ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		f.vs("set", "Port", "field-p1", "tag=31")
+		binding := f.binding("field-p1")
+		cached, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{binding})
+		must(t, err)
+		if tag := cached.Ports[binding.ManagementID].VLAN.Tag; tag == nil || *tag != 20 {
+			t.Fatal("fixture did not retain the old readable cache")
+		}
 		r, err := f.engine.Read(f.ctx, id)
 		must(t, err)
 		req := apitypes.RequestID(time.Now())

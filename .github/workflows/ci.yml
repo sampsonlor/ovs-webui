@@ -153,6 +153,31 @@ jobs:
             printf '%s\n' "$unformatted"
             exit 1
           fi
+      - name: Bounded protocol fuzzing
+        run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
+      - name: Build CGO-free daemon binaries
+        run: |
+          mkdir -p outputs/runtime test-results
+          go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-webd ./cmd/ovs-webd
+          go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-mgrd ./cmd/ovs-mgrd
+          go test -c -o outputs/runtime/storage.test ./internal/repository/sqlite
+          go test -c -o outputs/runtime/execution.test ./tests/daemon/field_execution
+      - name: Real filesystem exhaustion and durable recovery
+        run: sudo -- python3 tests/daemon/storage_full.py outputs/runtime/storage.test
+      - name: Install ephemeral OVS test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y openvswitch-switch
+      - name: Native Safe Apply rollback and crash matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeSafeApply$' -test.v -test.timeout=120s \
+              | go tool test2json -p "native-safe-apply-$schema" | tee "test-results/go-safe-apply-$schema.json"
+          done
+      - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
+        run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
       - name: Vet and native race tests
         env:
           CGO_ENABLED: '1'
@@ -176,31 +201,6 @@ jobs:
           go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
-      - name: Bounded protocol fuzzing
-        run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
-      - name: Build CGO-free daemon binaries
-        run: |
-          mkdir -p outputs/runtime
-          go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-webd ./cmd/ovs-webd
-          go build -trimpath -ldflags="-X github.com/sampsonlor/ovs-webui/internal/buildinfo.Commit=$GITHUB_SHA" -o outputs/runtime/ovs-mgrd ./cmd/ovs-mgrd
-          go test -c -o outputs/runtime/storage.test ./internal/repository/sqlite
-          go test -c -o outputs/runtime/execution.test ./tests/daemon/field_execution
-      - name: Real filesystem exhaustion and durable recovery
-        run: sudo -- python3 tests/daemon/storage_full.py outputs/runtime/storage.test
-      - name: Install ephemeral OVS test prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y openvswitch-switch
-      - name: Native Safe Apply rollback and crash matrix
-        run: |
-          set -o pipefail
-          for schema in 3.3.9 3.7.1 4.0.0; do
-            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
-              outputs/runtime/execution.test -test.run '^TestNativeSafeApply$' -test.v -test.timeout=120s \
-              | go tool test2json -p "native-safe-apply-$schema" | tee "test-results/go-safe-apply-$schema.json"
-          done
-      - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
-        run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
