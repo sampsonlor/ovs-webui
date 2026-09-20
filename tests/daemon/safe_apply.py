@@ -170,7 +170,9 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
 
         revoked, _ = stage('inv-p1', 42)
         awaiting(revoked)
-        assert call('/session', 'DELETE', {})[0] == 204
+        session = get('/session')
+        assert call('/session', 'DELETE', extra_headers={
+            'Origin': f'https://127.0.0.1:{https_port}', 'X-OVS-CSRF-Token': session['csrf_token']})[0] == 204
         eventually(lambda: durable(revoked)['state'] == 'rolled-back')
         login()
         assert int(vsctl('get', 'Port', 'inv-p1', 'tag')) == 40
