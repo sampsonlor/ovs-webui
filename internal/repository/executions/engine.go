@@ -310,12 +310,19 @@ func (e *Engine) saveOutcome(ctx context.Context, id string, o execution.Outcome
 		if state == "recovery-required" && o.Applied == "pending" && time.Since(r.Created) >= execution.AppliedFor {
 			o.Reason = "applied-budget-exhausted"
 		}
-		if candidate.Digest(r.Outcome) == candidate.Digest(o) && r.State == state {
+		if sameOutcome(r.Outcome, o) && r.State == state {
 			return nil
 		}
 		_, err = e.transition(ctx, tx, r, o, state)
 		return err
 	})
+}
+
+// A refreshed observation timestamp alone is not a journal state transition.
+// Keep unresolved recovery from appending identical audit/Job events each tick.
+func sameOutcome(a, b execution.Outcome) bool {
+	a.Observed, b.Observed = nil, nil
+	return candidate.Digest(a) == candidate.Digest(b)
 }
 func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record, o execution.Outcome, state string) (execution.Record, error) {
 	seq, err := strconv.ParseInt(r.Sequence, 10, 64)
@@ -381,7 +388,7 @@ func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record,
 // evidence yields RecoveryRequired and preserves all protections. It never
 // calls Prepare or Commit, including for a journal interrupted before dispatch.
 func (e *Engine) Recover(ctx context.Context) error {
-	ctx=sqlite.RecoveryContext(ctx)
+	ctx = sqlite.RecoveryContext(ctx)
 	var ids []string
 	err := e.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
 		rows, err := q.QueryContext(ctx, "SELECT id FROM field_executions WHERE state NOT IN ('succeeded','failed') ORDER BY updated_at_ms,id LIMIT ?", MaxUnsettled+1)

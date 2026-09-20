@@ -259,6 +259,14 @@ func TestSafeApplyAuthorityDeadlineAndConflict(t *testing.T) {
 				if s.State != "recovery-required" || p.sends.Load() != 2 {
 					t.Fatal(s, p.sends.Load())
 				}
+				before, _ := e.Read(testContext, id)
+				for i := 0; i < 3; i++ {
+					safeTick(t, e)
+				}
+				after, _ := e.Read(testContext, id)
+				if before.Sequence != after.Sequence {
+					t.Fatal("unchanged recovery appended duplicate state transitions")
+				}
 				probe.failed.Store(false)
 				safeTick(t, e)
 				if safeTestState(t, r, id).State != "rolled-back" {

@@ -263,6 +263,7 @@ func (e *Engine) safetyStep(ctx context.Context, id string) error {
 	if s.Rollback != nil {
 		// A durable rollback dispatch intent is NEVER sent again, even after a
 		// lost reply or SIGKILL. Reconcile its own marker/target/Applied evidence.
+		previous := s
 		s.Outcome = e.provider.Observe(ctx, *s.Rollback, s.Outcome)
 		if s.Outcome.Commit == "committed" && s.Outcome.Applied == "applied" {
 			if e.probe(ctx) == nil {
@@ -274,6 +275,9 @@ func (e *Engine) safetyStep(ctx context.Context, id string) error {
 			}
 		} else {
 			s.State, s.Reason = "recovery-required", s.Outcome.Reason
+		}
+		if s.State == previous.State && s.Reason == previous.Reason && sameOutcome(s.Outcome, previous.Outcome) {
+			return nil
 		}
 		return e.saveSafety(ctx, r, s)
 	}
