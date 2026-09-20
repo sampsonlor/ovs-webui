@@ -16,6 +16,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
+	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/safety"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
@@ -50,6 +51,19 @@ func (e *Engine) ConfigureSafety(o SafetyOptions) error {
 	return nil
 }
 func (e *Engine) SafetyAvailable() bool { return e.safety != nil && e.store.Status().Writable }
+
+func RequireSafetyConfiguration(ctx context.Context, store *sqlite.Store, configured bool) error {
+	return store.Read(sqlite.RecoveryContext(ctx), func(ctx context.Context, q *sql.Conn) error {
+		var n int
+		if err := q.QueryRowContext(ctx, "SELECT count(*) FROM safe_applies WHERE state NOT IN ('confirmed','rolled-back','not-committed')").Scan(&n); err != nil {
+			return err
+		}
+		if n != 0 && !configured {
+			return apitypes.Fail(503, "SAFE_APPLY_RECOVERY_CONFIGURATION_REQUIRED")
+		}
+		return nil
+	})
+}
 func (e *Engine) safetyReady(ctx context.Context) error {
 	if !e.SafetyAvailable() || e.safety.Clock().BootID == "" {
 		return apitypes.Fail(409, "SAFE_APPLY_CAPABILITY_UNAVAILABLE")
@@ -100,6 +114,8 @@ func (e *Engine) admitSafety(ctx context.Context, tx *sql.Tx, r execution.Record
 		return apitypes.Fail(503, "SAFE_CLOCK_UNAVAILABLE")
 	}
 	s := safety.Record{State: "preparing", Reason: "checkpoint-durable", Domain: e.safety.Probe.Domain(), Reservation: a.reservation, Preparation: safety.NewDeadline(c, safety.PreparationBudget)}
+	sum := sha256.Sum256(a.command.Payload)
+	s.Fingerprint = hex.EncodeToString(sum[:])
 	b, _ := json.Marshal(s)
 	_, err := tx.ExecContext(ctx, "INSERT INTO safe_applies VALUES(?,?,?,?,?,?,?)", r.ID, r.Owner, a.command.Epoch, r.RequestID, s.State, s.Domain, b)
 	return err
@@ -164,7 +180,7 @@ func (e *Engine) updateSafety(ctx context.Context, tx *sql.Tx, r execution.Recor
 			return err
 		}
 	}
-	_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-state", Result: s.State, Reason: s.Reason, Object: &apitypes.Ref{Kind: "transaction", ID: r.ID}, Transaction: r.ID, Job: r.JobID, ChangeSet: r.Authorization.ChangeSet, Actor: r.Owner, Critical: true, Created: r.Updated})
+	_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-state", Result: s.State, Reason: s.Reason, Object: &apitypes.Ref{Kind: "transaction", ID: r.ID}, Transaction: r.ID, Job: r.JobID, ChangeSet: r.Authorization.ChangeSet, Actor: r.Owner, Credential: r.Authorization.Credential, Capability: "configuration.apply", Correlation: r.Correlation, RequestID: r.RequestID, RequestDomain: "management", RequestEpoch: r.Authorization.Epoch, Critical: true, Created: r.Updated})
 	return err
 }
 func (e *Engine) saveSafety(ctx context.Context, r execution.Record, s safety.Record) error {
@@ -196,6 +212,7 @@ func (e *Engine) readSafety(ctx context.Context, id string) (execution.Record, s
 // SafetyTick is the independent recovery lane. Reads never call it. Each step
 // uses bounded provider/probe I/O and cannot be queued behind HTTP diagnostics.
 func (e *Engine) SafetyTick(ctx context.Context) error {
+	ctx = sqlite.RecoveryContext(ctx)
 	if e.safety == nil {
 		return nil
 	}
@@ -280,6 +297,24 @@ func (e *Engine) safetyStep(ctx context.Context, id string) error {
 	}
 	authorized := e.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error { return e.safety.Authority(ctx, q, r.Authorization) })
 	rollback := expired || authorized != nil || s.State == "rollback-requested"
+	if s.Trigger == "" && rollback {
+		s.Trigger = "preparation-budget-exhausted"
+		if s.Confirmation != nil {
+			s.Trigger = "confirmation-window-expired"
+		}
+		if clock.BootID != s.Preparation.Boot {
+			s.Trigger = "boot-changed"
+		}
+		if clock.Wall.Before(r.Updated) || clock.Wall.Before(s.LastWall) {
+			s.Trigger = "clock-reversed"
+		}
+		if authorized != nil {
+			s.Trigger = "apply-authority-revoked"
+		}
+		if s.State == "rollback-requested" {
+			s.Trigger = "authorized-rollback-requested"
+		}
+	}
 	if o.Applied != "applied" {
 		if rollback {
 			return e.rollback(ctx, r, s)
@@ -293,6 +328,7 @@ func (e *Engine) safetyStep(ctx context.Context, id string) error {
 		s.ProbeFailures++
 		s.HealthyAt = nil
 		if s.ProbeFailures >= 3 {
+			s.Trigger = "management-path-probes-failed"
 			return e.rollback(ctx, r, s)
 		}
 		s.Reason = "management-path-unverified"
@@ -386,6 +422,7 @@ func (e *Engine) rollback(ctx context.Context, r execution.Record, s safety.Reco
 // Decide rechecks OVS and reachability outside SQL, then arbitrates against
 // timeout/revocation using a single journal CAS. No client clock is evidence.
 func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, check func(context.Context, evidence.Query) error, command requests.Command) (apitypes.Result, error) {
+	ctx = sqlite.RecoveryContext(ctx)
 	var out apitypes.Result
 	authorize := func(ctx context.Context) error {
 		return e.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error { return check(ctx, q) })
@@ -450,6 +487,9 @@ func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, chec
 			return requests.Mutation{}, err
 		}
 		ref := &apitypes.Ref{Kind: "transaction", ID: id}
+		if _, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-decision", Result: decision, Object: ref, Transaction: id, Job: r.JobID, Critical: true}); err != nil {
+			return requests.Mutation{}, err
+		}
 		return requests.Mutation{Status: 202, Body: json.RawMessage(`{}`), Resource: ref, Job: &apitypes.Ref{Kind: "job", ID: r.JobID}, Terminal: decision == "confirm"}, nil
 	})
 }

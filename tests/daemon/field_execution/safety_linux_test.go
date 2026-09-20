@@ -95,6 +95,28 @@ func TestNativeSafeApply(t *testing.T) {
 	if os.Getenv("OVS_EXECUTION_NATIVE_TEST") != "1" {
 		t.Skip("explicit native Safe Apply matrix")
 	}
+	t.Run("lost_rollback_reply_retains_uncertainty_and_protection", func(t *testing.T) {
+		f := newFixture(t)
+		var offset atomic.Int64
+		f.configureSafety(&offset)
+		id := f.safeApply(f.prepare([]string{"field-p1"}, 20))
+		f.waitSafety(id, "awaiting-confirmation")
+		f.proxy.dropReply.Store(true)
+		f.decide(id, "rollback")
+		f.waitSafety(id, "recovery-required")
+		waitFor(t, func() bool { must(t, f.engine.SafetyTick(f.ctx)); return f.safeState(id).Outcome.Commit == "committed" })
+		s := f.safeState(id)
+		if s.Outcome.Target != nil || s.Outcome.Applied != "unknown" || f.proxy.sent.Load() != 2 || f.vs("get", "Port", "field-p1", "tag") != "10" {
+			t.Fatal("rollback reply loss invented success or replayed", s)
+		}
+		var n int
+		must(t, f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+			return q.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE transaction_id=?", id).Scan(&n)
+		}))
+		if n != 1 {
+			t.Fatal("unknown rollback released protection")
+		}
+	})
 	t.Run("confirm_consumes_only_authoritative_workspace", func(t *testing.T) {
 		f := newFixture(t)
 		var offset atomic.Int64

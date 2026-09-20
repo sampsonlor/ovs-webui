@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/migrations"
@@ -26,17 +27,20 @@ type Options struct {
 	SoftwareVersion string
 }
 type Store struct {
-	options                                     Options
-	guard                                       *fileGuard
-	writer, readers                             *sql.DB
-	mu                                          sync.RWMutex
-	status                                      repository.Status
-	writeSlot, writeQueue, readSlots, readQueue chan struct{}
-	commit                                      func(*sql.Tx) error
+	options                                                 Options
+	guard                                                   *fileGuard
+	writer, readers                                         *sql.DB
+	recoveryReaders                                         *sql.DB
+	mu                                                      sync.RWMutex
+	status                                                  repository.Status
+	writeSlot, writeQueue, readSlots, readQueue             chan struct{}
+	recoveryReadSlot, recoveryReadQueue, recoveryWriteQueue chan struct{}
+	recoveryWriters                                         atomic.Int32
+	commit                                                  func(*sql.Tx) error
 }
 
 func newStore(o Options) *Store {
-	return &Store{options: o, status: repository.Status{State: "degraded", Code: "STORAGE_UNAVAILABLE"}, writeSlot: make(chan struct{}, 1), writeQueue: make(chan struct{}, 16), readSlots: make(chan struct{}, 4), readQueue: make(chan struct{}, 16), commit: func(tx *sql.Tx) error { return tx.Commit() }}
+	return &Store{options: o, status: repository.Status{State: "degraded", Code: "STORAGE_UNAVAILABLE"}, writeSlot: make(chan struct{}, 1), writeQueue: make(chan struct{}, 16), readSlots: make(chan struct{}, 4), readQueue: make(chan struct{}, 16), recoveryReadSlot: make(chan struct{}, 1), recoveryReadQueue: make(chan struct{}, 64), recoveryWriteQueue: make(chan struct{}, 64), commit: func(tx *sql.Tx) error { return tx.Commit() }}
 }
 func (s *Store) Kind() repository.Kind     { return s.options.Kind }
 func (s *Store) Status() repository.Status { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
@@ -52,6 +56,9 @@ func (s *Store) Close() error {
 	s.degrade("STORAGE_CLOSED", false)
 	if s.readers != nil {
 		_ = s.readers.Close()
+	}
+	if s.recoveryReaders != nil {
+		_ = s.recoveryReaders.Close()
 	}
 	if s.writer != nil {
 		_ = s.writer.Close()
@@ -221,6 +228,10 @@ func openWithMigrations(ctx context.Context, o Options, plan []migrations.Migrat
 	if err = integrity(ctx, s.readers); err != nil {
 		return fail("STORAGE_INTEGRITY_FAILED")
 	}
+	s.recoveryReaders, err = connect(o.Path, true, 1)
+	if err != nil {
+		return fail("STORAGE_RECOVERY_READER_UNAVAILABLE")
+	}
 	s.mu.Lock()
 	s.status = repository.Status{State: "ready", Readable: true, Writable: true, SchemaVersion: len(plan)}
 	s.mu.Unlock()
@@ -321,7 +332,11 @@ func (s *Store) checked(writable bool) bool {
 func (s *Store) Read(ctx context.Context, fn func(context.Context, *sql.Conn) error) error {
 	ctx, cancel := context.WithTimeout(ctx, ReadTimeout)
 	defer cancel()
-	release, err := acquire(ctx, s.readSlots, s.readQueue)
+	slots, queue, pool := s.readSlots, s.readQueue, s.readers
+	if isRecovery(ctx) {
+		slots, queue, pool = s.recoveryReadSlot, s.recoveryReadQueue, s.recoveryReaders
+	}
+	release, err := acquire(ctx, slots, queue)
 	if err != nil {
 		return err
 	}
@@ -329,7 +344,7 @@ func (s *Store) Read(ctx context.Context, fn func(context.Context, *sql.Conn) er
 	if !s.checked(false) {
 		return repository.ErrUnavailable
 	}
-	conn, err := s.readers.Conn(ctx)
+	conn, err := pool.Conn(ctx)
 	if err != nil {
 		return s.failure(err)
 	}
@@ -341,7 +356,7 @@ func (s *Store) Read(ctx context.Context, fn func(context.Context, *sql.Conn) er
 func (s *Store) Write(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
 	ctx, cancel := context.WithTimeout(ctx, WriteTimeout)
 	defer cancel()
-	release, err := acquire(ctx, s.writeSlot, s.writeQueue)
+	release, err := s.acquireWrite(ctx)
 	if err != nil {
 		return err
 	}
@@ -415,7 +430,7 @@ func (s *Store) failure(err error) error {
 func (s *Store) Checkpoint(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, WriteTimeout)
 	defer cancel()
-	release, err := acquire(ctx, s.writeSlot, s.writeQueue)
+	release, err := s.acquireWrite(ctx)
 	if err != nil {
 		return err
 	}

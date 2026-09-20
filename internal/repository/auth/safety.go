@@ -223,7 +223,7 @@ func (r *Repository) ResolveSafeApply(ctx context.Context, credential string, in
 			if err != nil {
 				return err
 			}
-			if s.Reservation != in.Reservation {
+			if s.Reservation != in.Reservation || s.Fingerprint != fingerprint {
 				return apitypes.Fail(409, "RESERVATION_MISMATCH")
 			}
 			if !safety.Terminal(s.State) {
@@ -248,14 +248,24 @@ func (r *Repository) ResolveSafeApply(ctx context.Context, credential string, in
 		next.Sequence++
 		next.Candidate.Revision = repository.NewID()
 		if confirmed {
-			next.Candidate.Intents = []plan.StoredIntent{}
-			next.Candidate.State = "empty"
-			next.Candidate.Consumed = out.Transaction
+			out.Confirmed = true
+			next.Candidate = plan.Candidate{ID: repository.NewID(), Revision: repository.NewID(), State: "empty", Intents: []plan.StoredIntent{}}
 		} else {
 			next.Candidate.State = "staged"
+			if len(next.Candidate.Intents) == 0 {
+				next.Candidate.State = "empty"
+			}
 		}
 		next.Sign(r.key)
-		if err = candidateFence(ctx, tx, next, true); err != nil {
+		if confirmed {
+			result, err := tx.ExecContext(ctx, "UPDATE candidate_witnesses SET candidate_id=?,sequence=?,revision=?,envelope_hash=? WHERE owner_id=? AND candidate_id=? AND workspace_epoch=? AND sequence=? AND envelope_hash=?", next.Candidate.ID, next.Sequence, next.Candidate.Revision, plan.Digest(next), c.PrincipalID, in.Envelope.Candidate.ID, in.Envelope.Epoch, in.Envelope.Sequence, plan.Digest(in.Envelope))
+			if err != nil {
+				return err
+			}
+			if n, err := result.RowsAffected(); err != nil || n != 1 {
+				return apitypes.Fail(409, "WORKSPACE_WITNESS_CHANGED")
+			}
+		} else if err = candidateFence(ctx, tx, next, true); err != nil {
 			return err
 		}
 		out.Envelope = &next

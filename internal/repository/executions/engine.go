@@ -381,6 +381,7 @@ func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record,
 // evidence yields RecoveryRequired and preserves all protections. It never
 // calls Prepare or Commit, including for a journal interrupted before dispatch.
 func (e *Engine) Recover(ctx context.Context) error {
+	ctx=sqlite.RecoveryContext(ctx)
 	var ids []string
 	err := e.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
 		rows, err := q.QueryContext(ctx, "SELECT id FROM field_executions WHERE state NOT IN ('succeeded','failed') ORDER BY updated_at_ms,id LIMIT ?", MaxUnsettled+1)

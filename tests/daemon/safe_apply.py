@@ -134,6 +134,12 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         assert code == 202 and headers['Idempotency-Replayed'] == 'true'
         notes.append('real HTTPS/CSRF/Unix IPC admission, Applied, interface-bound TCP reachability, explicit confirmation, consumed workspace and replay without a second native write')
 
+        prior_pid = run('systemctl', 'show', '--property=MainPID', '--value', units['mgrd']).stdout.strip()
+        run('systemctl', 'kill', '--signal=SIGSTOP', units['mgrd'])
+        eventually(lambda: (pid := run('systemctl', 'show', '--property=MainPID', '--value', units['mgrd']).stdout.strip()) not in ('0', prior_pid), timeout=20)
+        eventually(ready)
+        notes.append('stopping the actual manager safety loop suppresses systemd heartbeat and causes bounded supervisor restart; HTTP timers do not fake watchdog progress')
+
         # Wait the REAL 120-second production deadline; no accelerated clock.
         timed, _ = stage('inv-p1', 41)
         before = awaiting(timed)['confirmation_deadline']

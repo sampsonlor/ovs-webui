@@ -137,7 +137,14 @@ func (w *Workspace) recoverSafeWorkspace(ctx context.Context, s publicapi.Subjec
 		return err
 	}
 	next := out.Envelope
-	if next == nil || next.Owner != s.ID || next.Sequence != in.Envelope.Sequence+1 || next.Epoch != in.Envelope.Epoch || next.Candidate.ID != in.Envelope.Candidate.ID || next.Seal == "" || candidate.Budget(*next) != nil {
+	if next == nil || next.Owner != s.ID || next.Sequence != in.Envelope.Sequence+1 || next.Epoch != in.Envelope.Epoch || next.Seal == "" || candidate.Budget(*next) != nil {
+		return apitypes.Fail(503, "WORKSPACE_RESOLUTION_INVALID")
+	}
+	if out.Confirmed {
+		if out.Transaction == nil || !apitypes.ManagementID(next.Candidate.ID) || next.Candidate.ID == in.Envelope.Candidate.ID || next.Candidate.Consumed != nil || len(next.Candidate.Intents) != 0 || next.Candidate.State != "empty" {
+			return apitypes.Fail(503, "WORKSPACE_RESOLUTION_INVALID")
+		}
+	} else if next.Candidate.ID != in.Envelope.Candidate.ID {
 		return apitypes.Fail(503, "WORKSPACE_RESOLUTION_INVALID")
 	}
 	return w.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
@@ -152,7 +159,7 @@ func (w *Workspace) recoverSafeWorkspace(ctx context.Context, s publicapi.Subjec
 			return apitypes.Fail(409, "WORKSPACE_RESERVATION_CHANGED")
 		}
 		b, _ := json.Marshal(next)
-		if _, err = tx.ExecContext(ctx, "UPDATE candidate_workspaces SET revision=?,sequence=?,envelope=? WHERE owner_id=?", next.Candidate.Revision, next.Sequence, b, s.ID); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE candidate_workspaces SET candidate_id=?,revision=?,sequence=?,envelope=? WHERE owner_id=?", next.Candidate.ID, next.Candidate.Revision, next.Sequence, b, s.ID); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM candidate_execution_reservations WHERE owner_id=? AND request_id=?", s.ID, in.Command.RequestID); err != nil {

@@ -195,6 +195,11 @@ func TestSafeApplyAppliedGateConfirmAndSingleLKG(t *testing.T) {
 	if err != nil || resolved.Pending || resolved.Envelope == nil || len(resolved.Envelope.Candidate.Intents) != 0 || resolved.Envelope.Verify(r.key, g.Claims.PrincipalID) != nil {
 		t.Fatal(resolved, err)
 	}
+	if !resolved.Confirmed || resolved.Envelope.Candidate.Consumed != nil || resolved.Envelope.Candidate.ID == in.Envelope.Candidate.ID {
+		t.Fatal("confirmation did not create a fresh workspace", resolved)
+	}
+	newIntent := in.Envelope.Candidate.Intents[0]
+	preparePlan(t, r, g.Grant, *resolved.Envelope, plan.Intent{ID: repository.NewID(), Operation: newIntent.Operation, Object: newIntent.Object, Value: newIntent.Value})
 	resolved2, err := r.ResolveSafeApply(testContext, g.Grant, in)
 	if err != nil || plan.Digest(resolved) != plan.Digest(resolved2) {
 		t.Fatal("resolution is not replayable", err)

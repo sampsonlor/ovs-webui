@@ -163,6 +163,7 @@ func safeView(ctx context.Context, q evidence.Query, r execution.Record, c authn
 		return nil, err
 	}
 	v["safe_apply"], v["recovery_reason"] = s.State, s.Reason
+	v["recovery_trigger"] = s.Trigger
 	if s.State != "preparing" {
 		v["phase"] = s.State
 	}

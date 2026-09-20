@@ -8,6 +8,7 @@ StartLimitBurst=5
 Type=notify
 NotifyAccess=main
 WatchdogSec=10s
+TimeoutAbortSec=2s
 User=root
 Group=ovs-webui-web
 EnvironmentFile=/etc/ovs-webui/runtime.env

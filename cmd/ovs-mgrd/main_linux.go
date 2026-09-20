@@ -48,7 +48,7 @@ func run() int {
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
 	rotateSecret := flag.Bool("rotate-secret-key", false, "Offline privileged key rotation, retaining old versions")
 	restore := flag.Bool("prepare-restore-security", false, "Offline: rotate restored auth/request epochs and revoke all grants/tokens; run with webd reconciliation")
-	ovsSocket := flag.String("ovsdb-socket", "/run/openvswitch/db.sock", "Read-only local OVSDB Unix socket")
+	ovsSocket := flag.String("ovsdb-socket", "/run/openvswitch/db.sock", "Local OVSDB Unix socket for typed inventory and guarded execution")
 	ovsFile := flag.String("ovsdb-file", "/var/lib/openvswitch/conf.db", "Canonical database file for lifecycle evidence (no symlinks)")
 	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
@@ -275,6 +275,13 @@ func run() int {
 	} else if *acceptEvidence != "" {
 		logger.Error("reconciliation_failed", "code", "INVENTORY_STORAGE_UNAVAILABLE")
 		return 1
+	}
+	if storageErr == nil {
+		configured := authentication != nil && authentication.SafetyAvailable()
+		if err := executions.RequireSafetyConfiguration(ctx, store, configured); err != nil {
+			logger.Error("service_start_failed", "code", "SAFE_APPLY_RECOVERY_CONFIGURATION_REQUIRED")
+			return 1
+		}
 	}
 	listener, err := ipc.ListenUnix(ipc.SocketOptions{Path: *socket, OwnerUID: 0, GroupGID: uint32(*gid), PeerUID: uint32(*uid)})
 	if err != nil {

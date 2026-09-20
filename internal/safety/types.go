@@ -33,6 +33,7 @@ type Request struct {
 	Reservation string             `json:"reservation_id"`
 }
 type Resolution struct {
+	Confirmed   bool                `json:"confirmed"`
 	Pending     bool                `json:"pending"`
 	Transaction *apitypes.Ref       `json:"transaction"`
 	Envelope    *candidate.Envelope `json:"envelope"`
@@ -65,6 +66,8 @@ type Record struct {
 	Reason        string            `json:"reason"`
 	Domain        string            `json:"domain"`
 	Reservation   string            `json:"reservation_id"`
+	Fingerprint   string            `json:"request_fingerprint"`
+	Trigger       string            `json:"recovery_trigger"`
 	Preparation   Deadline          `json:"preparation"`
 	Confirmation  *Deadline         `json:"confirmation"`
 	HealthyAt     *time.Time        `json:"healthy_at"`
