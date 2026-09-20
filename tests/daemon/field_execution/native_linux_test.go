@@ -580,6 +580,7 @@ func TestNativeFieldExecution(t *testing.T) {
 }
 
 type nativeCrashInput struct {
+	Safe        bool
 	Root, Grant string
 	Request     execution.Request
 	AllowIDs    []string
@@ -632,6 +633,19 @@ func TestNativeExecutionCrashChild(t *testing.T) {
 	w, err := web.NewWorkspace(f.webStore, f.auth)
 	must(t, err)
 	subject := publicapi.Subject{ID: in.Request.Envelope.Owner, Credential: in.Grant}
+	if in.Safe {
+		f.workspace = w
+		claims, err := f.auth.InspectAuth(f.ctx, in.Grant)
+		must(t, err)
+		f.login = authn.LoginResult{Grant: in.Grant, Claims: claims}
+		f.engine, err = f.auth.ConfigureExecution(crashAfterCommit{p.Executor(f.inventory)})
+		must(t, err)
+		var offset atomic.Int64
+		f.configureSafety(&offset)
+		f.safeApply(in.Request)
+		time.Sleep(10 * time.Second)
+		t.Fatal("Safe Apply did not reach native crash boundary")
+	}
 	lease, err := w.ReserveExecution(f.ctx, subject, in.Request, isolatedSafety{f})
 	must(t, err)
 	e, err := f.auth.ConfigureExecution(crashAfterCommit{p.Executor(f.inventory)})

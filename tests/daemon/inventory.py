@@ -42,6 +42,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--bin-dir', required=True)
     parser.add_argument('--schema-version', default='3.3.9', choices=['3.3.9', '3.7.1', '4.0.0'])
+    parser.add_argument('--safe-apply-network', action='store_true')
     args = parser.parse_args()
     assert os.geteuid() == 0 and Path('/run/systemd/system').is_dir()
     repo = Path(__file__).resolve().parents[2]
@@ -283,6 +284,19 @@ def main():
             lambda: stop_ovs('db'), start_db, eventually, credentials)
         checks.append('formal Candidate and Validation acceptance passed on the real HTTPS/IPC/OVSDB path; detailed checks in metrics.candidate_validation')
 
+        if args.safe_apply_network:
+            from safe_apply import verify_safe_apply
+            result = verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
+                                       eventually, fixture, config, cert, port)
+            result.update({'platform': os.uname().machine, 'schema_fixture': args.schema_version,
+                           'ovsdb_binary': ovs_run('ovsdb-server', '--version').splitlines()[0],
+                           'switch_binary': ovs_run('ovs-vswitchd', '--version').splitlines()[0]})
+            target = repo / 'test-results/go-safe-apply-vm.json'
+            target.parent.mkdir(exist_ok=True)
+            target.write_text(json.dumps(result, indent=2) + '\n')
+            print(json.dumps(result, indent=2))
+            return
+
 
         vsctl('del-port', 'br-inv', 'inv-p1')
         eventually(lambda: call('/ports/' + original['management_id'])[0] == 404)
@@ -389,7 +403,7 @@ def main():
         text = '\n'.join(journal)
         for credential in credentials:
             assert credential not in text, 'credential leaked to daemon journal'
-        target = repo / f'test-results/go-inventory-{args.schema_version}-journal.log'
+        target = repo / ('test-results/go-safe-apply-vm-journal.log' if args.safe_apply_network else f'test-results/go-inventory-{args.schema_version}-journal.log')
         target.parent.mkdir(exist_ok=True)
         target.write_text(text)
         for name in ('switch', 'db'):
