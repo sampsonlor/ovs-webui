@@ -12,10 +12,10 @@ import (
 
 func TestRecoveryHasReservedSQLiteReader(t *testing.T) {
 	s := initialized(t, options(t))
-	ready := make(chan struct{}, 4)
+	ready := make(chan struct{}, cap(s.readSlots))
 	release := make(chan struct{})
 	var readers sync.WaitGroup
-	for i := 0; i < 4; i++ {
+	for i := 0; i < cap(s.readSlots); i++ {
 		readers.Add(1)
 		go func() {
 			defer readers.Done()
@@ -34,7 +34,7 @@ func TestRecoveryHasReservedSQLiteReader(t *testing.T) {
 		}()
 	}
 	defer func() { close(release); readers.Wait() }()
-	for i := 0; i < 4; i++ {
+	for i := 0; i < cap(s.readSlots); i++ {
 		select {
 		case <-ready:
 		case <-time.After(3 * time.Second):

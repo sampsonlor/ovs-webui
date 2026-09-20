@@ -15,13 +15,14 @@
 | 撤权、boot 变化、时钟倒退 | 确认关闭、服务端要求补偿；Go auth 测试；撤销真实发起会话另由 VM 验证 |
 | 精细回滚 | 同一 OVSDB transaction 比较 current == our_after，只恢复 touched VLAN 字段，其他 Port / metadata 保留；native matrix |
 | Prepare 后第三方抢写 | 两 Port 补偿整笔被原生 wait 拒绝，无部分回滚；native matrix |
+| monitor 缓存落后于真实数据库 | 保留缓存并停止 monitor，然后外部修改 VLAN；原生只读证明拒绝确认且不增加 OVS 写入次数；native matrix |
 | generation / 强身份变化 | 旧事务不能补偿到替换数据库；native matrix |
 | commit 成功但回执未持久化就 SIGKILL | marker 证明 Commit，缺失 target 保留 Applied Unknown；只补偿一次，不重发原 Apply；native matrix |
 | 回滚回复丢失 | 即使物理值恢复、marker 证明提交，缺失精确 target 仍保留 Recovery Required 与保护；native matrix |
 | 第三方重叠修改 / manager.db 损坏 | 拒绝确认、保留冲突和 Last Known Good；损坏后不猜测恢复写入；VM 测试 |
 | 数据库繁忙 / 长期未知状态 | 恢复专用 reader 与 writer 优先级；相同观察不重复追加状态证据；SQLite 与 auth 回归 |
 
-原生 runner 为 Ubuntu 24.04 amd64 / arm64，各自运行 race、真实 systemd/HTTPS/IPC/双库故障测试。真实 OVS field matrix 保留每份 schema 八个既有场景，新增 Safe Apply 每份六个场景；schema 为 3.3.9、3.7.1、4.0.0。实际 OVS binary 版本由产物记录，三份 schema 不代表三个 binary 版本或完整发行版资格。独立 VM 网络测试必须加载 kernel datapath，失败不能改用 dummy 或 skip 代替。
+原生 runner 为 Ubuntu 24.04 amd64 / arm64，各自运行 race、真实 systemd/HTTPS/IPC/双库故障测试。真实 OVS field matrix 保留每份 schema 八个既有场景，新增 Safe Apply 每份七个场景；schema 为 3.3.9、3.7.1、4.0.0。实际 OVS binary 版本由产物记录，三份 schema 不代表三个 binary 版本或完整发行版资格。独立 VM 网络测试必须加载 kernel datapath，失败不能改用 dummy 或 skip 代替。
 
 Go native 场景的 probe / 时间可合成，以精确覆盖故障边界；VM 网络场景使用实际管理 TCP/HTTPS 和生产 120 秒窗口。两类证据分别保留，不互相替代。Windows 本地只承诺可运行的 Go 测试、Linux vet / 编译、Python 语法检查、契约回归与 pnpm build，Linux 安全与恢复结果以两个原生 CI job 为准。
 

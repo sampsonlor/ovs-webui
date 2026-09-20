@@ -16,9 +16,11 @@ mgrd 重查当前 credential、Validation、原始 HMAC envelope、单调 witnes
 
 确认在 provider 证据及 probe 重查后通过同一 SQLite writer CAS，与截止、撤权和手动回滚裁决。定时健康读取没有确认或回滚权限。权限下降、发起 credential 撤销、确认超时，或连续三次 probe 失败会要求补偿；commit 尚不能证明时保留 OutcomeUnknown。
 
+monitor 的新鲜缓存只是观察线索。宣告 Applied 前，provider 另发固定的 OVSDB 只读 transaction：零等待原生 guards 同时核对 after-image、marker、结构/authority 依赖、Interface.error，并读取真实 next_cfg / cur_cfg。确认与回滚完成都使用这份证明；缓存尚未收到第三方更新时也不能确认。该请求不包含 update、mutate 或 commit，不改变计数器或配置。
+
 VLAN 四字段保护从入场持续到整个 Safe Apply 终态。配置同一管理路径的操作另共享该路径恢复域；这不是把所有 OVS 字段升级为全局锁。结构与第三方写入仍由原生 OVSDB CAS 保护。普通读取、诊断、HTTP/IPC control queues 不运行安全循环；mgrd 每秒独立推进恢复，只有推进成功且存储可写才发送 systemd watchdog heartbeat。unit 的 WatchdogSec=10s、TimeoutAbortSec=2s，重启不操作 OVS units。
 
-恢复和确认使用专用 SQLite 只读连接；普通读取占满连接池不会堵住该连接。恢复写入等待时，普通 writer 在开始事务前让出队列；已经开始的写事务仍受五秒预算约束。优先级只由内部代码设置。存在未解决 journal 却缺失安全恢复配置时，mgrd 拒绝正常启动，不发送假健康 heartbeat。
+恢复和确认使用专用 SQLite 只读连接；四个 reader 总配额中，三个供普通读取，一个保留给恢复，普通读取占满连接池不会堵住恢复连接。恢复写入等待时，普通 writer 在开始事务前让出队列；已经开始的写事务仍受五秒预算约束。优先级只由内部代码设置。存在未解决 journal 却缺失安全恢复配置时，mgrd 拒绝正常启动，不发送假健康 heartbeat。
 
 ## 回滚与 Last Known Good
 

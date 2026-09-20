@@ -100,9 +100,20 @@ func (p *faultProxy) serve(c net.Conn) {
 			if d.Decode(&b) != nil {
 				return
 			}
-			var r struct{ Method string }
+			var r struct {
+				Method string
+				Params []json.RawMessage
+			}
 			_ = json.Unmarshal(b, &r)
-			if r.Method == "transact" {
+			mutation := false
+			if r.Method == "transact" && len(r.Params) > 1 {
+				for _, raw := range r.Params[1:] {
+					var op struct{ Op string }
+					_ = json.Unmarshal(raw, &op)
+					mutation = mutation || op.Op == "update" || op.Op == "mutate" || op.Op == "insert" || op.Op == "delete"
+				}
+			}
+			if mutation {
 				transaction.Store(true)
 				p.sent.Add(1)
 				p.mu.Lock()

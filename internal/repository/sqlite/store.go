@@ -20,6 +20,7 @@ import (
 
 const ReadTimeout = 2 * time.Second
 const WriteTimeout = 5 * time.Second
+const ordinaryReaders = 3 // The fourth bounded reader is reserved for recovery.
 
 type Options struct {
 	Path            string
@@ -40,7 +41,7 @@ type Store struct {
 }
 
 func newStore(o Options) *Store {
-	return &Store{options: o, status: repository.Status{State: "degraded", Code: "STORAGE_UNAVAILABLE"}, writeSlot: make(chan struct{}, 1), writeQueue: make(chan struct{}, 16), readSlots: make(chan struct{}, 4), readQueue: make(chan struct{}, 16), recoveryReadSlot: make(chan struct{}, 1), recoveryReadQueue: make(chan struct{}, 64), recoveryWriteQueue: make(chan struct{}, 64), commit: func(tx *sql.Tx) error { return tx.Commit() }}
+	return &Store{options: o, status: repository.Status{State: "degraded", Code: "STORAGE_UNAVAILABLE"}, writeSlot: make(chan struct{}, 1), writeQueue: make(chan struct{}, 16), readSlots: make(chan struct{}, ordinaryReaders), readQueue: make(chan struct{}, 16), recoveryReadSlot: make(chan struct{}, 1), recoveryReadQueue: make(chan struct{}, 64), recoveryWriteQueue: make(chan struct{}, 64), commit: func(tx *sql.Tx) error { return tx.Commit() }}
 }
 func (s *Store) Kind() repository.Kind     { return s.options.Kind }
 func (s *Store) Status() repository.Status { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
@@ -221,7 +222,7 @@ func openWithMigrations(ctx context.Context, o Options, plan []migrations.Migrat
 			return fail("STORAGE_MIGRATION_UNKNOWN")
 		}
 	}
-	s.readers, err = connect(o.Path, true, 4)
+	s.readers, err = connect(o.Path, true, ordinaryReaders)
 	if err != nil {
 		return fail("STORAGE_READERS_UNAVAILABLE")
 	}

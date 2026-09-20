@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"os"
 	"os/exec"
@@ -95,6 +96,28 @@ func TestNativeSafeApply(t *testing.T) {
 	if os.Getenv("OVS_EXECUTION_NATIVE_TEST") != "1" {
 		t.Skip("explicit native Safe Apply matrix")
 	}
+	t.Run("confirmation_rechecks_OVS_when_monitor_is_behind", func(t *testing.T) {
+		f := newFixture(t)
+		var offset atomic.Int64
+		f.configureSafety(&offset)
+		id := f.safeApply(f.prepare([]string{"field-p1"}, 20))
+		f.waitSafety(id, "awaiting-confirmation")
+		// Keep the old cache intact inside its freshness budget while the real
+		// database changes. Confirmation must not treat that cache as proof.
+		f.cancel()
+		<-f.monitorDone
+		f.cancel = nil
+		f.vs("set", "Port", "field-p1", "tag=31")
+		r, err := f.engine.Read(f.ctx, id)
+		must(t, err)
+		req := apitypes.RequestID(time.Now())
+		body, _ := json.Marshal(map[string]any{"request_id": req, "expected_sequence": r.Sequence, "decision": "confirm"})
+		_, err = f.auth.ExecuteAuth(f.ctx, f.login.Grant, authn.Command{Method: "POST", URI: "/api/v1/transactions/" + id + "/decisions", Epoch: f.login.Claims.RequestEpoch, RequestID: req, Payload: body})
+		var problem *apitypes.Problem
+		if !errors.As(err, &problem) || problem.Code != "CONFIRMATION_EVIDENCE_UNAVAILABLE" || f.safeState(id).State == "confirmed" || f.proxy.sent.Load() != 1 {
+			t.Fatal("stale cache confirmed or read proof mutated OVS", err)
+		}
+	})
 	t.Run("lost_rollback_reply_retains_uncertainty_and_protection", func(t *testing.T) {
 		f := newFixture(t)
 		var offset atomic.Int64

@@ -122,7 +122,7 @@ func TestSettingsIndependentReadersAndSingleton(t *testing.T) {
 		t.Fatalf("unsafe settings: %s/%d/%d/%d", wal, syncMode, foreignKeys, busy)
 	}
 	conns := []*sql.Conn{}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < cap(s.readSlots); i++ {
 		c, err := s.readers.Conn(background)
 		if err != nil {
 			t.Fatal(err)
@@ -141,7 +141,7 @@ func TestSettingsIndependentReadersAndSingleton(t *testing.T) {
 	if err == nil {
 		t.Fatal("two repository owners admitted")
 	}
-	if s.writer.Stats().MaxOpenConnections != 1 || s.readers.Stats().MaxOpenConnections != 4 {
+	if s.writer.Stats().MaxOpenConnections != 1 || s.readers.Stats().MaxOpenConnections+s.recoveryReaders.Stats().MaxOpenConnections != 4 || s.recoveryReaders.Stats().MaxOpenConnections != 1 {
 		t.Fatal("unbounded connection pool")
 	}
 }
