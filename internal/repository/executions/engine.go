@@ -36,6 +36,7 @@ type Engine struct {
 	key      []byte
 	mu       sync.Mutex
 	active   map[string]bool
+	safety   *SafetyOptions
 }
 type stored struct {
 	execution.Record
@@ -103,6 +104,9 @@ func (e *Engine) authorization(ctx context.Context, in execution.Request, a Auth
 // the independent Safe Apply guard. #40 owns that public admission coordinator.
 // Network work runs outside SQLite transactions and the auth dispatch gate.
 func (e *Engine) Submit(ctx context.Context, in execution.Request, a Authorizer, lease execution.Lease) (apitypes.Result, error) {
+	return e.submit(ctx, in, a, lease, nil)
+}
+func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer, lease execution.Lease, safe *safeAdmission) (apitypes.Result, error) {
 	var out apitypes.Result
 	if candidate.Budget(in.Envelope) != nil || !apitypes.ManagementID(in.ValidationID) {
 		return out, apitypes.Fail(422, "INVALID_EXECUTION")
@@ -113,6 +117,9 @@ func (e *Engine) Submit(ctx context.Context, in execution.Request, a Authorizer,
 	}
 	payload, _ := json.Marshal(in)
 	command := requests.Command{Principal: c.Owner, Epoch: c.Epoch, Domain: "management", ID: in.ID, Operation: "createTransaction", Method: "POST", URI: "/api/v1/transactions", Payload: payload, Credential: c.Credential, Capability: "configuration.apply"}
+	if safe != nil {
+		command = safe.command
+	}
 	authorize := func(ctx context.Context) error { _, err := e.authorization(ctx, in, a, true); return err }
 	receipts := requests.New(e.store)
 	if prior, found, err := receipts.Replay(ctx, command, authorize); err != nil || found {
@@ -123,6 +130,11 @@ func (e *Engine) Submit(ctx context.Context, in execution.Request, a Authorizer,
 	}
 	if err = lease.Check(ctx, in); err != nil {
 		return out, err
+	}
+	if safe != nil {
+		if err = e.safetyReady(ctx); err != nil {
+			return out, err
+		}
 	}
 	c, err = e.authorization(ctx, in, a, false)
 	if err != nil {
@@ -138,7 +150,12 @@ func (e *Engine) Submit(ctx context.Context, in execution.Request, a Authorizer,
 	if !e.claim(id) {
 		return out, apitypes.Fail(409, "EXECUTION_BUSY")
 	}
-	defer e.release(id)
+	async := false
+	defer func() {
+		if !async {
+			e.release(id)
+		}
+	}()
 	var r execution.Record
 	out, err = receipts.Execute(ctx, command, authorize, func(ctx context.Context, tx *sql.Tx) (requests.Mutation, error) {
 		fresh, err := a(ctx, tx, in, false)
@@ -193,6 +210,11 @@ func (e *Engine) Submit(ctx context.Context, in execution.Request, a Authorizer,
 		if _, err = tx.ExecContext(ctx, "INSERT INTO field_executions VALUES(?,?,?,?,?,?,?)", id, r.JobID, c.Owner, in.ValidationID, r.State, now.UnixMilli(), b); err != nil {
 			return requests.Mutation{}, err
 		}
+		if safe != nil {
+			if err = e.admitSafety(ctx, tx, r, *safe); err != nil {
+				return requests.Mutation{}, err
+			}
+		}
 		if _, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "execute-fields", Result: "admitted", Object: ref, Job: r.JobID, Transaction: id, ChangeSet: c.ChangeSet, Created: now}); err != nil {
 			return requests.Mutation{}, err
 		}
@@ -201,42 +223,66 @@ func (e *Engine) Submit(ctx context.Context, in execution.Request, a Authorizer,
 	if err != nil || out.Replayed {
 		return out, err
 	}
-	beforeSend := func() error {
-		if err := lease.Check(ctx, in); err != nil {
+	run := func(ctx context.Context) error {
+		beforeSend := func() error {
+			if err := lease.Check(ctx, in); err != nil {
+				return err
+			}
+			return e.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+				fresh, err := a(ctx, tx, in, false)
+				if err != nil {
+					return err
+				}
+				if fresh != c || !time.Now().Before(fresh.Expires) {
+					return apitypes.Fail(409, "EXECUTION_AUTHORITY_CHANGED")
+				}
+				current, err := load(ctx, tx, id)
+				if err != nil {
+					return err
+				}
+				if current.State != "admitted" {
+					return apitypes.Fail(409, "EXECUTION_ALREADY_DISPATCHED")
+				}
+				if safe != nil {
+					s, err := loadSafety(ctx, tx, id)
+					if err != nil {
+						return err
+					}
+					if s.State != "preparing" || s.Preparation.Expired(e.safety.Clock()) {
+						return apitypes.Fail(409, "SAFE_APPLY_EXPIRED")
+					}
+				}
+				r, err = e.transition(ctx, tx, current, execution.Outcome{Commit: "unknown", Applied: "unknown", Reason: "dispatch-intent-durable"}, "committing")
+				return err
+			})
+		}
+		result := e.provider.Commit(ctx, p, beforeSend)
+		// Persist the exact returned next_cfg before resync. Losing this durable
+		// write loses Applied proof, even when a subsequent marker proves commit.
+		finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), sqlite.WriteTimeout)
+		defer cancel()
+		if err = e.saveOutcome(finish, id, result); err != nil {
 			return err
 		}
-		return e.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
-			fresh, err := a(ctx, tx, in, false)
-			if err != nil {
-				return err
-			}
-			if fresh != c || !time.Now().Before(fresh.Expires) {
-				return apitypes.Fail(409, "EXECUTION_AUTHORITY_CHANGED")
-			}
-			current, err := load(ctx, tx, id)
-			if err != nil {
-				return err
-			}
-			if current.State != "admitted" {
-				return apitypes.Fail(409, "EXECUTION_ALREADY_DISPATCHED")
-			}
-			r, err = e.transition(ctx, tx, current, execution.Outcome{Commit: "unknown", Applied: "unknown", Reason: "dispatch-intent-durable"}, "committing")
-			return err
-		})
+		if result.Commit == "committed" {
+			result = e.provider.Observe(finish, p, result)
+			err = e.saveOutcome(finish, id, result)
+		}
+		return err
 	}
-	result := e.provider.Commit(ctx, p, beforeSend)
-	// Persist the exact returned next_cfg before resync. Losing this durable
-	// write loses Applied proof, even when a subsequent marker proves commit.
-	finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), sqlite.WriteTimeout)
-	defer cancel()
-	if err = e.saveOutcome(finish, id, result); err != nil {
-		return out, err
+	if safe != nil {
+		async = true
+		// Admission, before-image, protection and receipt are durable before
+		// returning. A disconnected HTTP client cannot cancel the worker.
+		go func() {
+			defer e.release(id)
+			worker, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			defer cancel()
+			_ = run(worker)
+		}()
+		return out, nil
 	}
-	if result.Commit == "committed" {
-		result = e.provider.Observe(finish, p, result)
-		err = e.saveOutcome(finish, id, result)
-	}
-	return out, err
+	return out, run(ctx)
 }
 
 func stateFor(r execution.Record, o execution.Outcome) string {
@@ -301,6 +347,16 @@ func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record,
 	if state == "succeeded" {
 		jobState, dispatch, business = "succeeded", "completed", "success"
 	}
+	var safe int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM safe_applies WHERE id=?", r.ID).Scan(&safe); err != nil {
+		return r, err
+	}
+	if safe != 0 {
+		jobState, business = "running", "unknown"
+		if state == "recovery-required" || job.State == "needs-attention" {
+			jobState = "needs-attention"
+		}
+	}
 	ctx = evidence.WithRequest(ctx, evidence.Request{Principal: r.Owner, Credential: r.Authorization.Credential, Capability: "configuration.apply", Operation: "createTransaction", Domain: "management", Epoch: r.Authorization.Epoch, ID: r.RequestID, Correlation: r.Correlation})
 	if _, err = evidence.ChangeJob(ctx, tx, job.ID, job.Sequence, evidence.Transition{State: jobState, Dispatch: dispatch, Business: business, Commit: o.Commit, Applied: o.Applied, Reason: o.Reason}, r.Updated); err != nil {
 		return r, err
@@ -312,7 +368,7 @@ func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record,
 	if _, err = tx.ExecContext(ctx, "UPDATE field_executions SET state=?,updated_at_ms=?,document=? WHERE id=?", state, r.Updated.UnixMilli(), b, r.ID); err != nil {
 		return r, err
 	}
-	if terminal(r) {
+	if terminal(r) && safe == 0 {
 		if _, err = tx.ExecContext(ctx, "DELETE FROM operation_protections WHERE transaction_id=?", r.ID); err != nil {
 			return r, err
 		}

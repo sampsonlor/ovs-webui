@@ -83,6 +83,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	r = r.WithContext(ctx)
 	switch r.URL.Path {
+	case "/ipc/v1/operations/safe.admit", "/ipc/v1/operations/safe.resolve", "/ipc/v1/operations/safe.decide":
+		if !state.negotiated.Load() {
+			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")
+			return
+		}
+		h.authOperation(w, r)
 	case "/ipc/v1/operations/tls.execute", "/ipc/v1/operations/tls.state":
 		if !state.negotiated.Load() {
 			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")

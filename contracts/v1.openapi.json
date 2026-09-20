@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.6.0",
-    "description": "Phase 1 public transport with authentication, OVSDB inventory, Candidate/Validation, durable field-execution evidence and Job/Event/Audit services. Public switching admission remains gated on Safe Apply; Applied evidence does not prove health or confirmation."
+    "version": "1.7.0",
+    "description": "Phase 1 public transport with authenticated Candidate/Validation, durable Safe Apply admission, server confirmation, guarded rollback and shared evidence. Management reachability requires a reviewed server-configured probe; Applied alone never proves health or confirmation."
   },
   "servers": [
     {
@@ -2210,7 +2210,7 @@
         ],
         "x-capability": "config.apply",
         "x-service-issue": 39,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": ""
       },
       "get": {
@@ -2831,7 +2831,7 @@
         ],
         "x-capability": "config.decide",
         "x-service-issue": 40,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "transaction"
       }
     },
@@ -28482,6 +28482,9 @@
                 "type": "null"
               }
             ]
+          },
+          "safe_apply_available": {
+            "type": "boolean"
           },
           "current_instance_generation": {
             "anyOf": [

@@ -173,8 +173,9 @@ jobs:
           done
           go test -json -race -count=1 -timeout=180s "${runtime_packages[@]}" | tee test-results/go-tests.json
           auth_services='^(TestFormalValidation|TestShared|TestRunningCancellation|TestEvidence|TestLegacy|TestExecution|TestTLS|TestVerifiedAuth)'
-          go test -json -race -count=1 -timeout=180s -skip "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
       - name: Bounded protocol fuzzing
         run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
       - name: Build CGO-free daemon binaries

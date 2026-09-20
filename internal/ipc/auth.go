@@ -11,6 +11,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/safety"
 )
 
 func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
@@ -23,9 +24,9 @@ func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
 	switch op {
 	case "auth.authenticate", "auth.reauthenticate":
 		class = Auth
-	case "auth.revoke":
+	case "auth.revoke", "safe.decide", "safe.resolve":
 		class = Control
-	case "security.execute", "candidate.prepare", "candidate.validate":
+	case "security.execute", "candidate.prepare", "candidate.validate", "safe.admit":
 		class = Heavy
 	}
 	free, err := h.budgets[class].acquire(r.Context())
@@ -54,6 +55,32 @@ func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
 	}
 	var out any
 	switch op {
+	case "safe.admit", "safe.resolve":
+		manager, ok := h.auth.(safety.Manager)
+		if !ok {
+			h.problem(w, r, 503, "SAFE_APPLY_UNAVAILABLE")
+			return
+		}
+		var in safety.Request
+		if !h.decode(w, r, &in) {
+			return
+		}
+		if op == "safe.admit" {
+			out, err = manager.AdmitSafeApply(r.Context(), credential, in)
+		} else {
+			out, err = manager.ResolveSafeApply(r.Context(), credential, in)
+		}
+	case "safe.decide":
+		var in authn.Command
+		if !h.decode(w, r, &in) {
+			return
+		}
+		id := strings.TrimSuffix(strings.TrimPrefix(in.URI, "/api/v1/transactions/"), "/decisions")
+		if in.Method != "POST" || in.URI != "/api/v1/transactions/"+id+"/decisions" || !apitypes.ManagementID(id) {
+			h.problem(w, r, 403, "OPERATION_DENIED")
+			return
+		}
+		out, err = h.auth.ExecuteAuth(r.Context(), credential, in)
 	case "candidate.prepare", "candidate.read", "candidate.validate":
 		manager, ok := h.auth.(candidate.Manager)
 		if !ok {
@@ -173,7 +200,19 @@ func (c *Client) ReadInventory(ctx context.Context, g string, in authn.Query) (o
 	return
 }
 func (c *Client) ExecuteAuth(ctx context.Context, g string, in authn.Command) (out apitypes.Result, err error) {
-	err = c.callAuth(ctx, "security.execute", g, in, &out)
+	op := "security.execute"
+	if strings.HasPrefix(in.URI, "/api/v1/transactions/") && strings.HasSuffix(in.URI, "/decisions") {
+		op = "safe.decide"
+	}
+	err = c.callAuth(ctx, op, g, in, &out)
+	return
+}
+func (c *Client) AdmitSafeApply(ctx context.Context, g string, in safety.Request) (out apitypes.Result, err error) {
+	err = c.callAuth(ctx, "safe.admit", g, in, &out)
+	return
+}
+func (c *Client) ResolveSafeApply(ctx context.Context, g string, in safety.Request) (out safety.Resolution, err error) {
+	err = c.callAuth(ctx, "safe.resolve", g, in, &out)
 	return
 }
 func (c *Client) PrepareCandidate(ctx context.Context, g string, in candidate.PrepareRequest) (out candidate.Envelope, err error) {

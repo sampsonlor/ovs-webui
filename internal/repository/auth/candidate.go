@@ -222,6 +222,7 @@ func (r *Repository) ReadCandidate(ctx context.Context, credential string, in pl
 					v.State = "stale"
 				}
 			}
+			v.SafeApplyAvailable = r.SafetyAvailable()
 			value = v
 		} else {
 			v := record.Validation
@@ -257,6 +258,7 @@ func (r *Repository) ReadCandidate(ctx context.Context, credential string, in pl
 					}
 				}
 			}
+			v.ExecutionReady = v.Usable && r.SafetyAvailable()
 			value = v
 		}
 		out.Status = 200
