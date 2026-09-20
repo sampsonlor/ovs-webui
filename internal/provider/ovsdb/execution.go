@@ -525,6 +525,11 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 			}
 		}
 	}
+	if err = e.verifyApplied(ctx, p, view, &out); err != nil {
+		out.Applied = "unknown"
+		out.Reason = "fresh-applied-evidence-unavailable"
+		return out
+	}
 	out.Applied = "applied"
 	out.Reason = "ovs-vswitchd-applied"
 	return out

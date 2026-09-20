@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +19,8 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
+	"github.com/sampsonlor/ovs-webui/internal/safety"
+	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
 
 func View(r execution.Record, now time.Time) map[string]any {
@@ -62,7 +67,8 @@ func signCursor(c pageCursor, key []byte) string {
 	h.Write(b)
 	return base64.RawURLEncoding.EncodeToString(b) + "." + base64.RawURLEncoding.EncodeToString(h.Sum(nil))
 }
-func Read(ctx context.Context, q evidence.Query, c authn.Claims, op string, path map[string]string, values url.Values, key []byte, now time.Time) (any, error) {
+func Read(ctx context.Context, q evidence.Query, c authn.Claims, op string, path map[string]string, values url.Values, key []byte, now time.Time, configured ...bool) (any, error) {
+	available := len(configured) > 0 && configured[0]
 	if op == "readTransaction" {
 		r, err := load(ctx, q, path["transaction_id"])
 		if err != nil {
@@ -71,7 +77,7 @@ func Read(ctx context.Context, q evidence.Query, c authn.Claims, op string, path
 		if r.Owner != c.PrincipalID {
 			return nil, apitypes.Fail(404, "NOT_FOUND")
 		}
-		return View(r, now), nil
+		return safeView(ctx, q, r, c, now, available)
 	}
 	limit := 100
 	if values.Get("limit") != "" {
@@ -125,7 +131,10 @@ func Read(ctx context.Context, q evidence.Query, c authn.Claims, op string, path
 		if json.Unmarshal(b, &s) != nil {
 			return nil, apitypes.Fail(503, "EXECUTION_EVIDENCE_INVALID")
 		}
-		v := View(s.Record, now)
+		v, err := safeView(ctx, q, s.Record, c, now, available)
+		if err != nil {
+			return nil, err
+		}
 		blob, _ := json.Marshal(v)
 		if len(items) >= limit || bytes+len(blob) > 36<<10 {
 			more = true
@@ -143,6 +152,44 @@ func Read(ctx context.Context, q evidence.Query, c authn.Claims, op string, path
 		next = signCursor(cursor, key)
 	}
 	return map[string]any{"items": items, "next_cursor": next, "snapshot_id": cursor.Page, "instance_generation": nil, "truncated": more, "server_time": now}, nil
+}
+func safeView(ctx context.Context, q evidence.Query, r execution.Record, c authn.Claims, now time.Time, configured bool) (map[string]any, error) {
+	v := View(r, now)
+	s, err := loadSafety(ctx, q, r.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	v["safe_apply"], v["recovery_reason"] = s.State, s.Reason
+	v["recovery_trigger"] = s.Trigger
+	if s.State != "preparing" {
+		v["phase"] = s.State
+	}
+	if safety.Terminal(s.State) {
+		v["phase"] = "settled"
+	}
+	if s.Confirmation != nil {
+		v["confirmation_deadline"] = s.Confirmation.Wall
+	}
+	fresh := s.HealthyAt != nil && !now.Before(*s.HealthyAt) && now.Sub(*s.HealthyAt) < safety.EvidenceFreshFor
+	if fresh {
+		v["health"] = "healthy"
+	}
+	v["reachability_observed_at"] = s.HealthyAt
+	v["rollback_evidence"] = s.Outcome
+	actions := []string{}
+	if configured && !safety.Terminal(s.State) {
+		if s.State == "awaiting-confirmation" && fresh && s.Confirmation != nil && !s.Confirmation.Expired(tlscontrol.Now()) && slices.Contains(c.Capabilities, "configuration.confirm") {
+			actions = append(actions, "confirm")
+		}
+		if s.Rollback == nil && s.State != "rollback-conflict" && slices.Contains(c.Capabilities, "configuration.rollback") {
+			actions = append(actions, "rollback")
+		}
+	}
+	v["allowed_actions"] = actions
+	return v, nil
 }
 func candidatePermission(c authn.Claims) string {
 	b, _ := json.Marshal([]any{c.Revision, c.Epoch, c.CredentialID, c.Capabilities})

@@ -117,4 +117,6 @@ func Operation(op string) bool {
 
 // Only these already-authorized control operations may admit a new receipt/job
 // into reserved space. This classification grants no permission by itself.
-func ControlOperation(op string) bool { return op == "cancelJob" || op == "confirmCertificate" }
+func ControlOperation(op string) bool {
+	return op == "cancelJob" || op == "confirmCertificate" || op == "decideTransaction" || op == "reconcileTransaction"
+}

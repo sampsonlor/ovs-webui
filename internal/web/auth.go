@@ -236,7 +236,7 @@ func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q public
 	return publicapi.Response{Status: result.Status, Body: result.Body, ETag: result.ETag}, nil
 }
 func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q publicapi.Query, c requests.Command) (apitypes.Result, error) {
-	if q.Operation.ID == "changeCandidate" || q.Operation.ID == "createValidation" {
+	if q.Operation.ID == "changeCandidate" || q.Operation.ID == "createValidation" || q.Operation.ID == "createTransaction" {
 		if a.workspace == nil {
 			return apitypes.Result{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")
 		}

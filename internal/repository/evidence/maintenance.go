@@ -76,7 +76,7 @@ func Prune(ctx context.Context, store *sqlite.Store, now time.Time) error {
 			}
 			rows, err := tx.QueryContext(ctx, `SELECT e.id,e.created_at_ms FROM evidence_records e WHERE e.collection=? AND e.created_at_ms<?
  AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.id=e.job_id AND j.state NOT IN ('succeeded','failed','cancelled'))
- AND NOT EXISTS(SELECT 1 FROM transaction_journal t WHERE t.transaction_id=e.transaction_id AND t.state NOT IN ('succeeded','failed','cancelled','completed'))
+ AND NOT EXISTS(SELECT 1 FROM transaction_journal t WHERE t.transaction_id=e.transaction_id AND t.state NOT IN ('succeeded','failed','cancelled','completed','confirmed','rolled-back','not-committed'))
  AND NOT EXISTS(SELECT 1 FROM jobs j JOIN evidence_jobs k ON k.id=j.id WHERE json_extract(k.document,'$.correlation_id')=e.correlation_id AND j.state NOT IN ('succeeded','failed','cancelled'))
  ORDER BY e.created_at_ms,e.id LIMIT 256`, collection, now.Add(-time.Duration(days)*24*time.Hour).UnixMilli())
 			if err != nil {
@@ -123,7 +123,7 @@ func Prune(ctx context.Context, store *sqlite.Store, now time.Time) error {
 			}
 		}
 		rows, err := tx.QueryContext(ctx, `DELETE FROM jobs WHERE id IN (SELECT e.id FROM evidence_jobs e JOIN jobs j ON j.id=e.id WHERE e.completed_at_ms<? AND j.state IN ('succeeded','failed','cancelled')
- AND NOT EXISTS(SELECT 1 FROM transaction_journal t WHERE t.transaction_id=j.transaction_id AND t.state NOT IN ('succeeded','failed','cancelled','completed'))
+ AND NOT EXISTS(SELECT 1 FROM transaction_journal t WHERE t.transaction_id=j.transaction_id AND t.state NOT IN ('succeeded','failed','cancelled','completed','confirmed','rolled-back','not-committed'))
  AND NOT EXISTS(SELECT 1 FROM api_receipts r WHERE json_extract(r.receipt,'$.job_ref.id')=j.id AND r.completed_at_ms IS NULL)
  AND NOT EXISTS(SELECT 1 FROM evidence_records r WHERE r.job_id=j.id)
  AND NOT EXISTS(SELECT 1 FROM candidate_validations v WHERE v.job_id=j.id)

@@ -24,10 +24,12 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
+	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
 	registry "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/secrets"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
+	"github.com/sampsonlor/ovs-webui/internal/safety"
 	"github.com/sampsonlor/ovs-webui/internal/secret"
 )
 
@@ -46,12 +48,14 @@ func run() int {
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
 	rotateSecret := flag.Bool("rotate-secret-key", false, "Offline privileged key rotation, retaining old versions")
 	restore := flag.Bool("prepare-restore-security", false, "Offline: rotate restored auth/request epochs and revoke all grants/tokens; run with webd reconciliation")
-	ovsSocket := flag.String("ovsdb-socket", "/run/openvswitch/db.sock", "Read-only local OVSDB Unix socket")
+	ovsSocket := flag.String("ovsdb-socket", "/run/openvswitch/db.sock", "Local OVSDB Unix socket for typed inventory and guarded execution")
 	ovsFile := flag.String("ovsdb-file", "/var/lib/openvswitch/conf.db", "Canonical database file for lifecycle evidence (no symlinks)")
 	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
+	probeAddress := flag.String("safe-apply-probe-address", "", "Reviewed numeric management endpoint IP:TCP-port; empty disables Safe Apply")
+	probeInterface := flag.String("safe-apply-probe-interface", "", "Reviewed management interface; probe sockets bind to this device")
 	flag.Parse()
 	if *version {
 		fmt.Println(buildinfo.SoftwareVersion())
@@ -200,6 +204,7 @@ func run() int {
 		}
 	}
 	var inventoryService *inventory.Service
+	var fields *executions.Engine
 	if storageErr == nil {
 		reg, err := registry.New(store)
 		if err != nil {
@@ -254,16 +259,29 @@ func run() int {
 		}
 		if authentication != nil {
 			authentication.WithInventory(inventoryService)
-			fields, err := authentication.ConfigureExecution(provider.Executor(inventoryService))
+			fields, err = authentication.ConfigureExecution(provider.Executor(inventoryService))
 			if err != nil || fields.Recover(ctx) != nil {
 				logger.Error("service_start_failed", "code", "EXECUTION_RECOVERY_UNAVAILABLE")
 				return 1
 			}
-			go fields.Maintain(ctx)
+			if *probeAddress != "" || *probeInterface != "" {
+				probe, err := safety.NewTCPProbe(*probeAddress, *probeInterface)
+				if err != nil || authentication.ConfigureSafety(executions.SafetyOptions{Probe: probe}) != nil {
+					logger.Error("service_start_failed", "code", "INVALID_SAFE_APPLY_CONFIGURATION")
+					return 2
+				}
+			}
 		}
 	} else if *acceptEvidence != "" {
 		logger.Error("reconciliation_failed", "code", "INVENTORY_STORAGE_UNAVAILABLE")
 		return 1
+	}
+	if storageErr == nil {
+		configured := authentication != nil && authentication.SafetyAvailable()
+		if err := executions.RequireSafetyConfiguration(ctx, store, configured); err != nil {
+			logger.Error("service_start_failed", "code", "SAFE_APPLY_RECOVERY_CONFIGURATION_REQUIRED")
+			return 1
+		}
 	}
 	listener, err := ipc.ListenUnix(ipc.SocketOptions{Path: *socket, OwnerUID: 0, GroupGID: uint32(*gid), PeerUID: uint32(*uid)})
 	if err != nil {
@@ -285,6 +303,7 @@ func run() int {
 		if !status.Writable {
 			health.State = "degraded"
 		}
+		health.ConfigurationReady = authentication != nil && authentication.SafetyAvailable() && status.Writable
 		return health
 	}).WithAuthentication(authService)
 	if authentication != nil {
@@ -297,6 +316,36 @@ func run() int {
 		go authentication.MaintainEvidence(ctx)
 	}
 	server := ipc.HTTPServer(handler)
+	// Recovery progresses independently from every HTTP/IPC admission queue.
+	// Only this loop may emit watchdog heartbeats. A database/loop failure lets
+	// systemd restart mgrd; it never signals ovsdb-server or ovs-vswitchd.
+	go func() {
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+			cycle, cancel := context.WithTimeout(ctx, 8*time.Second)
+			err := error(nil)
+			if fields != nil {
+				err = fields.Recover(cycle)
+				if err == nil {
+					err = fields.SafetyTick(cycle)
+				}
+			}
+			if err == nil && store.Status().Writable {
+				_ = runtimehost.Notify("WATCHDOG=1")
+			}
+			cancel()
+		}
+	}()
+	if err := runtimehost.Notify("READY=1"); err != nil {
+		logger.Error("service_start_failed", "code", "SUPERVISOR_NOTIFY_FAILED")
+		return 1
+	}
 	logger.Info("service_started", "scope", "runtime-bootstrap", "configuration_ready", false)
 	if err := runtimehost.Run(ctx, server, func() error { return server.Serve(listener) }, logger); err != nil {
 		logger.Error("service_stopped", "code", "HTTP_SERVE_FAILED")

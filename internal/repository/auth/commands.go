@@ -79,6 +79,9 @@ func (r *Repository) ExecuteAuth(ctx context.Context, credential string, input a
 	if op.ID == "reconcileTransaction" {
 		return r.reconcileFields(ctx, credential, input)
 	}
+	if op.ID == "decideTransaction" {
+		return r.decideSafeApply(ctx, credential, input)
+	}
 	if op.ID == "createTransaction" {
 		if _, _, err = r.candidateCommand(input, "createTransaction"); err != nil {
 			return out, err

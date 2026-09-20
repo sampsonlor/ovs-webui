@@ -100,12 +100,13 @@ type Diff struct {
 }
 type View struct {
 	Candidate
-	CurrentGeneration *string `json:"current_instance_generation"`
-	CurrentRevision   *string `json:"current_config_revision"`
-	ConflictSnapshot  *string `json:"conflict_snapshot_id"`
-	Diff              []Diff  `json:"diff"`
-	Checks            []Gate  `json:"checks"`
-	DiffTruncated     bool    `json:"diff_truncated"`
+	SafeApplyAvailable bool    `json:"safe_apply_available"`
+	CurrentGeneration  *string `json:"current_instance_generation"`
+	CurrentRevision    *string `json:"current_config_revision"`
+	ConflictSnapshot   *string `json:"conflict_snapshot_id"`
+	Diff               []Diff  `json:"diff"`
+	Checks             []Gate  `json:"checks"`
+	DiffTruncated      bool    `json:"diff_truncated"`
 }
 
 // Snapshot is one coherent, immutable projection of mgrd's current monitor.

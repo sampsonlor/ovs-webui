@@ -117,6 +117,9 @@ func (w *Workspace) Read(ctx context.Context, s publicapi.Subject, q publicapi.Q
 		out.Body, err = json.Marshal(receipt)
 		return out, err
 	}
+	if err := w.recoverSafeWorkspace(ctx, s); err != nil {
+		return out, err
+	}
 	e, err := w.envelope(ctx, s.ID)
 	if err != nil {
 		return out, err
@@ -170,7 +173,37 @@ func (w *Workspace) Read(ctx context.Context, s publicapi.Subject, q publicapi.Q
 		if err != nil {
 			return out, err
 		}
-		response.Body, err = json.Marshal(map[string]any{"server_time": time.Now().UTC(), "request_epochs": map[string]string{"workspace": e.Epoch, "management": claims.RequestEpoch}, "candidate": response.Body, "latest_validation": latest, "latest_transaction": nil, "gates": []candidate.Gate{{Code: "APPLY_SERVICE_UNAVAILABLE", State: "blocked", Reason: "APPLY_SERVICE_UNAVAILABLE"}}})
+		var availability struct {
+			Safe bool `json:"safe_apply_available"`
+		}
+		if json.Unmarshal(response.Body, &availability) != nil {
+			return out, apitypes.Fail(503, "CANDIDATE_RESPONSE_INVALID")
+		}
+		gates := []candidate.Gate{}
+		if !availability.Safe {
+			gates = append(gates, candidate.Gate{Code: "SAFE_APPLY_CAPABILITY_UNAVAILABLE", State: "blocked", Reason: "SAFE_APPLY_CAPABILITY_UNAVAILABLE"})
+		}
+		var transaction *apitypes.Ref
+		err = w.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
+			var b []byte
+			err := q.QueryRowContext(ctx, "SELECT receipt FROM safe_apply_outbox WHERE owner_id=? AND receipt IS NOT NULL ORDER BY created_at_ms DESC,request_id DESC LIMIT 1", s.ID).Scan(&b)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			var receipt apitypes.Receipt
+			if json.Unmarshal(b, &receipt) != nil {
+				return repository.ErrUnavailable
+			}
+			transaction = receipt.Resource
+			return nil
+		})
+		if err != nil {
+			return out, err
+		}
+		response.Body, err = json.Marshal(map[string]any{"server_time": time.Now().UTC(), "request_epochs": map[string]string{"workspace": e.Epoch, "management": claims.RequestEpoch}, "candidate": response.Body, "latest_validation": latest, "latest_transaction": transaction, "gates": gates})
 		if err != nil {
 			return out, err
 		}
@@ -182,6 +215,9 @@ func authCommand(c requests.Command) authn.Command {
 }
 func (w *Workspace) Execute(ctx context.Context, s publicapi.Subject, q publicapi.Query, c requests.Command) (apitypes.Result, error) {
 	var out apitypes.Result
+	if q.Operation.ID == "createTransaction" {
+		return w.applySafely(ctx, s, c)
+	}
 	cap := "config.stage"
 	if q.Operation.ID == "createValidation" {
 		cap = "config.validate"

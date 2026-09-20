@@ -5,7 +5,10 @@ StartLimitIntervalSec=30
 StartLimitBurst=5
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+WatchdogSec=10s
+TimeoutAbortSec=2s
 User=root
 Group=ovs-webui-web
 EnvironmentFile=/etc/ovs-webui/runtime.env
@@ -21,8 +24,8 @@ RestartSec=2s
 TimeoutStopSec=5s
 KillMode=control-group
 NoNewPrivileges=true
-CapabilityBoundingSet=CAP_CHOWN
-RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true

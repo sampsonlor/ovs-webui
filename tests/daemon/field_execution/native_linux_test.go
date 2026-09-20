@@ -100,9 +100,20 @@ func (p *faultProxy) serve(c net.Conn) {
 			if d.Decode(&b) != nil {
 				return
 			}
-			var r struct{ Method string }
+			var r struct {
+				Method string
+				Params []json.RawMessage
+			}
 			_ = json.Unmarshal(b, &r)
-			if r.Method == "transact" {
+			mutation := false
+			if r.Method == "transact" && len(r.Params) > 1 {
+				for _, raw := range r.Params[1:] {
+					var op struct{ Op string }
+					_ = json.Unmarshal(raw, &op)
+					mutation = mutation || op.Op == "update" || op.Op == "mutate" || op.Op == "insert" || op.Op == "delete"
+				}
+			}
+			if mutation {
 				transaction.Store(true)
 				p.sent.Add(1)
 				p.mu.Lock()
@@ -580,6 +591,7 @@ func TestNativeFieldExecution(t *testing.T) {
 }
 
 type nativeCrashInput struct {
+	Safe        bool
 	Root, Grant string
 	Request     execution.Request
 	AllowIDs    []string
@@ -632,6 +644,19 @@ func TestNativeExecutionCrashChild(t *testing.T) {
 	w, err := web.NewWorkspace(f.webStore, f.auth)
 	must(t, err)
 	subject := publicapi.Subject{ID: in.Request.Envelope.Owner, Credential: in.Grant}
+	if in.Safe {
+		f.workspace = w
+		claims, err := f.auth.InspectAuth(f.ctx, in.Grant)
+		must(t, err)
+		f.login = authn.LoginResult{Grant: in.Grant, Claims: claims}
+		f.engine, err = f.auth.ConfigureExecution(crashAfterCommit{p.Executor(f.inventory)})
+		must(t, err)
+		var offset atomic.Int64
+		f.configureSafety(&offset)
+		f.safeApply(in.Request)
+		time.Sleep(10 * time.Second)
+		t.Fatal("Safe Apply did not reach native crash boundary")
+	}
 	lease, err := w.ReserveExecution(f.ctx, subject, in.Request, isolatedSafety{f})
 	must(t, err)
 	e, err := f.auth.ConfigureExecution(crashAfterCommit{p.Executor(f.inventory)})

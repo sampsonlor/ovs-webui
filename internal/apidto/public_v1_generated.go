@@ -180,6 +180,7 @@ type Candidate struct {
 	State                     string                     `json:"state"`
 	Intents                   []ObservedIntent           `json:"intents"`
 	ConsumedBy                json.RawMessage            `json:"consumed_by"`
+	SafeApplyAvailable        bool                       `json:"safe_apply_available,omitempty"`
 	CurrentInstanceGeneration json.RawMessage            `json:"current_instance_generation,omitempty"`
 	CurrentConfigRevision     json.RawMessage            `json:"current_config_revision,omitempty"`
 	ConflictSnapshotId        json.RawMessage            `json:"conflict_snapshot_id,omitempty"`

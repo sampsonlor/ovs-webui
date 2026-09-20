@@ -108,6 +108,11 @@ func capabilities(ctx context.Context, q querier, principal string) ([]string, e
 	return unique(out), rows.Err()
 }
 func require(c authn.Claims, capability string, elevated bool, now int64) error {
+	// Transport admission accepts either decision capability. The typed
+	// decision service checks the exact confirm/rollback capability again.
+	if capability == "config.decide" && (slices.Contains(c.Capabilities, "configuration.confirm") || slices.Contains(c.Capabilities, "configuration.rollback")) {
+		return nil
+	}
 	if capability == "session.read" || capability == "session.end" {
 		if c.CredentialKind != "grant" {
 			return apitypes.Fail(403, "BROWSER_SESSION_REQUIRED")

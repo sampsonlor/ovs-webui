@@ -94,6 +94,36 @@ func TestExecutionResultDoesNotInventCommitOrApplied(t *testing.T) {
 		t.Fatal("malformed abort claimed not committed", out)
 	}
 }
+func TestAppliedProofIsReadOnlyAndPreservesNativeIntegers(t *testing.T) {
+	d, view, envelope := executionFixture(t, "3.3.9")
+	p, err := compileExecution(repository.NewID(), strings.Repeat("a", 64), envelope, view, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops, err := appliedProofOperations(p, view, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selects := 0
+	for _, value := range ops {
+		op := value.(map[string]any)
+		switch op["op"] {
+		case "wait":
+			encoded, _ := json.Marshal(op["timeout"])
+			if string(encoded) != "0" {
+				t.Fatal("unbounded read proof", op)
+			}
+		case "select":
+			selects++
+		default:
+			t.Fatal("mutation in read-only Applied proof", op)
+		}
+	}
+	b, _ := json.Marshal(ops)
+	if selects != 1 || !strings.Contains(string(b), "9007199254740993") || !strings.Contains(string(b), "9223372036854775807") || !strings.Contains(string(b), `"error"`) {
+		t.Fatal("incomplete or lossy Applied proof", string(b))
+	}
+}
 func TestExecutionRefusesUnknownDependencyAndMarkerCapacity(t *testing.T) {
 	d, v, e := executionFixture(t, "3.3.9")
 	port := v.Observation.Rows["Port"][e.Candidate.Intents[0].Object.OVSUUID]

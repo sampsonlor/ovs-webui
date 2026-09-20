@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.6.0', description: 'Phase 1 public transport with authentication, OVSDB inventory, Candidate/Validation, durable field-execution evidence and Job/Event/Audit services. Public switching admission remains gated on Safe Apply; Applied evidence does not prove health or confirmation.' };
+api.info = { title: 'OVS WebUI public API', version: '1.7.0', description: 'Phase 1 public transport with authenticated Candidate/Validation, durable Safe Apply admission, server confirmation, guarded rollback and shared evidence. Management reachability requires a reviewed server-configured probe; Applied alone never proves health or confirmation.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -22,6 +22,7 @@ const object = ref('ObjectBinding');
 const revision = ref('Revision');
 // Additive Candidate/Validation read models; frozen v1 requests stay compatible.
 Object.assign(s.Candidate.properties, {
+ safe_apply_available: bool,
  current_instance_generation: nullable(id), current_config_revision: nullable(revision), conflict_snapshot_id: nullable(id),
  diff: array(ref('DiffField'), 512), checks: array(ref('Gate'), 512), diff_truncated: bool,
 });
@@ -216,8 +217,8 @@ s.Transaction.properties.field_execution_state = string(64);
 s.Transaction.properties.candidate_id = id;
 s.Transaction.properties.candidate_revision = id;
 s.Transaction.properties.validation_id = id;
-for (const path of ['/transactions', '/transactions/{transaction_id}', '/transactions/{transaction_id}/reconciliations']) {
- for (const op of Object.values(api.paths[path])) if (['listTransactions', 'readTransaction', 'reconcileTransaction'].includes(op.operationId)) op['x-service-state'] = 'implemented';
+for (const path of ['/transactions', '/transactions/{transaction_id}', '/transactions/{transaction_id}/reconciliations', '/transactions/{transaction_id}/decisions']) {
+ for (const op of Object.values(api.paths[path])) if (['listTransactions', 'readTransaction', 'reconcileTransaction', 'createTransaction', 'decideTransaction'].includes(op.operationId)) op['x-service-state'] = 'implemented';
 }
 
 export const pagePaths = {

@@ -78,7 +78,7 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 		case "readRequestReceipt":
 			value, err = r.receipt(ctx, tx, c, path["request_id"], query)
 		case "listTransactions", "readTransaction":
-			value, err = executions.Read(ctx, tx, c, op.ID, path, query, r.key, r.now())
+			value, err = executions.Read(ctx, tx, c, op.ID, path, query, r.key, r.now(), r.SafetyAvailable())
 		default:
 			if evidence.Operation(op.ID) {
 				value, err = evidence.Read(ctx, tx, c, op.ID, path, query, r.key, r.now())
