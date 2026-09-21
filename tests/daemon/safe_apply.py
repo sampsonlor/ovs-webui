@@ -16,7 +16,7 @@ from authentication import request_id, run
 
 
 def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
-                      eventually, fixture, runtime_config, cert, https_port):
+                      eventually, fixture, runtime_config, cert, https_port, exercise=None):
     suffix = uuid.uuid4().hex[:7]
     bridge, port, peer, namespace = 'bs' + suffix, 'ps' + suffix, 'cs' + suffix, 'safe-' + suffix
     network = f'198.18.{20 + int(suffix[:2], 16) % 200}'
@@ -121,6 +121,9 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         assert listener.poll() is None
         metrics['kernel_datapath'] = vsctl('get', 'Bridge', bridge, 'datapath_type').strip()
         metrics['virtualization'] = run('systemd-detect-virt', check=False).stdout.strip()
+
+        if exercise is not None:
+            return exercise(metrics)
 
         normal, original_request = stage('inv-p1', 40)
         current = awaiting(normal)

@@ -241,7 +241,17 @@ func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q pub
 			return apitypes.Result{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")
 		}
 		out, err := a.workspace.Execute(ctx, s, q, c)
-		return out, authError(err)
+		err = authError(err)
+		// These draft-only rejections occur before web.db commits the Candidate.
+		// Other failures, especially validation/execution handoffs, remain unknown.
+		var problem *apitypes.Problem
+		if q.Operation.ID == "changeCandidate" && errors.As(err, &problem) {
+			switch problem.Code {
+			case "ETAG_MISMATCH", "CONFLICT_SNAPSHOT_CHANGED", "RESOLUTION_REQUIRED", "INVALID_RESOLUTION", "INVALID_INTENT", "UNSUPPORTED_CONFIGURATION", "INTENT_BINDING_MISMATCH", "DUPLICATE_FIELD_INTENT", "OBJECT_BINDING_CHANGED", "NATIVE_CONFIGURATION_UNKNOWN", "CANDIDATE_RESERVED", "CANDIDATE_CONSUMED":
+				problem.CommandEffect = "not-started"
+			}
+		}
+		return out, err
 	}
 	if q.Operation.ID == "createCertificate" || q.Operation.ID == "activateCertificate" || q.Operation.ID == "confirmCertificate" {
 		if a.certificates == nil {

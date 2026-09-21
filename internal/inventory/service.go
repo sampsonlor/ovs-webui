@@ -15,6 +15,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
@@ -114,7 +115,7 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	s.mu.RLock()
-	v, failure := s.current, s.failure
+	v, failure, localVLAN := s.current, s.failure, s.localVLAN
 	s.mu.RUnlock()
 	now := s.now()
 	fresh := "unknown"
@@ -146,12 +147,32 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 		return nil, apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
 	}
 	allowedConfig := slices.Contains(c.Capabilities, "configuration.read")
+	// SetLocalVLANPorts replaces the map; published observations are immutable.
+	project := func(b Binding, kind string) (map[string]any, error) {
+		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err != nil || b.Table != "Port" || !allowedConfig {
+			return item, err
+		}
+		binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Port", Generation: v.decision.Generation}
+		p := candidateSnapshot(v, localVLAN, []candidate.Binding{binding}).Ports[b.ManagementID]
+		editable := fresh == "fresh" && p.Known && p.SchemaSupported && p.Authority == "local-managed" && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.port.vlan.write")
+		for _, name := range []string{"vlan_mode", "tag", "trunks", "cvlans"} {
+			if field, ok := item["fields"].(map[string]any)[name].(map[string]any); ok {
+				field["ownership"], field["editable"] = p.Authority, editable
+			}
+		}
+		item["vlan_ownership"], item["vlan_modes"] = p.Authority, p.Modes
+		if editable {
+			item["allowed_operations"] = []string{"port.vlan.set"}
+		}
+		return item, nil
+	}
 	if len(path) > 0 {
 		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond"}[op]
 		for _, b := range v.decision.Bindings {
 			for _, id := range path {
 				if b.ManagementID == id && kindFor(b.Table) == tableKind(kind) {
-					item, err := resource(v, b, fresh, allowedConfig, kind)
+					item, err := project(b, kind)
 					if err != nil {
 						return nil, err
 					}
@@ -244,7 +265,7 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 				}
 			}
 		} else {
-			item, err = resource(v, bindings[id], fresh, allowedConfig, kind)
+			item, err = project(bindings[id], kind)
 			if err != nil {
 				return nil, err
 			}

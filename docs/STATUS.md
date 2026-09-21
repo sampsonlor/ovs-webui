@@ -1,6 +1,6 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-20。P1 六批及整合已接受；#30–#39 正式基础已依次接受合并。#39 字段执行通过 [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 合并至 `7aef52d`，接受标签 `phase1-ovsdb-execution-v0.1`。#40 Safe Apply 交付见 [PR #66](https://github.com/sampsonlor/ovs-webui/pull/66) 与[审阅记录](reviews/SAFE_APPLY_v0.1.md)，以最终 CI、main 合并和接受标签为准。共享库存与正式基础的归集证据见[归集记录](reviews/MAIN_CONSOLIDATION_2026-09-15.md)。
+更新：2026-09-21。P1 六批及整合已接受；#30–#40 正式基础已依次接受合并。#39 字段执行通过 [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 合并至 `7aef52d`，接受标签 `phase1-ovsdb-execution-v0.1`。#40 Safe Apply 已通过 PR 和 main 双架构完整 CI，并由 [PR #66](https://github.com/sampsonlor/ovs-webui/pull/66) 合并至 `8ceefac`，接受标签 `phase1-safe-apply-v0.1`。#41 Svelte 正式首切片正在验收，见[审阅矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。共享库存与正式基础的归集证据见[归集记录](reviews/MAIN_CONSOLIDATION_2026-09-15.md)。
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点 v0.2](reviews/P1_IA_COVERAGE_v0.2.md)和各批记录。
 
@@ -36,7 +36,7 @@
 | 共享 Job / 请求 / Event / Audit #37 | PR #63 已接受合并，#37 已关闭；共享持久服务、取消与恢复、当前授权、脱敏、保留及分页导出；122 路径 / 139 操作 | 原生双架构各 113 项 Go race 及真实服务场景通过；#20/#27/#28/#54 页面和具体执行器分别验收 |
 | Candidate / Diff / Validation #38 | PR #64 已接受合并，#38 已关闭；正式持久草稿、三方 rebase、原生 schema / 当前授权校验、不可变 Validation/ChangeSet/Job/Audit 和请求恢复 | 原生双架构各 126 项 Go race 及三份 schema 中真实 HTTPS/IPC/OVS 场景通过；Apply #39、Safe Apply #40、前端 #41/#54 分别验收 |
 | OVSDB 字段执行 / OutcomeUnknown / Applied #39 | PR #65 已接受合并，#39 已关闭；原生双架构各 134 项 Go race、每架构 24 个真实字段执行场景与完整 CI 通过 | [实现与门控](implementation/OVSDB_EXECUTION_v0.1.md)、[审阅记录](reviews/OVSDB_EXECUTION_v0.1.md)；公开高风险写入由 #40 的安全协调器准入 |
-| 持久 Safe Apply / 独立 Watchdog / 精细回滚 #40 | PR #66 提供双库 outbox/journal、Applied 与真实 probe 门控、服务端确认/截止/撤权、原生字段 CAS 补偿及单个 Last Known Good | [实现说明](implementation/SAFE_APPLY_v0.1.md)、[审阅与原生/VM 验收矩阵](reviews/SAFE_APPLY_v0.1.md)；最终 CI 通过后合并并记录 `phase1-safe-apply-v0.1`；#41/#54 页面独立验收 |
+| 持久 Safe Apply / 独立 Watchdog / 精细回滚 #40 | PR #66 提供双库 outbox/journal、Applied 与真实 probe 门控、服务端确认/截止/撤权、原生字段 CAS 补偿及单个 Last Known Good | [实现说明](implementation/SAFE_APPLY_v0.1.md)、[审阅与原生/VM 验收矩阵](reviews/SAFE_APPLY_v0.1.md)；已合并并记录 `phase1-safe-apply-v0.1`；#41/#54 页面独立验收 |
 | CI 工程基础 #6 / #7 | 已获用户接受并合并；#6、#7 已关闭；接受时 145 项回归、3 项集成、12 项浏览器测试及构建通过 | 详见 [CI 审阅](reviews/CI_BROWSER_BASELINE_v0.1.md)；Capabilities 新增覆盖见本批记录，真实 OVS 与正式管理面另行验收 |
 | Design System / 高保真 | 核心 P0 与 P1 六批使用统一组件；各批保留浅/深色、窄屏及放大文字局部证据 | 整站深色、浏览器缩放矩阵及其余 IA 页面 |
 | 批准 IA 导航 | 五域映射已接受并合并；桌面、窄屏共用定义；未实现入口明确 Planned | 完整 Page Inventory 与独立资源页仍未全部实现 |
@@ -58,8 +58,8 @@
 
 ## 下一步
 
-#39 已接受；#40 通过[本批审阅门槛](reviews/SAFE_APPLY_v0.1.md)后，下一项为 #41：Svelte 5 静态前端与 Ports/VLAN 正式服务端到端首切片。#54 继续负责完整页面迁移，#20–#28 均属于 Phase 1，按其完整功能与页面要求独立验收。开发仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
+#40 已接受。当前 #41 建立 Svelte 5 静态前端与 Ports/VLAN 正式服务端到端首切片，详见[实现说明](implementation/SVELTE_PORTS_VLAN_v0.1.md)和[验收矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。#54 继续负责完整页面迁移，#20–#28 均属于 Phase 1，按其完整功能与页面要求独立验收。开发仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
 
-[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#39 已完成，#40 随 PR #66 的验收状态推进，#29 仍为 In Progress。#20–#28 已统一加入 Phase 1 milestone，继续保留独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
+[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#40 已完成，#41 按正式浏览器及双架构 CI 的验收状态推进，#29 仍为 In Progress。#20–#28 已统一加入 Phase 1 milestone，继续保留独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。

@@ -54,11 +54,14 @@ func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(conte
 		return nil, nil, err
 	}
 	bootstrap := BootstrapHandler(manager, storage)
+	ui := staticHandler(staticAssets)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			api.ServeHTTP(w, r)
-		} else {
+		} else if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
 			bootstrap.ServeHTTP(w, r)
+		} else {
+			ui.ServeHTTP(w, r)
 		}
 	}), api.Close, nil
 }

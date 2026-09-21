@@ -29,8 +29,15 @@
     "out/**",
     "build/**",
     "dist/**",
+    "internal/web/assets/spa/**",
     "coverage/**",
     "next-env.d.ts"
+  ],
+  "overrides": [
+    {
+      "files": ["frontend/**/*.svelte"],
+      "rules": { "prefer-const": "off" }
+    }
   ],
   "rules": {
     "no-array-constructor": "error",

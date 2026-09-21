@@ -38,6 +38,7 @@ yarn-error.log*
 .vercel
 next-env.d.ts
 /dist/
+/internal/web/assets/spa/
 /.wrangler/
 /outputs/
 /work/
