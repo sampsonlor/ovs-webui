@@ -160,6 +160,52 @@ await test('storage failure prevents dispatch and completed workspace receipts s
   assert.equal(recovered.pending(), null);
 });
 
+await test('acknowledgements and definitive rejections must match the original command identity', async () => {
+  for (const variant of [
+    'valid',
+    'wrong-key',
+    'wrong-kind',
+    'rejected',
+    'wrong-rejection',
+  ]) {
+    const disk = storage();
+    const api = new API(async (_url, options) => {
+      const id = JSON.parse(options.body).request_id;
+      if (variant.includes('reject'))
+        return response(
+          {
+            code: 'ETAG_MISMATCH',
+            command_effect: 'not-started',
+            request_id: variant === 'rejected' ? id : requestID(),
+            request_domain: 'management',
+          },
+          412,
+        );
+      return response(
+        {
+          request_id: variant === 'wrong-key' ? requestID() : id,
+          request_epoch: epoch,
+          request_domain: 'management',
+          job_id: resource,
+          resource_ref: {
+            kind: variant === 'wrong-kind' ? 'job' : 'transaction',
+            id: resource,
+          },
+        },
+        202,
+      );
+    }, disk);
+    api.session = session;
+    if (variant === 'valid')
+      await api.command('/transactions', 'POST', 'management', {});
+    else
+      await assert.rejects(
+        api.command('/transactions', 'POST', 'management', {}),
+      );
+    assert.equal(!!api.pending(), !['valid', 'rejected'].includes(variant));
+  }
+});
+
 await test('responses arriving after sign-out cannot restore protected inventory or authority', async () => {
   let release, requested;
   const waiting = new Promise((r) => {

@@ -96,7 +96,9 @@ async function stage(page: Page, tag: string) {
   await page
     .getByRole('link', { name: 'Edit VLAN intent →', exact: true })
     .click();
-  await page.getByLabel('VLAN mode', { exact: true }).selectOption('access');
+  await page
+    .getByRole('combobox', { name: 'VLAN mode', exact: true })
+    .selectOption('access');
   await page.getByLabel('VLAN tag', { exact: true }).fill(tag);
   await page
     .getByRole('button', { name: 'Stage in Candidate', exact: true })
@@ -172,7 +174,9 @@ test('real login, native identity, approved depth and responsive responsibilitie
   await expect(
     page.getByRole('columnheader', { name: 'Identity / source', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Toggle color theme', exact: true })
+    .click();
   await screen(page, 'ports-expert-dark');
   await page.getByRole('link', { name: 'inv-p2', exact: true }).click();
   await expect(page.getByText(/dot1q-tunnel · tag 200/)).toBeVisible();
@@ -252,6 +256,15 @@ test('Candidate to Safe Apply recovers a lost real admission reply, refreshes an
     page.getByRole('button', { name: 'Recover original request' }),
   ).toBeVisible();
   await screen(page, 'lost-reply-unknown');
+  const secondTab = await context.newPage();
+  await secondTab.goto(page.url());
+  await expect(
+    secondTab.getByRole('button', { name: 'Recover original request' }),
+  ).toBeVisible();
+  await expect(
+    secondTab.getByRole('button', { name: 'Start Safe Apply', exact: true }),
+  ).toBeDisabled();
+  await secondTab.close();
   await page.reload();
   await page.getByRole('button', { name: 'Recover original request' }).click();
   await awaiting(page);

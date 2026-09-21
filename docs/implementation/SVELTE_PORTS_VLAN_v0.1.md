@@ -22,7 +22,7 @@ The SPA has no inline scripts/styles, third-party scripts, CDN fonts or `unsafe-
 
 ## Authority and recovery
 
-The client uses the generated public v1 DTOs and existing REST services. Every write carries the service request epoch and a UUIDv7 idempotency key. Candidate writes carry their strong revision. A pending identity is saved before dispatch; a storage failure prevents dispatch. After an unacknowledged mutation, the UI blocks new commands and queries the original receipt. Missing, forbidden, mismatched and unknown receipt states do not prove non-execution. Recognized accepted/completed receipts restore their linked resource without another POST.
+The client uses the generated public v1 DTOs and existing REST services. Every write carries the service request epoch and a UUIDv7 idempotency key. Candidate writes carry their strong revision. A same-origin Web Lock serializes command dispatch across tabs; a pending identity is saved before dispatch. Missing locking/storage support prevents dispatch. After an unacknowledged mutation, the UI blocks new commands and queries the original receipt. Missing, forbidden, mismatched and unknown receipt states do not prove non-execution. Acknowledgements must match the original identity and resource kind. Recognized accepted/completed receipts restore their linked resource without another POST.
 
 Known draft-only CAS/semantic rejections expose `command_effect: not-started`; this narrow mapping covers errors that occur before the Candidate write commits. Validation and execution handoff failures remain unknown. Do not generalize an HTTP status to a non-execution guarantee.
 

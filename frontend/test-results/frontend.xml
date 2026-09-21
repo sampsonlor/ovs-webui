@@ -1,0 +1,32 @@
+<testsuites id="" name="" tests="7" failures="0" skipped="7" errors="0" time="0.5017939999999999">
+<testsuite name="formal.spec.ts" timestamp="2026-09-21T02:18:43.684Z" hostname="" tests="7" failures="0" skipped="7" time="0" errors="0">
+<testcase name="real login, native identity, approved depth and responsive responsibilities" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Candidate to Safe Apply recovers a lost real admission reply, refreshes and links Job / Audit" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="real external writer exposes three-way conflict and explicit snapshot-bound rebase" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="real provider outage and manager outage remain stale / unavailable" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="reader depth never grants edit rights; revoked permissions fence an already-returned response" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="existing Safe Apply supports tablet review and mobile rollback without new transactions" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="closing the browser leaves the actual 120-second server deadline and rollback authoritative" classname="formal.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+</testsuites>

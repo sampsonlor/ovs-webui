@@ -103,6 +103,28 @@ export class API {
     body: object,
     revision?: string,
   ): Promise<T> {
+    // A shared pending key alone is not a compare-and-swap across browser tabs.
+    // Hold a same-origin Web Lock through persistence and acknowledgement.
+    if (typeof window !== 'undefined') {
+      if (!navigator.locks) throw new Error('CROSS_TAB_LOCK_UNAVAILABLE');
+      return navigator.locks.request(
+        `ovs.command.v1.${this.session?.principal_id ?? 'anonymous'}`,
+        { ifAvailable: true },
+        (lock) => {
+          if (!lock) throw new Error('REQUEST_IN_PROGRESS_IN_ANOTHER_TAB');
+          return this.dispatch<T>(path, method, domain, body, revision);
+        },
+      );
+    }
+    return this.dispatch<T>(path, method, domain, body, revision);
+  }
+  private async dispatch<T>(
+    path: string,
+    method: 'POST' | 'PATCH',
+    domain: 'workspace' | 'management',
+    body: object,
+    revision?: string,
+  ): Promise<T> {
     const session = this.session;
     if (!session) throw new Error('SESSION_REQUIRED');
     if (this.pending()) throw new Error('REQUEST_RECOVERY_REQUIRED');
@@ -128,11 +150,30 @@ export class API {
     ).catch((error: unknown) => {
       if (
         error instanceof APIError &&
-        ['none', 'not-started'].includes(error.problem.command_effect ?? '')
+        ['none', 'not-started'].includes(error.problem.command_effect ?? '') &&
+        error.problem.request_id === pending.request_id &&
+        error.problem.request_domain === domain
       )
         this.storage.removeItem(key);
       throw error;
     });
+    const data = result as Record<string, unknown> | undefined;
+    const uuid = (value: unknown) =>
+      typeof value === 'string' && /^[0-9a-f-]{14}4[0-9a-f-]{21}$/.test(value);
+    if (
+      !data ||
+      (domain === 'management'
+        ? data.request_id !== pending.request_id ||
+          data.request_domain !== domain ||
+          data.request_epoch !== pending.request_epoch ||
+          !uuid(data.job_id) ||
+          !this.resourceMatches(path, data.resource_ref)
+        : !uuid(data.id) ||
+          !uuid(data.revision) ||
+          !Array.isArray(data.intents))
+    ) {
+      throw new Error('COMMAND_RESPONSE_IDENTITY_MISMATCH');
+    }
     this.storage.removeItem(key);
     return result;
   }
@@ -145,11 +186,29 @@ export class API {
     if (!receiptMatches(receipt, pending))
       throw new Error('RECEIPT_IDENTITY_MISMATCH');
     // Unknown future receipt states cannot unlock another configuration command.
-    if (
-      ['accepted', 'completed'].includes(receipt.state) &&
-      receipt.resource_ref
-    )
+    if (['accepted', 'completed'].includes(receipt.state)) {
+      if (!this.resourceMatches(pending.path, receipt.resource_ref))
+        throw new Error('RECEIPT_RESOURCE_MISMATCH');
       this.storage.removeItem(this.key(pending.principal_id));
+    }
     return receipt;
+  }
+  private resourceMatches(path: string, value: unknown): boolean {
+    if (!value || typeof value !== 'object') return false;
+    const ref = value as Record<string, unknown>;
+    const kind =
+      path === '/candidate'
+        ? 'candidate'
+        : path === '/validations'
+          ? 'validation'
+          : path.startsWith('/transactions')
+            ? 'transaction'
+            : '';
+    return (
+      !!kind &&
+      ref.kind === kind &&
+      typeof ref.id === 'string' &&
+      /^[0-9a-f-]{14}4[0-9a-f-]{21}$/.test(ref.id)
+    );
   }
 }
