@@ -80,7 +80,9 @@
   bind:innerWidth={width}
   onpopstate={() => controller.go(location.pathname)}
   ononline={() => controller.refresh()}
-  onstorage={(event) => { if (event.key?.startsWith('ovs.pending.v1.')) void controller.refresh(); }}
+  onstorage={(event) => {
+    if (event.key?.startsWith('ovs.pending.v1.')) void controller.refresh();
+  }}
 />
 <a class="skip-link" href="#main">Skip to content</a>
 {#if !$model.session}

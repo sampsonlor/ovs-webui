@@ -16,7 +16,7 @@
 | Visual and keyboard | Standard/light, Expert/dark, native advanced values, tablet, 390px mobile, enlarged text, skip link and visible keyboard focus |
 | Build and static boundary | Svelte check, production build, embedded deep links, CSP without inline permission, no-store shell / hashed assets, unknown API routes never become HTML |
 
-`tests/frontend/formal.spec.ts` runs through the two actual daemons and native OVS. Its fixture reuses the kernel system datapath, veth namespace and interface-bound TCP probe from #40. It does not replace API responses with fixture JSON; the two interceptors only withhold or drop an actual authorized response to exercise delivery failures. Synthetic accounts, private test TLS identity, network, services and data are removed after the suite. Trace/HAR/storageState recording is disabled to prevent credential capture.
+`tests/frontend/formal.spec.ts` runs through the two actual daemons and native OVS. Its fixture reuses the kernel system datapath, veth namespace and interface-bound TCP probe from #40. It does not replace API responses with fixture JSON; interceptors only withhold or drop actual authorized responses to exercise delivery failures and concurrent recovery. Synthetic accounts, private test TLS identity, network, services and data are removed after the suite. The deadline case has a separate synthetic principal to respect the production authentication rate limit. Trace/HAR/storageState recording is disabled to prevent credential capture.
 
 The original #40 VM recovery and three-schema native execution matrices remain separate mandatory CI steps on amd64 and arm64. Running the frontend on one actual OVS binary with a schema fixture does not claim certification of multiple OVS binary releases.
 

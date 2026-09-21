@@ -206,6 +206,31 @@ await test('acknowledgements and definitive rejections must match the original c
   }
 });
 
+await test('a late recovery response cannot erase a newer pending identity', async () => {
+  const disk = storage();
+  const original = {
+    principal_id: principal,
+    request_id: requestID(),
+    request_domain: 'management',
+    request_epoch: epoch,
+    path: '/transactions',
+  };
+  const newer = { ...original, request_id: requestID() };
+  const key = `ovs.pending.v1.${principal}`;
+  disk.setItem(key, JSON.stringify(original));
+  const api = new API(async () => {
+    disk.setItem(key, JSON.stringify(newer));
+    return response({
+      ...original,
+      state: 'accepted',
+      resource_ref: { kind: 'transaction', id: resource },
+    });
+  }, disk);
+  api.session = session;
+  await api.recover();
+  assert.deepEqual(api.pending(), newer);
+});
+
 await test('responses arriving after sign-out cannot restore protected inventory or authority', async () => {
   let release, requested;
   const waiting = new Promise((r) => {

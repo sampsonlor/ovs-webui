@@ -103,6 +103,11 @@ export class API {
     body: object,
     revision?: string,
   ): Promise<T> {
+    return this.withRequestLock(() =>
+      this.dispatch<T>(path, method, domain, body, revision),
+    );
+  }
+  private async withRequestLock<T>(run: () => Promise<T>): Promise<T> {
     // A shared pending key alone is not a compare-and-swap across browser tabs.
     // Hold a same-origin Web Lock through persistence and acknowledgement.
     if (typeof window !== 'undefined') {
@@ -112,11 +117,17 @@ export class API {
         { ifAvailable: true },
         (lock) => {
           if (!lock) throw new Error('REQUEST_IN_PROGRESS_IN_ANOTHER_TAB');
-          return this.dispatch<T>(path, method, domain, body, revision);
+          return run();
         },
       );
     }
-    return this.dispatch<T>(path, method, domain, body, revision);
+    return run();
+  }
+  private forget(pending: Pending) {
+    const key = this.key(pending.principal_id);
+    // A delayed recovery must never remove a newer request's identity.
+    const raw = this.storage.getItem(key);
+    if (raw === JSON.stringify(pending)) this.storage.removeItem(key);
   }
   private async dispatch<T>(
     path: string,
@@ -154,7 +165,7 @@ export class API {
         error.problem.request_id === pending.request_id &&
         error.problem.request_domain === domain
       )
-        this.storage.removeItem(key);
+        this.forget(pending);
       throw error;
     });
     const data = result as Record<string, unknown> | undefined;
@@ -174,10 +185,13 @@ export class API {
     ) {
       throw new Error('COMMAND_RESPONSE_IDENTITY_MISMATCH');
     }
-    this.storage.removeItem(key);
+    this.forget(pending);
     return result;
   }
   async recover(): Promise<RequestReceipt> {
+    return this.withRequestLock(() => this.recoverOriginal());
+  }
+  private async recoverOriginal(): Promise<RequestReceipt> {
     const pending = this.pending();
     if (!pending) throw new Error('NO_PENDING_REQUEST');
     const receipt = await this.read<RequestReceipt>(
@@ -189,7 +203,7 @@ export class API {
     if (['accepted', 'completed'].includes(receipt.state)) {
       if (!this.resourceMatches(pending.path, receipt.resource_ref))
         throw new Error('RECEIPT_RESOURCE_MISMATCH');
-      this.storage.removeItem(this.key(pending.principal_id));
+      this.forget(pending);
     }
     return receipt;
   }

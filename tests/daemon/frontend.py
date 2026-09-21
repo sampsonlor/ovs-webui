@@ -14,7 +14,10 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     assert call('/session/reauthentication', 'POST', {'password': password})[0] == 200
     roles = {role['name']: role['id'] for role in get('/roles')['items']}
     accounts = {}
-    for name, role in [('browser-admin', 'Administrator'), ('browser-reader', 'Reader'), ('browser-revoke', 'NetworkAdmin')]:
+    # The deadline scenario has its own principal so rapid test logins/step-ups
+    # respect the production per-account authentication budget.
+    for name, role in [('browser-admin', 'Administrator'), ('browser-deadline', 'Administrator'),
+                       ('browser-reader', 'Reader'), ('browser-revoke', 'NetworkAdmin')]:
         secret = 'synthetic-browser-' + secrets.token_hex(16)
         credentials.append(secret)
         code, _, _ = call('/users', 'POST', {'request_id': request_id(), 'username': name, 'password': secret, 'role_ids': [roles[role]]})

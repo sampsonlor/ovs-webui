@@ -21,12 +21,20 @@
   const page = $derived(model.path.split('/')[2]);
   const resourceID = $derived(model.path.split('/')[3]);
   const left = $derived(t ? remaining(t, model.transaction.received, tick) : null);
-  const transactionFresh = $derived(model.transaction.status === 'ready' && tick - model.transaction.received <= 5000);
+  const transactionFresh = $derived(
+    model.transaction.status === 'ready' && tick - model.transaction.received <= 5000,
+  );
   let reason = $state('');
   let reviewed = $state(false);
   let discard = $state(false);
   let password = $state('');
   let resolutions = $state<Record<string, 'keep-current' | 'keep-mine' | ''>>({});
+  const reviewSnapshot = $derived(`${c?.id}/${c?.revision}/${c?.conflict_snapshot_id}`);
+  $effect(() => {
+    void reviewSnapshot;
+    resolutions = {};
+    discard = false;
+  });
   async function reauthenticate(event: SubmitEvent) {
     event.preventDefault();
     const value = password;
@@ -150,7 +158,11 @@
             discard = false;
             void controller.candidateCommand({ operation: 'discard' });
           }}
-          disabled={blocked}>Confirm discard</button
+          disabled={blocked ||
+            !desktop ||
+            !has(model.session, 'workspace.write') ||
+            !!c.consumed_by ||
+            !c.intents.length}>Confirm discard</button
         ><button
           onclick={() => {
             discard = false;
@@ -259,7 +271,9 @@
     </div>
     <section class="panel">
       <h2>Authoritative transaction state</h2>
-      {#if !transactionFresh}<p class="notice warning">This observation is stale. Decisions require fresh server evidence.</p>{/if}
+      {#if !transactionFresh}<p class="notice warning">
+          This observation is stale. Decisions require fresh server evidence.
+        </p>{/if}
       <dl class="state-grid">
         <dt>Knowledge</dt>
         <dd><Status value={t.knowledge} /></dd>

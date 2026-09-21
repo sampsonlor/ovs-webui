@@ -118,10 +118,10 @@ async function validate(page: Page) {
     page.getByText('Usable for this revision', { exact: true }),
   ).toBeVisible();
 }
-async function prepareApply(page: Page) {
+async function prepareApply(page: Page, name = 'browser-admin') {
   await page
     .getByLabel('Verify your password', { exact: true })
-    .fill(fixture.accounts['browser-admin']);
+    .fill(fixture.accounts[name]);
   await page
     .getByRole('button', { name: 'Verify identity', exact: true })
     .click();
@@ -215,6 +215,15 @@ test('real login, native identity, approved depth and responsive responsibilitie
   });
   await screen(page, 'port-large-text');
   expect(
+    await page
+      .locator('.brand-mark')
+      .evaluate(
+        (el) =>
+          el.scrollHeight <= el.clientHeight &&
+          el.scrollWidth <= el.clientWidth,
+      ),
+  ).toBe(true);
+  expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,
     ),
@@ -264,10 +273,39 @@ test('Candidate to Safe Apply recovers a lost real admission reply, refreshes an
   await expect(
     secondTab.getByRole('button', { name: 'Start Safe Apply', exact: true }),
   ).toBeDisabled();
-  await secondTab.close();
   await page.reload();
-  await page.getByRole('button', { name: 'Recover original request' }).click();
+  let releaseReceipt!: () => void;
+  const holdReceipt = new Promise<void>((r) => {
+    releaseReceipt = r;
+  });
+  let fetchedReceipt!: () => void;
+  const receiptFetched = new Promise<void>((r) => {
+    fetchedReceipt = r;
+  });
+  await page.route('**/api/v1/requests/**', async (route) => {
+    const response = await route.fetch();
+    fetchedReceipt();
+    await holdReceipt;
+    await route.fulfill({ response });
+  });
+  try {
+    await page
+      .getByRole('button', { name: 'Recover original request' })
+      .click();
+    await receiptFetched;
+    await secondTab
+      .getByRole('button', { name: 'Recover original request' })
+      .click();
+    await expect(
+      secondTab.getByText('Original outcome remains unknown:', {
+        exact: false,
+      }),
+    ).toContainText('REQUEST_IN_PROGRESS_IN_ANOTHER_TAB');
+  } finally {
+    releaseReceipt();
+  }
   await awaiting(page);
+  await secondTab.close();
   expect(posts).toBe(1);
   const transactionURL = page.url();
   const t = await get(
@@ -316,6 +354,25 @@ test('real external writer exposes three-way conflict and explicit snapshot-boun
     page.getByRole('button', { name: 'Validate Candidate', exact: true }),
   ).toBeDisabled();
   await screen(page, 'candidate-real-conflict');
+  await page
+    .getByRole('combobox', { name: /^Port / })
+    .selectOption('keep-mine');
+  // A new external snapshot needs a fresh human choice, not the previous consent.
+  const currentTag = page
+    .getByRole('region', { name: 'Configuration Diff' })
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader').filter({ hasText: 'tag' }) })
+    .getByRole('cell')
+    .nth(1);
+  vsctl('set', 'Port', 'inv-p1', 'tag=42');
+  await expect(currentTag).toHaveText('42');
+  await expect(page.getByRole('combobox', { name: /^Port / })).toHaveValue('');
+  await expect(
+    page.getByRole('button', { name: 'Rebase reviewed choices' }),
+  ).toBeDisabled();
+  vsctl('set', 'Port', 'inv-p1', 'tag=41');
+  // Wait for this same native value in the visible three-way Diff before choosing.
+  await expect(currentTag).toHaveText('41');
   await page
     .getByRole('combobox', { name: /^Port / })
     .selectOption('keep-mine');
@@ -493,11 +550,11 @@ test('closing the browser leaves the actual 120-second server deadline and rollb
   context,
 }) => {
   test.setTimeout(190000);
-  await login(page);
+  await login(page, 'browser-deadline');
   await clean(context);
   await stage(page, '70');
   await validate(page);
-  await prepareApply(page);
+  await prepareApply(page, 'browser-deadline');
   await page
     .getByRole('button', { name: 'Start Safe Apply', exact: true })
     .click();

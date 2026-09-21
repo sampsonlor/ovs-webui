@@ -176,8 +176,8 @@ pre {
   min-height: 100vh;
 }
 .sidebar {
-  width: 232px;
-  flex: 0 0 232px;
+  width: 14.5rem;
+  flex: 0 0 14.5rem;
   background: var(--sidebar);
   border-right: 1px solid var(--border);
   padding: 28px 16px;
@@ -200,8 +200,10 @@ pre {
 .brand-mark {
   background: var(--primary);
   color: var(--on-primary);
-  width: 46px;
-  height: 46px;
+  width: 2.875rem;
+  height: 2.875rem;
+  flex-shrink: 0;
+  white-space: nowrap;
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
@@ -333,7 +335,7 @@ pre {
 }
 .columns {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   gap: 20px;
 }
 .columns .panel {
@@ -555,8 +557,8 @@ footer {
 }
 @media (max-width: 1099px) {
   .sidebar {
-    width: 185px;
-    flex-basis: 185px;
+    width: 11.5625rem;
+    flex-basis: 11.5625rem;
     padding: 22px 12px;
   }
   .workspace main {
@@ -596,8 +598,8 @@ footer {
     margin-bottom: 16px;
   }
   .brand-mark {
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     font-size: 0.875rem;
   }
   .sidebar nav {
