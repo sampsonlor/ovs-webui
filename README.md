@@ -5,7 +5,7 @@ An engineering-focused web management experience for Open vSwitch (OVS), designe
 ## Project status
 
 See [current status and architecture alignment](docs/STATUS.md) for the
-2026-09-15 inventory, source baselines, implementation design and review scope.
+2026-09-21 inventory, source baselines, implementation design and review scope.
 
 This repository contains the approved P0 low-fidelity UX baseline and the active P1 prototype. It is a product and interaction prototype, not production-ready switch-management software.
 
@@ -50,7 +50,7 @@ in PR #58, adds private databases, atomic migrations, consistent backups
 and durable handoff receipts. Missing or damaged databases stop write admission;
 normal startup never replaces them with empty stores. Tasks #34–#38 add current
 authorization, SecretStore/TLS, real OVSDB discovery, durable evidence and Candidate
-validation. OVS configuration execution and the Svelte product retain subsequent gates.
+validation. #39/#40 add field execution and durable Safe Apply. The formal Svelte Ports/VLAN client in `frontend/` uses those same services; see [build instructions and scope](docs/implementation/SVELTE_PORTS_VLAN_v0.1.md). Remaining pages and Phase 1 release qualification retain separate gates.
 
 The accepted [public REST v1 review](docs/implementation/PUBLIC_API_v1.0.md), PR #59,
 adds OpenAPI runtime validation, generated DTOs, durable request idempotency and

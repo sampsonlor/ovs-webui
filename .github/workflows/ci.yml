@@ -155,6 +155,20 @@ jobs:
           fi
       - name: Bounded protocol fuzzing
         run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
+      - name: Install frontend build and browser test toolchain
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24.19.0
+          cache: true
+          install: false
+      - name: Build static frontend for Go embedding
+        run: |
+          pnpm install --frozen-lockfile --no-runtime
+          pnpm frontend:build
+      - name: Install native Chromium for formal service acceptance
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /tmp/ovs-frontend-browsers
+        run: pnpm exec playwright install --with-deps chromium
       - name: Build CGO-free daemon binaries
         run: |
           mkdir -p outputs/runtime test-results
@@ -178,6 +192,8 @@ jobs:
           done
       - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
         run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
+      - name: Embedded Svelte browser against real Go services and kernel OVS safety
+        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
       - name: Vet and native race tests
         env:
           CGO_ENABLED: '1'
@@ -238,6 +254,11 @@ jobs:
             test-results/go-execution-*.json
             test-results/go-safe-apply-*.json
             test-results/go-safe-apply-vm-journal.log
+            test-results/go-frontend.json
+            test-results/go-frontend-journal.log
+            test-results/frontend.xml
+            test-results/frontend/
+            test-results/frontend-evidence/
           if-no-files-found: ignore
           retention-days: 7
 

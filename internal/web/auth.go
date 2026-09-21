@@ -241,7 +241,17 @@ func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q pub
 			return apitypes.Result{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")
 		}
 		out, err := a.workspace.Execute(ctx, s, q, c)
-		return out, authError(err)
+		err = authError(err)
+		// These draft-only rejections occur before web.db commits the Candidate.
+		// Other failures, especially validation/execution handoffs, remain unknown.
+		var problem *apitypes.Problem
+		if q.Operation.ID == "changeCandidate" && errors.As(err, &problem) {
+			switch problem.Code {
+			case "ETAG_MISMATCH", "CONFLICT_SNAPSHOT_CHANGED", "RESOLUTION_REQUIRED", "INVALID_RESOLUTION", "INVALID_INTENT", "UNSUPPORTED_CONFIGURATION", "INTENT_BINDING_MISMATCH", "DUPLICATE_FIELD_INTENT", "OBJECT_BINDING_CHANGED", "NATIVE_CONFIGURATION_UNKNOWN", "CANDIDATE_RESERVED", "CANDIDATE_CONSUMED":
+				problem.CommandEffect = "not-started"
+			}
+		}
+		return out, err
 	}
 	if q.Operation.ID == "createCertificate" || q.Operation.ID == "activateCertificate" || q.Operation.ID == "confirmCertificate" {
 		if a.certificates == nil {
@@ -250,5 +260,15 @@ func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q pub
 		return a.certificates.Execute(ctx, s, q, c)
 	}
 	result, err := a.manager.ExecuteAuth(ctx, s.Credential, authn.Command{Method: c.Method, URI: c.URI, Epoch: c.Epoch, RequestID: c.ID, Precondition: c.Precondition, Payload: c.Payload})
-	return result, authError(err)
+	err = authError(err)
+	var problem *apitypes.Problem
+	if q.Operation.ID == "decideTransaction" && errors.As(err, &problem) && problem.Status == 409 {
+		// mgrd replays under the transaction lock before these monotonic guards.
+		// Neither rejection can later accept this decision's old sequence. Busy,
+		// transport and post-commit failures deliberately remain unknown.
+		if problem.Code == "TRANSACTION_VERSION_CHANGED" || problem.Code == "TRANSACTION_SETTLED" {
+			problem.CommandEffect = "not-started"
+		}
+	}
+	return result, err
 }

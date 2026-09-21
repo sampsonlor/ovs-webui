@@ -59,7 +59,33 @@ func (e *Engine) claim(id string) bool {
 	e.active[id] = true
 	return true
 }
-func (e *Engine) release(id string)    { e.mu.Lock(); delete(e.active, id); e.mu.Unlock() }
+func (e *Engine) release(id string) { e.mu.Lock(); delete(e.active, id); e.mu.Unlock() }
+
+// A control decision may briefly overlap a read-only watchdog observation.
+// Wait within the IPC budget instead of reporting a spurious unknown outcome.
+// Exhaustion remains unknown: another copy of the same request could be active.
+func (e *Engine) claimDecision(ctx context.Context, id string) error {
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if e.claim(id) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return apitypes.Fail(409, "TRANSACTION_BUSY")
+		case <-tick.C:
+		}
+	}
+}
+
 func terminal(r execution.Record) bool { return r.State == "succeeded" || r.State == "failed" }
 
 func load(ctx context.Context, q evidence.Query, id string) (execution.Record, error) {

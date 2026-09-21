@@ -127,6 +127,14 @@ func TestWorkspaceHTTPConcurrentSavesLostRepliesValidationAndRevocation(t *testi
 	if winner < 0 {
 		t.Fatal("no save succeeded", responses[0].Body.String(), responses[1].Body.String())
 	}
+	// A definitive draft CAS rejection must let clients refresh/review instead of
+	// getting stuck trying to recover a command which never committed.
+	rejected := call("PATCH", "/candidate", map[string]any{"request_id": workspaceID(), "operation": "stage", "intents": []candidate.Intent{intent}}, `"`+initial.Revision+`"`, "workspace")
+	var problem apitypes.Problem
+	_ = json.Unmarshal(rejected.Body.Bytes(), &problem)
+	if rejected.Code != 412 || problem.CommandEffect != "not-started" {
+		t.Fatal("definitive draft rejection lost effect", rejected.Code, rejected.Body.String())
+	}
 	e := read()
 	if *e.Intents[0].Before.Tag != 10 || *p.snapshot.Ports[binding.ManagementID].VLAN.Tag != 10 {
 		t.Fatal("save changed original/live")

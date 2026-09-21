@@ -43,6 +43,8 @@ def main():
     parser.add_argument('--bin-dir', required=True)
     parser.add_argument('--schema-version', default='3.3.9', choices=['3.3.9', '3.7.1', '4.0.0'])
     parser.add_argument('--safe-apply-network', action='store_true')
+    parser.add_argument('--frontend-browser', action='store_true')
+    parser.add_argument('--browser-node')
     args = parser.parse_args()
     assert os.geteuid() == 0 and Path('/run/systemd/system').is_dir()
     repo = Path(__file__).resolve().parents[2]
@@ -284,14 +286,20 @@ def main():
             lambda: stop_ovs('db'), start_db, eventually, credentials)
         checks.append('formal Candidate and Validation acceptance passed on the real HTTPS/IPC/OVSDB path; detailed checks in metrics.candidate_validation')
 
-        if args.safe_apply_network:
+        if args.safe_apply_network or args.frontend_browser:
             from safe_apply import verify_safe_apply
+            exercise = None
+            if args.frontend_browser:
+                from frontend import verify_frontend
+                def exercise(network_metrics):
+                    return verify_frontend(repo, fixture, args.browser_node, origin, password, call, get,
+                                           vsctl, units, db_socket, ovs, conf, credentials, network_metrics)
             result = verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
-                                       eventually, fixture, config, cert, port)
+                                       eventually, fixture, config, cert, port, exercise=exercise)
             result.update({'platform': os.uname().machine, 'schema_fixture': args.schema_version,
                            'ovsdb_binary': ovs_run('ovsdb-server', '--version').splitlines()[0],
                            'switch_binary': ovs_run('ovs-vswitchd', '--version').splitlines()[0]})
-            target = repo / 'test-results/go-safe-apply-vm.json'
+            target = repo / ('test-results/go-frontend.json' if args.frontend_browser else 'test-results/go-safe-apply-vm.json')
             target.parent.mkdir(exist_ok=True)
             target.write_text(json.dumps(result, indent=2) + '\n')
             print(json.dumps(result, indent=2))
@@ -403,7 +411,7 @@ def main():
         text = '\n'.join(journal)
         for credential in credentials:
             assert credential not in text, 'credential leaked to daemon journal'
-        target = repo / ('test-results/go-safe-apply-vm-journal.log' if args.safe_apply_network else f'test-results/go-inventory-{args.schema_version}-journal.log')
+        target = repo / ('test-results/go-frontend-journal.log' if args.frontend_browser else 'test-results/go-safe-apply-vm-journal.log' if args.safe_apply_network else f'test-results/go-inventory-{args.schema_version}-journal.log')
         target.parent.mkdir(exist_ok=True)
         target.write_text(text)
         for name in ('switch', 'db'):
