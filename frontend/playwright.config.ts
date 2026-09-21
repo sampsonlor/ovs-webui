@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   testDir: '../tests/frontend',
@@ -9,7 +10,17 @@ export default defineConfig({
   timeout: 70000,
   expect: { timeout: 15000 },
   outputDir: '../test-results/frontend',
-  reporter: [['list'], ['junit', { outputFile: 'test-results/frontend.xml' }]],
+  reporter: [
+    ['list'],
+    [
+      'junit',
+      {
+        outputFile: fileURLToPath(
+          new URL('../test-results/frontend.xml', import.meta.url),
+        ),
+      },
+    ],
+  ],
   use: {
     browserName: 'chromium',
     headless: true,
