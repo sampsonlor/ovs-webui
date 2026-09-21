@@ -437,10 +437,14 @@ func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, chec
 	if !e.SafetyAvailable() {
 		return out, apitypes.Fail(503, "SAFE_APPLY_CAPABILITY_UNAVAILABLE")
 	}
-	if !e.claim(id) {
-		return out, apitypes.Fail(409, "TRANSACTION_BUSY")
+	if err := e.claimDecision(ctx, id); err != nil {
+		return out, err
 	}
 	defer e.release(id)
+	// A duplicate could have completed while this call waited for the same lock.
+	if out, found, err := requests.New(e.store).Replay(ctx, command, authorize); err != nil || found {
+		return out, err
+	}
 	r, s, err := e.readSafety(ctx, id)
 	if err != nil {
 		return out, err

@@ -144,6 +144,31 @@ async function awaiting(page: Page) {
     page.getByRole('button', { name: 'Confirm configuration', exact: true }),
   ).toBeEnabled();
 }
+async function chooseDecision(page: Page, name: string, state: string) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const reply = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().endsWith('/decisions'),
+    );
+    await page.getByRole('button', { name, exact: true }).click();
+    const response = await reply;
+    if (response.status() === 202) {
+      await expect(page.getByTestId('safe-state')).toHaveText(state);
+      return;
+    }
+    // Repeat the human review only after an explicit non-execution guarantee.
+    const problem = await response.json();
+    expect(response.status()).toBe(409);
+    expect(problem.code).toBe('TRANSACTION_VERSION_CHANGED');
+    expect(problem.command_effect).toBe('not-started');
+    await expect(
+      page.getByRole('button', { name: 'Recover original request' }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('button', { name: 'Refresh evidence', exact: true })
+      .click();
+  }
+  throw new Error('Transaction did not stabilize for an explicit decision');
+}
 async function screen(page: Page, name: string) {
   mkdirSync(evidence, { recursive: true });
   await page.screenshot({ path: `${evidence}/${name}.png`, fullPage: true });
@@ -312,14 +337,34 @@ test('Candidate to Safe Apply recovers a lost real admission reply, refreshes an
     context,
     '/transactions/' + transactionURL.split('/').pop(),
   );
+  const currentSession = await get(context, '/session');
+  const staleID = requestID();
+  const stale = await context.request.post(
+    fixture.origin + '/api/v1/transactions/' + t.id + '/decisions',
+    {
+      data: {
+        request_id: staleID,
+        decision: 'confirm',
+      expected_sequence: String(BigInt(t.sequence) - BigInt(1)),
+      },
+      headers: {
+        Origin: fixture.origin,
+        'X-OVS-CSRF-Token': currentSession.csrf_token,
+        'Idempotency-Key': staleID,
+        'X-OVS-Request-Epoch': currentSession.request_epochs.management,
+      },
+    },
+  );
+  expect(stale.status()).toBe(409);
+  const staleProblem = await stale.json();
+  expect(staleProblem.code).toBe('TRANSACTION_VERSION_CHANGED');
+  expect(staleProblem.command_effect).toBe('not-started');
+  expect(staleProblem.request_id).toBe(staleID);
   await page.reload();
   await awaiting(page);
   expect(page.url()).toBe(transactionURL);
   await screen(page, 'safe-apply-awaiting');
-  await page
-    .getByRole('button', { name: 'Confirm configuration', exact: true })
-    .click();
-  await expect(page.getByTestId('safe-state')).toHaveText('confirmed');
+  await chooseDecision(page, 'Confirm configuration', 'confirmed');
   expect(vsctl('get', 'Port', 'inv-p1', 'tag')).toBe('40');
   await expect
     .poll(async () => (await get(context, '/candidate')).intents.length)
@@ -538,10 +583,7 @@ test('existing Safe Apply supports tablet review and mobile rollback without new
     page.getByRole('button', { name: 'Confirm configuration', exact: true }),
   ).toBeDisabled();
   await screen(page, 'safe-apply-mobile');
-  await page
-    .getByRole('button', { name: 'Request rollback', exact: true })
-    .click();
-  await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
+  await chooseDecision(page, 'Request rollback', 'rolled-back');
   expect(vsctl('get', 'Port', 'inv-p1', 'tag')).toBe('41');
 });
 

@@ -78,6 +78,12 @@ export function refPath(ref: ResourceRef | null): string | null {
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
 export function errorText(error: unknown): string {
+  if (
+    error instanceof APIError &&
+    error.problem.command_effect === 'not-started' &&
+    error.problem.code === 'TRANSACTION_VERSION_CHANGED'
+  )
+    return 'The transaction changed before this decision was accepted. Review the refreshed evidence and choose again.';
   return error instanceof Error ? error.message : 'UNKNOWN_ERROR';
 }
 export class Controller {

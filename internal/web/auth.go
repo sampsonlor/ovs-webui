@@ -260,5 +260,15 @@ func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q pub
 		return a.certificates.Execute(ctx, s, q, c)
 	}
 	result, err := a.manager.ExecuteAuth(ctx, s.Credential, authn.Command{Method: c.Method, URI: c.URI, Epoch: c.Epoch, RequestID: c.ID, Precondition: c.Precondition, Payload: c.Payload})
-	return result, authError(err)
+	err = authError(err)
+	var problem *apitypes.Problem
+	if q.Operation.ID == "decideTransaction" && errors.As(err, &problem) && problem.Status == 409 {
+		// mgrd replays under the transaction lock before these monotonic guards.
+		// Neither rejection can later accept this decision's old sequence. Busy,
+		// transport and post-commit failures deliberately remain unknown.
+		if problem.Code == "TRANSACTION_VERSION_CHANGED" || problem.Code == "TRANSACTION_SETTLED" {
+			problem.CommandEffect = "not-started"
+		}
+	}
+	return result, err
 }

@@ -25,7 +25,10 @@ type safeTestProvider struct {
 	applied  atomic.Bool
 	conflict atomic.Bool
 	unknown  atomic.Bool
+	gate     atomic.Pointer[safeObservationGate]
 }
+
+type safeObservationGate struct{ entered, release chan struct{} }
 
 func (p *safeTestProvider) Prepare(_ context.Context, id, marker string, e plan.Envelope) (execution.Plan, error) {
 	return execution.Plan{ID: id, Envelope: e, Generation: *e.Candidate.Generation, Marker: marker, Native: json.RawMessage(`{}`), Prepared: time.Now()}, nil
@@ -49,6 +52,10 @@ func (p *safeTestProvider) Commit(_ context.Context, plan execution.Plan, before
 	return execution.Outcome{Commit: "committed", Applied: "pending", Reason: "committed", Target: &n}
 }
 func (p *safeTestProvider) Observe(_ context.Context, plan execution.Plan, prior execution.Outcome) execution.Outcome {
+	if gate := p.gate.Swap(nil); gate != nil {
+		close(gate.entered)
+		<-gate.release
+	}
 	if p.unknown.Load() {
 		return prior
 	}
@@ -207,6 +214,76 @@ func TestSafeApplyAppliedGateConfirmAndSingleLKG(t *testing.T) {
 	view := read(t, r, g, "/transactions/"+id)
 	if view["safe_apply"] != "confirmed" {
 		t.Fatal(view)
+	}
+}
+
+func TestSafeApplyDecisionWaitsForObservationAndReplaysConcurrentDuplicate(t *testing.T) {
+	r, _ := fixture(t)
+	g := login(t, r, "admin", false)
+	in := safeTestRequest(t, r, g)
+	p, probe := &safeTestProvider{}, &safeTestProbe{}
+	p.applied.Store(true)
+	clock := tlscontrol.Now()
+	e := safeConfigure(t, r, p, probe, &clock)
+	id := safeAdmit(t, r, e, g, in)
+	if err := e.Reconcile(testContext, id); err != nil {
+		t.Fatal(err)
+	}
+	safeTick(t, e)
+	record, err := e.Read(testContext, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := request(t, r, "POST", "/transactions/"+id+"/decisions", map[string]any{"decision": "confirm", "expected_sequence": record.Sequence}, "")
+	gate := &safeObservationGate{entered: make(chan struct{}), release: make(chan struct{})}
+	p.gate.Store(gate)
+	defer func() {
+		select {
+		case <-gate.release:
+		default:
+			close(gate.release)
+		}
+	}()
+	observed := make(chan error, 1)
+	go func() { observed <- e.SafetyTick(testContext) }()
+	select {
+	case <-gate.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("watchdog never entered observation")
+	}
+	type answer struct {
+		result apitypes.Result
+		err    error
+	}
+	answers := make(chan answer, 2)
+	for i := 0; i < 2; i++ {
+		go func() { value, err := r.ExecuteAuth(testContext, g.Grant, cmd); answers <- answer{value, err} }()
+	}
+	select {
+	case got := <-answers:
+		t.Fatalf("decision did not wait for observation: %v", got.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(gate.release)
+	if err := <-observed; err != nil {
+		t.Fatal(err)
+	}
+	replayed := 0
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-answers:
+			if got.err != nil || got.result.Receipt.Resource == nil || got.result.Receipt.Resource.ID != id {
+				t.Fatal(got.result, got.err)
+			}
+			if got.result.Replayed {
+				replayed++
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("decision remained blocked")
+		}
+	}
+	if replayed != 1 || safeTestState(t, r, id).State != "confirmed" || p.sends.Load() != 1 {
+		t.Fatal("concurrent decision was not acknowledged exactly once", replayed, p.sends.Load())
 	}
 }
 
