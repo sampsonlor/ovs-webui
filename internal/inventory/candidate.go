@@ -145,13 +145,13 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	if v.decision.State != "confirmed" {
 		return out, apitypes.Fail(409, "GENERATION_RECONCILIATION_REQUIRED")
 	}
-	return candidateSnapshot(v, s.localVLAN, bindings), nil
+	return candidateSnapshot(v, s.localVLAN, s.localBond, bindings), nil
 }
 
 // Project the same immutable observation and authority policy for validation and
 // inventory edit hints. These hints never replace admission authorization.
-func candidateSnapshot(v *view, localVLAN map[string]bool, bindings []candidate.Binding) candidate.Snapshot {
-	out := candidate.Snapshot{Generation: v.decision.Generation, Schema: v.observation.Schema.Digest, Policy: Digest(localVLAN), Ports: map[string]candidate.Port{}}
+func candidateSnapshot(v *view, localVLAN, localBond map[string]bool, bindings []candidate.Binding) candidate.Snapshot {
+	out := candidate.Snapshot{Generation: v.decision.Generation, Schema: v.observation.Schema.Digest, Policy: Digest([]any{localVLAN, localBond}), Ports: map[string]candidate.Port{}}
 	compatible := 0
 	modes := []string{}
 	for _, t := range v.observation.Schema.Tables {
@@ -216,6 +216,7 @@ func candidateSnapshot(v *view, localVLAN map[string]bool, bindings []candidate.
 			}
 		}
 		p.Dependency = Digest([]any{bridge.UUID, bridge.Values["name"], bridge.Values["datapath_type"], row.Values["name"], members, p.Authority})
+		projectBond(v, row, bridge, localBond[b.ManagementID], &p)
 		out.Ports[b.ManagementID] = p
 	}
 	// Copy projected values before releasing the lock. No caller receives live

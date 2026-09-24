@@ -1,6 +1,6 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-21。P1 六批及整合已接受；#30–#40 正式基础已依次接受合并。#39 字段执行通过 [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 合并至 `7aef52d`，接受标签 `phase1-ovsdb-execution-v0.1`。#40 Safe Apply 已通过 PR 和 main 双架构完整 CI，并由 [PR #66](https://github.com/sampsonlor/ovs-webui/pull/66) 合并至 `8ceefac`，接受标签 `phase1-safe-apply-v0.1`。#41 Svelte 正式首切片由 [PR #67](https://github.com/sampsonlor/ovs-webui/pull/67) 交付；最终接受提交由 `phase1-svelte-ports-vlan-v0.1` 标签和 PR / main CI 记录，见[审阅矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。共享库存与正式基础的归集证据见[归集记录](reviews/MAIN_CONSOLIDATION_2026-09-15.md)。
+更新：2026-09-24。P1 六批及整合已接受；#30–#41 正式基础已依次接受合并。#39 字段执行通过 [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 合并至 `7aef52d`，接受标签 `phase1-ovsdb-execution-v0.1`。#40 Safe Apply 已通过 PR 和 main 双架构完整 CI，并由 [PR #66](https://github.com/sampsonlor/ovs-webui/pull/66) 合并至 `8ceefac`，接受标签 `phase1-safe-apply-v0.1`。#41 Svelte 正式首切片由 [PR #67](https://github.com/sampsonlor/ovs-webui/pull/67) 交付；最终接受提交由 `phase1-svelte-ports-vlan-v0.1` 标签和 PR / main CI 记录，见[审阅矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。共享库存与正式基础的归集证据见[归集记录](reviews/MAIN_CONSOLIDATION_2026-09-15.md)。
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点 v0.2](reviews/P1_IA_COVERAGE_v0.2.md)和各批记录。
 
@@ -59,8 +59,8 @@
 
 ## 下一步
 
-#41 已实现 Svelte 5 静态前端与 Ports/VLAN 正式服务端到端首切片，交付门控详见[实现说明](implementation/SVELTE_PORTS_VLAN_v0.1.md)和[验收矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。完成 PR #67 的最终提交及合并 main 验证后，下一项为 #42 Bridge / Port / Interface / Bond 原生语义服务，按对象子批次审阅后逐步开放。#54 继续负责完整页面迁移，#20–#28 均属于 Phase 1，按其完整功能与页面要求独立验收。开发仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
+#41 已接受，main 为 67d5f20，标签 phase1-svelte-ports-vlan-v0.1。当前 #42 按对象子批次推进：A 批接入现有 Port 的 Bond/LACP 字段服务，包含独立 authority、Candidate/三方 Diff、原生 OCC、Safe Apply 与精细回滚，详见[实现说明](implementation/PORT_BOND_LACP_v0.1.md)和[验收矩阵](reviews/PORT_BOND_LACP_v0.1.md)。A 批通过最终 PR/main 双架构 CI 后记录接受标签；#42 仍需继续 Bridge/Port/Interface 生命周期、成员变更、QinQ 与原生属性。#54 继续完整页面迁移，#20–#28 按完整功能独立验收。仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
 
-[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#40 已完成，#41 的完成状态由 PR #67 与接受标签登记，#29 仍为 In Progress。#20–#28 已统一加入 Phase 1 milestone，继续保留独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
+[Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#41 已完成，#42 与 #29 为 In Progress。#20–#28 已统一加入 Phase 1 milestone，继续保留独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。

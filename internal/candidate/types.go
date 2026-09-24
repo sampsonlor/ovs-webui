@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "port-vlan-v1"
+const ValidatorVersion = "port-fields-v2"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -32,10 +32,14 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
-	ID        string  `json:"intent_id"`
-	Operation string  `json:"operation"`
-	Object    Binding `json:"object"`
-	Value     VLAN    `json:"value"`
+	ID        string   `json:"intent_id"`
+	Operation string   `json:"operation"`
+	Object    Binding  `json:"object"`
+	Value     VLAN     `json:"value"`
+	Mode      string   `json:"mode,omitempty"`
+	LACP      string   `json:"lacp,omitempty"`
+	Members   []string `json:"member_interface_ids,omitempty"`
+	Fallback  string   `json:"fallback,omitempty"`
 }
 type StoredIntent struct {
 	// IPC fields are explicit: strict request decoding deliberately does not
@@ -47,6 +51,8 @@ type StoredIntent struct {
 	Before     VLAN    `json:"before"`
 	Dependency string  `json:"dependency_revision"`
 	Schema     string  `json:"schema_digest"`
+	Bond       *Bond   `json:"bond,omitempty"`
+	BeforeBond *Bond   `json:"before_bond,omitempty"`
 }
 type Candidate struct {
 	ID           string         `json:"id"`
@@ -112,11 +118,18 @@ type View struct {
 // Snapshot is one coherent, immutable projection of mgrd's current monitor.
 // Dependencies contain only digests of the relevant structural/native fields.
 type Port struct {
-	Binding                       Binding
-	VLAN                          VLAN
-	Known, SchemaSupported        bool
-	Modes                         []string
-	Dependency, Authority, Reason string
+	Binding                         Binding
+	VLAN                            VLAN
+	Known, SchemaSupported          bool
+	Modes                           []string
+	Dependency, Authority, Reason   string
+	Bond                            Bond
+	BondKnown, BondSupported        bool
+	BondDependency, BondAuthority   string
+	Members                         []string
+	MemberKindsSupported, LocalPort bool
+	FloodVLANs                      []int
+	STP, RSTP                       bool
 }
 type Snapshot struct {
 	Generation, Revision, Schema, Policy string

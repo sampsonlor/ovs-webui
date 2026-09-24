@@ -245,13 +245,31 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 	n.Operations = append(n.Operations, rootGuard)
 	seen := map[string]bool{}
 	for _, intent := range envelope.Candidate.Intents {
-		if intent.Operation != "port.vlan.set" || seen[intent.Object.OVSUUID] {
+		isBond := candidate.IsBondOperation(intent.Operation)
+		if intent.Operation != "port.vlan.set" && !isBond || seen[intent.Object.OVSUUID] {
 			return out, apitypes.Fail(422, "INVALID_EXECUTION_SCOPE")
 		}
 		seen[intent.Object.OVSUUID] = true
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]
 		where := []any{uuidCondition(port.UUID)}
-		g, err := guard(d, "Port", port, []string{"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "external_ids"}, where)
+		columns := []string{"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "external_ids"}
+		if isBond {
+			if intent.Bond == nil || intent.BeforeBond == nil {
+				return out, apitypes.Fail(422, "INVALID_EXECUTION_SCOPE")
+			}
+			for _, name := range []string{"lacp", "bond_mode", "other_config"} {
+				column := d.native.Tables["Port"].Columns[name]
+				if column == nil || !bondConstraint(name, column) {
+					return out, apitypes.Fail(409, "BOND_SCHEMA_UNSUPPORTED")
+				}
+			}
+			config, ok := port.Values["other_config"].(map[string]any)
+			if !ok || len(config) >= 128 && config["lacp-fallback-ab"] == nil && intent.Bond.Fallback != nil {
+				return out, apitypes.Fail(429, "BOND_MAP_CAPACITY")
+			}
+			columns = []string{"name", "interfaces", "lacp", "bond_mode", "other_config", "external_ids"}
+		}
+		g, err := guard(d, "Port", port, columns, where)
 		if err != nil {
 			return out, err
 		}
@@ -268,7 +286,11 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 			if !slices.Contains(nativeRefs(bridge.Values["ports"]), port.UUID) {
 				continue
 			}
-			g, err = guard(d, "Bridge", bridge, []string{"name", "datapath_type", "external_ids"}, []any{[]any{"ports", "includes", uuidSet(port.UUID)}})
+			bridgeColumns := []string{"name", "datapath_type", "external_ids"}
+			if isBond {
+				bridgeColumns = append(bridgeColumns, "stp_enable", "rstp_enable", "flood_vlans")
+			}
+			g, err = guard(d, "Bridge", bridge, bridgeColumns, []any{[]any{"ports", "includes", uuidSet(port.UUID)}})
 			if err != nil {
 				return out, err
 			}
@@ -282,9 +304,20 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 				return out, err
 			}
 			n.Operations = append(n.Operations, g)
+			if isBond {
+				n.Operations = append(n.Operations, waitRows("Port", []any{[]any{"interfaces", "includes", uuidSet(id)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(port.UUID)}}))
+			}
 		}
 		n.CountIndexes = append(n.CountIndexes, len(n.Operations))
-		n.Operations = append(n.Operations, map[string]any{"op": "update", "table": "Port", "where": where, "row": vlanRow(intent.Value)})
+		write := vlanRow(intent.Value)
+		if isBond {
+			write = bondRow(intent.Bond)
+		}
+		n.Operations = append(n.Operations, map[string]any{"op": "update", "table": "Port", "where": where, "row": write})
+		if isBond {
+			n.CountIndexes = append(n.CountIndexes, len(n.Operations))
+			n.Operations = append(n.Operations, map[string]any{"op": "mutate", "table": "Port", "where": where, "mutations": fallbackMutations(intent.Bond)})
+		}
 		n.CountIndexes = append(n.CountIndexes, len(n.Operations))
 		n.Operations = append(n.Operations, map[string]any{"op": "mutate", "table": "Port", "where": where, "mutations": []any{[]any{"external_ids", "delete", []any{"set", []any{execution.MarkerKey}}}, []any{"external_ids", "insert", []any{"map", []any{[]any{execution.MarkerKey, marker}}}}}})
 	}
@@ -473,7 +506,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	after := p.Envelope.Candidate
 	after.Intents = append([]candidate.StoredIntent{}, after.Intents...)
 	for i := range after.Intents {
-		after.Intents[i].Before = after.Intents[i].Value
+		candidate.AfterImage(&after.Intents[i])
 	}
 	checks, _ := candidate.Checks(after, view.Candidate)
 	if !candidate.Passed(checks) {

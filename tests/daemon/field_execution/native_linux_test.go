@@ -342,6 +342,14 @@ func (f *fixture) envelope() candidate.Envelope {
 	return e
 }
 func (f *fixture) prepare(names []string, tag int) execution.Request {
+	intents := []candidate.Intent{}
+	mode := "access"
+	for _, name := range names {
+		intents = append(intents, candidate.Intent{ID: repository.NewID(), Operation: "port.vlan.set", Object: f.binding(name), Value: candidate.VLAN{Mode: &mode, Tag: &tag, Trunks: []int{}, CVLANs: []int{}}})
+	}
+	return f.prepareIntents(intents)
+}
+func (f *fixture) prepareIntents(intents any) execution.Request {
 	f.t.Helper()
 	contract, err := apicontract.New()
 	must(f.t, err)
@@ -350,11 +358,6 @@ func (f *fixture) prepare(names []string, tag int) execution.Request {
 	_, err = f.workspace.Read(f.ctx, s, publicapi.Query{Operation: op, Path: path, Values: url.Values{}})
 	must(f.t, err)
 	e := f.envelope()
-	intents := []candidate.Intent{}
-	mode := "access"
-	for _, name := range names {
-		intents = append(intents, candidate.Intent{ID: repository.NewID(), Operation: "port.vlan.set", Object: f.binding(name), Value: candidate.VLAN{Mode: &mode, Tag: &tag, Trunks: []int{}, CVLANs: []int{}}})
-	}
 	id := apitypes.RequestID(time.Now())
 	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": intents})
 	op, path, _ = contract.Match("PATCH", "/api/v1/candidate")

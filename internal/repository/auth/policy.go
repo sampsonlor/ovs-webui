@@ -29,7 +29,7 @@ var aliases = map[string]string{
 }
 var readCapabilities = []string{"inventory.read", "state.read", "capabilities.read", "jobs.read", "events.read", "audit.read", "workspace.read", "configuration.read", "requests.read", "diagnostics.read", "artifacts.read", "access.tokens.self"}
 var securityCapabilities = []string{"access.users.manage", "access.roles.manage", "access.aaa.manage", "access.tokens.manage", "access.tls.manage"}
-var networkCapabilities = []string{"workspace.write", "configuration.validate", "configuration.apply", "configuration.confirm", "configuration.rollback", "ovs.port.vlan.write", "diagnostics.active", "diagnostics.disruptive", "support_bundle.create", "backup.create", "backup.restore", "configuration.import", "management_network.write", "ovs.lifecycle.manage", "jobs.cancel", "artifacts.write"}
+var networkCapabilities = []string{"workspace.write", "configuration.validate", "configuration.apply", "configuration.confirm", "configuration.rollback", "ovs.port.vlan.write", "ovs.port.bond.write", "diagnostics.active", "diagnostics.disruptive", "support_bundle.create", "backup.create", "backup.restore", "configuration.import", "management_network.write", "ovs.lifecycle.manage", "jobs.cancel", "artifacts.write"}
 var managementCapabilities = []string{"management.policy.write", "management.debug.write", "management.services.control", "openflow.local.write"}
 
 func unique(values []string) []string {

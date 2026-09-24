@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.7.0', description: 'Phase 1 public transport with authenticated Candidate/Validation, durable Safe Apply admission, server confirmation, guarded rollback and shared evidence. Management reachability requires a reviewed server-configured probe; Applied alone never proves health or confirmation.' };
+api.info = { title: 'OVS WebUI public API', version: '1.8.0', description: 'Phase 1 public transport with typed VLAN and existing-Port Bond/LACP Candidate intents, durable Safe Apply, guarded compensation and shared evidence. Object lifecycle and member changes retain separate service gates. Applied alone never proves link negotiation, health or confirmation.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -55,6 +55,7 @@ s.Subscription = closed({ resources: array(closed({ kind: string(64), id }), 32,
 // Switching mutations remain Candidate intents, never live PATCH on OVS objects.
 s.InterfaceSpec = closed({ name: string(), type: choices('system', 'internal', 'patch', 'vxlan', 'geneve', 'gre'), options: strMap });
 const intent = (operation, properties) => closed({ intent_id: id, operation: { type: 'string', const: operation }, ...properties });
+const fallback = choices('preserve', 'enabled', 'disabled', 'default');
 const intentSchemas = {
  BridgeCreateIntent: intent('bridge.create', { management_id: id, name: string(), datapath_type: choices('system', 'netdev') }),
  BridgeRemoveIntent: intent('bridge.remove', { object }),
@@ -71,8 +72,15 @@ const intentSchemas = {
  ProfileAssignmentIntent: intent('profile.assign', { object, profile_id: id, profile_revision: revision }),
  ManagementNetworkIntent: intent('management_network.configure', { object, mtu: integer(576, 65535), addresses: array(string(128), 32), gateways: array(string(128), 16) }),
  ControllerIntent: intent('controllers.configure', { object, targets: array(string(256), 16), fail_mode: choices('standalone', 'secure') }),
+ PortLACPIntent: intent('port.lacp.set', { object, lacp: choices('off', 'active', 'passive'), fallback }),
 };
 Object.assign(s, intentSchemas);
+s.BondIntent.properties.fallback = fallback;
+s.BondIntent.description = 'Existing native Bond-as-Port fields only. member_interface_ids must equal the current immutable member bindings; membership changes remain gated. An omitted fallback preserves the captured native value.';
+s.NativeBond = open({ lacp: nullable({ type: 'string' }), bond_mode: nullable({ type: 'string' }), lacp_fallback_ab: nullable({ type: 'string' }) });
+Object.assign(s.ObservedIntent.properties, { bond: ref('NativeBond'), before_bond: ref('NativeBond') });
+s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set'];
+s.ObservedIntent.description = 'The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');
 s.ProfileCommand = command({ name: string(), description: { type: 'string', maxLength: 4096 }, intents: array(ref('Intent'), 32) });

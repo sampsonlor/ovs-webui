@@ -56,16 +56,27 @@ func comparison(i StoredIntent, s Snapshot) (Port, string) {
 	if !ok || p.Binding != i.Object {
 		return Port{}, "OBJECT_BINDING_CHANGED"
 	}
-	if !p.Known {
+	if i.Operation != "port.vlan.set" && !IsBondOperation(i.Operation) {
+		return p, "UNSUPPORTED_CONFIGURATION"
+	}
+	if i.Operation == "port.vlan.set" && !p.Known || IsBondOperation(i.Operation) && !p.BondKnown {
 		return p, "NATIVE_CONFIGURATION_UNKNOWN"
 	}
 	if i.Schema != s.Schema {
 		return p, "SCHEMA_CHANGED"
 	}
-	if p.Dependency != i.Dependency {
+	dependency := p.Dependency
+	if IsBondOperation(i.Operation) {
+		dependency = p.BondDependency
+	}
+	if dependency != i.Dependency {
 		return p, "DEPENDENCY_CHANGED"
 	}
-	if !equal(p.VLAN, i.Before) {
+	if IsBondOperation(i.Operation) {
+		if i.BeforeBond == nil || i.Bond == nil || Digest(p.Bond) != Digest(i.BeforeBond) {
+			return p, "FIELD_CONFLICT"
+		}
+	} else if !equal(p.VLAN, i.Before) {
 		return p, "FIELD_CONFLICT"
 	}
 	return p, ""
@@ -88,9 +99,22 @@ func Compare(c Candidate, s Snapshot) View {
 		before := []any{i.Before.Mode, i.Before.Tag, i.Before.Trunks, i.Before.CVLANs}
 		after := []any{i.Value.Mode, i.Value.Tag, i.Value.Trunks, i.Value.CVLANs}
 		current := []any{p.VLAN.Mode, p.VLAN.Tag, p.VLAN.Trunks, p.VLAN.CVLANs}
-		for n, field := range []string{"vlan_mode", "tag", "trunks", "cvlans"} {
+		fields := []string{"vlan_mode", "tag", "trunks", "cvlans"}
+		known := p.Known
+		if IsBondOperation(i.Operation) {
+			fields = []string{"lacp", "bond_mode", "other_config.lacp-fallback-ab"}
+			before, after, current = []any{nil, nil, nil}, []any{nil, nil, nil}, []any{p.Bond.LACP, p.Bond.Mode, p.Bond.Fallback}
+			if i.BeforeBond != nil {
+				before = []any{i.BeforeBond.LACP, i.BeforeBond.Mode, i.BeforeBond.Fallback}
+			}
+			if i.Bond != nil {
+				after = []any{i.Bond.LACP, i.Bond.Mode, i.Bond.Fallback}
+			}
+			known = p.BondKnown
+		}
+		for n, field := range fields {
 			var now any
-			if p.Known {
+			if known {
 				now = current[n]
 			}
 			v.Diff = append(v.Diff, Diff{Object: i.Object, Field: field, Before: before[n], After: after[n], Current: now, Authority: "ovsdb-configuration", Operation: i.Operation, IntentID: i.ID, Conflict: problem != ""})
@@ -130,7 +154,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		seen := map[string]bool{}
 		for _, in := range cmd.Intents {
-			if seen[in.ID] || !apitypes.ManagementID(in.ID) || in.Operation != "port.vlan.set" || in.Object.Table != "Port" || !inputValid(in.Value) {
+			if seen[in.ID] || !apitypes.ManagementID(in.ID) || in.Object.Table != "Port" || in.Operation != "port.vlan.set" && !IsBondOperation(in.Operation) {
 				return e, apitypes.Fail(422, "UNSUPPORTED_CONFIGURATION")
 			}
 			seen[in.ID] = true
@@ -141,15 +165,27 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if !ok || p.Binding != in.Object {
 				return e, apitypes.Fail(409, "OBJECT_BINDING_CHANGED")
 			}
-			if !p.Known {
+			if in.Operation == "port.vlan.set" && !p.Known || IsBondOperation(in.Operation) && !p.BondKnown {
 				return e, apitypes.Fail(409, "NATIVE_CONFIGURATION_UNKNOWN")
 			}
-			in.Value = normalize(in.Value)
+			var desired *Bond
+			if IsBondOperation(in.Operation) {
+				var err error
+				desired, err = bondDesired(in, p)
+				if err != nil {
+					return e, err
+				}
+			} else {
+				if !inputValid(in.Value) || in.Mode != "" || in.LACP != "" || in.Fallback != "" || len(in.Members) != 0 {
+					return e, apitypes.Fail(422, "UNSUPPORTED_CONFIGURATION")
+				}
+				in.Value = normalize(in.Value)
+			}
 			index := -1
 			for n, prior := range c.Intents {
 				if prior.ID == in.ID {
 					index = n
-					if prior.Object != in.Object {
+					if prior.Object != in.Object || prior.Operation != in.Operation {
 						return e, apitypes.Fail(422, "INTENT_BINDING_MISMATCH")
 					}
 				} else if prior.Object.ManagementID == in.Object.ManagementID {
@@ -159,9 +195,25 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if index >= 0 {
 				// Identity and operation already match; editing keeps the
 				// original native values and their captured dependencies.
-				c.Intents[index].Value = in.Value
+				if IsBondOperation(in.Operation) {
+					prior := c.Intents[index].Bond
+					if prior == nil {
+						return e, apitypes.Fail(409, "NATIVE_CONFIGURATION_UNKNOWN")
+					}
+					preserved := p
+					preserved.Bond = *CloneBond(prior)
+					var err error
+					desired, err = bondDesired(in, preserved)
+					if err != nil {
+						return e, err
+					}
+				}
+				c.Intents[index].Value = normalize(in.Value)
+				c.Intents[index].Bond = desired
 			} else {
-				c.Intents = append(c.Intents, StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Value: in.Value, Before: normalize(p.VLAN), Dependency: p.Dependency, Schema: s.Schema})
+				i := StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Value: normalize(in.Value), Bond: desired, Schema: s.Schema}
+				currentOriginal(&i, p)
+				c.Intents = append(c.Intents, i)
 			}
 		}
 		if len(c.Intents) > MaxIntents {
@@ -217,8 +269,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if choice == "keep-current" {
 				continue
 			}
-			i.Before = normalize(p.VLAN)
-			i.Dependency = p.Dependency
+			currentOriginal(&i, p)
 			next = append(next, i)
 		}
 		if len(resolutions) != 0 {
@@ -254,6 +305,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 	for _, i := range c.Intents {
 		p, ok := s.Ports[i.Object.ManagementID]
 		if !ok {
+			continue
+		}
+		if IsBondOperation(i.Operation) {
+			checks = append(checks, bondChecks(i, p)...)
 			continue
 		}
 		if !p.SchemaSupported || i.Value.Mode == nil || !slices.Contains(p.Modes, *i.Value.Mode) {

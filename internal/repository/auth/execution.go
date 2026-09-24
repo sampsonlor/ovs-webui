@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"slices"
+	"strings"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
@@ -95,7 +95,7 @@ func (r *Repository) ExecutionAuthorizer(credential string) executions.Authorize
 		if replay {
 			return out, nil
 		}
-		if !slices.Contains(c.Capabilities, "ovs.port.vlan.write") {
+		if !intentCapabilities(c.Capabilities, in.Envelope.Candidate) {
 			return out, apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		var b, original []byte
@@ -143,6 +143,7 @@ func (r *Repository) ExecutionAuthorizer(credential string) executions.Authorize
 		out.ChangeSet = v.ChangeSetID
 		out.Validation = in.ValidationID
 		out.Scope = plan.Digest([]any{in.ValidationID, envelope, v.Risk, v.ProviderPolicy})
+		out.FieldCapabilities = strings.Join(plan.Capabilities(envelope.Candidate), ",")
 		out.Expires = v.Expires
 		return out, nil
 	}
