@@ -138,7 +138,7 @@ func TestBondValidationRejectsUnprovenNativeAndUnsafeCombinations(t *testing.T) 
 	slices.Sort(p.Members)
 	s.Ports[i.Object.ManagementID] = p
 	v := Compare(e.Candidate, s)
-	if !hasGate(v.Checks, "BOND_MEMBER_BINDINGS_CHANGED") {
+	if v.State != "reconciliation-required" || !hasGate(v.Checks, "BOND_MEMBER_BINDINGS_CHANGED") {
 		t.Fatal(v)
 	}
 	_, err := Prepare(e, Command{Operation: "rebase", Generation: s.Generation, ConfigRevision: s.Revision, ConflictSnapshot: v.ConflictSnapshot, Resolutions: []Resolution{{IntentID: i.ID, Choice: "keep-mine"}}}, s)

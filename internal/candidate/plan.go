@@ -95,7 +95,7 @@ func Compare(c Candidate, s Snapshot) View {
 			if v.State != "reconciliation-required" {
 				v.State = "conflict"
 			}
-			if problem == "GENERATION_RECONCILIATION_REQUIRED" || problem == "OBJECT_BINDING_CHANGED" {
+			if problem == "GENERATION_RECONCILIATION_REQUIRED" || problem == "OBJECT_BINDING_CHANGED" || problem == "BOND_MEMBER_BINDINGS_CHANGED" {
 				v.State = "reconciliation-required"
 			}
 		}
