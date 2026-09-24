@@ -164,6 +164,7 @@ func BondFieldsEditable(p Port) bool {
 func currentOriginal(i *StoredIntent, p Port) {
 	if IsBondOperation(i.Operation) {
 		i.BeforeBond = CloneBond(&p.Bond)
+		i.BondMembers = append([]string{}, p.Members...)
 		i.Before = normalize(VLAN{})
 		i.Dependency = p.BondDependency
 	} else {

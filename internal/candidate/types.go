@@ -44,15 +44,16 @@ type Intent struct {
 type StoredIntent struct {
 	// IPC fields are explicit: strict request decoding deliberately does not
 	// infer encoding/json's anonymous-field promotion rules.
-	ID         string  `json:"intent_id"`
-	Operation  string  `json:"operation"`
-	Object     Binding `json:"object"`
-	Value      VLAN    `json:"value"`
-	Before     VLAN    `json:"before"`
-	Dependency string  `json:"dependency_revision"`
-	Schema     string  `json:"schema_digest"`
-	Bond       *Bond   `json:"bond,omitempty"`
-	BeforeBond *Bond   `json:"before_bond,omitempty"`
+	ID          string   `json:"intent_id"`
+	Operation   string   `json:"operation"`
+	Object      Binding  `json:"object"`
+	Value       VLAN     `json:"value"`
+	Before      VLAN     `json:"before"`
+	Dependency  string   `json:"dependency_revision"`
+	Schema      string   `json:"schema_digest"`
+	Bond        *Bond    `json:"bond,omitempty"`
+	BeforeBond  *Bond    `json:"before_bond,omitempty"`
+	BondMembers []string `json:"bond_member_interface_ids,omitempty"`
 }
 type Candidate struct {
 	ID           string         `json:"id"`

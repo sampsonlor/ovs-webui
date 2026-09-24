@@ -133,6 +133,18 @@ func TestBondValidationRejectsUnprovenNativeAndUnsafeCombinations(t *testing.T) 
 	if !hasGate(checks, "DEPENDENCY_CHANGED") {
 		t.Fatal(checks)
 	}
+	p.Members = append([]string{}, p.Members...)
+	p.Members[0] = repository.NewID()
+	slices.Sort(p.Members)
+	s.Ports[i.Object.ManagementID] = p
+	v := Compare(e.Candidate, s)
+	if !hasGate(v.Checks, "BOND_MEMBER_BINDINGS_CHANGED") {
+		t.Fatal(v)
+	}
+	_, err := Prepare(e, Command{Operation: "rebase", Generation: s.Generation, ConfigRevision: s.Revision, ConflictSnapshot: v.ConflictSnapshot, Resolutions: []Resolution{{IntentID: i.ID, Choice: "keep-mine"}}}, s)
+	if err == nil {
+		t.Fatal("field rebase silently rebound different members")
+	}
 	p.BondKnown = false
 	s.Ports[i.Object.ManagementID] = p
 	if _, err := Prepare(e, Command{Operation: "stage", Intents: []Intent{i}}, s); err == nil {

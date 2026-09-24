@@ -48,7 +48,7 @@ root 在 mgrd 启动参数中配置 `--local-bond-ports=<Port 管理 ID 列表>`
 
 单 Port LACP 使用相同 object，加 `operation=port.lacp.set`、lacp、fallback，省略 mode 和 members。所有变更继续经过 Validation 与 safe-apply；请求不能携带 observed before、原生 OVSDB payload 或权限声明。
 
-首次 stage 捕获原值与结构依赖；编辑不重抓原值，preserve 沿用本项 desired fallback。外部改动需要当前 conflict snapshot 与显式 keep-current/keep-mine rebase。validator 版本变为 `port-fields-v2`，旧 Validation 需重做；已保存的 VLAN draft 与 journal 仍可读取。
+首次 stage 捕获原值、成员管理 ID 与结构依赖；编辑不重抓原值，preserve 沿用本项 desired fallback。外部字段改动需要当前 conflict snapshot 与显式 keep-current/keep-mine rebase。成员身份变化不允许通过字段 rebase 自动接受，须移除旧意图并按新库存重新审阅。validator 版本变为 `port-fields-v2`，旧 Validation 需重做；已保存的 VLAN draft 与 journal 仍可读取。
 
 目前同一 Candidate 的同一 Port 只保留一项字段意图；不同 Port 的 VLAN 与 Bond 可进入同一原生原子事务。专用正式 Bond 编辑器与完整页面迁移由 #54 继续，现有 Svelte 共享审阅/事务/证据页能展示字段 Diff。Standard/Expert 不改变授权；桌面开启配置、平板处理已有 Safe Apply、移动端查看事故与回滚的责任保持有效。
 

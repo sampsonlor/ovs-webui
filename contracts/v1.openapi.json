@@ -28260,6 +28260,12 @@
           },
           "before_bond": {
             "$ref": "#/components/schemas/NativeBond"
+          },
+          "bond_member_interface_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Id"
+            }
           }
         },
         "required": [

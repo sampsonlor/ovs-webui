@@ -78,7 +78,7 @@ Object.assign(s, intentSchemas);
 s.BondIntent.properties.fallback = fallback;
 s.BondIntent.description = 'Existing native Bond-as-Port fields only. member_interface_ids must equal the current immutable member bindings; membership changes remain gated. An omitted fallback preserves the captured native value.';
 s.NativeBond = open({ lacp: nullable({ type: 'string' }), bond_mode: nullable({ type: 'string' }), lacp_fallback_ab: nullable({ type: 'string' }) });
-Object.assign(s.ObservedIntent.properties, { bond: ref('NativeBond'), before_bond: ref('NativeBond') });
+Object.assign(s.ObservedIntent.properties, { bond: ref('NativeBond'), before_bond: ref('NativeBond'), bond_member_interface_ids: { type: 'array', items: id } });
 s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set'];
 s.ObservedIntent.description = 'The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };

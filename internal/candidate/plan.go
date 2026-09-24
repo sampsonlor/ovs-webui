@@ -65,6 +65,9 @@ func comparison(i StoredIntent, s Snapshot) (Port, string) {
 	if i.Schema != s.Schema {
 		return p, "SCHEMA_CHANGED"
 	}
+	if IsBondOperation(i.Operation) && !slices.Equal(i.BondMembers, p.Members) {
+		return p, "BOND_MEMBER_BINDINGS_CHANGED"
+	}
 	dependency := p.Dependency
 	if IsBondOperation(i.Operation) {
 		dependency = p.BondDependency
@@ -258,7 +261,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
 			p, reason := comparison(i, s)
-			if reason == "GENERATION_RECONCILIATION_REQUIRED" || reason == "OBJECT_BINDING_CHANGED" || reason == "NATIVE_CONFIGURATION_UNKNOWN" || reason == "SCHEMA_CHANGED" {
+			if reason == "GENERATION_RECONCILIATION_REQUIRED" || reason == "OBJECT_BINDING_CHANGED" || reason == "NATIVE_CONFIGURATION_UNKNOWN" || reason == "SCHEMA_CHANGED" || reason == "BOND_MEMBER_BINDINGS_CHANGED" {
 				return e, apitypes.Fail(409, reason)
 			}
 			choice := resolutions[i.ID]

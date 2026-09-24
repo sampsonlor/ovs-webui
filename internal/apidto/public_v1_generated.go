@@ -108,16 +108,17 @@ type VlanIntent struct {
 	Value     VlanInput     `json:"value"`
 }
 type ObservedIntent struct {
-	IntentId           Id                         `json:"intent_id"`
-	Operation          string                     `json:"operation"`
-	Object             ObservedBinding            `json:"object"`
-	Value              map[string]json.RawMessage `json:"value"`
-	Before             NativeVlan                 `json:"before,omitempty"`
-	DependencyRevision Revision                   `json:"dependency_revision,omitempty"`
-	SchemaDigest       string                     `json:"schema_digest,omitempty"`
-	Bond               NativeBond                 `json:"bond,omitempty"`
-	BeforeBond         NativeBond                 `json:"before_bond,omitempty"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	IntentId               Id                         `json:"intent_id"`
+	Operation              string                     `json:"operation"`
+	Object                 ObservedBinding            `json:"object"`
+	Value                  map[string]json.RawMessage `json:"value"`
+	Before                 NativeVlan                 `json:"before,omitempty"`
+	DependencyRevision     Revision                   `json:"dependency_revision,omitempty"`
+	SchemaDigest           string                     `json:"schema_digest,omitempty"`
+	Bond                   NativeBond                 `json:"bond,omitempty"`
+	BeforeBond             NativeBond                 `json:"before_bond,omitempty"`
+	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
+	ExtraFields            map[string]json.RawMessage `json:"-"`
 }
 
 func (v *ObservedIntent) UnmarshalJSON(data []byte) error {
