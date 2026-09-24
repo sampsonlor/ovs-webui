@@ -108,14 +108,17 @@ type VlanIntent struct {
 	Value     VlanInput     `json:"value"`
 }
 type ObservedIntent struct {
-	IntentId           Id                         `json:"intent_id"`
-	Operation          string                     `json:"operation"`
-	Object             ObservedBinding            `json:"object"`
-	Value              map[string]json.RawMessage `json:"value"`
-	Before             NativeVlan                 `json:"before,omitempty"`
-	DependencyRevision Revision                   `json:"dependency_revision,omitempty"`
-	SchemaDigest       string                     `json:"schema_digest,omitempty"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	IntentId               Id                         `json:"intent_id"`
+	Operation              string                     `json:"operation"`
+	Object                 ObservedBinding            `json:"object"`
+	Value                  map[string]json.RawMessage `json:"value"`
+	Before                 NativeVlan                 `json:"before,omitempty"`
+	DependencyRevision     Revision                   `json:"dependency_revision,omitempty"`
+	SchemaDigest           string                     `json:"schema_digest,omitempty"`
+	Bond                   NativeBond                 `json:"bond,omitempty"`
+	BeforeBond             NativeBond                 `json:"before_bond,omitempty"`
+	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
+	ExtraFields            map[string]json.RawMessage `json:"-"`
 }
 
 func (v *ObservedIntent) UnmarshalJSON(data []byte) error {
@@ -823,6 +826,7 @@ type BondIntent struct {
 	Mode               string        `json:"mode"`
 	Lacp               string        `json:"lacp"`
 	MemberInterfaceIds []Id          `json:"member_interface_ids"`
+	Fallback           string        `json:"fallback,omitempty"`
 }
 type SpanningTreeIntent struct {
 	IntentId     Id            `json:"intent_id"`
@@ -896,6 +900,29 @@ type ControllerIntent struct {
 	Targets   []string      `json:"targets"`
 	FailMode  string        `json:"fail_mode"`
 }
+type PortLACPIntent struct {
+	IntentId  Id            `json:"intent_id"`
+	Operation string        `json:"operation"`
+	Object    ObjectBinding `json:"object"`
+	Lacp      string        `json:"lacp"`
+	Fallback  string        `json:"fallback"`
+}
+type NativeBond struct {
+	Lacp           json.RawMessage            `json:"lacp"`
+	BondMode       json.RawMessage            `json:"bond_mode"`
+	LacpFallbackAb json.RawMessage            `json:"lacp_fallback_ab"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
+}
+
+func (v *NativeBond) UnmarshalJSON(data []byte) error {
+	type plain NativeBond
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v NativeBond) MarshalJSON() ([]byte, error) {
+	type plain NativeBond
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type Intent = json.RawMessage
 type ProfileCommand struct {
 	RequestId   RequestId `json:"request_id"`

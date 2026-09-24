@@ -268,33 +268,44 @@ export class WorkspaceController {
       )
     );
   }
+  private async readConsistentWorkspace() {
+    // The server worker can commit between these independent GETs. Discard a
+    // mixed observation and reread within a fixed budget; never resend a command
+    // or publish mismatched identity/generation/lock information as actionable.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const workspace = await this.client.readWorkspace();
+      const receivedAt = performance.now();
+      const [snapshot, inventory] = await Promise.all([
+        this.client.readCandidate(),
+        readPinnedInventory(this.client).catch((error: unknown) => {
+          if (
+            error instanceof ApiProblemError &&
+            error.problem.code === 'PROVIDER_UNAVAILABLE'
+          )
+            return null;
+          throw error;
+        }),
+      ]);
+      if (
+        workspace.candidate.id !== snapshot.candidate.id ||
+        workspace.candidate.revision !== snapshot.candidate.revision ||
+        workspace.candidate.currentGeneration !==
+          snapshot.candidate.currentGeneration ||
+        workspace.candidate.lockedByTransactionId !==
+          snapshot.candidate.lockedByTransactionId ||
+        (inventory &&
+          inventory.generation !== snapshot.candidate.currentGeneration)
+      )
+        continue;
+      return { workspace, snapshot, inventory, receivedAt };
+    }
+    throw new HttpContractError(
+      'Workspace changed while loading. Refresh and review again.',
+    );
+  }
   private async load() {
-    const workspace = await this.client.readWorkspace();
-    const receivedAt = performance.now();
-    const [snapshot, inventory] = await Promise.all([
-      this.client.readCandidate(),
-      readPinnedInventory(this.client).catch((error: unknown) => {
-        if (
-          error instanceof ApiProblemError &&
-          error.problem.code === 'PROVIDER_UNAVAILABLE'
-        )
-          return null;
-        throw error;
-      }),
-    ]);
-    if (
-      workspace.candidate.id !== snapshot.candidate.id ||
-      workspace.candidate.revision !== snapshot.candidate.revision ||
-      workspace.candidate.currentGeneration !==
-        snapshot.candidate.currentGeneration ||
-      workspace.candidate.lockedByTransactionId !==
-        snapshot.candidate.lockedByTransactionId ||
-      (inventory &&
-        inventory.generation !== snapshot.candidate.currentGeneration)
-    )
-      throw new HttpContractError(
-        'Workspace changed while loading. Refresh and review again.',
-      );
+    const { workspace, snapshot, inventory, receivedAt } =
+      await this.readConsistentWorkspace();
     const validationJob = workspace.latestValidation
       ? await this.client.readValidationJob(workspace.latestValidation)
       : null;

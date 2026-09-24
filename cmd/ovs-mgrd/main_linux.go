@@ -54,6 +54,7 @@ func run() int {
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
+	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
 	probeAddress := flag.String("safe-apply-probe-address", "", "Reviewed numeric management endpoint IP:TCP-port; empty disables Safe Apply")
 	probeInterface := flag.String("safe-apply-probe-interface", "", "Reviewed management interface; probe sockets bind to this device")
 	flag.Parse()
@@ -218,6 +219,14 @@ func run() int {
 		}
 		if err = inventoryService.SetLocalVLANPorts(vlanIDs); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_VLAN_AUTHORITY")
+			return 2
+		}
+		var bondIDs []string
+		if *localBondPorts != "" {
+			bondIDs = strings.Split(*localBondPorts, ",")
+		}
+		if err = inventoryService.SetLocalBondPorts(bondIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_BOND_AUTHORITY")
 			return 2
 		}
 		if *ovsUID >= 1<<32-1 {

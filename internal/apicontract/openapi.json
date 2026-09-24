@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.7.0",
-    "description": "Phase 1 public transport with authenticated Candidate/Validation, durable Safe Apply admission, server confirmation, guarded rollback and shared evidence. Management reachability requires a reviewed server-configured probe; Applied alone never proves health or confirmation."
+    "version": "1.8.0",
+    "description": "Phase 1 public transport with typed VLAN and existing-Port Bond/LACP Candidate intents, durable Safe Apply, guarded compensation and shared evidence. Object lifecycle and member changes retain separate service gates. Applied alone never proves link negotiation, health or confirmation."
   },
   "servers": [
     {
@@ -28232,7 +28232,9 @@
           "operation": {
             "type": "string",
             "x-known-values": [
-              "port.vlan.set"
+              "port.vlan.set",
+              "bond.configure",
+              "port.lacp.set"
             ]
           },
           "object": {
@@ -28252,6 +28254,18 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "bond": {
+            "$ref": "#/components/schemas/NativeBond"
+          },
+          "before_bond": {
+            "$ref": "#/components/schemas/NativeBond"
+          },
+          "bond_member_interface_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Id"
+            }
           }
         },
         "required": [
@@ -28260,7 +28274,8 @@
           "object",
           "value"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "description": "The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized."
       },
       "Port": {
         "type": "object",
@@ -30614,6 +30629,15 @@
             },
             "minItems": 2,
             "maxItems": 32
+          },
+          "fallback": {
+            "type": "string",
+            "enum": [
+              "preserve",
+              "enabled",
+              "disabled",
+              "default"
+            ]
           }
         },
         "required": [
@@ -30624,7 +30648,8 @@
           "lacp",
           "member_interface_ids"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Existing native Bond-as-Port fields only. member_interface_ids must equal the current immutable member bindings; membership changes remain gated. An omitted fallback preserves the captured native value."
       },
       "SpanningTreeIntent": {
         "type": "object",
@@ -31041,6 +31066,87 @@
         ],
         "additionalProperties": false
       },
+      "PortLACPIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "port.lacp.set"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "lacp": {
+            "type": "string",
+            "enum": [
+              "off",
+              "active",
+              "passive"
+            ]
+          },
+          "fallback": {
+            "type": "string",
+            "enum": [
+              "preserve",
+              "enabled",
+              "disabled",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "lacp",
+          "fallback"
+        ],
+        "additionalProperties": false
+      },
+      "NativeBond": {
+        "type": "object",
+        "properties": {
+          "lacp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bond_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lacp_fallback_ab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lacp",
+          "bond_mode",
+          "lacp_fallback_ab"
+        ],
+        "additionalProperties": true
+      },
       "Intent": {
         "oneOf": [
           {
@@ -31090,6 +31196,9 @@
           },
           {
             "$ref": "#/components/schemas/ControllerIntent"
+          },
+          {
+            "$ref": "#/components/schemas/PortLACPIntent"
           }
         ]
       },

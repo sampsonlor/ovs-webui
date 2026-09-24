@@ -16,6 +16,15 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 )
 
+func intentCapabilities(caps []string, c plan.Candidate) bool {
+	for _, cap := range plan.Capabilities(c) {
+		if !slices.Contains(caps, cap) {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *Repository) candidateClaims(ctx context.Context, q querier, credential, capability string) (authn.Claims, error) {
 	c, err := r.claims(ctx, q, credential)
 	if err != nil {
@@ -240,7 +249,7 @@ func (r *Repository) ReadCandidate(ctx context.Context, credential string, in pl
 			if c.CredentialID != record.Credential {
 				invalidation(&v, "VALIDATION_CREDENTIAL_CHANGED")
 			}
-			if !slices.Contains(c.Capabilities, "ovs.port.vlan.write") {
+			if !intentCapabilities(c.Capabilities, original.Candidate) {
 				invalidation(&v, "CAPABILITY_DENIED")
 			}
 			current, e := snapshot, snapshotErr
@@ -341,7 +350,7 @@ func (r *Repository) ValidateCandidate(ctx context.Context, credential string, i
 			diff = []plan.Diff{}
 			state = "failed"
 		}
-		if !slices.Contains(c.Capabilities, "ovs.port.vlan.write") {
+		if !intentCapabilities(c.Capabilities, in.Envelope.Candidate) {
 			checks = append(checks, plan.Gate{Code: "CAPABILITY_DENIED", State: "blocked", Reason: "CAPABILITY_DENIED"})
 			state = "blocked"
 		}

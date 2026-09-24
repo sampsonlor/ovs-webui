@@ -8,6 +8,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 func TestStrictCandidateCommandsRoundTripCapturedOriginals(t *testing.T) {
@@ -51,5 +52,42 @@ func TestStrictCandidateCommandsRoundTripCapturedOriginals(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestStrictBondOriginalsRetainSealAndNativeAbsence(t *testing.T) {
+	active, mode, fallback := "active", "balance-tcp", "true"
+	e := candidate.Envelope{Owner: "synthetic-owner", Epoch: repository.NewID(), Sequence: 1, Candidate: candidate.Candidate{ID: repository.NewID(), Revision: repository.NewID(), Intents: []candidate.StoredIntent{{Operation: "bond.configure", Bond: &candidate.Bond{LACP: &active, Mode: &mode, Fallback: &fallback}, BeforeBond: &candidate.Bond{}}}}}
+	key := bytes.Repeat([]byte{7}, 32)
+	e.Sign(key)
+	in := candidate.ValidateRequest{Envelope: e}
+	body, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out candidate.ValidateRequest
+	if err = DecodeStrict(body, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err = out.Envelope.Verify(key, e.Owner); err != nil {
+		t.Fatal("wire encoding changed signed originals", err)
+	}
+	if candidate.Digest(out.Envelope.Candidate.Intents[0].BeforeBond) != candidate.Digest(candidate.Bond{}) {
+		t.Fatal("absence was normalized")
+	}
+	for _, invalid := range []string{
+		strings.Replace(string(body), `"lacp":"active"`, `"lacp":"active","lacp":"off"`, 1),
+		strings.Replace(string(body), `"lacp":null`, `"lacp":null,"actor":"admin"`, 1),
+		strings.Replace(string(body), `"before_bond":`, `"Before_Bond":`, 1),
+	} {
+		if DecodeStrict([]byte(invalid), &out) == nil {
+			t.Fatal("nested field bypassed strict decoding")
+		}
+	}
+	if err = DecodeStrict([]byte(strings.Replace(string(body), `"lacp":null`, `"lacp":"off"`, 1)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Envelope.Verify(key, e.Owner) == nil {
+		t.Fatal("forged original retained valid seal")
 	}
 }

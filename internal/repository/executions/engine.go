@@ -215,17 +215,22 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		if err != nil {
 			return requests.Mutation{}, err
 		}
-		// VLAN's four columns form one semantic protection unit. A different
-		// Port or an unrelated non-VLAN field does not take this protection.
+		// Record the actual field group. Pending VLAN and Bond operations on the
+		// same Port serialize because they share one native recovery marker;
+		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
+			field := "port.vlan"
+			if candidate.IsBondOperation(intent.Operation) {
+				field = "port.bond"
+			}
 			var n int
-			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path='port.vlan'", intent.Object.ManagementID).Scan(&n); err != nil {
+			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond')", intent.Object.ManagementID).Scan(&n); err != nil {
 				return requests.Mutation{}, err
 			}
 			if n != 0 {
 				return requests.Mutation{}, apitypes.Fail(409, "FIELD_PROTECTED")
 			}
-			if _, err = tx.ExecContext(ctx, "INSERT INTO operation_protections VALUES(?,'port.vlan',?)", intent.Object.ManagementID, id); err != nil {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO operation_protections VALUES(?,?,?)", intent.Object.ManagementID, field, id); err != nil {
 				return requests.Mutation{}, err
 			}
 		}

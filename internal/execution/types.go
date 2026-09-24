@@ -57,6 +57,7 @@ type Request struct {
 type Authorization struct {
 	Owner, Credential, Epoch, Policy, ProviderPolicy, ChangeSet, Validation, Scope string
 	Expires                                                                        time.Time
+	FieldCapabilities                                                              string `json:",omitempty"`
 }
 
 // Lease coordinates the web.db reservation and the independent safety domain.

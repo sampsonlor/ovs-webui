@@ -37,6 +37,7 @@ type Column struct {
 	Monitored      bool            `json:"monitored"`
 	VLANCompatible bool            `json:"-"`
 	VLANModes      []string        `json:"-"`
+	BondCompatible bool            `json:"-"`
 }
 type Table struct {
 	Name    string     `json:"name"`

@@ -35,6 +35,7 @@ type Service struct {
 	key       []byte
 	now       func() time.Time
 	localVLAN map[string]bool
+	localBond map[string]bool
 }
 
 func New(r Registry) *Service {
@@ -115,7 +116,7 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	s.mu.RLock()
-	v, failure, localVLAN := s.current, s.failure, s.localVLAN
+	v, failure, localVLAN, localBond := s.current, s.failure, s.localVLAN, s.localBond
 	s.mu.RUnlock()
 	now := s.now()
 	fresh := "unknown"
@@ -154,7 +155,7 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 			return item, err
 		}
 		binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Port", Generation: v.decision.Generation}
-		p := candidateSnapshot(v, localVLAN, []candidate.Binding{binding}).Ports[b.ManagementID]
+		p := candidateSnapshot(v, localVLAN, localBond, []candidate.Binding{binding}).Ports[b.ManagementID]
 		editable := fresh == "fresh" && p.Known && p.SchemaSupported && p.Authority == "local-managed" && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.port.vlan.write")
 		for _, name := range []string{"vlan_mode", "tag", "trunks", "cvlans"} {
 			if field, ok := item["fields"].(map[string]any)[name].(map[string]any); ok {
@@ -164,6 +165,16 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 		item["vlan_ownership"], item["vlan_modes"] = p.Authority, p.Modes
 		if editable {
 			item["allowed_operations"] = []string{"port.vlan.set"}
+		}
+		bondEditable := fresh == "fresh" && candidate.BondFieldsEditable(p) && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.port.bond.write")
+		item["bond_configuration"], item["bond_ownership"], item["bond_editable"] = p.Bond, p.BondAuthority, bondEditable
+		if bondEditable {
+			ops, _ := item["allowed_operations"].([]string)
+			ops = append(ops, "port.lacp.set")
+			if len(p.Members) >= 2 {
+				ops = append(ops, "bond.configure")
+			}
+			item["allowed_operations"] = ops
 		}
 		return item, nil
 	}

@@ -190,6 +190,14 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeSafeApply$' -test.v -test.timeout=120s \
               | go tool test2json -p "native-safe-apply-$schema" | tee "test-results/go-safe-apply-$schema.json"
           done
+      - name: Native existing-Port Bond and LACP safety matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeBondLACP$' -test.v -test.timeout=180s \
+              | go tool test2json -p "native-bond-lacp-$schema" | tee "test-results/go-bond-lacp-$schema.json"
+          done
       - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
         run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
@@ -252,6 +260,7 @@ jobs:
             test-results/go-inventory-*.json
             test-results/go-inventory-*-journal.log
             test-results/go-execution-*.json
+            test-results/go-bond-lacp-*.json
             test-results/go-safe-apply-*.json
             test-results/go-safe-apply-vm-journal.log
             test-results/go-frontend.json

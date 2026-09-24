@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
@@ -68,7 +69,18 @@ func (r *Repository) safeAuthority(ctx context.Context, q evidence.Query, a exec
 	if err != nil {
 		return err
 	}
-	for _, cap := range []string{"configuration.apply", "configuration.confirm", "ovs.port.vlan.write", "configuration.read", "inventory.read"} {
+	fields := a.FieldCapabilities
+	if fields == "" {
+		fields = "ovs.port.vlan.write"
+	} // legacy VLAN journals
+	required := []string{"configuration.apply", "configuration.confirm", "configuration.read", "inventory.read"}
+	for _, cap := range strings.Split(fields, ",") {
+		if cap != "ovs.port.vlan.write" && cap != "ovs.port.bond.write" {
+			return apitypes.Fail(403, "APPLY_AUTHORITY_REVOKED")
+		}
+		required = append(required, cap)
+	}
+	for _, cap := range required {
 		if !slices.Contains(caps, cap) || !slices.Contains(current, cap) {
 			return apitypes.Fail(403, "APPLY_AUTHORITY_REVOKED")
 		}

@@ -40,7 +40,7 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 		if labels[execution.MarkerKey] != original.Marker {
 			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 		}
-		intent.Before, intent.Value = intent.Value, intent.Before
+		candidate.Reverse(intent)
 	}
 	checks, _ := candidate.Checks(envelope.Candidate, view.Candidate)
 	if !candidate.Passed(checks) {
