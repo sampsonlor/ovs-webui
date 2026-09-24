@@ -260,6 +260,7 @@ jobs:
             test-results/go-inventory-*.json
             test-results/go-inventory-*-journal.log
             test-results/go-execution-*.json
+            test-results/go-bond-lacp-*.json
             test-results/go-safe-apply-*.json
             test-results/go-safe-apply-vm-journal.log
             test-results/go-frontend.json
