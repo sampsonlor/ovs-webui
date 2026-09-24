@@ -490,6 +490,69 @@ async function httpClient(
   });
 }
 
+void test('HTTP observation rereads a server commit between workspace and Candidate without replaying Apply', async (t) => {
+  const store = fixture(t).open();
+  prepared(store);
+  let applyPosts = 0;
+  let workspaceReads = 0;
+  let injected = false;
+  const client = await httpClient(t, store, async (url, options, response) => {
+    if (options.method === 'POST' && url.endsWith('/transactions'))
+      applyPosts++;
+    if (new URL(url).pathname.endsWith('/workspace')) {
+      workspaceReads++;
+      if (applyPosts && !injected) {
+        injected = true;
+        // Return the already-read queued workspace after the actual store
+        // worker has committed. The next Candidate GET sees the new generation.
+        for (let i = 0; i < 4; i++) store.transactions.tick();
+      }
+    }
+    return response;
+  });
+  const controller = new WorkspaceController(client);
+  await controller.refresh();
+  assert.equal(
+    await controller.startSafeApply('Review read-race recovery.', randomUUID()),
+    true,
+  );
+  assert.equal(injected, true);
+  assert.equal(workspaceReads, 3);
+  assert.equal(applyPosts, 1);
+  assert.equal(controller.getSnapshot().phase, 'ready');
+  assert.equal(
+    controller.getSnapshot().transaction.safeApply,
+    'awaiting-confirmation',
+  );
+  assert.equal(controller.transactionPresentation().canConfirm, true);
+  assert.equal(controller.canWrite(), false);
+  controller.dispose();
+});
+
+void test('HTTP observation rejects persistent snapshot churn after a bounded read budget', async (t) => {
+  const store = fixture(t).open();
+  prepared(store);
+  let workspaceReads = 0;
+  let posts = 0;
+  const client = await httpClient(t, store, async (url, options, response) => {
+    if (options.method === 'POST') posts++;
+    if (new URL(url).pathname.endsWith('/workspace')) {
+      workspaceReads++;
+      store.externalChange(null, null);
+    }
+    return response;
+  });
+  const controller = new WorkspaceController(client);
+  await controller.refresh();
+  assert.equal(workspaceReads, 3);
+  assert.equal(posts, 0);
+  assert.equal(controller.getSnapshot().phase, 'error');
+  assert.equal(controller.getSnapshot().snapshot, null);
+  assert.equal(controller.canWrite(), false);
+  assert.equal(controller.canStartSafeApply(), false);
+  controller.dispose();
+});
+
 void test('HTTP lost Apply and Confirm acknowledgements recover across controller reload without a second POST', async (t) => {
   const f = fixture(t);
   const store = f.open();
