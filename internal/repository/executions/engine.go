@@ -219,10 +219,19 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		if err = identity.ReserveCreations(ctx, tx, id, p.Marker, in.Envelope.Candidate); err != nil {
 			return requests.Mutation{}, err
 		}
+		if err = identity.ReserveRestorations(ctx, tx, id, e.rollbackMarker(id, p.Marker), in.Envelope.Candidate); err != nil {
+			return requests.Mutation{}, err
+		}
 		// Record the actual field group. Pending VLAN and Bond operations on the
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
+			if intent.Deletion != nil {
+				if err = protectDeletion(ctx, tx, id, intent); err != nil {
+					return requests.Mutation{}, err
+				}
+				continue
+			}
 			field := "port.vlan"
 			resource := intent.Object.ManagementID
 			if intent.Creation != nil {
@@ -233,7 +242,7 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 				field = "port.bond"
 			}
 			var n int
-			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond','root.bridge-creation')", resource).Scan(&n); err != nil {
+			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond','root.bridge-creation','object.lifecycle')", resource).Scan(&n); err != nil {
 				return requests.Mutation{}, err
 			}
 			if n != 0 {

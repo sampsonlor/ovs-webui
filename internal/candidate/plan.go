@@ -89,6 +89,15 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == BridgeDelete {
+			problem := deletionProblem(i, s)
+			if problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, deletionDiff(i, s))
+			continue
+		}
 		if i.Operation == BridgeCreate {
 			problem := creationProblem(i, s)
 			if problem != "" {
@@ -171,6 +180,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 	case "stage":
 		if len(cmd.Intents) == 0 || len(cmd.Intents) > MaxIntents {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
+		}
+		if hasDeletion(c.Intents) || cmd.Intents[0].Operation == BridgeDelete {
+			var err error
+			c, err = stageDeletion(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if hasCreation(c.Intents) || cmd.Intents[0].Operation == BridgeCreate {
 			var err error
@@ -285,6 +302,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if i.Operation == BridgeDelete {
+				return e, apitypes.Fail(409, "DELETION_RESTAGE_REQUIRED")
+			}
 			if i.Operation == BridgeCreate {
 				return e, apitypes.Fail(409, "CREATION_RESTAGE_REQUIRED")
 			}
@@ -334,6 +354,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == BridgeDelete {
+			checks = append(checks, deletionChecks(i, s)...)
+			continue
+		}
 		if i.Operation == BridgeCreate {
 			checks = append(checks, creationChecks(i, s)...)
 			continue

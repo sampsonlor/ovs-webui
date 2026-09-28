@@ -148,6 +148,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
 	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" }) {
 		projectCreation(v, s.localBridgeNames, &out)
+		projectDeletion(v, s.localBridgeDeleteNames, &out)
 	}
 	return out, nil
 }

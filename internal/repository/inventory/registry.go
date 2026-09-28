@@ -159,14 +159,14 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 		// Uncertain evidence never rebinds an old identity. A fresh monitor can still
 		// expose schema and status, but object pages remain unavailable until review.
 		if out.State == "confirmed" {
-			rows, err := tx.QueryContext(ctx, "SELECT management_id,table_name,ovs_uuid,state FROM identities WHERE generation=?", out.Generation)
+			rows, err := tx.QueryContext(ctx, "SELECT i.management_id,i.table_name,i.ovs_uuid,i.state,coalesce(c.marker,'') FROM identities i LEFT JOIN identity_creations c ON c.management_id=i.management_id WHERE i.generation=?", out.Generation)
 			if err != nil {
 				return err
 			}
 			known := map[string]domain.Binding{}
 			for rows.Next() {
 				var b domain.Binding
-				if err = rows.Scan(&b.ManagementID, &b.Table, &b.UUID, &b.State); err != nil {
+				if err = rows.Scan(&b.ManagementID, &b.Table, &b.UUID, &b.State, &b.CreationMarker); err != nil {
 					rows.Close()
 					return err
 				}

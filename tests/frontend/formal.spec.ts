@@ -207,6 +207,73 @@ async function screen(page: Page, name: string) {
 }
 const pageErrors = new WeakMap<Page, string[]>();
 
+test('managed Bridge deletion reviews identity changes and restores fresh objects', async ({ page, context }) => {
+  const account = 'browser-bridge-delete';
+  await login(page, account);
+  await clean(context);
+  let c = await get(context, '/candidate');
+  await command(context, '/candidate', {
+    operation: 'stage',
+    intents: [{ intent_id: crypto.randomUUID(), operation: 'bridge.create-isolated', name: 'br-ui-delete' }],
+  }, 'PATCH', c.revision);
+  c = await get(context, '/candidate');
+  const original = c.intents[0].object;
+  await page.goto(fixture.origin + '/changes/candidate');
+  await validate(page);
+  await prepareApply(page, account);
+  await page.getByRole('button', { name: 'Start Safe Apply', exact: true }).click();
+  await awaiting(page);
+  await chooseDecision(page, 'Confirm configuration', 'confirmed');
+  c = await get(context, '/candidate');
+  await command(context, '/candidate', {
+    operation: 'stage',
+    intents: [{ intent_id: crypto.randomUUID(), operation: 'bridge.delete-isolated', object: original }],
+  }, 'PATCH', c.revision);
+  c = await get(context, '/candidate');
+  const replacement = c.intents[0].bridge_deletion.replacement.bridge;
+  expect(replacement.management_id).not.toBe(original.management_id);
+  expect(vsctl('get', 'Bridge', 'br-ui-delete', '_uuid')).toBe(original.ovs_uuid);
+  await page.goto(fixture.origin + '/changes/candidate');
+  await expect(page.getByText('Rollback recreates with new identities', { exact: true })).toBeVisible();
+  const diff = page.getByRole('region', { name: 'Configuration Diff' });
+  const standard = await diff.innerText();
+  await screen(page, 'bridge-delete-standard');
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await page.getByText('Original and reserved replacement identities', { exact: true }).click();
+  await expect(page.locator('pre')).toContainText(replacement.management_id);
+  expect(await diff.innerText()).toBe(standard);
+  await screen(page, 'bridge-delete-expert');
+  await page.getByRole('button', { name: 'Expert', exact: true }).click();
+  for (const [width, height, device] of [[900, 1000, 'tablet'], [390, 844, 'mobile']] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole('button', { name: 'Validate Candidate', exact: true })).toBeDisabled();
+    await screen(page, 'bridge-delete-' + device + '-review');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await validate(page);
+  await prepareApply(page, account);
+  await page.getByRole('button', { name: 'Start Safe Apply', exact: true }).click();
+  await awaiting(page);
+  await expect(page.getByTestId('identity-replacements')).toContainText('reserved');
+  await expect(page.getByRole('link', { name: 'Open restored Bridge' })).toHaveCount(0);
+  expect(vsctl('--if-exists', 'get', 'Bridge', 'br-ui-delete', '_uuid')).toBe('');
+  await screen(page, 'bridge-delete-awaiting-confirmation');
+  await chooseDecision(page, 'Request rollback', 'rolled-back');
+  await expect(page.getByTestId('identity-replacements')).toContainText('restored');
+  await screen(page, 'bridge-delete-rolled-back');
+  const transaction = await get(context, new URL(page.url()).pathname.replace('/changes', ''));
+  expect(transaction.identity_replacements).toHaveLength(3);
+  expect(transaction.identity_replacements.every((r: { state: string }) => r.state === 'restored')).toBe(true);
+  const listed = await get(context, '/transactions');
+  expect(listed.items.find((r: { id: string }) => r.id === transaction.id).identity_replacements).toEqual(transaction.identity_replacements);
+  expect((await context.request.get(fixture.origin + '/api/v1/bridges/' + original.management_id)).status()).toBe(404);
+  expect(vsctl('get', 'Bridge', 'br-ui-delete', '_uuid')).toBe(replacement.ovs_uuid);
+  await page.getByRole('link', { name: 'Open restored Bridge' }).click();
+  await expect(page).toHaveURL(fixture.origin + '/bridges/' + replacement.management_id);
+  await expect(page.getByRole('heading', { name: 'br-ui-delete', exact: true })).toBeVisible();
+});
+
 test('isolated Bridge staged by API uses shared responsive Diff, Safe Apply and rollback', async ({
   page,
   context,

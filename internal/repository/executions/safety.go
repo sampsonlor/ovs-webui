@@ -383,10 +383,13 @@ func (e *Engine) holdSafety(ctx context.Context, r execution.Record, s safety.Re
 	s.HealthyAt = nil
 	return e.saveSafety(ctx, r, s)
 }
-func (e *Engine) rollback(ctx context.Context, r execution.Record, s safety.Record) error {
+func (e *Engine) rollbackMarker(id, marker string) string {
 	h := hmac.New(sha256.New, e.key)
-	h.Write([]byte("ovs-webui/rollback/v1\x00" + r.ID + "\x00" + r.Plan.Marker))
-	p, err := e.provider.(safety.Provider).PrepareRollback(ctx, r.Plan, hex.EncodeToString(h.Sum(nil)))
+	h.Write([]byte("ovs-webui/rollback/v1\x00" + id + "\x00" + marker))
+	return hex.EncodeToString(h.Sum(nil))
+}
+func (e *Engine) rollback(ctx context.Context, r execution.Record, s safety.Record) error {
+	p, err := e.provider.(safety.Provider).PrepareRollback(ctx, r.Plan, e.rollbackMarker(r.ID, r.Plan.Marker))
 	if err != nil {
 		state, reason := "recovery-required", "rollback-provider-unavailable"
 		var problem *apitypes.Problem

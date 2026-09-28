@@ -96,7 +96,7 @@
     {#if c.diff_truncated}<p class="notice warning">
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
-    <Diff fields={c.diff ?? []} />
+    <Diff fields={c.diff ?? []} {expert} />
     {#if c.state === 'conflict'}
       <section class="panel">
         <h2>Resolve against this snapshot</h2>
@@ -196,7 +196,7 @@
         <Status value={gate.state} /> <strong>{gate.code}</strong>
         <p>{gate.reason}</p>
       </div>{/each}
-    <Diff fields={v.diff} />
+    <Diff fields={v.diff} {expert} />
     {#if expert}<details>
         <summary>Validation identity and policy</summary>
         <dl>
@@ -348,6 +348,28 @@
           <dd class="mono">{t.instance_generation}</dd>{/if}
       </dl>
     </section>
+    {#if t.identity_replacements?.length}
+      <section class="panel" data-testid="identity-replacements">
+        <h2>Recovery object identities</h2>
+        <p>Rollback recreates with new identities. A reserved identity is not proof of recovery. Old object links never redirect to a replacement.</p>
+        {#each t.identity_replacements as replacement}
+          <p>
+            {replacement.previous.table} · <Status value={replacement.state} />
+            {#if replacement.state === 'restored' && replacement.replacement.table === 'Bridge'}
+              <Link href={'/bridges/' + replacement.replacement.management_id}>Open restored Bridge</Link>
+            {/if}
+          </p>
+          {#if expert}
+            <dl>
+              <dt>Previous management ID / OVS UUID</dt>
+              <dd class="mono">{replacement.previous.management_id} / {replacement.previous.ovs_uuid}</dd>
+              <dt>Replacement management ID / OVS UUID</dt>
+              <dd class="mono">{replacement.replacement.management_id} / {replacement.replacement.ovs_uuid}</dd>
+            </dl>
+          {/if}
+        {/each}
+      </section>
+    {/if}
     <p class="actions">
       <Link href="/operations/events">Events</Link><Link href="/operations/audit"
         >Audit</Link

@@ -215,19 +215,31 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if err = bridgeHostCheck(envelope.Candidate); err != nil {
 		return out, err
 	}
-	conn, _, d, identity, _, err := e.connect(ctx)
+	conn, reader, d, identity, pid, err := e.connect(ctx)
 	if err != nil {
 		return out, err
 	}
-	conn.Close()
+	defer conn.Close()
 	if d.public.Digest != view.Candidate.Schema || identity != view.Observation.Evidence.Peer {
 		return out, apitypes.Fail(409, "PROVIDER_IDENTITY_CHANGED")
+	}
+	if deletion := envelope.Candidate.Intents[0].Deletion; deletion != nil {
+		if !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
+			return out, apitypes.Fail(409, "PROVIDER_IDENTITY_CHANGED")
+		}
+		if err = verifyDeletionBefore(ctx, conn, reader, d, envelope.Candidate, deletion.SourceMarker); err != nil {
+			return out, err
+		}
 	}
 	return compileExecution(id, marker, envelope, view, d)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
 	if _, ok := bridgeIntent(envelope.Candidate); ok {
-		return compileBridgeExecution(id, marker, marker, envelope, view, d)
+		creationMarker := marker
+		if deletion := envelope.Candidate.Intents[0].Deletion; deletion != nil && !deletion.Restoring {
+			creationMarker = deletion.SourceMarker
+		}
+		return compileBridgeExecution(id, marker, creationMarker, envelope, view, d)
 	}
 	var out execution.Plan
 	root := view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root]
@@ -509,7 +521,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
 		markerKey := execution.MarkerKey
-		if intent.Creation != nil {
+		if candidate.IsBridgeOperation(intent.Operation) {
 			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
 			markerKey = bridgeMarkerKey
 		}
@@ -564,7 +576,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
-		if intent.Creation != nil {
+		if candidate.IsBridgeOperation(intent.Operation) {
 			continue
 		}
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]

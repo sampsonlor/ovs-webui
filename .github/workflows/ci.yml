@@ -208,6 +208,14 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeIsolatedBridge$' -test.v -test.timeout=180s \
               | go tool test2json -p "native-isolated-bridge-$schema" | tee "test-results/go-isolated-bridge-$schema.json"
           done
+      - name: Native managed Bridge deletion and fresh-identity compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeIsolatedBridgeDeletion$' -test.v -test.timeout=240s \
+              | go tool test2json -p "native-isolated-bridge-delete-$schema" | tee "test-results/go-isolated-bridge-delete-$schema.json"
+          done
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
         run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
       - name: Vet and native race tests

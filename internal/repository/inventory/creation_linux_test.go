@@ -87,7 +87,7 @@ func TestCreationReservationNeedsCommitEvidenceAndNeverRecycles(t *testing.T) {
 	decision, err = reg.Reconcile(ctx, o)
 	must(err)
 	for _, b := range candidate.CreationBindings(i) {
-		if got := decision.Bindings[domain.Key(b.Table, b.OVSUUID)]; got.ManagementID != b.ManagementID || got.State != "active" {
+		if got := decision.Bindings[domain.Key(b.Table, b.OVSUUID)]; got.ManagementID != b.ManagementID || got.State != "active" || got.CreationMarker != marker {
 			t.Fatal("assigned identity lost", got)
 		}
 	}
