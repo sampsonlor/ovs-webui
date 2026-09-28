@@ -5,6 +5,8 @@
   const internalPorts = $derived(fields.filter((field) => field.operation === 'port.create-internal'));
   const deletions = $derived(fields.filter((field) => field.operation === 'bridge.delete-isolated'));
   function display(value: unknown, field: DiffField) {
+    if (field.operation === 'port.create-internal' && value === 'absent') return 'Not present';
+    if (field.operation === 'port.create-internal' && value === 'name occupied') return 'Name in use';
     if (field.operation === 'port.create-internal' && value && typeof value === 'object') {
       const port = value as Record<string, unknown>;
       return `${String(port.bridge)} → ${String(port.name)} · internal · access VLAN ${String(port.tag)}`;
@@ -62,7 +64,7 @@
           ><th scope="row"
             >{#if field.object.table === 'Port' && field.operation !== 'port.create-internal'}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field)}</td><td
             >{display(field.current, field)}</td
