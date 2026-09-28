@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
@@ -43,18 +44,38 @@ func verifyDeletionBefore(ctx context.Context, conn net.Conn, reader *bufio.Read
 	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
-	body, err := call(conn, reader, 4, "transact", params)
-	if err != nil {
+	// The discovery call helper deliberately denies transact. Keep that boundary:
+	// this private path sends only the locally compiled, wait-only proof above.
+	if err = send(conn, map[string]any{"method": "transact", "params": params, "id": 4}); err != nil {
 		return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
 	}
-	var results []map[string]json.RawMessage
-	if json.Unmarshal(body, &results) != nil || len(results) != len(guards) {
-		return apitypes.Fail(409, "ISOLATED_BRIDGE_GRAPH_CHANGED")
+	if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
 	}
-	for _, result := range results {
-		if result == nil || len(result["error"]) != 0 {
-			return apitypes.Fail(409, "ISOLATED_BRIDGE_GRAPH_CHANGED")
+	for count := 0; count < 32; count++ {
+		m, err := readMessage(reader)
+		if err != nil {
+			return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
 		}
+		if m.Method == "echo" {
+			if err = replyEcho(conn, m); err != nil {
+				return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
+			}
+			continue
+		}
+		if m.Method != "" || string(m.ID) != "4" || len(m.Error) != 0 && string(m.Error) != "null" {
+			return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
+		}
+		var results []map[string]json.RawMessage
+		if json.Unmarshal(m.Result, &results) != nil || len(results) != len(guards) {
+			return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
+		}
+		for _, result := range results {
+			if result == nil || len(result["error"]) != 0 {
+				return apitypes.Fail(409, "ISOLATED_BRIDGE_GRAPH_CHANGED")
+			}
+		}
+		return ctx.Err()
 	}
-	return ctx.Err()
+	return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
 }

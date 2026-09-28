@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -48,6 +50,14 @@ func (f *fixture) deletionProtection(id string, want int) {
 	}))
 	if count != want {
 		f.t.Fatal("incorrect retained protections", count, want)
+	}
+}
+
+func deletionError(t *testing.T, err error, code string) {
+	t.Helper()
+	var problem *apitypes.Problem
+	if !errors.As(err, &problem) || problem.Code != code {
+		t.Fatalf("want %s, got %v", code, err)
 	}
 }
 
@@ -126,9 +136,8 @@ func TestNativeIsolatedBridgeDeletion(t *testing.T) {
 		f, name, source := deletionFixture(t, false)
 		in := f.prepareDeletion(source.Object)
 		f.vs("set", "Interface", name, "ingress_policing_rate=64")
-		if _, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope); err == nil {
-			t.Fatal("unsupported config admitted")
-		}
+		_, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
+		deletionError(t, err, "ISOLATED_BRIDGE_GRAPH_CHANGED")
 		if f.proxy.sent.Load() != 1 {
 			t.Fatal("read-only preflight mutated OVS")
 		}
@@ -137,9 +146,8 @@ func TestNativeIsolatedBridgeDeletion(t *testing.T) {
 		f, _, source := deletionFixture(t, false)
 		in := f.prepareDeletion(source.Object)
 		must(t, f.inventory.SetLocalBridgeDeleteNames(nil))
-		if _, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope); err == nil {
-			t.Fatal("creation grant authorized deletion")
-		}
+		_, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
+		deletionError(t, err, "EXECUTION_PREFLIGHT_FAILED")
 		if f.proxy.sent.Load() != 1 {
 			t.Fatal("unauthorized delete sent")
 		}
@@ -229,9 +237,8 @@ func TestNativeIsolatedBridgeDeletion(t *testing.T) {
 		f, name, source := deletionFixture(t, true)
 		in := f.prepareDeletion(source.Object)
 		f.run("ip", "address", "add", "192.0.2.77/32", "dev", name)
-		if _, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope); err == nil {
-			t.Fatal("host-address-bearing graph admitted")
-		}
+		_, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
+		deletionError(t, err, "BRIDGE_HOST_DEPENDENCY_CHANGED")
 		if f.proxy.sent.Load() != 1 {
 			t.Fatal("host-dependent graph mutated")
 		}
