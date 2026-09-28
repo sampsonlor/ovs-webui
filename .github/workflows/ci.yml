@@ -182,6 +182,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch
+      - name: Native internal Port deletion and fresh-identity compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeInternalPortDeletion$' -test.v -test.timeout=240s \
+              | go tool test2json -p "native-internal-port-delete-$schema" | tee "test-results/go-internal-port-delete-$schema.json"
+          done
       - name: Native internal Port creation and guarded compensation matrix
         run: |
           set -o pipefail

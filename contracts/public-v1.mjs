@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.11.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation on an explicitly authorized existing Bridge is also supported. General graph deletion, physical/member changes and full pages retain separate gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.12.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. General graph deletion, physical/member changes and full pages retain separate gates.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -75,12 +75,17 @@ const intentSchemas = {
  PortLACPIntent: intent('port.lacp.set', { object, lacp: choices('off', 'active', 'passive'), fallback }),
  IsolatedBridgeIntent: intent('bridge.create-isolated', { name: { type: 'string', minLength: 1, maxLength: 15, pattern: '^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$' } }),
  IsolatedBridgeDeleteIntent: intent('bridge.delete-isolated', { object }),
+ InternalPortDeleteIntent: intent('port.delete-internal', { object }),
  InternalPortCreateIntent: intent('port.create-internal', { object, name: {type: 'string', minLength: 1, maxLength: 15, pattern: '^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$'}, vlan_id: integer(1,4094) }),
 };
 Object.assign(s, intentSchemas);
 s.InternalPortCreateIntent.description = 'Create one fresh internal access Port and Interface under an existing system Bridge binding. Requires ovs.port.internal.create and a root-owned Bridge management-id:name grant. No physical adoption, local-port change, host IP configuration or direct live write. Safe Apply rollback removes only unchanged created children and preserves the captured parent membership.';
 s.InternalPortCreation = open({ name: string(15), vlan_id: integer(1,4094), root_uuid: id, bridge: object, bridge_name: string(15), interface: object, original_members: array(object,32,1), local_port: object, local_interface: object, before_present: bool, after_present: bool });
 s.ObservedIntent.properties.internal_port_creation = ref('InternalPortCreation');
+s.InternalPortDeleteIntent.description = 'Delete one manager-owned independent internal access Port and its Interface, preserving the existing Bridge and other members. Requires ovs.port.internal.delete and an independent root Bridge management-id:name deletion grant. Compensation reserves fresh child identities. Changed native configuration, references or host dependencies block execution. Input cannot provide captured graphs, markers or replacement identities.';
+s.InternalPortGraph = open({ port: ref('ObservedBinding'), configuration: ref('InternalPortCreation') });
+s.InternalPortDeletion = open({ source: ref('InternalPortGraph'), replacement: ref('InternalPortGraph') });
+s.ObservedIntent.properties.internal_port_deletion = ref('InternalPortDeletion');
 s.BondIntent.properties.fallback = fallback;
 s.BondIntent.description = 'Existing native Bond-as-Port fields only. member_interface_ids must equal the current immutable member bindings; membership changes remain gated. An omitted fallback preserves the captured native value.';
 s.NativeBond = open({ lacp: nullable({ type: 'string' }), bond_mode: nullable({ type: 'string' }), lacp_fallback_ab: nullable({ type: 'string' }) });
@@ -96,7 +101,7 @@ s.ObservedIntent.properties.bridge_deletion = ref('BridgeDeletion');
 s.IdentityReplacement = open({ previous: ref('ObservedBinding'), replacement: ref('ObservedBinding'), state: { type: 'string', 'x-known-values': ['reserved', 'restored', 'not-used', 'unverified'] } });
 s.IdentityReplacement.description = 'Only restored proves settled compensation with Applied and health evidence. Other or unknown states do not establish a usable replacement.';
 s.Transaction.properties.identity_replacements = array(ref('IdentityReplacement'), 3);
-s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set', 'bridge.create-isolated', 'bridge.delete-isolated', 'port.create-internal'];
+s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set', 'bridge.create-isolated', 'bridge.delete-isolated', 'port.create-internal', 'port.delete-internal'];
 s.ObservedIntent.description = 'The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');

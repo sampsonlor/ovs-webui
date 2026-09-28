@@ -231,11 +231,23 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 			return out, err
 		}
 	}
+	if deletion := envelope.Candidate.Intents[0].PortDeletion; deletion != nil {
+		if !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
+			return out, apitypes.Fail(409, "PROVIDER_IDENTITY_CHANGED")
+		}
+		if err = verifyPortDeletionBefore(ctx, conn, reader, d, envelope.Candidate, view, deletion.SourceMarker); err != nil {
+			return out, err
+		}
+	}
 	return compileExecution(id, marker, envelope, view, d)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
 	if _, ok := internalPortIntent(envelope.Candidate); ok {
-		return compileInternalPortExecution(id, marker, marker, envelope, view, d)
+		creationMarker := marker
+		if deletion := envelope.Candidate.Intents[0].PortDeletion; deletion != nil && !deletion.Restoring {
+			creationMarker = deletion.SourceMarker
+		}
+		return compileInternalPortExecution(id, marker, creationMarker, envelope, view, d)
 	}
 	if _, ok := bridgeIntent(envelope.Candidate); ok {
 		creationMarker := marker

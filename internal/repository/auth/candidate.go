@@ -100,7 +100,7 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		bindings := plan.Bindings(in.Envelope.Candidate)
 		for _, i := range cmd.Intents {
 			bindings = append(bindings, i.Object)
-			if i.Operation == plan.BridgeCreate {
+			if i.Operation == plan.BridgeCreate || i.Operation == plan.InternalPortDelete {
 				bindings = append(bindings, plan.Binding{Table: "Bridge"})
 			}
 		}

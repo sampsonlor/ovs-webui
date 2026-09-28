@@ -15,8 +15,8 @@ import (
 )
 
 func internalPortIntent(c candidate.Candidate) (candidate.StoredIntent, bool) {
-	if len(c.Intents) == 1 && c.Intents[0].Operation == candidate.InternalPortCreate && c.Intents[0].PortCreation != nil {
-		return c.Intents[0], true
+	if len(c.Intents) == 1 {
+		return candidate.InternalPortGraphIntent(c.Intents[0])
 	}
 	return candidate.StoredIntent{}, false
 }
@@ -133,6 +133,9 @@ func compileInternalPortExecution(id, marker, creationMarker string, envelope ca
 	}
 	n := nativePlan{Operations: append([]map[string]any{g}, ops...), Evidence: view.Observation.Evidence, CreationMarker: creationMarker, InsertUUIDs: map[int]string{}}
 	n.Operations = append(n.Operations, parents...)
+	if deletion := envelope.Candidate.Intents[0].PortDeletion; deletion != nil && deletion.Restoring {
+		n.Operations = append(n.Operations, deletedPortSourceGuards(deletion)...)
+	}
 	if p.AfterPresent {
 		rows, err := internalPortRows(d, i, creationMarker)
 		if err != nil {
@@ -186,6 +189,9 @@ func internalPortProof(p execution.Plan, view inventory.ExecutionView, d discove
 	parents, err := internalParentGuards(d, i, view, i.PortCreation.AfterPresent)
 	if err != nil {
 		return nil, err
+	}
+	if deletion := p.Envelope.Candidate.Intents[0].PortDeletion; deletion != nil && deletion.Restoring {
+		guards = append(guards, deletedPortSourceGuards(deletion)...)
 	}
 	ops := []any{g}
 	for _, g := range append(guards, parents...) {

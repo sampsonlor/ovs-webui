@@ -82,3 +82,84 @@ func TestInternalPortAppliedRequiresRegularOfport(t *testing.T) {
 		}
 	}
 }
+
+func TestInternalPortDeletePlanPreservesParentAndUsesFreshCompensation(t *testing.T) {
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			d, v, e := executionFixture(t, version)
+			bind := func(table, id string) candidate.Binding {
+				return candidate.Binding{ManagementID: repository.NewID(), OVSUUID: id, Table: table, Generation: v.Candidate.Generation}
+			}
+			root := v.Observation.Evidence.Root
+			parent := candidate.InternalPortParent{Dependency: "captured", Eligible: true}
+			for id := range v.Observation.Rows["Bridge"] {
+				parent.Binding = bind("Bridge", id)
+				parent.Name = "br-test"
+			}
+			for id := range v.Observation.Rows["Port"] {
+				parent.LocalPort = bind("Port", id)
+			}
+			for id := range v.Observation.Rows["Interface"] {
+				parent.LocalInterface = bind("Interface", id)
+			}
+			parent.Members = []candidate.Binding{parent.LocalPort}
+			v.Candidate.InternalPorts.Parents = map[string]candidate.InternalPortParent{parent.Binding.ManagementID: parent}
+			i := candidate.StoredIntent{ID: repository.NewID(), Operation: candidate.InternalPortCreate, Object: bind("Port", repository.NewID()), Dependency: parent.Dependency, PortCreation: &candidate.InternalPortCreation{Name: "pi-new", VLANID: 20, Root: root, Bridge: parent.Binding, BridgeName: parent.Name, Members: parent.Members, LocalPort: parent.LocalPort, LocalInterface: parent.LocalInterface, Interface: bind("Interface", repository.NewID()), AfterPresent: true}}
+			e.Candidate.Intents = []candidate.StoredIntent{i}
+
+			source := candidate.InternalPortGraph{Port: i.Object, Configuration: *i.PortCreation}
+			source.Configuration.BeforePresent, source.Configuration.AfterPresent = false, false
+			replacement := source
+			replacement.Port = bind("Port", repository.NewID())
+			replacement.Configuration.Interface = bind("Interface", repository.NewID())
+			i.Operation = candidate.InternalPortDelete
+			i.PortCreation = nil
+			i.PortDeletion = &candidate.InternalPortDeletion{Source: source, Replacement: replacement, SourceMarker: strings.Repeat("a", 64)}
+			e.Candidate.Intents = []candidate.StoredIntent{i}
+			p, err := compileExecution(repository.NewID(), strings.Repeat("b", 64), e, v, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var n nativePlan
+			if err = json.Unmarshal(p.Native, &n); err != nil {
+				t.Fatal(err)
+			}
+			if len(n.InsertUUIDs) != 0 || n.CreationMarker != i.PortDeletion.SourceMarker {
+				t.Fatal("deletion lost private creation marker")
+			}
+			for _, needle := range []string{"Mirror", "qos", "ingress_policing_rate", "mtu_request", parent.Binding.OVSUUID, parent.LocalPort.OVSUUID, parent.LocalInterface.OVSUUID} {
+				if !strings.Contains(string(p.Native), needle) {
+					t.Fatal("missing guard", needle)
+				}
+			}
+			candidate.Reverse(&e.Candidate.Intents[0])
+			r, err := compileExecution(p.ID, strings.Repeat("c", 64), e, v, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = json.Unmarshal(r.Native, &n); err != nil {
+				t.Fatal(err)
+			}
+			if len(n.InsertUUIDs) != 2 || n.CreationMarker != r.Marker {
+				t.Fatal("wrong restored identity ownership")
+			}
+			for _, b := range replacement.Bindings() {
+				found := false
+				for _, id := range n.InsertUUIDs {
+					found = found || id == b.OVSUUID
+				}
+				if !found {
+					t.Fatal("replacement UUID not used")
+				}
+			}
+			for _, op := range n.Operations {
+				if op["op"] == "update" || op["op"] == "delete" || op["op"] == "insert" && op["table"] == "Bridge" {
+					t.Fatal("parent overwritten", op)
+				}
+			}
+			if !strings.Contains(string(r.Native), source.Port.OVSUUID) || !strings.Contains(string(r.Native), source.Configuration.Interface.OVSUUID) {
+				t.Fatal("source absence guards missing")
+			}
+		})
+	}
+}

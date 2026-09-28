@@ -41,6 +41,7 @@ func TestCreationGraphIsSealedAndStrictAcrossIPC(t *testing.T) {
 func TestDeletionGraphSealAndStrictIPC(t *testing.T) {
 	e := candidate.Envelope{Owner: repository.NewID(), Epoch: repository.NewID(), Sequence: 1, Candidate: candidate.Candidate{ID: repository.NewID(), Revision: repository.NewID(), Intents: []candidate.StoredIntent{
 		{Operation: candidate.BridgeDelete, Deletion: &candidate.BridgeDeletion{SourceMarker: strings.Repeat("a", 64), Source: candidate.BridgeGraph{Name: "original"}, Replacement: candidate.BridgeGraph{Name: "replacement"}}},
+		{Operation: candidate.InternalPortDelete, PortDeletion: &candidate.InternalPortDeletion{SourceMarker: strings.Repeat("a", 64), Source: candidate.InternalPortGraph{Configuration: candidate.InternalPortCreation{Name: "original"}}, Replacement: candidate.InternalPortGraph{Configuration: candidate.InternalPortCreation{Name: "replacement"}}}},
 	}}}
 	key := bytes.Repeat([]byte{7}, 32)
 	e.Sign(key)
@@ -91,5 +92,32 @@ func TestInternalPortGraphIsSealedAndStrictAcrossIPC(t *testing.T) {
 	}
 	if out.Envelope.Verify(key, e.Owner) == nil {
 		t.Fatal("forged compensation accepted")
+	}
+}
+
+func TestInternalPortDeletionGraphSealAndStrictIPC(t *testing.T) {
+	e := candidate.Envelope{Owner: repository.NewID(), Epoch: repository.NewID(), Sequence: 1, Candidate: candidate.Candidate{ID: repository.NewID(), Revision: repository.NewID(), Intents: []candidate.StoredIntent{
+		{Operation: candidate.InternalPortDelete, PortDeletion: &candidate.InternalPortDeletion{SourceMarker: strings.Repeat("a", 64), Source: candidate.InternalPortGraph{Configuration: candidate.InternalPortCreation{Name: "original"}}, Replacement: candidate.InternalPortGraph{Configuration: candidate.InternalPortCreation{Name: "replacement"}}}},
+	}}}
+	key := bytes.Repeat([]byte{7}, 32)
+	e.Sign(key)
+	b, _ := json.Marshal(candidate.ValidateRequest{Envelope: e})
+	var out candidate.ValidateRequest
+	if err := DecodeStrict(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := out.Envelope.Verify(key, e.Owner); err != nil {
+		t.Fatal(err)
+	}
+	forged := strings.Replace(string(b), `"name":"replacement"`, `"name":"forged"`, 1)
+	if err := DecodeStrict([]byte(forged), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Envelope.Verify(key, e.Owner) == nil {
+		t.Fatal("unsealed compensation identities accepted")
+	}
+	forged = strings.Replace(string(b), `"name":"replacement"`, `"name":"replacement","name":"forged"`, 1)
+	if DecodeStrict([]byte(forged), &out) == nil {
+		t.Fatal("duplicate graph field accepted")
 	}
 }

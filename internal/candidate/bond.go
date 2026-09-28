@@ -20,6 +20,9 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if i.Operation == InternalPortDelete {
+			cap = "ovs.port.internal.delete"
+		}
 		if i.Operation == InternalPortCreate {
 			cap = "ovs.port.internal.create"
 		}
@@ -186,6 +189,11 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.PortDeletion != nil {
+		i.PortDeletion = clonePortDeletion(i.PortDeletion)
+		i.PortDeletion.Observed = true
+		return
+	}
 	if i.PortCreation != nil {
 		i.PortCreation = cloneInternalPort(i.PortCreation)
 		i.PortCreation.BeforePresent = i.PortCreation.AfterPresent
@@ -208,6 +216,11 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.PortDeletion != nil {
+		i.PortDeletion = clonePortDeletion(i.PortDeletion)
+		i.PortDeletion.Restoring, i.PortDeletion.Observed = true, false
+		return
+	}
 	if i.PortCreation != nil {
 		i.PortCreation = cloneInternalPort(i.PortCreation)
 		i.PortCreation.BeforePresent, i.PortCreation.AfterPresent = i.PortCreation.AfterPresent, i.PortCreation.BeforePresent

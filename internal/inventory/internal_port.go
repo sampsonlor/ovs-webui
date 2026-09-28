@@ -10,17 +10,24 @@ import (
 
 // Each root-owned grant binds one existing immutable Bridge ID to one NEW
 // internal-port name. A name-recreated Bridge does not inherit this authority.
-func (s *Service) SetLocalInternalPortTargets(targets []string) error {
+func internalPortTargets(targets []string) (map[string]bool, error) {
 	if len(targets) > 32 {
-		return apitypes.Fail(422, "INVALID_INTERNAL_PORT_AUTHORITY")
+		return nil, apitypes.Fail(422, "INVALID_INTERNAL_PORT_AUTHORITY")
 	}
 	allow := map[string]bool{}
 	for _, target := range targets {
 		id, name, ok := strings.Cut(target, ":")
 		if !ok || !apitypes.ManagementID(id) || !candidate.ValidBridgeName(name) || allow[target] {
-			return apitypes.Fail(422, "INVALID_INTERNAL_PORT_AUTHORITY")
+			return nil, apitypes.Fail(422, "INVALID_INTERNAL_PORT_AUTHORITY")
 		}
 		allow[target] = true
+	}
+	return allow, nil
+}
+func (s *Service) SetLocalInternalPortTargets(targets []string) error {
+	allow, err := internalPortTargets(targets)
+	if err != nil {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

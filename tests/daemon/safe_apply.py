@@ -114,7 +114,7 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         if exercise is not None:
             vsctl('add-br', 'br-ui-parent', '--', 'set', 'Bridge', 'br-ui-parent', 'datapath_type=system')
             parent = eventually(lambda: next((b for b in get('/bridges')['items'] if b['name'] == 'br-ui-parent'), None))
-            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-internal-port-targets=' + parent['management_id'] + ':pi-ui-create')
+            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-internal-port-targets=' + parent['management_id'] + ':pi-ui-create,' + parent['management_id'] + ':pi-ui-delete --local-internal-port-delete-targets=' + parent['management_id'] + ':pi-ui-delete')
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-bridge-create-names=br-ui-create,br-ui-delete --local-bridge-delete-names=br-ui-delete')
         unit_path.write_text(text)
         runtime_config.write_text(original_config.replace(f'HTTPS_LISTEN=127.0.0.1:{https_port}', f'HTTPS_LISTEN=0.0.0.0:{https_port}'))

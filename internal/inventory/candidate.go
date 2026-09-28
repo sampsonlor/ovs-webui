@@ -150,6 +150,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 		projectCreation(v, s.localBridgeNames, &out)
 		projectDeletion(v, s.localBridgeDeleteNames, &out)
 		projectInternalPorts(v, s.localInternalPortTargets, &out)
+		projectInternalPortDeletion(v, s.localInternalPortDeleteTargets, &out)
 	}
 	return out, nil
 }

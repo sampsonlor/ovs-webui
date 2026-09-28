@@ -56,6 +56,7 @@ func run() int {
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
 	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
+	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
 	localBridgeDeleteNames := flag.String("local-bridge-delete-names", "", "Reviewed names for deleting unchanged manager-created isolated Bridges; independent of creation authority")
@@ -269,6 +270,21 @@ func run() int {
 			}
 		}
 		if err = inventoryService.SetLocalInternalPortTargets(internalTargets); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_INTERNAL_PORT_AUTHORITY")
+			return 2
+		}
+		var internalDeleteTargets []string
+		if *localInternalPortDeleteTargets != "" {
+			internalDeleteTargets = strings.Split(*localInternalPortDeleteTargets, ",")
+		}
+		for _, target := range internalDeleteTargets {
+			_, name, _ := strings.Cut(target, ":")
+			if name == *probeInterface {
+				logger.Error("inventory_start_failed", "code", "PORT_NAME_IS_MANAGEMENT_INTERFACE")
+				return 2
+			}
+		}
+		if err = inventoryService.SetLocalInternalPortDeleteTargets(internalDeleteTargets); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_INTERNAL_PORT_AUTHORITY")
 			return 2
 		}

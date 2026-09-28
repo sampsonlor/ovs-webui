@@ -3,8 +3,18 @@
   import Link from './Link.svelte';
   let { fields, expert = false }: { fields: DiffField[]; expert?: boolean } = $props();
   const internalPorts = $derived(fields.filter((field) => field.operation === 'port.create-internal'));
+  const portDeletions = $derived(fields.filter((field) => field.operation === 'port.delete-internal'));
   const deletions = $derived(fields.filter((field) => field.operation === 'bridge.delete-isolated'));
   function display(value: unknown, field: DiffField) {
+    if (field.operation === 'port.delete-internal') {
+      if (value === 'absent') return 'Not present';
+      if (value && typeof value === 'object') {
+        const graph = value as Record<string, unknown>;
+        if ('state' in graph) return 'Removed · rollback recreates with new identities';
+        const config = graph.configuration as Record<string, unknown>;
+        return `${String(config.bridge_name)} → ${String(config.name)} · internal · access VLAN ${String(config.vlan_id)}`;
+      }
+    }
     if (field.operation === 'port.create-internal' && value === 'absent') return 'Not present';
     if (field.operation === 'port.create-internal' && value === 'name occupied') return 'Name in use';
     if (field.operation === 'port.create-internal' && value && typeof value === 'object') {
@@ -37,6 +47,14 @@
   {#if expert}{#each internalPorts as field}<details><summary>Parent binding and new object identities</summary><pre>{JSON.stringify({ port: field.object, target: field.after }, null, 2)}</pre></details>{/each}{/if}
 {/if}
 
+{#if portDeletions.length}
+  <div class="notice warning">
+    <strong>Delete internal access Port and Interface</strong>
+    <p>The parent Bridge, local port and other members are preserved. Rollback recreates this pair with new identities and the same access VLAN. Changed configuration, references or host dependencies block deletion or recovery.</p>
+  </div>
+  {#if expert}{#each portDeletions as field}<details><summary>Original and reserved replacement identities</summary><pre>{JSON.stringify({ original: field.before, proposed: field.after }, null, 2)}</pre></details>{/each}{/if}
+{/if}
+
 {#if deletions.length}
   <div class="notice warning">
     <strong>Rollback recreates with new identities</strong>
@@ -62,9 +80,9 @@
       {#each fields as field}
         <tr class:conflict={field.conflict}
           ><th scope="row"
-            >{#if field.object.table === 'Port' && field.operation !== 'port.create-internal'}<Link href={`/ports/${field.object.management_id}`}
+            >{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field)}</td><td
             >{display(field.current, field)}</td
