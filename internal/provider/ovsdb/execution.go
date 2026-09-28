@@ -234,6 +234,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return compileExecution(id, marker, envelope, view, d)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if _, ok := internalPortIntent(envelope.Candidate); ok {
+		return compileInternalPortExecution(id, marker, marker, envelope, view, d)
+	}
 	if _, ok := bridgeIntent(envelope.Candidate); ok {
 		creationMarker := marker
 		if deletion := envelope.Candidate.Intents[0].Deletion; deletion != nil && !deletion.Restoring {
@@ -521,7 +524,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
 		markerKey := execution.MarkerKey
-		if candidate.IsBridgeOperation(intent.Operation) {
+		if candidate.IsGraphOperation(intent.Operation) {
 			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
 			markerKey = bridgeMarkerKey
 		}
@@ -576,7 +579,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
-		if candidate.IsBridgeOperation(intent.Operation) {
+		if candidate.IsGraphOperation(intent.Operation) {
 			continue
 		}
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]

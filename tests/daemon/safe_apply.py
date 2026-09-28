@@ -112,6 +112,9 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE}' +
                             f' --safe-apply-probe-address={client_ip}:18080 --safe-apply-probe-interface={bridge}')
         if exercise is not None:
+            vsctl('add-br', 'br-ui-parent', '--', 'set', 'Bridge', 'br-ui-parent', 'datapath_type=system')
+            parent = eventually(lambda: next((b for b in get('/bridges')['items'] if b['name'] == 'br-ui-parent'), None))
+            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-internal-port-targets=' + parent['management_id'] + ':pi-ui-create')
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-bridge-create-names=br-ui-create,br-ui-delete --local-bridge-delete-names=br-ui-delete')
         unit_path.write_text(text)
         runtime_config.write_text(original_config.replace(f'HTTPS_LISTEN=127.0.0.1:{https_port}', f'HTTPS_LISTEN=0.0.0.0:{https_port}'))
@@ -218,6 +221,8 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         run('ip', 'link', 'delete', port, check=False)
         run('ip', 'netns', 'delete', namespace, check=False)
         try:
+            if exercise is not None:
+                vsctl('--if-exists', 'del-br', 'br-ui-parent')
             vsctl('--if-exists', 'del-br', bridge)
         finally:
             (Path('/etc/systemd/system') / units['mgrd']).write_text(original_unit)

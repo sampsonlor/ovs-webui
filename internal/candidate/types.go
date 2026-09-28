@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "isolated-bridge-delete-v1"
+const ValidatorVersion = "internal-port-create-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -41,22 +41,24 @@ type Intent struct {
 	Members   []string `json:"member_interface_ids,omitempty"`
 	Fallback  string   `json:"fallback,omitempty"`
 	Name      string   `json:"name,omitempty"`
+	VLANID    int      `json:"vlan_id,omitempty"`
 }
 type StoredIntent struct {
 	// IPC fields are explicit: strict request decoding deliberately does not
 	// infer encoding/json's anonymous-field promotion rules.
-	ID          string          `json:"intent_id"`
-	Operation   string          `json:"operation"`
-	Object      Binding         `json:"object"`
-	Value       VLAN            `json:"value"`
-	Before      VLAN            `json:"before"`
-	Dependency  string          `json:"dependency_revision"`
-	Schema      string          `json:"schema_digest"`
-	Bond        *Bond           `json:"bond,omitempty"`
-	BeforeBond  *Bond           `json:"before_bond,omitempty"`
-	BondMembers []string        `json:"bond_member_interface_ids,omitempty"`
-	Creation    *BridgeCreation `json:"bridge_creation,omitempty"`
-	Deletion    *BridgeDeletion `json:"bridge_deletion,omitempty"`
+	ID           string                `json:"intent_id"`
+	Operation    string                `json:"operation"`
+	Object       Binding               `json:"object"`
+	Value        VLAN                  `json:"value"`
+	Before       VLAN                  `json:"before"`
+	Dependency   string                `json:"dependency_revision"`
+	Schema       string                `json:"schema_digest"`
+	Bond         *Bond                 `json:"bond,omitempty"`
+	BeforeBond   *Bond                 `json:"before_bond,omitempty"`
+	BondMembers  []string              `json:"bond_member_interface_ids,omitempty"`
+	Creation     *BridgeCreation       `json:"bridge_creation,omitempty"`
+	Deletion     *BridgeDeletion       `json:"bridge_deletion,omitempty"`
+	PortCreation *InternalPortCreation `json:"internal_port_creation,omitempty"`
 }
 type Candidate struct {
 	ID           string         `json:"id"`
@@ -140,6 +142,7 @@ type Snapshot struct {
 	Ports                                map[string]Port
 	Creation                             CreationSnapshot
 	Deletion                             DeletionSnapshot
+	InternalPorts                        InternalPortSnapshot
 }
 type Provider interface {
 	CandidateSnapshot(context.Context, []Binding) (Snapshot, error)
@@ -211,6 +214,10 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if p := i.PortCreation; p != nil {
+			out = append(out, p.Bridge, p.Interface, p.LocalPort, p.LocalInterface)
+			out = append(out, p.Members...)
+		}
 		if i.Creation != nil {
 			out = append(out, i.Creation.Port, i.Creation.Interface)
 		}

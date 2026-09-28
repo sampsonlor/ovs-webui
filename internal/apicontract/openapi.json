@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.10.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. General graph deletion, membership changes and full pages retain separate gates."
+    "version": "1.11.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation on an explicitly authorized existing Bridge is also supported. General graph deletion, physical/member changes and full pages retain separate gates."
   },
   "servers": [
     {
@@ -28236,7 +28236,8 @@
               "bond.configure",
               "port.lacp.set",
               "bridge.create-isolated",
-              "bridge.delete-isolated"
+              "bridge.delete-isolated",
+              "port.create-internal"
             ]
           },
           "object": {
@@ -28256,6 +28257,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "internal_port_creation": {
+            "$ref": "#/components/schemas/InternalPortCreation"
           },
           "bond": {
             "$ref": "#/components/schemas/NativeBond"
@@ -31169,6 +31173,104 @@
         "additionalProperties": false,
         "description": "Delete one unchanged isolated Bridge graph previously created by this manager. Requires the independent root deletion name gate and ovs.bridge.delete. Safe Apply compensation recreates the graph with fresh identities; deleted identities are never reused. Input cannot supply graphs, markers or replacement identities."
       },
+      "InternalPortCreateIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "port.create-internal"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$"
+          },
+          "vlan_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "name",
+          "vlan_id"
+        ],
+        "additionalProperties": false,
+        "description": "Create one fresh internal access Port and Interface under an existing system Bridge binding. Requires ovs.port.internal.create and a root-owned Bridge management-id:name grant. No physical adoption, local-port change, host IP configuration or direct live write. Safe Apply rollback removes only unchanged created children and preserves the captured parent membership."
+      },
+      "InternalPortCreation": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
+          "vlan_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          },
+          "root_uuid": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "bridge": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "bridge_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
+          "interface": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "original_members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectBinding"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          },
+          "local_port": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "local_interface": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "before_present": {
+            "type": "boolean"
+          },
+          "after_present": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "vlan_id",
+          "root_uuid",
+          "bridge",
+          "bridge_name",
+          "interface",
+          "original_members",
+          "local_port",
+          "local_interface",
+          "before_present",
+          "after_present"
+        ],
+        "additionalProperties": true
+      },
       "NativeBond": {
         "type": "object",
         "properties": {
@@ -31376,6 +31478,9 @@
           },
           {
             "$ref": "#/components/schemas/IsolatedBridgeDeleteIntent"
+          },
+          {
+            "$ref": "#/components/schemas/InternalPortCreateIntent"
           }
         ]
       },

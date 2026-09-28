@@ -122,14 +122,25 @@ func creationRows(d discovered, i candidate.StoredIntent, marker string) (map[st
 }
 
 func graphGuards(d discovered, i candidate.StoredIntent, marker string, present bool) ([]map[string]any, error) {
-	rows, err := creationRows(d, i, marker)
+	var rows map[string]map[string]any
+	var err error
+	var name, root, bridge, port string
+	if p := i.PortCreation; p != nil {
+		rows, err = internalPortRows(d, i, marker)
+		name, root, bridge, port = p.Name, p.Root, p.Bridge.OVSUUID, i.Object.OVSUUID
+	} else {
+		rows, err = creationRows(d, i, marker)
+		if i.Creation != nil {
+			name, root, bridge, port = i.Creation.Name, i.Creation.Root, i.Object.OVSUUID, i.Creation.Port.OVSUUID
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 	ops := []map[string]any{}
 	for _, b := range candidate.CreationBindings(i) {
 		if !present {
-			ops = append(ops, waitRows(b.Table, []any{uuidCondition(b.OVSUUID)}, []string{"_uuid"}, []any{}), waitRows(b.Table, []any{[]any{"name", "==", i.Creation.Name}}, []string{"_uuid"}, []any{}))
+			ops = append(ops, waitRows(b.Table, []any{uuidCondition(b.OVSUUID)}, []string{"_uuid"}, []any{}), waitRows(b.Table, []any{[]any{"name", "==", name}}, []string{"_uuid"}, []any{}))
 			continue
 		}
 		row := rows[b.Table]
@@ -139,7 +150,7 @@ func graphGuards(d discovered, i candidate.StoredIntent, marker string, present 
 			columns = append(columns, name)
 		}
 		slices.Sort(columns)
-		ops = append(ops, waitRows(b.Table, []any{[]any{"name", "==", i.Creation.Name}}, columns, []any{row}))
+		ops = append(ops, waitRows(b.Table, []any{[]any{"name", "==", name}}, columns, []any{row}))
 		// Check all possible parents, even tables outside the inventory monitor.
 		for table, schema := range d.native.Tables {
 			for name, col := range schema.Columns {
@@ -152,13 +163,13 @@ func graphGuards(d discovered, i candidate.StoredIntent, marker string, present 
 				}
 				want := []any{}
 				if table == "Open_vSwitch" && name == "bridges" && b.Table == "Bridge" {
-					want = append(want, map[string]any{"_uuid": uuidValue(i.Creation.Root)})
+					want = append(want, map[string]any{"_uuid": uuidValue(root)})
 				}
 				if table == "Bridge" && name == "ports" && b.Table == "Port" {
-					want = append(want, map[string]any{"_uuid": uuidValue(i.Object.OVSUUID)})
+					want = append(want, map[string]any{"_uuid": uuidValue(bridge)})
 				}
 				if table == "Port" && name == "interfaces" && b.Table == "Interface" {
-					want = append(want, map[string]any{"_uuid": uuidValue(i.Creation.Port.OVSUUID)})
+					want = append(want, map[string]any{"_uuid": uuidValue(port)})
 				}
 				value := any(uuidSet(b.OVSUUID))
 				if col.Type == native.TypeUUID {
@@ -168,8 +179,10 @@ func graphGuards(d discovered, i candidate.StoredIntent, marker string, present 
 			}
 		}
 	}
-	if !present {
-		ops = append(ops, waitRows("Open_vSwitch", []any{uuidCondition(i.Creation.Root), []any{"bridges", "includes", uuidSet(i.Object.OVSUUID)}}, []string{"_uuid"}, []any{}))
+	if i.PortCreation != nil {
+		ops = append(ops, waitRows("Bridge", []any{[]any{"name", "==", name}}, []string{"_uuid"}, []any{}))
+	} else if !present {
+		ops = append(ops, waitRows("Open_vSwitch", []any{uuidCondition(root), []any{"bridges", "includes", uuidSet(i.Object.OVSUUID)}}, []string{"_uuid"}, []any{}))
 	}
 	return ops, nil
 }

@@ -16,17 +16,18 @@ const CreationMarker = candidate.BridgeCreationMarker
 // after failure, rollback or deletion, even if the display name is unchanged.
 func ReserveCreations(ctx context.Context, tx *sql.Tx, transaction, marker string, c candidate.Candidate) error {
 	for _, i := range c.Intents {
-		if i.Operation != candidate.BridgeCreate {
+		if i.Operation != candidate.BridgeCreate && i.Operation != candidate.InternalPortCreate {
 			continue
 		}
-		if i.Creation == nil || i.Creation.BeforePresent || !i.Creation.AfterPresent {
+		valid := i.Operation == candidate.BridgeCreate && i.Creation != nil && !i.Creation.BeforePresent && i.Creation.AfterPresent || i.Operation == candidate.InternalPortCreate && i.PortCreation != nil && !i.PortCreation.BeforePresent && i.PortCreation.AfterPresent
+		if !valid {
 			return apitypes.Fail(422, "INVALID_CREATION_RESERVATION")
 		}
 		var count int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM identities").Scan(&count); err != nil {
 			return err
 		}
-		if count+3 > domain.MaxIdentities {
+		if count+len(candidate.CreationBindings(i)) > domain.MaxIdentities {
 			return apitypes.Fail(503, "IDENTITY_REGISTRY_FULL")
 		}
 		for _, b := range candidate.CreationBindings(i) {

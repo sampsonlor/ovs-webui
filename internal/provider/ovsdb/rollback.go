@@ -37,7 +37,7 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	envelope.Candidate.Intents = append([]candidate.StoredIntent{}, envelope.Candidate.Intents...)
 	for i := range envelope.Candidate.Intents {
 		intent := &envelope.Candidate.Intents[i]
-		if candidate.IsBridgeOperation(intent.Operation) {
+		if candidate.IsGraphOperation(intent.Operation) {
 			labels, _ := view.Observation.Rows["Open_vSwitch"][original.Root].Values["external_ids"].(map[string]any)
 			if labels[bridgeMarkerKey] != original.Marker {
 				return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
@@ -54,6 +54,12 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	checks, _ := candidate.Checks(envelope.Candidate, view.Candidate)
 	if !candidate.Passed(checks) {
 		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+	}
+	if _, ok := internalPortIntent(envelope.Candidate); ok {
+		if bridgeHostCheck(envelope.Candidate) != nil {
+			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+		}
+		return compileInternalPortExecution(original.ID, marker, n.CreationMarker, envelope, view, d)
 	}
 	if _, ok := bridgeIntent(envelope.Candidate); ok {
 		if bridgeHostCheck(envelope.Candidate) != nil {

@@ -12,6 +12,10 @@ import (
 
 func protectDeletion(ctx context.Context, tx *sql.Tx, id string, i candidate.StoredIntent) error {
 	d := i.Deletion
+	return protectGraph(ctx, tx, id, d.Source.Root, append(d.Source.Bindings(), d.Replacement.Bindings()...))
+}
+
+func protectGraph(ctx context.Context, tx *sql.Tx, id, root string, bindings []candidate.Binding) error {
 	protect := func(resource, field string) error {
 		var n int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=?", resource).Scan(&n); err != nil {
@@ -23,10 +27,10 @@ func protectDeletion(ctx context.Context, tx *sql.Tx, id string, i candidate.Sto
 		_, err := tx.ExecContext(ctx, "INSERT INTO operation_protections VALUES(?,?,?)", resource, field, id)
 		return err
 	}
-	if err := protect(d.Source.Root, "root.bridge-creation"); err != nil {
+	if err := protect(root, "root.bridge-creation"); err != nil {
 		return err
 	}
-	for _, b := range append(d.Source.Bindings(), d.Replacement.Bindings()...) {
+	for _, b := range bindings {
 		if err := protect(b.ManagementID, "object.lifecycle"); err != nil {
 			return err
 		}

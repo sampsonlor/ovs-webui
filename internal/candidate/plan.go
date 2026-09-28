@@ -89,6 +89,14 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == InternalPortCreate {
+			if problem := internalPortProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, internalPortDiff(i, s))
+			continue
+		}
 		if i.Operation == BridgeDelete {
 			problem := deletionProblem(i, s)
 			if problem != "" {
@@ -180,6 +188,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 	case "stage":
 		if len(cmd.Intents) == 0 || len(cmd.Intents) > MaxIntents {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == InternalPortCreate }) || cmd.Intents[0].Operation == InternalPortCreate {
+			var err error
+			c, err = stageInternalPort(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if hasDeletion(c.Intents) || cmd.Intents[0].Operation == BridgeDelete {
 			var err error
@@ -305,7 +321,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if i.Operation == BridgeDelete {
 				return e, apitypes.Fail(409, "DELETION_RESTAGE_REQUIRED")
 			}
-			if i.Operation == BridgeCreate {
+			if i.Operation == BridgeCreate || i.Operation == InternalPortCreate {
 				return e, apitypes.Fail(409, "CREATION_RESTAGE_REQUIRED")
 			}
 			p, reason := comparison(i, s)
@@ -354,6 +370,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == InternalPortCreate {
+			checks = append(checks, internalPortChecks(i, s)...)
+			continue
+		}
 		if i.Operation == BridgeDelete {
 			checks = append(checks, deletionChecks(i, s)...)
 			continue
