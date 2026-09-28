@@ -71,7 +71,35 @@ async function login(page: Page, name = 'browser-admin') {
   await page
     .getByLabel('Password', { exact: true })
     .fill(fixture.accounts[name]);
+  const loginReply = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' && r.url().endsWith('/api/v1/sessions'),
+  );
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const response = await loginReply;
+  const problem = response.status() === 201 ? null : await response.json();
+  const code =
+    typeof problem?.code === 'string' && /^[A-Z_]{1,80}$/.test(problem.code)
+      ? problem.code
+      : '';
+  expect(response.status(), `Session creation ${code}`).toBe(201);
+  // Diagnose browser cookie admission without retaining cookies, credentials or
+  // successful session payloads in the test report.
+  const admitted = await page.evaluate(async () => {
+    const r = await fetch('/api/v1/session', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const p = r.ok ? null : await r.json();
+    return {
+      status: r.status,
+      code:
+        typeof p?.code === 'string' && /^[A-Z_]{1,80}$/.test(p.code)
+          ? p.code
+          : '',
+    };
+  });
+  expect(admitted).toEqual({ status: 200, code: '' });
   await expect(
     page.getByRole('heading', { name: 'Ports', exact: true }),
   ).toBeVisible();
