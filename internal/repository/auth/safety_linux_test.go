@@ -101,18 +101,22 @@ func safeTestState(t *testing.T, r *Repository, id string) safety.Record {
 	}
 	return s
 }
-func safeWait(t *testing.T, e *executions.Engine, id string) execution.Record {
+func safeAwaitObservation(t *testing.T, r *Repository, e *executions.Engine, id string) safety.Record {
 	t.Helper()
+	var observed safety.Record
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		r, err := e.Read(testContext, id)
-		if err == nil && r.State != "admitted" && r.State != "committing" {
-			time.Sleep(10 * time.Millisecond)
-			return r
+		// A committed journal row does not mean the asynchronous worker has
+		// released its transaction lock. The watchdog intentionally skips busy
+		// transactions, so wait for an actual safety observation, not a delay.
+		safeTick(t, e)
+		observed = safeTestState(t, r, id)
+		if observed.State != "preparing" {
+			return observed
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("asynchronous field worker did not finish")
-	return execution.Record{}
+	t.Fatal("asynchronous field worker did not allow a safety observation", observed)
+	return safety.Record{}
 }
 func safeConfigure(t *testing.T, r *Repository, p *safeTestProvider, probe *safeTestProbe, clock *tlscontrol.Clock) *executions.Engine {
 	t.Helper()
@@ -139,7 +143,7 @@ func safeAdmit(t *testing.T, r *Repository, e *executions.Engine, g authn.LoginR
 		t.Fatal(err)
 	}
 	id := out.Receipt.Resource.ID
-	safeWait(t, e, id)
+	safeAwaitObservation(t, r, e, id)
 	return id
 }
 func safeTick(t *testing.T, e *executions.Engine) {
@@ -156,9 +160,33 @@ func TestSafeApplyAppliedGateConfirmAndSingleLKG(t *testing.T) {
 	p, probe := &safeTestProvider{}, &safeTestProbe{}
 	clock := tlscontrol.Now()
 	e := safeConfigure(t, r, p, probe, &clock)
-	id := safeAdmit(t, r, e, g, in)
+	gate := &safeObservationGate{entered: make(chan struct{}), release: make(chan struct{})}
+	p.gate.Store(gate)
+	defer func() {
+		select {
+		case <-gate.release:
+		default:
+			close(gate.release)
+		}
+	}()
+	out, err := r.AdmitSafeApply(testContext, g.Grant, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := out.Receipt.Resource.ID
+	select {
+	case <-gate.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("admission worker never entered the gated observation")
+	}
+	// Force the exact CI race: commit is durable while the worker still holds
+	// the lock. One watchdog tick must not invent Applied or confirmation.
 	safeTick(t, e)
-	if s := safeTestState(t, r, id); s.Confirmation != nil || s.HealthyAt != nil {
+	if s := safeTestState(t, r, id); s.State != "preparing" || s.Confirmation != nil || s.HealthyAt != nil {
+		t.Fatal("busy admission invented a safety observation", s)
+	}
+	close(gate.release)
+	if s := safeAwaitObservation(t, r, e, id); s.Confirmation != nil || s.HealthyAt != nil {
 		t.Fatal("commit opened confirmation before Applied", s)
 	}
 	p.applied.Store(true)
