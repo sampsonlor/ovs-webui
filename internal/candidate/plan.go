@@ -89,6 +89,23 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == BridgeCreate {
+			problem := creationProblem(i, s)
+			if problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			var after any
+			current := "absent"
+			if i.Creation != nil {
+				after = map[string]any{"name": i.Creation.Name, "datapath_type": "system", "local_port": i.Creation.Name, "interface_type": "internal", "uplinks": 0, "fail_mode": "secure"}
+				if s.Creation.Names[i.Creation.Name] {
+					current = "name occupied"
+				}
+			}
+			v.Diff = append(v.Diff, Diff{Object: i.Object, Field: "isolated_bridge_graph", Before: "absent", After: after, Current: current, Authority: "ovsdb-configuration", Operation: i.Operation, IntentID: i.ID, Conflict: problem != ""})
+			continue
+		}
 		p, problem := comparison(i, s)
 		if problem != "" {
 			v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -154,6 +171,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 	case "stage":
 		if len(cmd.Intents) == 0 || len(cmd.Intents) > MaxIntents {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
+		}
+		if hasCreation(c.Intents) || cmd.Intents[0].Operation == BridgeCreate {
+			var err error
+			c, err = stageCreation(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		seen := map[string]bool{}
 		for _, in := range cmd.Intents {
@@ -260,6 +285,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if i.Operation == BridgeCreate {
+				return e, apitypes.Fail(409, "CREATION_RESTAGE_REQUIRED")
+			}
 			p, reason := comparison(i, s)
 			if reason == "GENERATION_RECONCILIATION_REQUIRED" || reason == "OBJECT_BINDING_CHANGED" || reason == "NATIVE_CONFIGURATION_UNKNOWN" || reason == "SCHEMA_CHANGED" || reason == "BOND_MEMBER_BINDINGS_CHANGED" {
 				return e, apitypes.Fail(409, reason)
@@ -306,6 +334,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == BridgeCreate {
+			checks = append(checks, creationChecks(i, s)...)
+			continue
+		}
 		p, ok := s.Ports[i.Object.ManagementID]
 		if !ok {
 			continue

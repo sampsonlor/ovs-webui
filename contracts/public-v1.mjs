@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.8.0', description: 'Phase 1 public transport with typed VLAN and existing-Port Bond/LACP Candidate intents, durable Safe Apply, guarded compensation and shared evidence. Object lifecycle and member changes retain separate service gates. Applied alone never proves link negotiation, health or confirmation.' };
+api.info = { title: 'OVS WebUI public API', version: '1.9.0', description: 'Phase 1 typed VLAN, Bond/LACP and isolated Bridge creation through Candidate and durable Safe Apply. Manager-assigned identities, guarded graph compensation and shared evidence. Existing-object deletion, membership changes and full pages retain separate gates.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -73,13 +73,17 @@ const intentSchemas = {
  ManagementNetworkIntent: intent('management_network.configure', { object, mtu: integer(576, 65535), addresses: array(string(128), 32), gateways: array(string(128), 16) }),
  ControllerIntent: intent('controllers.configure', { object, targets: array(string(256), 16), fail_mode: choices('standalone', 'secure') }),
  PortLACPIntent: intent('port.lacp.set', { object, lacp: choices('off', 'active', 'passive'), fallback }),
+ IsolatedBridgeIntent: intent('bridge.create-isolated', { name: { type: 'string', minLength: 1, maxLength: 15, pattern: '^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$' } }),
 };
 Object.assign(s, intentSchemas);
 s.BondIntent.properties.fallback = fallback;
 s.BondIntent.description = 'Existing native Bond-as-Port fields only. member_interface_ids must equal the current immutable member bindings; membership changes remain gated. An omitted fallback preserves the captured native value.';
 s.NativeBond = open({ lacp: nullable({ type: 'string' }), bond_mode: nullable({ type: 'string' }), lacp_fallback_ab: nullable({ type: 'string' }) });
 Object.assign(s.ObservedIntent.properties, { bond: ref('NativeBond'), before_bond: ref('NativeBond'), bond_member_interface_ids: { type: 'array', items: id } });
-s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set'];
+s.BridgeCreation = open({ name: string(15), root_uuid: id, local_port: object, local_interface: object, before_present: bool, after_present: bool });
+s.ObservedIntent.properties.bridge_creation = ref('BridgeCreation');
+s.IsolatedBridgeIntent.description = 'Create one fresh isolated system Bridge with its local Port and internal Interface. Manager assigns all identities. Requires a reviewed root name allowlist and ovs.bridge.create. Existing names, client identities, members and mixed-intent batches are rejected. Creation can only run through Safe Apply; rollback removes only the unchanged created graph.';
+s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set', 'bridge.create-isolated'];
 s.ObservedIntent.description = 'The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');

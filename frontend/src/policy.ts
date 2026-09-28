@@ -60,8 +60,19 @@ export function applyReady(
   return !!(
     desktop &&
     has(session, 'configuration.apply') &&
-    has(session, 'ovs.port.vlan.write') &&
     c &&
+    c.intents.length > 0 &&
+    c.intents.every((i) => {
+      const capability = (
+        {
+          'port.vlan.set': 'ovs.port.vlan.write',
+          'bond.configure': 'ovs.port.bond.write',
+          'port.lacp.set': 'ovs.port.bond.write',
+          'bridge.create-isolated': 'ovs.bridge.create',
+        } as Record<string, string>
+      )[i.operation];
+      return !!capability && has(session, capability);
+    }) &&
     v &&
     c.state === 'dirty' &&
     !c.consumed_by &&

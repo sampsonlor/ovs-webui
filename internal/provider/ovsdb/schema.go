@@ -102,6 +102,7 @@ func discover(data []byte) (discovered, error) {
 		}
 	}
 	sort.Slice(d.public.Tables, func(i, j int) bool { return d.public.Tables[i].Name < d.public.Tables[j].Name })
+	d.public.BridgeCreation = bridgeSchemaSupported(d)
 	return d, nil
 }
 

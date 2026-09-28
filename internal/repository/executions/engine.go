@@ -19,6 +19,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
+	identity "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 )
@@ -215,22 +216,30 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		if err != nil {
 			return requests.Mutation{}, err
 		}
+		if err = identity.ReserveCreations(ctx, tx, id, p.Marker, in.Envelope.Candidate); err != nil {
+			return requests.Mutation{}, err
+		}
 		// Record the actual field group. Pending VLAN and Bond operations on the
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
 			field := "port.vlan"
+			resource := intent.Object.ManagementID
+			if intent.Creation != nil {
+				field = "root.bridge-creation"
+				resource = intent.Creation.Root
+			}
 			if candidate.IsBondOperation(intent.Operation) {
 				field = "port.bond"
 			}
 			var n int
-			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond')", intent.Object.ManagementID).Scan(&n); err != nil {
+			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond','root.bridge-creation')", resource).Scan(&n); err != nil {
 				return requests.Mutation{}, err
 			}
 			if n != 0 {
 				return requests.Mutation{}, apitypes.Fail(409, "FIELD_PROTECTED")
 			}
-			if _, err = tx.ExecContext(ctx, "INSERT INTO operation_protections VALUES(?,?,?)", intent.Object.ManagementID, field, id); err != nil {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO operation_protections VALUES(?,?,?)", resource, field, id); err != nil {
 				return requests.Mutation{}, err
 			}
 		}
@@ -407,6 +416,9 @@ func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record,
 		return r, err
 	}
 	if terminal(r) && safe == 0 {
+		if err = identity.RetirePending(ctx, tx, r.ID); err != nil {
+			return r, err
+		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM operation_protections WHERE transaction_id=?", r.ID); err != nil {
 			return r, err
 		}

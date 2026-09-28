@@ -174,6 +174,83 @@ async function screen(page: Page, name: string) {
   await page.screenshot({ path: `${evidence}/${name}.png`, fullPage: true });
 }
 const pageErrors = new WeakMap<Page, string[]>();
+
+test('isolated Bridge staged by API uses shared responsive Diff, Safe Apply and rollback', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-bridge');
+  await clean(context);
+  const c = await get(context, '/candidate');
+  await command(
+    context,
+    '/candidate',
+    {
+      operation: 'stage',
+      intents: [
+        {
+          intent_id: crypto.randomUUID(),
+          operation: 'bridge.create-isolated',
+          name: 'br-ui-create',
+        },
+      ],
+    },
+    'PATCH',
+    c.revision,
+  );
+  expect(vsctl('--if-exists', 'get', 'Bridge', 'br-ui-create', '_uuid')).toBe(
+    '',
+  );
+  await page.goto(fixture.origin + '/changes/candidate');
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+  const diff = page.getByRole('region', { name: 'Configuration Diff' });
+  await expect(diff).toContainText('br-ui-create');
+  const standard = await diff.innerText();
+  await screen(page, 'bridge-create-standard');
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  expect(await diff.innerText()).toBe(standard);
+  await screen(page, 'bridge-create-expert');
+  await page.setViewportSize({ width: 900, height: 1000 });
+  await expect(
+    page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+  ).toBeDisabled();
+  await screen(page, 'bridge-create-tablet-review');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+  ).toBeDisabled();
+  await screen(page, 'bridge-create-mobile-review');
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await validate(page);
+  await prepareApply(page, 'browser-bridge');
+  await page
+    .getByRole('button', { name: 'Start Safe Apply', exact: true })
+    .click();
+  await awaiting(page);
+  const inventory = await get(context, '/bridges');
+  const bridge = inventory.items.find(
+    (b: { name: string }) => b.name === 'br-ui-create',
+  );
+  expect(bridge?.port_refs).toHaveLength(1);
+  expect(vsctl('get', 'Interface', 'br-ui-create', 'ofport')).toBe('65534');
+  await screen(page, 'bridge-create-awaiting-confirmation');
+  await chooseDecision(page, 'Request rollback', 'rolled-back');
+  expect(vsctl('--if-exists', 'get', 'Bridge', 'br-ui-create', '_uuid')).toBe(
+    '',
+  );
+  expect(vsctl('--if-exists', 'get', 'Port', 'br-ui-create', '_uuid')).toBe('');
+  expect(
+    vsctl('--if-exists', 'get', 'Interface', 'br-ui-create', '_uuid'),
+  ).toBe('');
+  await screen(page, 'bridge-create-rolled-back');
+});
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
@@ -345,7 +422,7 @@ test('Candidate to Safe Apply recovers a lost real admission reply, refreshes an
       data: {
         request_id: staleID,
         decision: 'confirm',
-      expected_sequence: String(BigInt(t.sequence) - BigInt(1)),
+        expected_sequence: String(BigInt(t.sequence) - BigInt(1)),
       },
       headers: {
         Origin: fixture.origin,

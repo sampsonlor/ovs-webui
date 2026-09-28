@@ -27,10 +27,12 @@ type Executor struct {
 func (p *Provider) Executor(s *inventory.Service) *Executor { return &Executor{p, s} }
 
 type nativePlan struct {
-	Operations   []map[string]any   `json:"operations"`
-	CountIndexes []int              `json:"count_indexes"`
-	TargetIndex  int                `json:"target_index"`
-	Evidence     inventory.Evidence `json:"evidence"`
+	Operations     []map[string]any   `json:"operations"`
+	CountIndexes   []int              `json:"count_indexes"`
+	TargetIndex    int                `json:"target_index"`
+	Evidence       inventory.Evidence `json:"evidence"`
+	CreationMarker string             `json:"creation_marker,omitempty"`
+	InsertUUIDs    map[int]string     `json:"insert_uuids,omitempty"`
 }
 
 func uuidValue(id string) []any     { return []any{"uuid", id} }
@@ -210,6 +212,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if !candidate.Passed(checks) {
 		return out, apitypes.Fail(409, "EXECUTION_PREFLIGHT_FAILED")
 	}
+	if err = bridgeHostCheck(envelope.Candidate); err != nil {
+		return out, err
+	}
 	conn, _, d, identity, _, err := e.connect(ctx)
 	if err != nil {
 		return out, err
@@ -221,6 +226,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return compileExecution(id, marker, envelope, view, d)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if _, ok := bridgeIntent(envelope.Candidate); ok {
+		return compileBridgeExecution(id, marker, marker, envelope, view, d)
+	}
 	var out execution.Plan
 	root := view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root]
 	next, err := number(root.Values["next_cfg"])
@@ -358,6 +366,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = "execution-preflight-conflict"
 		return notSent
 	}
+	if bridgeHostCheck(p.Envelope.Candidate) != nil {
+		notSent.Reason = "bridge-host-interface-conflict"
+		return notSent
+	}
 	conn, r, schema, identity, pid, err := e.connect(ctx)
 	if err != nil {
 		notSent.Reason = "provider-connect-failed"
@@ -453,6 +465,12 @@ func decodeCommit(n nativePlan, p execution.Plan, body []byte) execution.Outcome
 			return out
 		}
 	}
+	for index, expected := range n.InsertUUIDs {
+		var id []string
+		if index < 0 || index >= len(results) || json.Unmarshal(results[index]["uuid"], &id) != nil || len(id) != 2 || id[0] != "uuid" || id[1] != expected {
+			return out
+		}
+	}
 	var rows []struct {
 		ID   []string    `json:"_uuid"`
 		Next json.Number `json:"next_cfg"`
@@ -490,8 +508,13 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	all, anyMarker := true, false
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
+		markerKey := execution.MarkerKey
+		if intent.Creation != nil {
+			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
+			markerKey = bridgeMarkerKey
+		}
 		labels, _ := row.Values["external_ids"].(map[string]any)
-		match := exists && labels[execution.MarkerKey] == p.Marker
+		match := exists && labels[markerKey] == p.Marker
 		all = all && match
 		anyMarker = anyMarker || match
 	}
@@ -541,6 +564,9 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
+		if intent.Creation != nil {
+			continue
+		}
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]
 		for _, id := range nativeRefs(port.Values["interfaces"]) {
 			member := view.Observation.Rows["Interface"][id]

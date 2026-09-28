@@ -16,15 +16,15 @@
 <div class="table-scroll" tabindex="0" role="region" aria-label="Configuration Diff">
   <table>
     <caption>Original → Current → Yours · values supplied by the server</caption><thead
-      ><tr><th>Port / field</th><th>Original</th><th>Current</th><th>Yours</th></tr
+      ><tr><th>Object / field</th><th>Original</th><th>Current</th><th>Yours</th></tr
       ></thead
     ><tbody>
       {#each fields as field}
         <tr class:conflict={field.conflict}
           ><th scope="row"
-            ><Link href={`/ports/${field.object.management_id}`}
+            >{#if field.object.table === 'Port'}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            ><br />{field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{text(field.before, field.field)}</td><td
             >{text(field.current, field.field)}</td

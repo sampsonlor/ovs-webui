@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "port-fields-v2"
+const ValidatorVersion = "isolated-bridge-v3"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -40,20 +40,22 @@ type Intent struct {
 	LACP      string   `json:"lacp,omitempty"`
 	Members   []string `json:"member_interface_ids,omitempty"`
 	Fallback  string   `json:"fallback,omitempty"`
+	Name      string   `json:"name,omitempty"`
 }
 type StoredIntent struct {
 	// IPC fields are explicit: strict request decoding deliberately does not
 	// infer encoding/json's anonymous-field promotion rules.
-	ID          string   `json:"intent_id"`
-	Operation   string   `json:"operation"`
-	Object      Binding  `json:"object"`
-	Value       VLAN     `json:"value"`
-	Before      VLAN     `json:"before"`
-	Dependency  string   `json:"dependency_revision"`
-	Schema      string   `json:"schema_digest"`
-	Bond        *Bond    `json:"bond,omitempty"`
-	BeforeBond  *Bond    `json:"before_bond,omitempty"`
-	BondMembers []string `json:"bond_member_interface_ids,omitempty"`
+	ID          string          `json:"intent_id"`
+	Operation   string          `json:"operation"`
+	Object      Binding         `json:"object"`
+	Value       VLAN            `json:"value"`
+	Before      VLAN            `json:"before"`
+	Dependency  string          `json:"dependency_revision"`
+	Schema      string          `json:"schema_digest"`
+	Bond        *Bond           `json:"bond,omitempty"`
+	BeforeBond  *Bond           `json:"before_bond,omitempty"`
+	BondMembers []string        `json:"bond_member_interface_ids,omitempty"`
+	Creation    *BridgeCreation `json:"bridge_creation,omitempty"`
 }
 type Candidate struct {
 	ID           string         `json:"id"`
@@ -135,6 +137,7 @@ type Port struct {
 type Snapshot struct {
 	Generation, Revision, Schema, Policy string
 	Ports                                map[string]Port
+	Creation                             CreationSnapshot
 }
 type Provider interface {
 	CandidateSnapshot(context.Context, []Binding) (Snapshot, error)
@@ -206,6 +209,9 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if i.Creation != nil {
+			out = append(out, i.Creation.Port, i.Creation.Interface)
+		}
 	}
 	return out
 }
