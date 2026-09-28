@@ -19,7 +19,7 @@ func TestFormalValidationBridgeRequiresDistinctAuthorityAndCredentialCeiling(t *
 	r, _ := fixture(t)
 	g := login(t, r, "admin", false)
 	e, p, _ := planSetup(t, r, g)
-	p.snapshot.Creation = plan.CreationSnapshot{Root: repository.NewID(), Supported: true, Authority: "local-managed", AllowedNames: map[string]bool{"br-new": true}}
+	p.snapshot.Creation = plan.CreationSnapshot{Root: repository.NewID(), Supported: true, Capacity: true, Authority: "local-managed", AllowedNames: map[string]bool{"br-new": true}}
 	id := planRequestID()
 	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{map[string]any{"intent_id": repository.NewID(), "operation": plan.BridgeCreate, "name": "br-new"}}})
 	e, err := r.PrepareCandidate(testContext, g.Grant, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}})

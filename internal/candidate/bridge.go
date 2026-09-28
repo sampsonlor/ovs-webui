@@ -24,6 +24,7 @@ type BridgeCreation struct {
 type CreationSnapshot struct {
 	Root, Authority string
 	Supported       bool
+	Capacity        bool
 	AllowedNames    map[string]bool
 	Names           map[string]bool
 	Objects         map[string]Binding
@@ -84,6 +85,9 @@ func creationProblem(i StoredIntent, s Snapshot) string {
 
 func creationChecks(i StoredIntent, s Snapshot) []Gate {
 	out := []Gate{}
+	if i.Creation != nil && !i.Creation.BeforePresent && i.Creation.AfterPresent && !s.Creation.Capacity {
+		out = append(out, gate("BRIDGE_INVENTORY_CAPACITY", "blocked", i.ID))
+	}
 	if !s.Creation.Supported {
 		out = append(out, gate("BRIDGE_LIFECYCLE_SCHEMA_UNSUPPORTED", "blocked", i.ID))
 	}

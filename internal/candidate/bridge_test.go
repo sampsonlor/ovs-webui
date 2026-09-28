@@ -6,7 +6,7 @@ import (
 )
 
 func bridgeSnapshot() Snapshot {
-	return Snapshot{Generation: repository.NewID(), Schema: "schema", Revision: "revision", Creation: CreationSnapshot{Root: repository.NewID(), Authority: "local-managed", Supported: true, AllowedNames: map[string]bool{"br-new": true}, Names: map[string]bool{}, Objects: map[string]Binding{}, Retired: map[string]bool{}}}
+	return Snapshot{Generation: repository.NewID(), Schema: "schema", Revision: "revision", Creation: CreationSnapshot{Root: repository.NewID(), Authority: "local-managed", Supported: true, Capacity: true, AllowedNames: map[string]bool{"br-new": true}, Names: map[string]bool{}, Objects: map[string]Binding{}, Retired: map[string]bool{}}}
 }
 func TestIsolatedBridgeDraftIdentityAndNoAdoption(t *testing.T) {
 	s := bridgeSnapshot()
@@ -63,6 +63,10 @@ func TestIsolatedBridgeChecksAndCompensationCopies(t *testing.T) {
 		t.Fatal("unsupported schema")
 	}
 	s.Creation.Supported = true
+	s.Creation.Capacity = false
+	if checks, _ := Checks(c, s); Passed(checks) {
+		t.Fatal("creation exceeded inventory capacity")
+	}
 	for _, b := range CreationBindings(i) {
 		s.Creation.Objects[b.OVSUUID] = b
 	}
@@ -73,6 +77,9 @@ func TestIsolatedBridgeChecksAndCompensationCopies(t *testing.T) {
 	}
 	if p := creationProblem(r, s); p != "" {
 		t.Fatal(p)
+	}
+	if checks := creationChecks(r, s); !Passed(checks) {
+		t.Fatal("capacity gate blocked cleanup", checks)
 	}
 	b := s.Creation.Objects[i.Object.OVSUUID]
 	b.ManagementID = repository.NewID()

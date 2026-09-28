@@ -10,7 +10,7 @@
 
 新能力 `ovs.bridge.create` 独立于 VLAN/Bond。已有角色/credential ceiling 不会随升级自动扩大，必须显式授权并重新登录。root 还须配置 `--local-bridge-create-names=br-example`；默认空列表禁止创建。列表只授权全新名称，不把同名已有对象纳入管理。禁止与 probe 接口同名，未知 schema、外控 root、已有 OVS 名称或 Linux 网络接口阻止执行。撤权使待确认事务补偿。
 
-创建和补偿共用 root 的专用 Bridge recovery marker，因此未决创建占用 `root.bridge-creation` 保护；既有 Port 字段组仍独立，未新增全局配置锁。共享管理路径恢复域沿用 #40。被拒绝/删除/回滚的身份永久 tombstone，重新创建同名对象使用新身份；旧 Candidate 不能复活它，需移除后重新 stage。名称只用于唯一性检查，不用于历史身份重绑定。身份数量沿用 16,384 上限，耗尽拒绝新事务，不清除未决记录。
+创建和补偿共用 root 的专用 Bridge recovery marker，因此未决创建占用 `root.bridge-creation` 保护；既有 Port 字段组仍独立，未新增全局配置锁。共享管理路径恢复域沿用 #40。被拒绝/删除/回滚的身份永久 tombstone，重新创建同名对象使用新身份；旧 Candidate 不能复活它，需移除后重新 stage。名称只用于唯一性检查，不用于历史身份重绑定。身份数量沿用 16,384 上限，耗尽拒绝新事务，不清除未决记录。创建前为库存 2,048 行 / 4 MiB 上限预留三行与相应字节空间；容量门禁不阻止已有图的精确清理，其他写入者造成的后续库存耗尽仍按 provider degradation 保留恢复状态。
 
 ## 原生事务与证据
 

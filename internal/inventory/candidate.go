@@ -146,10 +146,8 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 		return out, apitypes.Fail(409, "GENERATION_RECONCILIATION_REQUIRED")
 	}
 	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
-	priorRevision := out.Revision
-	projectCreation(v, s.localBridgeNames, &out)
-	if !slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" }) {
-		out.Revision = priorRevision
+	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" }) {
+		projectCreation(v, s.localBridgeNames, &out)
 	}
 	return out, nil
 }

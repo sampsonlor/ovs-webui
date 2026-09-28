@@ -1,6 +1,6 @@
 # OVS WebUI 当前进度
 
-更新：2026-09-24。P1 六批及整合已接受；#30–#41 正式基础已依次接受合并。#39 字段执行通过 [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 合并至 `7aef52d`，接受标签 `phase1-ovsdb-execution-v0.1`。#40 Safe Apply 已通过 PR 和 main 双架构完整 CI，并由 [PR #66](https://github.com/sampsonlor/ovs-webui/pull/66) 合并至 `8ceefac`，接受标签 `phase1-safe-apply-v0.1`。#41 Svelte 正式首切片由 [PR #67](https://github.com/sampsonlor/ovs-webui/pull/67) 交付；最终接受提交由 `phase1-svelte-ports-vlan-v0.1` 标签和 PR / main CI 记录，见[审阅矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。共享库存与正式基础的归集证据见[归集记录](reviews/MAIN_CONSOLIDATION_2026-09-15.md)。
+更新：2026-09-28。P1 六批及整合已接受；#30–#41 正式基础已依次接受合并。#39 字段执行通过 [PR #65](https://github.com/sampsonlor/ovs-webui/pull/65) 合并至 `7aef52d`，接受标签 `phase1-ovsdb-execution-v0.1`。#40 Safe Apply 已通过 PR 和 main 双架构完整 CI，并由 [PR #66](https://github.com/sampsonlor/ovs-webui/pull/66) 合并至 `8ceefac`，接受标签 `phase1-safe-apply-v0.1`。#41 Svelte 正式首切片由 [PR #67](https://github.com/sampsonlor/ovs-webui/pull/67) 交付；最终接受提交由 `phase1-svelte-ports-vlan-v0.1` 标签和 PR / main CI 记录，见[审阅矩阵](reviews/SVELTE_PORTS_VLAN_v0.1.md)。共享库存与正式基础的归集证据见[归集记录](reviews/MAIN_CONSOLIDATION_2026-09-15.md)。
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点 v0.2](reviews/P1_IA_COVERAGE_v0.2.md)和各批记录。
 

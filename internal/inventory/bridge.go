@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"encoding/json"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 )
@@ -33,6 +34,12 @@ func projectCreation(v *view, allow map[string]bool, out *candidate.Snapshot) {
 		c.Retired[id] = retired
 	}
 	root := v.observation.Rows["Open_vSwitch"][c.Root]
+	count := 0
+	for _, rows := range v.observation.Rows {
+		count += len(rows)
+	}
+	encoded, err := json.Marshal(v.observation.Rows)
+	c.Capacity = err == nil && count+3 <= MaxRows && len(encoded)+3*MaxRowBytes <= MaxSnapshotBytes
 	if len(v.observation.Rows["Open_vSwitch"]) != 1 || root.UUID == "" {
 		c.Supported = false
 	}
