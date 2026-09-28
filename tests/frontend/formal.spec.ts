@@ -90,11 +90,15 @@ async function login(page: Page, name = 'browser-admin') {
       credentials: 'same-origin',
       cache: 'no-store',
     });
-    const p = r.ok ? null : await r.json();
+    const p: unknown = r.ok ? null : await r.json();
     return {
       status: r.status,
       code:
-        typeof p?.code === 'string' && /^[A-Z_]{1,80}$/.test(p.code)
+        p !== null &&
+        typeof p === 'object' &&
+        'code' in p &&
+        typeof p.code === 'string' &&
+        /^[A-Z_]{1,80}$/.test(p.code)
           ? p.code
           : '',
     };
