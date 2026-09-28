@@ -54,10 +54,24 @@ func RetirePending(ctx context.Context, tx *sql.Tx, transaction string) error {
 }
 
 // Reserve compensation identities before deleting anything. The same durable
-// admission either reserves all three bindings and the journal, or does neither.
+// admission either reserves all replacement bindings and the journal, or does neither.
 // Normal deletion confirmation retires these unused reservations permanently.
 func ReserveRestorations(ctx context.Context, tx *sql.Tx, transaction, marker string, c candidate.Candidate) error {
 	for _, i := range c.Intents {
+		if i.Operation == candidate.InternalPortDelete {
+			if i.PortDeletion == nil || i.PortDeletion.Restoring || i.PortDeletion.Observed {
+				return apitypes.Fail(422, "INVALID_RESTORATION_RESERVATION")
+			}
+			candidate.Reverse(&i)
+			creation, ok := candidate.InternalPortGraphIntent(i)
+			if !ok {
+				return apitypes.Fail(422, "INVALID_RESTORATION_RESERVATION")
+			}
+			if err := ReserveCreations(ctx, tx, transaction, marker, candidate.Candidate{Intents: []candidate.StoredIntent{creation}}); err != nil {
+				return err
+			}
+			continue
+		}
 		if i.Operation != candidate.BridgeDelete {
 			continue
 		}

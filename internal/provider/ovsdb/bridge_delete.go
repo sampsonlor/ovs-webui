@@ -35,6 +35,10 @@ func verifyDeletionBefore(ctx context.Context, conn net.Conn, reader *bufio.Read
 	if c.Intents[0].Deletion.Restoring {
 		guards = append(guards, deletedSourceGuards(c.Intents[0].Deletion)...)
 	}
+	return verifyDeletionGuards(ctx, conn, reader, guards, "ISOLATED_BRIDGE_GRAPH_CHANGED")
+}
+
+func verifyDeletionGuards(ctx context.Context, conn net.Conn, reader *bufio.Reader, guards []map[string]any, conflict string) error {
 	params := []any{"Open_vSwitch"}
 	for _, guard := range guards {
 		if guard["op"] != "wait" {
@@ -46,10 +50,10 @@ func verifyDeletionBefore(ctx context.Context, conn net.Conn, reader *bufio.Read
 	defer stop()
 	// The discovery call helper deliberately denies transact. Keep that boundary:
 	// this private path sends only the locally compiled, wait-only proof above.
-	if err = send(conn, map[string]any{"method": "transact", "params": params, "id": 4}); err != nil {
+	if err := send(conn, map[string]any{"method": "transact", "params": params, "id": 4}); err != nil {
 		return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
 	}
-	if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		return apitypes.Fail(503, "BRIDGE_PREFLIGHT_UNAVAILABLE")
 	}
 	for count := 0; count < 32; count++ {
@@ -72,7 +76,7 @@ func verifyDeletionBefore(ctx context.Context, conn net.Conn, reader *bufio.Read
 		}
 		for _, result := range results {
 			if result == nil || len(result["error"]) != 0 {
-				return apitypes.Fail(409, "ISOLATED_BRIDGE_GRAPH_CHANGED")
+				return apitypes.Fail(409, conflict)
 			}
 		}
 		return ctx.Err()

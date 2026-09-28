@@ -38,7 +38,9 @@ type InternalPortSnapshot struct {
 	Parents             map[string]InternalPortParent
 }
 
-func IsGraphOperation(op string) bool { return IsBridgeOperation(op) || op == InternalPortCreate }
+func IsGraphOperation(op string) bool {
+	return IsBridgeOperation(op) || op == InternalPortCreate || op == InternalPortDelete
+}
 
 func cloneInternalPort(p *InternalPortCreation) *InternalPortCreation {
 	if p == nil {

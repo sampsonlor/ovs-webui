@@ -59,7 +59,18 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 		if bridgeHostCheck(envelope.Candidate) != nil {
 			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 		}
-		return compileInternalPortExecution(original.ID, marker, n.CreationMarker, envelope, view, d)
+		creationMarker := n.CreationMarker
+		if envelope.Candidate.Intents[0].PortDeletion != nil {
+			creationMarker = marker
+			if err = verifyPortDeletionBefore(ctx, conn, reader, d, envelope.Candidate, view, creationMarker); err != nil {
+				var problem *apitypes.Problem
+				if !errors.As(err, &problem) || problem.Code != "INTERNAL_PORT_GRAPH_CHANGED" {
+					return execution.Plan{}, err
+				}
+				return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+			}
+		}
+		return compileInternalPortExecution(original.ID, marker, creationMarker, envelope, view, d)
 	}
 	if _, ok := bridgeIntent(envelope.Candidate); ok {
 		if bridgeHostCheck(envelope.Candidate) != nil {

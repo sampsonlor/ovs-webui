@@ -227,6 +227,14 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
+			if d := intent.PortDeletion; d != nil {
+				bindings := append([]candidate.Binding{d.Source.Configuration.Bridge}, d.Source.Bindings()...)
+				bindings = append(bindings, d.Replacement.Bindings()...)
+				if err = protectGraph(ctx, tx, id, d.Source.Configuration.Root, bindings); err != nil {
+					return requests.Mutation{}, err
+				}
+				continue
+			}
 			if p := intent.PortCreation; p != nil {
 				if err = protectGraph(ctx, tx, id, p.Root, []candidate.Binding{p.Bridge, intent.Object, p.Interface}); err != nil {
 					return requests.Mutation{}, err

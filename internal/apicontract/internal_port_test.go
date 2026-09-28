@@ -28,3 +28,21 @@ func TestInternalPortRequestRejectsPrivateGraphsAndInvalidVLANs(t *testing.T) {
 		}
 	}
 }
+
+func TestInternalPortDeletionRequestCannotSupplyCapturedAuthority(t *testing.T) {
+	c, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := map[string]any{"intent_id": repository.NewID(), "operation": "port.delete-internal", "object": map[string]any{"management_id": repository.NewID(), "ovs_uuid": repository.NewID(), "table": "Port", "instance_generation": repository.NewID()}}
+	if err = c.Schemas["Intent"].Validate(i); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"name", "vlan_id", "internal_port_deletion", "source", "replacement", "source_marker", "restoring", "observed", "members", "value"} {
+		i[field] = "forged"
+		if c.Schemas["Intent"].Validate(i) == nil {
+			t.Fatal("accepted", field)
+		}
+		delete(i, field)
+	}
+}

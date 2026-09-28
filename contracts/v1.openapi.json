@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.11.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation on an explicitly authorized existing Bridge is also supported. General graph deletion, physical/member changes and full pages retain separate gates."
+    "version": "1.12.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. General graph deletion, physical/member changes and full pages retain separate gates."
   },
   "servers": [
     {
@@ -28237,7 +28237,8 @@
               "port.lacp.set",
               "bridge.create-isolated",
               "bridge.delete-isolated",
-              "port.create-internal"
+              "port.create-internal",
+              "port.delete-internal"
             ]
           },
           "object": {
@@ -28260,6 +28261,9 @@
           },
           "internal_port_creation": {
             "$ref": "#/components/schemas/InternalPortCreation"
+          },
+          "internal_port_deletion": {
+            "$ref": "#/components/schemas/InternalPortDeletion"
           },
           "bond": {
             "$ref": "#/components/schemas/NativeBond"
@@ -31173,6 +31177,28 @@
         "additionalProperties": false,
         "description": "Delete one unchanged isolated Bridge graph previously created by this manager. Requires the independent root deletion name gate and ovs.bridge.delete. Safe Apply compensation recreates the graph with fresh identities; deleted identities are never reused. Input cannot supply graphs, markers or replacement identities."
       },
+      "InternalPortDeleteIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "port.delete-internal"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object"
+        ],
+        "additionalProperties": false,
+        "description": "Delete one manager-owned independent internal access Port and its Interface, preserving the existing Bridge and other members. Requires ovs.port.internal.delete and an independent root Bridge management-id:name deletion grant. Compensation reserves fresh child identities. Changed native configuration, references or host dependencies block execution. Input cannot provide captured graphs, markers or replacement identities."
+      },
       "InternalPortCreateIntent": {
         "type": "object",
         "properties": {
@@ -31268,6 +31294,38 @@
           "local_interface",
           "before_present",
           "after_present"
+        ],
+        "additionalProperties": true
+      },
+      "InternalPortGraph": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/InternalPortCreation"
+          }
+        },
+        "required": [
+          "port",
+          "configuration"
+        ],
+        "additionalProperties": true
+      },
+      "InternalPortDeletion": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/InternalPortGraph"
+          },
+          "replacement": {
+            "$ref": "#/components/schemas/InternalPortGraph"
+          }
+        },
+        "required": [
+          "source",
+          "replacement"
         ],
         "additionalProperties": true
       },
@@ -31478,6 +31536,9 @@
           },
           {
             "$ref": "#/components/schemas/IsolatedBridgeDeleteIntent"
+          },
+          {
+            "$ref": "#/components/schemas/InternalPortDeleteIntent"
           },
           {
             "$ref": "#/components/schemas/InternalPortCreateIntent"

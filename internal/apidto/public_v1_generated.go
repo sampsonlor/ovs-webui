@@ -116,6 +116,7 @@ type ObservedIntent struct {
 	DependencyRevision     Revision                   `json:"dependency_revision,omitempty"`
 	SchemaDigest           string                     `json:"schema_digest,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
+	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
 	Bond                   NativeBond                 `json:"bond,omitempty"`
 	BeforeBond             NativeBond                 `json:"before_bond,omitempty"`
 	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
@@ -921,6 +922,11 @@ type IsolatedBridgeDeleteIntent struct {
 	Operation string        `json:"operation"`
 	Object    ObjectBinding `json:"object"`
 }
+type InternalPortDeleteIntent struct {
+	IntentId  Id            `json:"intent_id"`
+	Operation string        `json:"operation"`
+	Object    ObjectBinding `json:"object"`
+}
 type InternalPortCreateIntent struct {
 	IntentId  Id            `json:"intent_id"`
 	Operation string        `json:"operation"`
@@ -949,6 +955,36 @@ func (v *InternalPortCreation) UnmarshalJSON(data []byte) error {
 }
 func (v InternalPortCreation) MarshalJSON() ([]byte, error) {
 	type plain InternalPortCreation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type InternalPortGraph struct {
+	Port          ObservedBinding            `json:"port"`
+	Configuration InternalPortCreation       `json:"configuration"`
+	ExtraFields   map[string]json.RawMessage `json:"-"`
+}
+
+func (v *InternalPortGraph) UnmarshalJSON(data []byte) error {
+	type plain InternalPortGraph
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v InternalPortGraph) MarshalJSON() ([]byte, error) {
+	type plain InternalPortGraph
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type InternalPortDeletion struct {
+	Source      InternalPortGraph          `json:"source"`
+	Replacement InternalPortGraph          `json:"replacement"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *InternalPortDeletion) UnmarshalJSON(data []byte) error {
+	type plain InternalPortDeletion
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v InternalPortDeletion) MarshalJSON() ([]byte, error) {
+	type plain InternalPortDeletion
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

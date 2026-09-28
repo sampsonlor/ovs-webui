@@ -71,6 +71,7 @@ export function applyReady(
           'bridge.create-isolated': 'ovs.bridge.create',
           'bridge.delete-isolated': 'ovs.bridge.delete',
           'port.create-internal': 'ovs.port.internal.create',
+          'port.delete-internal': 'ovs.port.internal.delete',
         } as Record<string, string>
       )[i.operation];
       return !!capability && has(session, capability);

@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "internal-port-create-v1"
+const ValidatorVersion = "internal-port-delete-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -58,6 +58,7 @@ type StoredIntent struct {
 	BondMembers  []string              `json:"bond_member_interface_ids,omitempty"`
 	Creation     *BridgeCreation       `json:"bridge_creation,omitempty"`
 	Deletion     *BridgeDeletion       `json:"bridge_deletion,omitempty"`
+	PortDeletion *InternalPortDeletion `json:"internal_port_deletion,omitempty"`
 	PortCreation *InternalPortCreation `json:"internal_port_creation,omitempty"`
 }
 type Candidate struct {
@@ -142,6 +143,7 @@ type Snapshot struct {
 	Ports                                map[string]Port
 	Creation                             CreationSnapshot
 	Deletion                             DeletionSnapshot
+	PortDeletions                        InternalPortDeletionSnapshot
 	InternalPorts                        InternalPortSnapshot
 }
 type Provider interface {
@@ -214,6 +216,12 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if d := i.PortDeletion; d != nil {
+			p := d.Source.Configuration
+			out = append(out, p.Bridge, p.Interface, p.LocalPort, p.LocalInterface)
+			out = append(out, p.Members...)
+			out = append(out, d.Replacement.Bindings()...)
+		}
 		if p := i.PortCreation; p != nil {
 			out = append(out, p.Bridge, p.Interface, p.LocalPort, p.LocalInterface)
 			out = append(out, p.Members...)

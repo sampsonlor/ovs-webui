@@ -357,6 +357,8 @@
             {replacement.previous.table} · <Status value={replacement.state} />
             {#if replacement.state === 'restored' && replacement.replacement.table === 'Bridge'}
               <Link href={'/bridges/' + replacement.replacement.management_id}>Open restored Bridge</Link>
+            {:else if replacement.state === 'restored' && replacement.replacement.table === 'Port'}
+              <Link href={'/ports/' + replacement.replacement.management_id}>Open restored Port</Link>
             {/if}
           </p>
           {#if expert}

@@ -165,3 +165,62 @@ func TestFormalValidationInternalPortRequiresDistinctAuthorityAndCredentialCeili
 		t.Fatal("old credential widened", v)
 	}
 }
+
+func TestFormalValidationInternalPortDeletionRequiresDistinctAuthorityAndCredentialCeiling(t *testing.T) {
+	r, _ := fixture(t)
+	g := login(t, r, "admin", false)
+	e, p, _ := planSetup(t, r, g)
+	p.snapshot.Creation = plan.CreationSnapshot{Root: repository.NewID(), Supported: true, Capacity: true, Authority: "local-managed"}
+	bind := func(table string) plan.Binding {
+		return plan.Binding{ManagementID: repository.NewID(), OVSUUID: repository.NewID(), Table: table, Generation: p.snapshot.Generation}
+	}
+	parent := plan.InternalPortParent{Binding: bind("Bridge"), Name: "br-parent", Dependency: "captured", Eligible: true, LocalPort: bind("Port"), LocalInterface: bind("Interface")}
+	parent.Members = []plan.Binding{parent.LocalPort}
+	p.snapshot.InternalPorts = plan.InternalPortSnapshot{Supported: true, Capacity: true, Targets: map[string]bool{parent.Binding.ManagementID + ":pi-new": true}, Parents: map[string]plan.InternalPortParent{parent.Binding.ManagementID: parent}}
+	port, iface := bind("Port"), bind("Interface")
+	graph := plan.InternalPortGraph{Port: port, Configuration: plan.InternalPortCreation{Name: "pi-new", VLANID: 20, Root: p.snapshot.Creation.Root, Bridge: parent.Binding, BridgeName: parent.Name, Interface: iface, Members: append([]plan.Binding{}, parent.Members...), LocalPort: parent.LocalPort, LocalInterface: parent.LocalInterface}}
+	parent.Members = append(parent.Members, port)
+	slices.SortFunc(parent.Members, func(a, b plan.Binding) int { return strings.Compare(a.OVSUUID, b.OVSUUID) })
+	p.snapshot.InternalPorts.Parents[parent.Binding.ManagementID] = parent
+	p.snapshot.Creation.Objects = map[string]plan.Binding{port.OVSUUID: port, iface.OVSUUID: iface}
+	p.snapshot.PortDeletions = plan.InternalPortDeletionSnapshot{Targets: map[string]bool{parent.Binding.ManagementID + ":pi-new": true}, Graphs: map[string]plan.ManagedInternalPort{port.ManagementID: {Graph: graph, Marker: strings.Repeat("a", 64), Dependency: "child", RestoreCapacity: true}}}
+	id := planRequestID()
+	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{map[string]any{"intent_id": repository.NewID(), "operation": plan.InternalPortDelete, "object": port}}})
+	e, err := r.PrepareCandidate(testContext, g.Grant, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := r.ValidateCandidate(testContext, g.Grant, validationRequest(e, g.Claims.RequestEpoch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !readPlanValidation(t, r, g.Grant, e, valid.Receipt.Resource.ID).Usable {
+		t.Fatal("creation validation blocked")
+	}
+	setCaps := func(caps []string) {
+		t.Helper()
+		b, _ := json.Marshal(caps)
+		if err := r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, "UPDATE roles SET capabilities=? WHERE id IN (SELECT role_id FROM principal_roles WHERE principal_id=?)", b, g.Claims.PrincipalID)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	caps := slices.DeleteFunc(append([]string{}, g.Claims.Capabilities...), func(s string) bool { return s == "ovs.port.internal.delete" })
+	setCaps(caps)
+	if readPlanValidation(t, r, g.Grant, e, valid.Receipt.Resource.ID).Usable {
+		t.Fatal("creation retained revoked permission")
+	}
+	a := execution.Authorization{Owner: g.Claims.PrincipalID, Credential: g.Claims.CredentialID, Epoch: g.Claims.RequestEpoch, FieldCapabilities: "ovs.port.internal.delete"}
+	wantCode(t, r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error { return r.safeAuthority(ctx, q, a) }), "APPLY_AUTHORITY_REVOKED")
+	limited := login(t, r, "admin", false)
+	setCaps(g.Claims.Capabilities)
+	ack, err := r.ValidateCandidate(testContext, limited.Grant, validationRequest(e, limited.Claims.RequestEpoch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := readPlanValidation(t, r, limited.Grant, e, ack.Receipt.Resource.ID); v.Usable || v.State != "blocked" {
+		t.Fatal("old credential widened", v)
+	}
+}
