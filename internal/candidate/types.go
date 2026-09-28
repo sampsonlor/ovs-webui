@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "isolated-bridge-v3"
+const ValidatorVersion = "isolated-bridge-delete-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -56,6 +56,7 @@ type StoredIntent struct {
 	BeforeBond  *Bond           `json:"before_bond,omitempty"`
 	BondMembers []string        `json:"bond_member_interface_ids,omitempty"`
 	Creation    *BridgeCreation `json:"bridge_creation,omitempty"`
+	Deletion    *BridgeDeletion `json:"bridge_deletion,omitempty"`
 }
 type Candidate struct {
 	ID           string         `json:"id"`
@@ -138,6 +139,7 @@ type Snapshot struct {
 	Generation, Revision, Schema, Policy string
 	Ports                                map[string]Port
 	Creation                             CreationSnapshot
+	Deletion                             DeletionSnapshot
 }
 type Provider interface {
 	CandidateSnapshot(context.Context, []Binding) (Snapshot, error)
@@ -211,6 +213,10 @@ func Bindings(c Candidate) []Binding {
 		out = append(out, i.Object)
 		if i.Creation != nil {
 			out = append(out, i.Creation.Port, i.Creation.Interface)
+		}
+		if i.Deletion != nil {
+			out = append(out, i.Deletion.Source.Port, i.Deletion.Source.Interface)
+			out = append(out, i.Deletion.Replacement.Bindings()...)
 		}
 	}
 	return out

@@ -18,8 +18,8 @@ import (
 const bridgeMarkerKey = "ovs-webui.bridge-commit"
 
 func bridgeIntent(c candidate.Candidate) (candidate.StoredIntent, bool) {
-	if len(c.Intents) == 1 && c.Intents[0].Operation == candidate.BridgeCreate && c.Intents[0].Creation != nil {
-		return c.Intents[0], true
+	if len(c.Intents) == 1 {
+		return candidate.BridgeGraphIntent(c.Intents[0])
 	}
 	return candidate.StoredIntent{}, false
 }
@@ -207,6 +207,9 @@ func compileBridgeExecution(id, marker, creationMarker string, envelope candidat
 	if err != nil {
 		return out, err
 	}
+	if deletion := envelope.Candidate.Intents[0].Deletion; deletion != nil && deletion.Restoring {
+		ops = append(ops, deletedSourceGuards(deletion)...)
+	}
 	n := nativePlan{Operations: append([]map[string]any{g}, ops...), Evidence: view.Observation.Evidence, CreationMarker: creationMarker, InsertUUIDs: map[int]string{}}
 	if i.Creation.AfterPresent {
 		rows, err := creationRows(d, i, creationMarker)
@@ -257,6 +260,9 @@ func bridgeProof(p execution.Plan, view inventory.ExecutionView, d discovered) (
 	guards, err := graphGuards(d, i, n.CreationMarker, i.Creation.AfterPresent)
 	if err != nil {
 		return nil, err
+	}
+	if deletion := p.Envelope.Candidate.Intents[0].Deletion; deletion != nil && deletion.Restoring {
+		guards = append(guards, deletedSourceGuards(deletion)...)
 	}
 	ops := []any{g}
 	for _, guard := range guards {

@@ -22,6 +22,7 @@ import (
 	identity "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
+	"github.com/sampsonlor/ovs-webui/internal/safety"
 )
 
 const MaxRecords = 1024
@@ -193,7 +194,7 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 			return requests.Mutation{}, apitypes.Fail(409, "EXECUTION_AUTHORITY_CHANGED")
 		}
 		var total, unsettled int
-		if err = tx.QueryRowContext(ctx, "SELECT count(*),coalesce(sum(state NOT IN ('succeeded','failed')),0) FROM field_executions").Scan(&total, &unsettled); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT count(*),coalesce(sum(f.state NOT IN ('succeeded','failed') AND NOT EXISTS (SELECT 1 FROM safe_applies s WHERE s.id=f.id AND s.state IN ('confirmed','rolled-back','not-committed'))),0) FROM field_executions f").Scan(&total, &unsettled); err != nil {
 			return requests.Mutation{}, err
 		}
 		if total >= MaxRecords || unsettled >= MaxUnsettled {
@@ -219,10 +220,19 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		if err = identity.ReserveCreations(ctx, tx, id, p.Marker, in.Envelope.Candidate); err != nil {
 			return requests.Mutation{}, err
 		}
+		if err = identity.ReserveRestorations(ctx, tx, id, e.rollbackMarker(id, p.Marker), in.Envelope.Candidate); err != nil {
+			return requests.Mutation{}, err
+		}
 		// Record the actual field group. Pending VLAN and Bond operations on the
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
+			if intent.Deletion != nil {
+				if err = protectDeletion(ctx, tx, id, intent); err != nil {
+					return requests.Mutation{}, err
+				}
+				continue
+			}
 			field := "port.vlan"
 			resource := intent.Object.ManagementID
 			if intent.Creation != nil {
@@ -233,7 +243,7 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 				field = "port.bond"
 			}
 			var n int
-			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond','root.bridge-creation')", resource).Scan(&n); err != nil {
+			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE resource_id=? AND field_path IN ('port.vlan','port.bond','root.bridge-creation','object.lifecycle')", resource).Scan(&n); err != nil {
 				return requests.Mutation{}, err
 			}
 			if n != 0 {
@@ -346,6 +356,15 @@ func (e *Engine) saveOutcome(ctx context.Context, id string, o execution.Outcome
 		if terminal(r) {
 			return nil
 		}
+		s, safeErr := loadSafety(ctx, tx, id)
+		if safeErr == nil && safety.Terminal(s.State) {
+			// Original Applied can remain unknown after successful compensation.
+			// A settled safety decision owns the final Job, not late field reads.
+			return nil
+		}
+		if safeErr != nil && !errors.Is(safeErr, sql.ErrNoRows) {
+			return safeErr
+		}
 		state := stateFor(r, o)
 		if state == "recovery-required" && o.Applied == "pending" && time.Since(r.Created) >= execution.AppliedFor {
 			o.Reason = "applied-budget-exhausted"
@@ -434,7 +453,7 @@ func (e *Engine) Recover(ctx context.Context) error {
 	ctx = sqlite.RecoveryContext(ctx)
 	var ids []string
 	err := e.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
-		rows, err := q.QueryContext(ctx, "SELECT id FROM field_executions WHERE state NOT IN ('succeeded','failed') ORDER BY updated_at_ms,id LIMIT ?", MaxUnsettled+1)
+		rows, err := q.QueryContext(ctx, "SELECT f.id FROM field_executions f WHERE f.state NOT IN ('succeeded','failed') AND NOT EXISTS (SELECT 1 FROM safe_applies s WHERE s.id=f.id AND s.state IN ('confirmed','rolled-back','not-committed')) ORDER BY f.updated_at_ms,f.id LIMIT ?", MaxUnsettled+1)
 		if err != nil {
 			return err
 		}

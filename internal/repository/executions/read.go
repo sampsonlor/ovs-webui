@@ -131,6 +131,7 @@ func Read(ctx context.Context, q evidence.Query, c authn.Claims, op string, path
 		if json.Unmarshal(b, &s) != nil {
 			return nil, apitypes.Fail(503, "EXECUTION_EVIDENCE_INVALID")
 		}
+		s.Plan = s.Native
 		v, err := safeView(ctx, q, s.Record, c, now, available)
 		if err != nil {
 			return nil, err
@@ -179,6 +180,9 @@ func safeView(ctx context.Context, q evidence.Query, r execution.Record, c authn
 	}
 	v["reachability_observed_at"] = s.HealthyAt
 	v["rollback_evidence"] = s.Outcome
+	if replacements := identityReplacements(r, s); len(replacements) != 0 {
+		v["identity_replacements"] = replacements
+	}
 	actions := []string{}
 	if configured && !safety.Terminal(s.State) {
 		if s.State == "awaiting-confirmation" && fresh && s.Confirmation != nil && !s.Confirmation.Expired(tlscontrol.Now()) && slices.Contains(c.Capabilities, "configuration.confirm") {

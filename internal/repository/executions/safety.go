@@ -142,7 +142,7 @@ func (e *Engine) updateSafety(ctx context.Context, tx *sql.Tx, r execution.Recor
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE field_executions SET document=?,updated_at_ms=? WHERE id=?", b, r.Updated.UnixMilli(), r.ID); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE field_executions SET state=?,document=?,updated_at_ms=? WHERE id=?", r.State, b, r.Updated.UnixMilli(), r.ID); err != nil {
 		return err
 	}
 	public, _ := json.Marshal(r)
@@ -292,6 +292,15 @@ func (e *Engine) safetyStep(ctx context.Context, id string) error {
 		return nil
 	} // field recovery proves pre-dispatch rejection on restart.
 	o := e.provider.Observe(ctx, r.Plan, r.Outcome)
+	// The watchdog can observe Applied before the field recovery loop does.
+	// Persist that proof before opening confirmation, using the same per-ID lock.
+	if err = e.saveOutcome(ctx, id, o); err != nil {
+		return err
+	}
+	r, err = e.Read(ctx, id)
+	if err != nil {
+		return err
+	}
 	if o.Commit != "committed" {
 		return e.holdSafety(ctx, r, s, "recovery-required", "apply-outcome-unknown")
 	}
@@ -383,10 +392,13 @@ func (e *Engine) holdSafety(ctx context.Context, r execution.Record, s safety.Re
 	s.HealthyAt = nil
 	return e.saveSafety(ctx, r, s)
 }
-func (e *Engine) rollback(ctx context.Context, r execution.Record, s safety.Record) error {
+func (e *Engine) rollbackMarker(id, marker string) string {
 	h := hmac.New(sha256.New, e.key)
-	h.Write([]byte("ovs-webui/rollback/v1\x00" + r.ID + "\x00" + r.Plan.Marker))
-	p, err := e.provider.(safety.Provider).PrepareRollback(ctx, r.Plan, hex.EncodeToString(h.Sum(nil)))
+	h.Write([]byte("ovs-webui/rollback/v1\x00" + id + "\x00" + marker))
+	return hex.EncodeToString(h.Sum(nil))
+}
+func (e *Engine) rollback(ctx context.Context, r execution.Record, s safety.Record) error {
+	p, err := e.provider.(safety.Provider).PrepareRollback(ctx, r.Plan, e.rollbackMarker(r.ID, r.Plan.Marker))
 	if err != nil {
 		state, reason := "recovery-required", "rollback-provider-unavailable"
 		var problem *apitypes.Problem
@@ -459,6 +471,7 @@ func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, chec
 	if safety.Terminal(s.State) {
 		return out, apitypes.Fail(409, "TRANSACTION_SETTLED")
 	}
+	var confirmation execution.Outcome
 	if decision == "confirm" {
 		if s.State != "awaiting-confirmation" || s.Confirmation == nil || s.Confirmation.Expired(e.safety.Clock()) || s.Domain != e.safety.Probe.Domain() {
 			return out, apitypes.Fail(409, "DECISION_EXPIRED")
@@ -467,6 +480,7 @@ func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, chec
 		if o.Commit != "committed" || o.Applied != "applied" || e.probe(ctx) != nil {
 			return out, apitypes.Fail(409, "CONFIRMATION_EVIDENCE_UNAVAILABLE")
 		}
+		confirmation = o
 	}
 	return requests.New(e.store).Execute(ctx, command, authorize, func(ctx context.Context, tx *sql.Tx) (requests.Mutation, error) {
 		if err := check(ctx, tx); err != nil {
@@ -487,6 +501,12 @@ func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, chec
 				return requests.Mutation{}, err
 			}
 			s.State, s.Reason = "confirmed", "connectivity-confirmed"
+			confirmedAt := e.safety.Clock().Wall
+			s.HealthyAt = &confirmedAt
+			// Also repair older awaiting-confirmation journals whose watchdog
+			// proof was not persisted. Commit proof, decision and Job atomically.
+			current.Outcome = confirmation
+			current.State = stateFor(current, confirmation)
 		} else if decision == "rollback" {
 			if s.Rollback != nil || s.State == "rollback-conflict" {
 				return requests.Mutation{}, apitypes.Fail(409, "ROLLBACK_ALREADY_DISPATCHED")

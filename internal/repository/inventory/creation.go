@@ -51,3 +51,24 @@ func RetirePending(ctx context.Context, tx *sql.Tx, transaction string) error {
 	_, err := tx.ExecContext(ctx, "UPDATE identities SET state='tombstone' WHERE state='pending' AND management_id IN (SELECT management_id FROM identity_creations WHERE transaction_id=?)", transaction)
 	return err
 }
+
+// Reserve compensation identities before deleting anything. The same durable
+// admission either reserves all three bindings and the journal, or does neither.
+// Normal deletion confirmation retires these unused reservations permanently.
+func ReserveRestorations(ctx context.Context, tx *sql.Tx, transaction, marker string, c candidate.Candidate) error {
+	for _, i := range c.Intents {
+		if i.Operation != candidate.BridgeDelete {
+			continue
+		}
+		if i.Deletion == nil || i.Deletion.Restoring || i.Deletion.Observed {
+			return apitypes.Fail(422, "INVALID_RESTORATION_RESERVATION")
+		}
+		g := i.Deletion.Replacement
+		creation := candidate.StoredIntent{Operation: candidate.BridgeCreate, Object: g.Bridge,
+			Creation: &candidate.BridgeCreation{Name: g.Name, Root: g.Root, Port: g.Port, Interface: g.Interface, AfterPresent: true}}
+		if err := ReserveCreations(ctx, tx, transaction, marker, candidate.Candidate{Intents: []candidate.StoredIntent{creation}}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

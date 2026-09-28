@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.9.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and isolated Bridge creation through Candidate and durable Safe Apply. Manager-assigned identities, guarded graph compensation and shared evidence. Existing-object deletion, membership changes and full pages retain separate gates."
+    "version": "1.10.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. General graph deletion, membership changes and full pages retain separate gates."
   },
   "servers": [
     {
@@ -28235,7 +28235,8 @@
               "port.vlan.set",
               "bond.configure",
               "port.lacp.set",
-              "bridge.create-isolated"
+              "bridge.create-isolated",
+              "bridge.delete-isolated"
             ]
           },
           "object": {
@@ -28270,6 +28271,9 @@
           },
           "bridge_creation": {
             "$ref": "#/components/schemas/BridgeCreation"
+          },
+          "bridge_deletion": {
+            "$ref": "#/components/schemas/BridgeDeletion"
           }
         },
         "required": [
@@ -29285,6 +29289,14 @@
           },
           "correlation_id": {
             "$ref": "#/components/schemas/Id"
+          },
+          "identity_replacements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityReplacement"
+            },
+            "minItems": 0,
+            "maxItems": 3
           },
           "field_execution_state": {
             "type": "string",
@@ -31135,6 +31147,28 @@
         "additionalProperties": false,
         "description": "Create one fresh isolated system Bridge with its local Port and internal Interface. Manager assigns all identities. Requires a reviewed root name allowlist and ovs.bridge.create. Existing names, client identities, members and mixed-intent batches are rejected. Creation can only run through Safe Apply; rollback removes only the unchanged created graph."
       },
+      "IsolatedBridgeDeleteIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "bridge.delete-isolated"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object"
+        ],
+        "additionalProperties": false,
+        "description": "Delete one unchanged isolated Bridge graph previously created by this manager. Requires the independent root deletion name gate and ovs.bridge.delete. Safe Apply compensation recreates the graph with fresh identities; deleted identities are never reused. Input cannot supply graphs, markers or replacement identities."
+      },
       "NativeBond": {
         "type": "object",
         "properties": {
@@ -31210,6 +31244,80 @@
         ],
         "additionalProperties": true
       },
+      "BridgeGraph": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
+          "root_uuid": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "bridge": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "local_port": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "local_interface": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          }
+        },
+        "required": [
+          "name",
+          "root_uuid",
+          "bridge",
+          "local_port",
+          "local_interface"
+        ],
+        "additionalProperties": true
+      },
+      "BridgeDeletion": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/BridgeGraph"
+          },
+          "replacement": {
+            "$ref": "#/components/schemas/BridgeGraph"
+          }
+        },
+        "required": [
+          "source",
+          "replacement"
+        ],
+        "additionalProperties": true,
+        "description": "Captured original and proposed fresh compensation identities are review evidence, not writable input or proof of restoration."
+      },
+      "IdentityReplacement": {
+        "type": "object",
+        "properties": {
+          "previous": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "replacement": {
+            "$ref": "#/components/schemas/ObservedBinding"
+          },
+          "state": {
+            "type": "string",
+            "x-known-values": [
+              "reserved",
+              "restored",
+              "not-used",
+              "unverified"
+            ]
+          }
+        },
+        "required": [
+          "previous",
+          "replacement",
+          "state"
+        ],
+        "additionalProperties": true,
+        "description": "Only restored proves settled compensation with Applied and health evidence. Other or unknown states do not establish a usable replacement."
+      },
       "Intent": {
         "oneOf": [
           {
@@ -31265,6 +31373,9 @@
           },
           {
             "$ref": "#/components/schemas/IsolatedBridgeIntent"
+          },
+          {
+            "$ref": "#/components/schemas/IsolatedBridgeDeleteIntent"
           }
         ]
       },

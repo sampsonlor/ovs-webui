@@ -53,6 +53,23 @@ func bridgeHostCheck(c candidate.Candidate) error {
 	return nil
 }
 
+func bridgeHostApplied(c candidate.Candidate) error {
+	i, ok := bridgeIntent(c)
+	if !ok || i.Creation.AfterPresent {
+		return nil
+	}
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return err
+	}
+	for _, link := range interfaces {
+		if link.Name == i.Creation.Name {
+			return apitypes.Fail(409, "BRIDGE_HOST_REMOVAL_PENDING")
+		}
+	}
+	return nil
+}
+
 func sameExecutionFile(o Options, pid int, prior inventory.Evidence) bool {
 	w := witness(o.DatabaseFile, pid, prior.File)
 	return w.Available && w.ServerHasFile && prior.File.Available && w.Device == prior.File.Device && w.Inode == prior.File.Inode && w.PriorMatches

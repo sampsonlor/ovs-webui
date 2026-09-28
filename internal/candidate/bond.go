@@ -29,6 +29,9 @@ func Capabilities(c Candidate) []string {
 		if i.Operation == BridgeCreate {
 			cap = "ovs.bridge.create"
 		}
+		if i.Operation == BridgeDelete {
+			cap = "ovs.bridge.delete"
+		}
 		if !slices.Contains(out, cap) {
 			out = append(out, cap)
 		}
@@ -177,8 +180,14 @@ func currentOriginal(i *StoredIntent, p Port) {
 }
 
 // AfterImage and Reverse are also used by read-only Applied proof and guarded
-// compensation; neither can change an object binding or member set.
+// compensation. Deletion compensation selects a pre-reserved new graph and
+// retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.Deletion != nil {
+		i.Deletion = cloneDeletion(i.Deletion)
+		i.Deletion.Observed = true
+		return
+	}
 	if i.Creation != nil {
 		i.Creation = cloneCreation(i.Creation)
 		i.Creation.BeforePresent = i.Creation.AfterPresent
@@ -191,6 +200,11 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.Deletion != nil {
+		i.Deletion = cloneDeletion(i.Deletion)
+		i.Deletion.Restoring, i.Deletion.Observed = true, false
+		return
+	}
 	if i.Creation != nil {
 		i.Creation = cloneCreation(i.Creation)
 		i.Creation.BeforePresent, i.Creation.AfterPresent = i.Creation.AfterPresent, i.Creation.BeforePresent

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.9.0', description: 'Phase 1 typed VLAN, Bond/LACP and isolated Bridge creation through Candidate and durable Safe Apply. Manager-assigned identities, guarded graph compensation and shared evidence. Existing-object deletion, membership changes and full pages retain separate gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.10.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. General graph deletion, membership changes and full pages retain separate gates.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -74,6 +74,7 @@ const intentSchemas = {
  ControllerIntent: intent('controllers.configure', { object, targets: array(string(256), 16), fail_mode: choices('standalone', 'secure') }),
  PortLACPIntent: intent('port.lacp.set', { object, lacp: choices('off', 'active', 'passive'), fallback }),
  IsolatedBridgeIntent: intent('bridge.create-isolated', { name: { type: 'string', minLength: 1, maxLength: 15, pattern: '^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$' } }),
+ IsolatedBridgeDeleteIntent: intent('bridge.delete-isolated', { object }),
 };
 Object.assign(s, intentSchemas);
 s.BondIntent.properties.fallback = fallback;
@@ -83,7 +84,15 @@ Object.assign(s.ObservedIntent.properties, { bond: ref('NativeBond'), before_bon
 s.BridgeCreation = open({ name: string(15), root_uuid: id, local_port: object, local_interface: object, before_present: bool, after_present: bool });
 s.ObservedIntent.properties.bridge_creation = ref('BridgeCreation');
 s.IsolatedBridgeIntent.description = 'Create one fresh isolated system Bridge with its local Port and internal Interface. Manager assigns all identities. Requires a reviewed root name allowlist and ovs.bridge.create. Existing names, client identities, members and mixed-intent batches are rejected. Creation can only run through Safe Apply; rollback removes only the unchanged created graph.';
-s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set', 'bridge.create-isolated'];
+s.BridgeGraph = open({ name: string(15), root_uuid: id, bridge: ref('ObservedBinding'), local_port: ref('ObservedBinding'), local_interface: ref('ObservedBinding') });
+s.BridgeDeletion = open({ source: ref('BridgeGraph'), replacement: ref('BridgeGraph') });
+s.BridgeDeletion.description = 'Captured original and proposed fresh compensation identities are review evidence, not writable input or proof of restoration.';
+s.IsolatedBridgeDeleteIntent.description = 'Delete one unchanged isolated Bridge graph previously created by this manager. Requires the independent root deletion name gate and ovs.bridge.delete. Safe Apply compensation recreates the graph with fresh identities; deleted identities are never reused. Input cannot supply graphs, markers or replacement identities.';
+s.ObservedIntent.properties.bridge_deletion = ref('BridgeDeletion');
+s.IdentityReplacement = open({ previous: ref('ObservedBinding'), replacement: ref('ObservedBinding'), state: { type: 'string', 'x-known-values': ['reserved', 'restored', 'not-used', 'unverified'] } });
+s.IdentityReplacement.description = 'Only restored proves settled compensation with Applied and health evidence. Other or unknown states do not establish a usable replacement.';
+s.Transaction.properties.identity_replacements = array(ref('IdentityReplacement'), 3);
+s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set', 'bridge.create-isolated', 'bridge.delete-isolated'];
 s.ObservedIntent.description = 'The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');

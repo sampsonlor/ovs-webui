@@ -57,6 +57,7 @@ func run() int {
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
 	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
+	localBridgeDeleteNames := flag.String("local-bridge-delete-names", "", "Reviewed names for deleting unchanged manager-created isolated Bridges; independent of creation authority")
 	probeAddress := flag.String("safe-apply-probe-address", "", "Reviewed numeric management endpoint IP:TCP-port; empty disables Safe Apply")
 	probeInterface := flag.String("safe-apply-probe-interface", "", "Reviewed management interface; probe sockets bind to this device")
 	flag.Parse()
@@ -241,6 +242,18 @@ func run() int {
 		}
 		if err = inventoryService.SetLocalBridgeNames(bridgeNames); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_BRIDGE_CREATION_AUTHORITY")
+			return 2
+		}
+		var bridgeDeleteNames []string
+		if *localBridgeDeleteNames != "" {
+			bridgeDeleteNames = strings.Split(*localBridgeDeleteNames, ",")
+		}
+		if slices.Contains(bridgeDeleteNames, *probeInterface) {
+			logger.Error("inventory_start_failed", "code", "BRIDGE_NAME_IS_MANAGEMENT_INTERFACE")
+			return 2
+		}
+		if err = inventoryService.SetLocalBridgeDeleteNames(bridgeDeleteNames); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_BRIDGE_DELETION_AUTHORITY")
 			return 2
 		}
 		if *ovsUID >= 1<<32-1 {

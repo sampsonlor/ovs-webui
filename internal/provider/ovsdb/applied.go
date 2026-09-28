@@ -110,6 +110,9 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 		if ctx.Err() != nil || !sameExecutionFile(e.provider.options, pid, original.Evidence) {
 			return errors.New("APPLIED_IDENTITY_CHANGED")
 		}
+		if err = bridgeHostApplied(p.Envelope.Candidate); err != nil {
+			return err
+		}
 		value, observed := strconv.FormatInt(current, 10), time.Now().UTC()
 		out.Current, out.Observed = &value, &observed
 		return nil

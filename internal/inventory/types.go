@@ -90,10 +90,11 @@ type Observation struct {
 	Evidence Evidence
 }
 type Binding struct {
-	ManagementID string `json:"management_id"`
-	Table        string `json:"table"`
-	UUID         string `json:"ovs_uuid"`
-	State        string `json:"state"`
+	ManagementID   string `json:"management_id"`
+	Table          string `json:"table"`
+	UUID           string `json:"ovs_uuid"`
+	State          string `json:"state"`
+	CreationMarker string `json:"-"`
 }
 type Decision struct {
 	Generation    string             `json:"generation"`

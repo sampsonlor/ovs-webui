@@ -69,6 +69,7 @@ export function applyReady(
           'bond.configure': 'ovs.port.bond.write',
           'port.lacp.set': 'ovs.port.bond.write',
           'bridge.create-isolated': 'ovs.bridge.create',
+          'bridge.delete-isolated': 'ovs.bridge.delete',
         } as Record<string, string>
       )[i.operation];
       return !!capability && has(session, capability);

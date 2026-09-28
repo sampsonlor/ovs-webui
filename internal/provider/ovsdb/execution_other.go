@@ -16,3 +16,5 @@ func bridgeHostCheck(c candidate.Candidate) error {
 }
 
 func sameExecutionFile(Options, int, inventory.Evidence) bool { return false }
+
+func bridgeHostApplied(c candidate.Candidate) error { return bridgeHostCheck(c) }

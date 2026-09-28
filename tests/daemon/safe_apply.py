@@ -112,7 +112,7 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE}' +
                             f' --safe-apply-probe-address={client_ip}:18080 --safe-apply-probe-interface={bridge}')
         if exercise is not None:
-            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-bridge-create-names=br-ui-create')
+            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-bridge-create-names=br-ui-create,br-ui-delete --local-bridge-delete-names=br-ui-delete')
         unit_path.write_text(text)
         runtime_config.write_text(original_config.replace(f'HTTPS_LISTEN=127.0.0.1:{https_port}', f'HTTPS_LISTEN=0.0.0.0:{https_port}'))
         run('systemctl', 'daemon-reload')

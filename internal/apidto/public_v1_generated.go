@@ -119,6 +119,7 @@ type ObservedIntent struct {
 	BeforeBond             NativeBond                 `json:"before_bond,omitempty"`
 	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
 	BridgeCreation         BridgeCreation             `json:"bridge_creation,omitempty"`
+	BridgeDeletion         BridgeDeletion             `json:"bridge_deletion,omitempty"`
 	ExtraFields            map[string]json.RawMessage `json:"-"`
 }
 
@@ -377,6 +378,7 @@ type Transaction struct {
 	AllowedActions       []string                   `json:"allowed_actions"`
 	JobRef               ResourceRef                `json:"job_ref"`
 	CorrelationId        Id                         `json:"correlation_id"`
+	IdentityReplacements []IdentityReplacement      `json:"identity_replacements,omitempty"`
 	FieldExecutionState  string                     `json:"field_execution_state,omitempty"`
 	CandidateId          Id                         `json:"candidate_id,omitempty"`
 	CandidateRevision    Id                         `json:"candidate_revision,omitempty"`
@@ -913,6 +915,11 @@ type IsolatedBridgeIntent struct {
 	Operation string `json:"operation"`
 	Name      string `json:"name"`
 }
+type IsolatedBridgeDeleteIntent struct {
+	IntentId  Id            `json:"intent_id"`
+	Operation string        `json:"operation"`
+	Object    ObjectBinding `json:"object"`
+}
 type NativeBond struct {
 	Lacp           json.RawMessage            `json:"lacp"`
 	BondMode       json.RawMessage            `json:"bond_mode"`
@@ -945,6 +952,55 @@ func (v *BridgeCreation) UnmarshalJSON(data []byte) error {
 }
 func (v BridgeCreation) MarshalJSON() ([]byte, error) {
 	type plain BridgeCreation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type BridgeGraph struct {
+	Name           string                     `json:"name"`
+	RootUuid       Id                         `json:"root_uuid"`
+	Bridge         ObservedBinding            `json:"bridge"`
+	LocalPort      ObservedBinding            `json:"local_port"`
+	LocalInterface ObservedBinding            `json:"local_interface"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
+}
+
+func (v *BridgeGraph) UnmarshalJSON(data []byte) error {
+	type plain BridgeGraph
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v BridgeGraph) MarshalJSON() ([]byte, error) {
+	type plain BridgeGraph
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type BridgeDeletion struct {
+	Source      BridgeGraph                `json:"source"`
+	Replacement BridgeGraph                `json:"replacement"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *BridgeDeletion) UnmarshalJSON(data []byte) error {
+	type plain BridgeDeletion
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v BridgeDeletion) MarshalJSON() ([]byte, error) {
+	type plain BridgeDeletion
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type IdentityReplacement struct {
+	Previous    ObservedBinding            `json:"previous"`
+	Replacement ObservedBinding            `json:"replacement"`
+	State       string                     `json:"state"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *IdentityReplacement) UnmarshalJSON(data []byte) error {
+	type plain IdentityReplacement
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v IdentityReplacement) MarshalJSON() ([]byte, error) {
+	type plain IdentityReplacement
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
