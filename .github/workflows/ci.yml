@@ -233,6 +233,9 @@ jobs:
           go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
+          # Force the worker-held-lock admission regression repeatedly without
+          # increasing timeouts or counting these runs as unique suite tests.
+          go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
@@ -259,6 +262,7 @@ jobs:
           name: go-runtime-${{ matrix.arch }}
           path: |
             test-results/go-tests.json
+            test-results/go-safe-admission.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json
