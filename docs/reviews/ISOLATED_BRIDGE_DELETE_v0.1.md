@@ -17,3 +17,5 @@
 新增 `TestNativeIsolatedBridgeDeletion` 每 schema 13 个叶子场景；报告 `go-isolated-bridge-delete-{schema}.json` 随两个 runtime artifacts 保留。正式浏览器共 9 个场景，新增截图 `frontend-evidence/bridge-delete-*.png`；不保留密码、cookie、CSRF 或网络 trace。
 
 本批只覆盖本服务创建且仍然隔离的图。#42/#54 继续开放；#71 的一次性 arm64 登录问题仍单独跟踪，不因本批 CI 通过宣布根因已修复。原始根目录三份 DOCX 保留，部署配置和站点访问不变。
+
+新增原生场景发现共享 Safe Apply 的保存时序缺口：watchdog 可以先观察到 Applied 并允许确认，而原执行记录仍保留 pending；后续恢复扫描会尝试重新更新终态 Job。修正后先持久保存观察结果再开放确认，确认时把新鲜证明与决策/Job 原子保存，已终结的安全事务不再占用未完成执行容量或重开 Job。补充确定性测试覆盖 watchdog 先于字段恢复、旧 awaiting-confirmation 记录，以及原始 target 未知但补偿已完成的情况；不增加重试、不放宽权限或安全超时。
