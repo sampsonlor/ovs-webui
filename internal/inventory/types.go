@@ -46,11 +46,12 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
-	Name           string  `json:"name"`
-	Version        string  `json:"version"`
-	Digest         string  `json:"digest"`
-	Tables         []Table `json:"tables"`
-	BridgeCreation bool    `json:"-"`
+	Name                 string  `json:"name"`
+	Version              string  `json:"version"`
+	Digest               string  `json:"digest"`
+	Tables               []Table `json:"tables"`
+	BridgeCreation       bool    `json:"-"`
+	InternalPortCreation bool    `json:"-"`
 }
 type Row struct {
 	UUID   string         `json:"uuid"`

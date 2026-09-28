@@ -13,7 +13,7 @@ import (
 )
 
 func bridgeHostCheck(c candidate.Candidate) error {
-	i, ok := bridgeIntent(c)
+	name, before, _, ok := lifecycleHost(c)
 	if !ok {
 		return nil
 	}
@@ -22,10 +22,10 @@ func bridgeHostCheck(c candidate.Candidate) error {
 		return err
 	}
 	for _, link := range interfaces {
-		if link.Name != i.Creation.Name {
+		if link.Name != name {
 			continue
 		}
-		if !i.Creation.BeforePresent {
+		if !before {
 			return apitypes.Fail(409, "HOST_INTERFACE_NAME_IN_USE")
 		}
 		// Refuse compensation if the OS has acquired a routable address or upper
@@ -54,8 +54,8 @@ func bridgeHostCheck(c candidate.Candidate) error {
 }
 
 func bridgeHostApplied(c candidate.Candidate) error {
-	i, ok := bridgeIntent(c)
-	if !ok || i.Creation.AfterPresent {
+	name, _, after, ok := lifecycleHost(c)
+	if !ok || after {
 		return nil
 	}
 	interfaces, err := net.Interfaces()
@@ -63,7 +63,7 @@ func bridgeHostApplied(c candidate.Candidate) error {
 		return err
 	}
 	for _, link := range interfaces {
-		if link.Name == i.Creation.Name {
+		if link.Name == name {
 			return apitypes.Fail(409, "BRIDGE_HOST_REMOVAL_PENDING")
 		}
 	}

@@ -319,9 +319,26 @@ await test('semantic gates preserve advanced VLANs and keep mode depth separate 
   };
   assert.ok(applyReady(creation, validation, creator, true));
   assert.ok(!applyReady(creation, validation, creator, false));
-  const deletion = { ...candidate, intents: [{ operation: 'bridge.delete-isolated' }] };
+  const internal = {
+    ...candidate,
+    intents: [{ operation: 'port.create-internal' }],
+  };
+  assert.ok(!applyReady(internal, validation, creator, true));
+  const portCreator = {
+    ...session,
+    effective_capabilities: ['configuration.apply', 'ovs.port.internal.create'],
+  };
+  assert.ok(applyReady(internal, validation, portCreator, true));
+  assert.ok(!applyReady(internal, validation, portCreator, false));
+  const deletion = {
+    ...candidate,
+    intents: [{ operation: 'bridge.delete-isolated' }],
+  };
   assert.ok(!applyReady(deletion, validation, creator, true));
-  const remover = { ...session, effective_capabilities: ['configuration.apply', 'ovs.bridge.delete'] };
+  const remover = {
+    ...session,
+    effective_capabilities: ['configuration.apply', 'ovs.bridge.delete'],
+  };
   assert.ok(applyReady(deletion, validation, remover, true));
   assert.ok(!applyReady(deletion, validation, remover, false));
   assert.ok(

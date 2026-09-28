@@ -115,6 +115,7 @@ type ObservedIntent struct {
 	Before                 NativeVlan                 `json:"before,omitempty"`
 	DependencyRevision     Revision                   `json:"dependency_revision,omitempty"`
 	SchemaDigest           string                     `json:"schema_digest,omitempty"`
+	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	Bond                   NativeBond                 `json:"bond,omitempty"`
 	BeforeBond             NativeBond                 `json:"before_bond,omitempty"`
 	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
@@ -920,6 +921,37 @@ type IsolatedBridgeDeleteIntent struct {
 	Operation string        `json:"operation"`
 	Object    ObjectBinding `json:"object"`
 }
+type InternalPortCreateIntent struct {
+	IntentId  Id            `json:"intent_id"`
+	Operation string        `json:"operation"`
+	Object    ObjectBinding `json:"object"`
+	Name      string        `json:"name"`
+	VlanId    int64         `json:"vlan_id"`
+}
+type InternalPortCreation struct {
+	Name            string                     `json:"name"`
+	VlanId          int64                      `json:"vlan_id"`
+	RootUuid        Id                         `json:"root_uuid"`
+	Bridge          ObjectBinding              `json:"bridge"`
+	BridgeName      string                     `json:"bridge_name"`
+	Interface       ObjectBinding              `json:"interface"`
+	OriginalMembers []ObjectBinding            `json:"original_members"`
+	LocalPort       ObjectBinding              `json:"local_port"`
+	LocalInterface  ObjectBinding              `json:"local_interface"`
+	BeforePresent   bool                       `json:"before_present"`
+	AfterPresent    bool                       `json:"after_present"`
+	ExtraFields     map[string]json.RawMessage `json:"-"`
+}
+
+func (v *InternalPortCreation) UnmarshalJSON(data []byte) error {
+	type plain InternalPortCreation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v InternalPortCreation) MarshalJSON() ([]byte, error) {
+	type plain InternalPortCreation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type NativeBond struct {
 	Lacp           json.RawMessage            `json:"lacp"`
 	BondMode       json.RawMessage            `json:"bond_mode"`

@@ -2,8 +2,15 @@
   import type { DiffField } from '../../clients/typescript/public-v1.generated';
   import Link from './Link.svelte';
   let { fields, expert = false }: { fields: DiffField[]; expert?: boolean } = $props();
+  const internalPorts = $derived(fields.filter((field) => field.operation === 'port.create-internal'));
   const deletions = $derived(fields.filter((field) => field.operation === 'bridge.delete-isolated'));
   function display(value: unknown, field: DiffField) {
+    if (field.operation === 'port.create-internal' && value === 'absent') return 'Not present';
+    if (field.operation === 'port.create-internal' && value === 'name occupied') return 'Name in use';
+    if (field.operation === 'port.create-internal' && value && typeof value === 'object') {
+      const port = value as Record<string, unknown>;
+      return `${String(port.bridge)} → ${String(port.name)} · internal · access VLAN ${String(port.tag)}`;
+    }
     if (field.operation === 'bridge.delete-isolated' && value && typeof value === 'object') {
       const graph = value as Record<string, unknown>;
       return 'state' in graph
@@ -21,6 +28,14 @@
           : '∅'
         : JSON.stringify(value);
 </script>
+
+{#if internalPorts.length}
+  <div class="notice">
+    <strong>New internal access Port and Interface</strong>
+    <p>The existing Bridge and local port are preserved. Rollback removes the new pair only while its configuration and parent membership are unchanged. Host IP configuration is a separate operation.</p>
+  </div>
+  {#if expert}{#each internalPorts as field}<details><summary>Parent binding and new object identities</summary><pre>{JSON.stringify({ port: field.object, target: field.after }, null, 2)}</pre></details>{/each}{/if}
+{/if}
 
 {#if deletions.length}
   <div class="notice warning">
@@ -47,9 +62,9 @@
       {#each fields as field}
         <tr class:conflict={field.conflict}
           ><th scope="row"
-            >{#if field.object.table === 'Port'}<Link href={`/ports/${field.object.management_id}`}
+            >{#if field.object.table === 'Port' && field.operation !== 'port.create-internal'}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field)}</td><td
             >{display(field.current, field)}</td

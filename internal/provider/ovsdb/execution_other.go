@@ -9,7 +9,7 @@ import (
 )
 
 func bridgeHostCheck(c candidate.Candidate) error {
-	if _, ok := bridgeIntent(c); ok {
+	if _, _, _, ok := lifecycleHost(c); ok {
 		return apitypes.Fail(503, "BRIDGE_HOST_PROVIDER_UNAVAILABLE")
 	}
 	return nil

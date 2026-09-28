@@ -36,6 +36,9 @@ var bridgeName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$`)
 func ValidBridgeName(name string) bool { return bridgeName.MatchString(name) }
 
 func CreationBindings(i StoredIntent) []Binding {
+	if i.PortCreation != nil {
+		return []Binding{i.Object, i.PortCreation.Interface}
+	}
 	if i.Creation == nil {
 		return nil
 	}
@@ -43,7 +46,7 @@ func CreationBindings(i StoredIntent) []Binding {
 }
 
 func newBridgeIntent(in Intent, s Snapshot) (StoredIntent, error) {
-	if !ValidBridgeName(in.Name) || in.Object != (Binding{}) || in.Mode != "" || in.LACP != "" || in.Fallback != "" || len(in.Members) != 0 || Digest(in.Value) != Digest(VLAN{}) {
+	if !ValidBridgeName(in.Name) || in.VLANID != 0 || in.Object != (Binding{}) || in.Mode != "" || in.LACP != "" || in.Fallback != "" || len(in.Members) != 0 || Digest(in.Value) != Digest(VLAN{}) {
 		return StoredIntent{}, apitypes.Fail(422, "INVALID_ISOLATED_BRIDGE")
 	}
 	bind := func(table string) Binding {

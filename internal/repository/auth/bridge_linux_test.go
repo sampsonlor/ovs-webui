@@ -113,3 +113,55 @@ func TestFormalValidationDeletionHasSeparatePermissionAndCredentialCeiling(t *te
 		t.Fatal("old credential widened to deletion")
 	}
 }
+
+func TestFormalValidationInternalPortRequiresDistinctAuthorityAndCredentialCeiling(t *testing.T) {
+	r, _ := fixture(t)
+	g := login(t, r, "admin", false)
+	e, p, _ := planSetup(t, r, g)
+	p.snapshot.Creation = plan.CreationSnapshot{Root: repository.NewID(), Supported: true, Capacity: true, Authority: "local-managed"}
+	bind := func(table string) plan.Binding {
+		return plan.Binding{ManagementID: repository.NewID(), OVSUUID: repository.NewID(), Table: table, Generation: p.snapshot.Generation}
+	}
+	parent := plan.InternalPortParent{Binding: bind("Bridge"), Name: "br-parent", Dependency: "captured", Eligible: true, LocalPort: bind("Port"), LocalInterface: bind("Interface")}
+	parent.Members = []plan.Binding{parent.LocalPort}
+	p.snapshot.InternalPorts = plan.InternalPortSnapshot{Supported: true, Capacity: true, Targets: map[string]bool{parent.Binding.ManagementID + ":pi-new": true}, Parents: map[string]plan.InternalPortParent{parent.Binding.ManagementID: parent}}
+	id := planRequestID()
+	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{map[string]any{"intent_id": repository.NewID(), "operation": plan.InternalPortCreate, "name": "pi-new", "vlan_id": 20, "object": parent.Binding}}})
+	e, err := r.PrepareCandidate(testContext, g.Grant, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := r.ValidateCandidate(testContext, g.Grant, validationRequest(e, g.Claims.RequestEpoch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !readPlanValidation(t, r, g.Grant, e, valid.Receipt.Resource.ID).Usable {
+		t.Fatal("creation validation blocked")
+	}
+	setCaps := func(caps []string) {
+		t.Helper()
+		b, _ := json.Marshal(caps)
+		if err := r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, "UPDATE roles SET capabilities=? WHERE id IN (SELECT role_id FROM principal_roles WHERE principal_id=?)", b, g.Claims.PrincipalID)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	caps := slices.DeleteFunc(append([]string{}, g.Claims.Capabilities...), func(s string) bool { return s == "ovs.port.internal.create" })
+	setCaps(caps)
+	if readPlanValidation(t, r, g.Grant, e, valid.Receipt.Resource.ID).Usable {
+		t.Fatal("creation retained revoked permission")
+	}
+	a := execution.Authorization{Owner: g.Claims.PrincipalID, Credential: g.Claims.CredentialID, Epoch: g.Claims.RequestEpoch, FieldCapabilities: "ovs.port.internal.create"}
+	wantCode(t, r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error { return r.safeAuthority(ctx, q, a) }), "APPLY_AUTHORITY_REVOKED")
+	limited := login(t, r, "admin", false)
+	setCaps(g.Claims.Capabilities)
+	ack, err := r.ValidateCandidate(testContext, limited.Grant, validationRequest(e, limited.Claims.RequestEpoch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := readPlanValidation(t, r, limited.Grant, e, ack.Receipt.Resource.ID); v.Usable || v.State != "blocked" {
+		t.Fatal("old credential widened", v)
+	}
+}
