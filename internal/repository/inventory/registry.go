@@ -133,7 +133,7 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 			}
 			state, why = "new", "explicit-reconciliation"
 		}
-		out = domain.Decision{Generation: old.Generation, State: "confirmed", Reason: why, Evidence: o.Evidence, Bindings: map[string]domain.Binding{}}
+		out = domain.Decision{Generation: old.Generation, State: "confirmed", Reason: why, Evidence: o.Evidence, Bindings: map[string]domain.Binding{}, Retired: map[string]bool{}}
 		changed := state == "new"
 		if changed {
 			var generations int
@@ -148,7 +148,7 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 			if _, err = tx.ExecContext(ctx, "INSERT INTO generations VALUES(?,?,?)", out.Generation, blob, time.Now().Unix()); err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE identities SET state='tombstone' WHERE state='active'"); err != nil {
+			if _, err = tx.ExecContext(ctx, "UPDATE identities SET state='tombstone' WHERE state IN ('active','pending')"); err != nil {
 				return err
 			}
 		}
@@ -188,6 +188,20 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 				for uuid := range objects {
 					key := domain.Key(table, uuid)
 					b, ok := known[key]
+					if ok && b.State == "pending" {
+						var marker string
+						if err = tx.QueryRowContext(ctx, "SELECT marker FROM identity_creations WHERE management_id=?", b.ManagementID).Scan(&marker); err != nil {
+							return err
+						}
+						labels, _ := objects[uuid].Values["external_ids"].(map[string]any)
+						if labels[CreationMarker] != marker {
+							return apitypes.Fail(503, "IDENTITY_CREATION_EVIDENCE_MISMATCH")
+						}
+						if _, err = tx.ExecContext(ctx, "UPDATE identities SET state='active' WHERE management_id=? AND state='pending'", b.ManagementID); err != nil {
+							return err
+						}
+						b.State = "active"
+					}
 					if ok && b.State != "active" {
 						return apitypes.Fail(503, "TOMBSTONED_UUID_REAPPEARED")
 					}
@@ -205,11 +219,15 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 				}
 			}
 			for key, b := range known {
+				if b.State == "tombstone" {
+					out.Retired[b.UUID] = true
+				}
 				if b.State == "active" {
 					if _, ok := out.Bindings[key]; !ok {
 						if _, err = tx.ExecContext(ctx, "UPDATE identities SET state='tombstone' WHERE management_id=?", b.ManagementID); err != nil {
 							return err
 						}
+						out.Retired[b.UUID] = true
 					}
 				}
 			}

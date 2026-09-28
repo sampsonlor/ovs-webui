@@ -26,6 +26,9 @@ func Capabilities(c Candidate) []string {
 		if IsBondOperation(i.Operation) {
 			cap = "ovs.port.bond.write"
 		}
+		if i.Operation == BridgeCreate {
+			cap = "ovs.bridge.create"
+		}
 		if !slices.Contains(out, cap) {
 			out = append(out, cap)
 		}
@@ -176,6 +179,11 @@ func currentOriginal(i *StoredIntent, p Port) {
 // AfterImage and Reverse are also used by read-only Applied proof and guarded
 // compensation; neither can change an object binding or member set.
 func AfterImage(i *StoredIntent) {
+	if i.Creation != nil {
+		i.Creation = cloneCreation(i.Creation)
+		i.Creation.BeforePresent = i.Creation.AfterPresent
+		return
+	}
 	if IsBondOperation(i.Operation) {
 		i.BeforeBond = CloneBond(i.Bond)
 	} else {
@@ -183,6 +191,11 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.Creation != nil {
+		i.Creation = cloneCreation(i.Creation)
+		i.Creation.BeforePresent, i.Creation.AfterPresent = i.Creation.AfterPresent, i.Creation.BeforePresent
+		return
+	}
 	if IsBondOperation(i.Operation) {
 		i.BeforeBond, i.Bond = CloneBond(i.Bond), CloneBond(i.BeforeBond)
 	} else {

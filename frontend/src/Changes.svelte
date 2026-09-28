@@ -243,7 +243,7 @@
         >
         <label class="check"
           ><input type="checkbox" bind:checked={reviewed} />I reviewed this Diff,
-          including native empty-trunks semantics and recovery constraints.</label
+          including the affected objects, native semantics and recovery constraints.</label
         >
         <button
           type="submit"

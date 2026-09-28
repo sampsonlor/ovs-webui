@@ -59,7 +59,7 @@
 
 ## 下一步
 
-#41 已接受，main 为 67d5f20，标签 phase1-svelte-ports-vlan-v0.1。当前 #42 按对象子批次推进：A 批接入现有 Port 的 Bond/LACP 字段服务，包含独立 authority、Candidate/三方 Diff、原生 OCC、Safe Apply 与精细回滚，详见[实现说明](implementation/PORT_BOND_LACP_v0.1.md)和[验收矩阵](reviews/PORT_BOND_LACP_v0.1.md)。A 批通过最终 PR/main 双架构 CI 后记录接受标签；#42 仍需继续 Bridge/Port/Interface 生命周期、成员变更、QinQ 与原生属性。#54 继续完整页面迁移，#20–#28 按完整功能独立验收。仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
+#42 A 批现有 Port Bond/LACP 已由 [PR #68](https://github.com/sampsonlor/ovs-webui/pull/68) 合并至 `59dcd54`，PR/main 双架构 CI 全绿，接受标签 `phase1-port-bond-lacp-v0.1`。当前 B 批继续隔离 Bridge 创建：服务端身份、Bridge/local Port/internal Interface 原子创建、Safe Apply 和精确 GC 补偿；见[实现说明](implementation/ISOLATED_BRIDGE_v0.1.md)和[验收矩阵](reviews/ISOLATED_BRIDGE_v0.1.md)。最终 PR/main 双架构 CI 通过后以 `phase1-isolated-bridge-v0.1` 记录接受提交。#42 仍需继续已有对象删除、独立 Port/Interface 生命周期、成员变更、QinQ 与原生属性；#54 继续完整页面迁移，#20–#28 按完整功能独立验收。仅保留 main 与一个活动特性分支；测试及 CI 通过后合并并删除该分支。
 
 [Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#41 已完成，#42 与 #29 为 In Progress。#20–#28 已统一加入 Phase 1 milestone，继续保留独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 

@@ -298,6 +298,7 @@ await test('semantic gates preserve advanced VLANs and keep mode depth separate 
     revision: epoch,
     state: 'dirty',
     safe_apply_available: true,
+    intents: [{ operation: 'port.vlan.set' }],
   };
   const validation = {
     candidate_id: resource,
@@ -307,6 +308,25 @@ await test('semantic gates preserve advanced VLANs and keep mode depth separate 
     execution_ready: true,
   };
   assert.ok(applyReady(candidate, validation, session, true));
+  const creation = {
+    ...candidate,
+    intents: [{ operation: 'bridge.create-isolated' }],
+  };
+  assert.ok(!applyReady(creation, validation, session, true));
+  const creator = {
+    ...session,
+    effective_capabilities: ['configuration.apply', 'ovs.bridge.create'],
+  };
+  assert.ok(applyReady(creation, validation, creator, true));
+  assert.ok(!applyReady(creation, validation, creator, false));
+  assert.ok(
+    !applyReady(
+      { ...creation, intents: [{ operation: 'future' }] },
+      validation,
+      creator,
+      true,
+    ),
+  );
   for (const changes of [
     { state: 'future' },
     { consumed_by: {} },

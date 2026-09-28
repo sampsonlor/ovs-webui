@@ -100,6 +100,9 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		bindings := plan.Bindings(in.Envelope.Candidate)
 		for _, i := range cmd.Intents {
 			bindings = append(bindings, i.Object)
+			if i.Operation == plan.BridgeCreate {
+				bindings = append(bindings, plan.Binding{Table: "Bridge"})
+			}
 		}
 		snapshot, err = r.candidateSnapshot(ctx, bindings)
 		if err != nil {

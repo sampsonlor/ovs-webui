@@ -200,6 +200,14 @@ jobs:
           done
       - name: Real kernel OVS management VLAN loss, daemon kill and deadline recovery
         run: sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --safe-apply-network
+      - name: Native isolated Bridge identity, GC and safety matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeIsolatedBridge$' -test.v -test.timeout=180s \
+              | go tool test2json -p "native-isolated-bridge-$schema" | tee "test-results/go-isolated-bridge-$schema.json"
+          done
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
         run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
       - name: Vet and native race tests
@@ -261,6 +269,7 @@ jobs:
             test-results/go-inventory-*-journal.log
             test-results/go-execution-*.json
             test-results/go-bond-lacp-*.json
+            test-results/go-isolated-bridge-*.json
             test-results/go-safe-apply-*.json
             test-results/go-safe-apply-vm-journal.log
             test-results/go-frontend.json

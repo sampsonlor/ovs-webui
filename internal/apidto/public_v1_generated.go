@@ -118,6 +118,7 @@ type ObservedIntent struct {
 	Bond                   NativeBond                 `json:"bond,omitempty"`
 	BeforeBond             NativeBond                 `json:"before_bond,omitempty"`
 	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
+	BridgeCreation         BridgeCreation             `json:"bridge_creation,omitempty"`
 	ExtraFields            map[string]json.RawMessage `json:"-"`
 }
 
@@ -907,6 +908,11 @@ type PortLACPIntent struct {
 	Lacp      string        `json:"lacp"`
 	Fallback  string        `json:"fallback"`
 }
+type IsolatedBridgeIntent struct {
+	IntentId  Id     `json:"intent_id"`
+	Operation string `json:"operation"`
+	Name      string `json:"name"`
+}
 type NativeBond struct {
 	Lacp           json.RawMessage            `json:"lacp"`
 	BondMode       json.RawMessage            `json:"bond_mode"`
@@ -920,6 +926,25 @@ func (v *NativeBond) UnmarshalJSON(data []byte) error {
 }
 func (v NativeBond) MarshalJSON() ([]byte, error) {
 	type plain NativeBond
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type BridgeCreation struct {
+	Name           string                     `json:"name"`
+	RootUuid       Id                         `json:"root_uuid"`
+	LocalPort      ObjectBinding              `json:"local_port"`
+	LocalInterface ObjectBinding              `json:"local_interface"`
+	BeforePresent  bool                       `json:"before_present"`
+	AfterPresent   bool                       `json:"after_present"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
+}
+
+func (v *BridgeCreation) UnmarshalJSON(data []byte) error {
+	type plain BridgeCreation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v BridgeCreation) MarshalJSON() ([]byte, error) {
+	type plain BridgeCreation
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

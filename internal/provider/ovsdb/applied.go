@@ -15,6 +15,9 @@ import (
 // Compile only zero-timeout guards and a counter select. No update, mutate or
 // commit operation is allowed into this private, read-only proof transaction.
 func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d discovered) ([]any, error) {
+	if _, ok := bridgeIntent(p.Envelope.Candidate); ok {
+		return bridgeProof(p, view, d)
+	}
 	checked, err := compileExecution(p.ID, p.Marker, p.Envelope, view, d)
 	if err != nil {
 		return nil, err

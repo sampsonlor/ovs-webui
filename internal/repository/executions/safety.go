@@ -15,6 +15,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
+	identity "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/safety"
@@ -170,6 +171,9 @@ func (e *Engine) updateSafety(ctx context.Context, tx *sql.Tx, r execution.Recor
 		return err
 	}
 	if safety.Terminal(s.State) {
+		if err = identity.RetirePending(ctx, tx, r.ID); err != nil {
+			return err
+		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM operation_protections WHERE transaction_id=?", r.ID); err != nil {
 			return err
 		}

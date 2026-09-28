@@ -46,10 +46,11 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
-	Name    string  `json:"name"`
-	Version string  `json:"version"`
-	Digest  string  `json:"digest"`
-	Tables  []Table `json:"tables"`
+	Name           string  `json:"name"`
+	Version        string  `json:"version"`
+	Digest         string  `json:"digest"`
+	Tables         []Table `json:"tables"`
+	BridgeCreation bool    `json:"-"`
 }
 type Row struct {
 	UUID   string         `json:"uuid"`
@@ -101,6 +102,7 @@ type Decision struct {
 	Evidence      Evidence           `json:"evidence"`
 	PendingDigest string             `json:"pending_digest"`
 	Bindings      map[string]Binding `json:"-"`
+	Retired       map[string]bool    `json:"-"`
 }
 type Registry interface {
 	Previous(context.Context) (Decision, error)

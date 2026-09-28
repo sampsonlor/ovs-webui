@@ -145,7 +145,13 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	if v.decision.State != "confirmed" {
 		return out, apitypes.Fail(409, "GENERATION_RECONCILIATION_REQUIRED")
 	}
-	return candidateSnapshot(v, s.localVLAN, s.localBond, bindings), nil
+	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
+	priorRevision := out.Revision
+	projectCreation(v, s.localBridgeNames, &out)
+	if !slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" }) {
+		out.Revision = priorRevision
+	}
+	return out, nil
 }
 
 // Project the same immutable observation and authority policy for validation and

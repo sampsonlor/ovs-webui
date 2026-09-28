@@ -36,6 +36,14 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	envelope.Candidate.Intents = append([]candidate.StoredIntent{}, envelope.Candidate.Intents...)
 	for i := range envelope.Candidate.Intents {
 		intent := &envelope.Candidate.Intents[i]
+		if intent.Creation != nil {
+			labels, _ := view.Observation.Rows["Open_vSwitch"][original.Root].Values["external_ids"].(map[string]any)
+			if labels[bridgeMarkerKey] != original.Marker {
+				return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+			}
+			candidate.Reverse(intent)
+			continue
+		}
 		labels, _ := view.Observation.Rows["Port"][intent.Object.OVSUUID].Values["external_ids"].(map[string]any)
 		if labels[execution.MarkerKey] != original.Marker {
 			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
@@ -45,6 +53,12 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	checks, _ := candidate.Checks(envelope.Candidate, view.Candidate)
 	if !candidate.Passed(checks) {
 		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+	}
+	if _, ok := bridgeIntent(envelope.Candidate); ok {
+		if bridgeHostCheck(envelope.Candidate) != nil {
+			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+		}
+		return compileBridgeExecution(original.ID, marker, n.CreationMarker, envelope, view, d)
 	}
 	// This private derived envelope is never accepted as a user Candidate or
 	// validation. Commit checks its current before-image again before sending.
