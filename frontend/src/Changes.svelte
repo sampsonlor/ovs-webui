@@ -116,12 +116,14 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
+            c.intents.some((i) => i.operation === 'interface.mtu.set') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||
             c.intents.some((i) => !resolutions[i.intent_id])}
           >Rebase reviewed choices</button
         >
+        {#if c.intents.some((i) => i.operation === 'interface.mtu.set')}<p>MTU configuration or attachment changed. Discard this intent, review the current Interface and stage a new request. Rebase cannot change its captured binding.</p>{/if}
       </section>
     {/if}
     {#if !desktop}<p class="notice">

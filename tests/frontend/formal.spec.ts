@@ -29,6 +29,30 @@ const unit = (action: string, name: string) =>
   execFileSync('systemctl', [action, fixture.units[name]], { stdio: 'pipe' });
 const evidence = 'test-results/frontend-evidence';
 
+async function mtuEditor(page: Page) {
+  const list = await get(page.context(), '/interfaces');
+  const item = list.items.find((i: { name: string }) => i.name === 'pi-ui-mtu');
+  expect(item?.mtu_editable).toBe(true);
+  await page.goto(fixture.origin + `/interfaces/${item.management_id}`);
+  await page
+    .getByRole('link', { name: 'Edit MTU request →', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Edit MTU request', exact: true }),
+  ).toBeVisible();
+  return item;
+}
+
+async function stageMTU(page: Page, requested: string) {
+  await page.getByLabel('MTU request (bytes)', { exact: true }).fill(requested);
+  await page
+    .getByRole('button', { name: 'Stage in Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+}
+
 async function get(context: BrowserContext, path: string) {
   const response = await context.request.get(fixture.origin + '/api/v1' + path);
   expect(response.status(), path).toBe(200);
@@ -1493,4 +1517,213 @@ test('closing the browser leaves the actual 120-second server deadline and rollb
     }),
   ).toBeDisabled();
   await screen(reopened, 'server-deadline-rollback');
+});
+
+test('explicit internal Interface MTU follows responsive Candidate review, actual device proof and exact rollback', async ({
+  page,
+}) => {
+  const account = 'browser-mtu';
+  await login(page, account);
+  await clean(page.context());
+  const before = await mtuEditor(page);
+  const originalPort = vsctl('get', 'Port', 'pi-ui-mtu', '_uuid');
+  const originalBridge = vsctl('get', 'Bridge', 'br-ui-parent', '_uuid');
+  try {
+    await page.getByLabel('MTU request (bytes)', { exact: true }).fill('65536');
+    await page
+      .getByRole('button', { name: 'Stage in Candidate', exact: true })
+      .click();
+    await expect(page.getByRole('alert')).toHaveText(
+      'Enter one MTU request from 576 to 65535 bytes.',
+    );
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu_request')).toBe('1500');
+    await screen(page, 'interface-mtu-editor');
+    await stageMTU(page, '2000');
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu_request')).toBe('1500');
+    const diff = page.getByRole('region', { name: 'Configuration Diff' });
+    await expect(diff).toContainText('mtu_request');
+    await expect(
+      diff.getByRole('cell', { name: '1500', exact: true }),
+    ).toHaveCount(2);
+    await expect(
+      diff.getByRole('cell', { name: '2000', exact: true }),
+    ).toHaveCount(1);
+    const standard = await diff.innerText();
+    await screen(page, 'interface-mtu-standard');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    expect(await diff.innerText()).toBe(standard);
+    await screen(page, 'interface-mtu-expert');
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    for (const [width, height, device] of [
+      [900, 1000, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(
+        page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+      ).toBeDisabled();
+      await screen(page, `interface-mtu-${device}-review`);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+    }
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await validate(page);
+    await prepareApply(page, account);
+    await page
+      .getByRole('button', { name: 'Start Safe Apply', exact: true })
+      .click();
+    await awaiting(page);
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu')).toBe('2000');
+    expect(
+      JSON.parse(
+        execFileSync('ip', ['-j', 'link', 'show', 'dev', 'pi-ui-mtu'], {
+          encoding: 'utf8',
+        }),
+      )[0].mtu,
+    ).toBe(2000);
+    await screen(page, 'interface-mtu-awaiting-confirmation');
+    vsctl(
+      'set',
+      'Interface',
+      'pi-ui-mtu',
+      'external_ids:unrelated=preserve',
+      'other_config:opaque=preserve',
+    );
+    await chooseDecision(page, 'Rollback now', 'rolled-back');
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu_request')).toBe('1500');
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu')).toBe('1500');
+    expect(
+      JSON.parse(
+        execFileSync('ip', ['-j', 'link', 'show', 'dev', 'pi-ui-mtu'], {
+          encoding: 'utf8',
+        }),
+      )[0].mtu,
+    ).toBe(1500);
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', '_uuid')).toBe(
+      before.ovs_uuid,
+    );
+    expect(vsctl('get', 'Port', 'pi-ui-mtu', '_uuid')).toBe(originalPort);
+    expect(vsctl('get', 'Bridge', 'br-ui-parent', '_uuid')).toBe(
+      originalBridge,
+    );
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'other_config')).toBe(
+      '{opaque=preserve}',
+    );
+    await screen(page, 'interface-mtu-rolled-back');
+    await mtuEditor(page);
+    await stageMTU(page, '2200');
+    await validate(page);
+    await prepareApply(page, account);
+    await page
+      .getByRole('button', { name: 'Start Safe Apply', exact: true })
+      .click();
+    await awaiting(page);
+    await chooseDecision(page, 'Confirm configuration', 'confirmed');
+    expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu')).toBe('2200');
+    await screen(page, 'interface-mtu-confirmed');
+  } finally {
+    vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1500');
+  }
+});
+
+test('MTU drift, hidden native options, reader permissions and mobile direct edits remain gated', async ({
+  page,
+  browser,
+}) => {
+  await login(page, 'browser-mtu-drift');
+  await clean(page.context());
+  const item = await mtuEditor(page);
+  try {
+    await stageMTU(page, '2000');
+    vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1800');
+    await page
+      .getByRole('button', { name: 'Refresh evidence', exact: true })
+      .click();
+    await expect(
+      page.getByRole('region', { name: 'Configuration Diff' }),
+    ).toContainText('1800');
+    await expect(
+      page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', {
+        name: 'Rebase reviewed choices',
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await screen(page, 'interface-mtu-drift');
+    await clean(page.context());
+    vsctl('set', 'Interface', 'pi-ui-mtu', 'options:unpublished=synthetic');
+    await expect
+      .poll(
+        async () =>
+          (await get(page.context(), `/interfaces/${item.management_id}`))
+            .mtu_editable,
+      )
+      .toBe(false);
+    const hidden = await get(
+      page.context(),
+      `/interfaces/${item.management_id}`,
+    );
+    expect(hidden.options).toEqual({});
+    await page.goto(fixture.origin + `/interfaces/${item.management_id}/mtu`);
+    await expect(
+      page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toBeDisabled();
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-mtu-unavailable-dark');
+    vsctl('clear', 'Interface', 'pi-ui-mtu', 'options');
+    await expect
+      .poll(
+        async () =>
+          (await get(page.context(), `/interfaces/${item.management_id}`))
+            .mtu_editable,
+      )
+      .toBe(true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(fixture.origin + `/interfaces/${item.management_id}/mtu`);
+    await expect(
+      page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText('Use a desktop to prepare a configuration change.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await screen(page, 'interface-mtu-mobile-editor');
+    const reader = await browser.newContext({ ignoreHTTPSErrors: true });
+    try {
+      const readerPage = await reader.newPage();
+      await login(readerPage, 'browser-mtu-reader');
+      const observed = await get(reader, `/interfaces/${item.management_id}`);
+      expect(observed.mtu_editable).toBe(false);
+      expect(observed.fields.mtu_request.editable).toBe(false);
+      await readerPage.goto(
+        fixture.origin + `/interfaces/${item.management_id}/mtu`,
+      );
+      await expect(
+        readerPage.getByRole('button', {
+          name: 'Stage in Candidate',
+          exact: true,
+        }),
+      ).toBeDisabled();
+      await expect(
+        readerPage.getByText(
+          'Current permissions do not allow Interface MTU changes.',
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await screen(readerPage, 'interface-mtu-reader');
+    } finally {
+      await reader.close();
+    }
+  } finally {
+    vsctl('clear', 'Interface', 'pi-ui-mtu', 'options');
+    vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1500');
+  }
 });

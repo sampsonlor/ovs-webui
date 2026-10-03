@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "qinq-vlan-v1"
+const ValidatorVersion = "interface-explicit-mtu-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -32,19 +32,21 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
-	ID        string   `json:"intent_id"`
-	Operation string   `json:"operation"`
-	Object    Binding  `json:"object"`
-	Value     VLAN     `json:"value"`
-	Mode      string   `json:"mode,omitempty"`
-	LACP      string   `json:"lacp,omitempty"`
-	Members   []string `json:"member_interface_ids,omitempty"`
-	Fallback  string   `json:"fallback,omitempty"`
-	Name      string   `json:"name,omitempty"`
-	VLANID    int      `json:"vlan_id,omitempty"`
+	ID         string   `json:"intent_id"`
+	Operation  string   `json:"operation"`
+	Object     Binding  `json:"object"`
+	Value      VLAN     `json:"value"`
+	Mode       string   `json:"mode,omitempty"`
+	LACP       string   `json:"lacp,omitempty"`
+	Members    []string `json:"member_interface_ids,omitempty"`
+	Fallback   string   `json:"fallback,omitempty"`
+	Name       string   `json:"name,omitempty"`
+	VLANID     int      `json:"vlan_id,omitempty"`
+	MTURequest int      `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
 	QinQ *QinQContext `json:"qinq_context,omitempty"`
+	MTU  *MTUChange   `json:"mtu_change,omitempty"`
 	// IPC fields are explicit: strict request decoding deliberately does not
 	// infer encoding/json's anonymous-field promotion rules.
 	ID           string                `json:"intent_id"`
@@ -144,6 +146,7 @@ type Port struct {
 type Snapshot struct {
 	Generation, Revision, Schema, Policy string
 	Ports                                map[string]Port
+	Interfaces                           map[string]InterfaceMTU
 	Creation                             CreationSnapshot
 	Deletion                             DeletionSnapshot
 	PortDeletions                        InternalPortDeletionSnapshot
@@ -219,6 +222,9 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if i.MTU != nil {
+			out = append(out, i.MTU.Port, i.MTU.Bridge)
+		}
 		if d := i.PortDeletion; d != nil {
 			p := d.Source.Configuration
 			out = append(out, p.Bridge, p.Interface, p.LocalPort, p.LocalInterface)

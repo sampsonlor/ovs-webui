@@ -38,6 +38,7 @@ type Column struct {
 	VLANCompatible bool            `json:"-"`
 	VLANModes      []string        `json:"-"`
 	BondCompatible bool            `json:"-"`
+	MTUCompatible  bool            `json:"-"`
 }
 type Table struct {
 	Name    string     `json:"name"`
@@ -54,8 +55,10 @@ type Schema struct {
 	InternalPortCreation bool    `json:"-"`
 }
 type Row struct {
-	UUID   string         `json:"uuid"`
-	Values map[string]any `json:"values"`
+	// Provider assertion about the FULL raw options map, not its public subset.
+	InterfaceOptionsEmpty *bool          `json:"interface_options_empty,omitempty"`
+	UUID                  string         `json:"uuid"`
+	Values                map[string]any `json:"values"`
 }
 type Rows map[string]map[string]Row
 

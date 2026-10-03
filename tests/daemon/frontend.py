@@ -23,6 +23,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-reader', 'Reader'), ('browser-revoke', 'NetworkAdmin'),
                        ('browser-bridge', 'NetworkAdmin'), ('browser-bridge-delete', 'NetworkAdmin'),
                        ('browser-qinq', 'NetworkAdmin'), ('browser-interfaces', 'Reader'),
+                       ('browser-mtu', 'NetworkAdmin'), ('browser-mtu-drift', 'NetworkAdmin'),
+                       ('browser-mtu-reader', 'Reader'),
                        ('browser-interface-observer', 'InterfaceObserver'),
                        ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin')]:
         secret = 'synthetic-browser-' + secrets.token_hex(16)

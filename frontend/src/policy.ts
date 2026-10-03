@@ -1,5 +1,6 @@
 import type {
   Candidate,
+  Interface,
   NativeVlan,
   Port,
   Session,
@@ -17,9 +18,46 @@ export const vlanModes = [...standardModes, 'dot1q-tunnel'] as const;
 export function has(session: Session | null, capability: string): boolean {
   return !!session?.effective_capabilities.includes(capability);
 }
+export function mtuNumber(value: unknown): number | null {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 1 ||
+    typeof value[0] !== 'string' ||
+    !/^[0-9]+$/.test(value[0])
+  )
+    return null;
+  const n = Number(value[0]);
+  return Number.isSafeInteger(n) && n >= 576 && n <= 65535 ? n : null;
+}
+export function mtuEditReason(
+  item: Interface,
+  session: Session | null,
+  desktop: boolean,
+): string {
+  if (!desktop) return 'Use a desktop to prepare a configuration change.';
+  if (
+    !has(session, 'workspace.write') ||
+    !has(session, 'ovs.interface.mtu.write')
+  )
+    return 'Current permissions do not allow Interface MTU changes.';
+  if (
+    item.source.freshness !== 'fresh' ||
+    item.fields?.mtu_request?.availability !== 'known'
+  )
+    return 'MTU configuration is stale, unavailable or withheld.';
+  if (
+    item.mtu_editable !== true ||
+    !item.allowed_operations?.includes('interface.mtu.set') ||
+    item.fields?.mtu_request?.editable !== true ||
+    mtuNumber(item.fields?.mtu_request?.value) === null
+  )
+    return 'MTU editing requires an explicitly authorized standalone internal Interface with an existing MTU request. Local interfaces, Bond members, other types and native defaults are read-only.';
+  return '';
+}
 export function vlanText(v: NativeVlan | null): string {
   if (!v) return 'Unknown / withheld';
-  if (v.vlan_mode === 'dot1q-tunnel') return `QinQ · service VLAN ${v.tag ?? '—'} · customer VLANs ${v.cvlans.length ? v.cvlans.join(', ') : 'all customer VLANs (empty set)'}`;
+  if (v.vlan_mode === 'dot1q-tunnel')
+    return `QinQ · service VLAN ${v.tag ?? '—'} · customer VLANs ${v.cvlans.length ? v.cvlans.join(', ') : 'all customer VLANs (empty set)'}`;
   return `${v.vlan_mode ?? 'Native default'} · tag ${v.tag ?? '—'} · trunks ${v.trunks.length ? v.trunks.join(', ') : 'all VLANs (empty set)'}${v.cvlans.length ? ` · CVLANs ${v.cvlans.join(', ')}` : ''}`;
 }
 export function editReason(
@@ -45,7 +83,11 @@ export function editReason(
   if (
     !native ||
     !vlanModes.some((m) => m === native.vlan_mode) ||
-    (native.vlan_mode === 'dot1q-tunnel' ? p.qinq_editable !== true || native.tag === null || native.trunks.length > 0 : native.cvlans.length > 0) ||
+    (native.vlan_mode === 'dot1q-tunnel'
+      ? p.qinq_editable !== true ||
+        native.tag === null ||
+        native.trunks.length > 0
+      : native.cvlans.length > 0) ||
     native.cvlans.some((v) => v < 1 || v > 4094) ||
     (native.tag !== null && (native.tag < 1 || native.tag > 4094)) ||
     native.trunks.some((v) => v < 1 || v > 4094)
@@ -75,6 +117,7 @@ export function applyReady(
           'bridge.delete-isolated': 'ovs.bridge.delete',
           'port.create-internal': 'ovs.port.internal.create',
           'port.delete-internal': 'ovs.port.internal.delete',
+          'interface.mtu.set': 'ovs.interface.mtu.write',
         } as Record<string, string>
       )[i.operation];
       return !!capability && has(session, capability);

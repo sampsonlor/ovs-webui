@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.14.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through read-only list/detail pages. General graph deletion, physical/member/Interface mutations and full pages retain separate gates."
+    "version": "1.15.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit MTU requests on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -28238,7 +28238,8 @@
               "bridge.create-isolated",
               "bridge.delete-isolated",
               "port.create-internal",
-              "port.delete-internal"
+              "port.delete-internal",
+              "interface.mtu.set"
             ]
           },
           "object": {
@@ -28285,6 +28286,9 @@
           },
           "bridge_deletion": {
             "$ref": "#/components/schemas/BridgeDeletion"
+          },
+          "mtu_change": {
+            "$ref": "#/components/schemas/MTUChange"
           }
         },
         "required": [
@@ -28294,7 +28298,7 @@
           "value"
         ],
         "additionalProperties": true,
-        "description": "The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond. Unknown native values are preserved and never silently normalized."
+        "description": "The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond; Interface MTU uses mtu_change. Unknown native values are preserved and never silently normalized."
       },
       "Port": {
         "type": "object",
@@ -30023,6 +30027,14 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/InventoryField"
             }
+          },
+          "mtu_ownership": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "mtu_editable": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -30042,7 +30054,7 @@
           "options"
         ],
         "additionalProperties": true,
-        "description": "Read-only native Interface inventory. Configuration fields require configuration.read; operational fields are observations, even when the native schema marks a column mutable. Empty optional values, unavailable columns and withheld values remain distinct. Device status is allowlisted; no hardware role or Interface type is inferred from names."
+        "description": "Native Interface inventory with explicitly admitted MTU edits. Configuration fields require configuration.read; operational fields remain observations. Empty optional values, unavailable columns and withheld values remain distinct. No hardware role or Interface type is inferred from names. MTU editing requires independent root Interface authority and an existing explicit request on a standalone non-local internal Interface."
       },
       "InventoryField": {
         "type": "object",
@@ -31369,6 +31381,34 @@
         "additionalProperties": false,
         "description": "Create one fresh internal access Port and Interface under an existing system Bridge binding. Requires ovs.port.internal.create and a root-owned Bridge management-id:name grant. No physical adoption, local-port change, host IP configuration or direct live write. Safe Apply rollback removes only unchanged created children and preserves the captured parent membership."
       },
+      "InterfaceMTUIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "interface.mtu.set"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "mtu_request": {
+            "type": "integer",
+            "minimum": 576,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "mtu_request"
+        ],
+        "additionalProperties": false,
+        "description": "Change an existing explicit mtu_request on one standalone non-local internal Interface with proven empty raw options. Requires ovs.interface.mtu.write and independent root Interface management ID authority. Single intent only; no clearing the request, type/options mutation, Bond member, local Interface or physical adoption. Safe Apply requires actual MTU proof and compensation restores the captured explicit request."
+      },
       "InternalPortCreation": {
         "type": "object",
         "properties": {
@@ -31613,6 +31653,34 @@
         "additionalProperties": true,
         "description": "Only restored proves settled compensation with Applied and health evidence. Other or unknown states do not establish a usable replacement."
       },
+      "MTUChange": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "type": "integer",
+            "minimum": 576,
+            "maximum": 65535
+          },
+          "after": {
+            "type": "integer",
+            "minimum": 576,
+            "maximum": 65535
+          },
+          "port": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "bridge": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "port",
+          "bridge"
+        ],
+        "additionalProperties": true
+      },
       "Intent": {
         "oneOf": [
           {
@@ -31677,6 +31745,9 @@
           },
           {
             "$ref": "#/components/schemas/InternalPortCreateIntent"
+          },
+          {
+            "$ref": "#/components/schemas/InterfaceMTUIntent"
           }
         ]
       },

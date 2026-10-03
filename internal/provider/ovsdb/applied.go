@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"strconv"
 	"time"
 
@@ -38,6 +39,15 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
+		if intent.Operation == candidate.InterfaceMTUSet {
+			row := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
+			g, err := guard(d, "Interface", row, []string{"error", "mtu"}, []any{uuidCondition(row.UUID)})
+			if err != nil {
+				return nil, err
+			}
+			ops = append(ops, g)
+			continue
+		}
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]
 		for _, id := range nativeRefs(port.Values["interfaces"]) {
 			g, err := guard(d, "Interface", view.Observation.Rows["Interface"][id], []string{"error"}, []any{uuidCondition(id)})
