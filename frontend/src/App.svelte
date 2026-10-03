@@ -8,6 +8,8 @@
   import LoadNotice from './LoadNotice.svelte';
   import VlanEditor from './VlanEditor.svelte';
   import Changes from './Changes.svelte';
+  import Interfaces from './Interfaces.svelte';
+  import InterfaceDetail from './InterfaceDetail.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -159,6 +161,7 @@
       <div class="nav-section">
         <p class="eyebrow">Switching</p>
         <Link href="/ports" current={path.startsWith('/ports')}>Ports</Link>
+        {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
       <nav aria-label="Change Control" class="nav-section">
         <p class="eyebrow">Shared Change Control</p>
@@ -435,9 +438,13 @@
                 </details>{/if}
             {/if}
           {/if}
+        {:else if path === '/interfaces'}
+          <Interfaces model={$model} {expert} />
+        {:else if path.startsWith('/interfaces/')}
+          <InterfaceDetail model={$model} {expert} />
         {:else if path.startsWith('/changes/') && path !== '/changes/transactions'}
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
-        {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path.startsWith('/bridges/') || path.startsWith('/interfaces/')}
+        {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path.startsWith('/bridges/')}
           <header class="page-heading">
             <div>
               <p class="eyebrow">Shared resources / authoritative evidence</p>

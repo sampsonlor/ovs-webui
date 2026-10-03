@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.13.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. General graph deletion, physical/member changes and full pages retain separate gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.14.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through read-only list/detail pages. General graph deletion, physical/member/Interface mutations and full pages retain separate gates.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -42,6 +42,9 @@ s.Resource = open({ id, state: string(), sequence: ref('Sequence'), resource_kin
 s.ResourcePage = open({ snapshot_id: id, instance_generation: nullable(id), items: array(ref('Resource'), 500), next_cursor: nullable(string(4096)), truncated: bool });
 s.Bridge = open({ ...s.Resource.properties, management_id: id, ovs_uuid: id, instance_generation: id, config_revision: revision, name: string(), port_refs: array(ref('ResourceRef'), 500), datapath_type: string() });
 s.Interface = open({ ...s.Resource.properties, management_id: id, ovs_uuid: id, instance_generation: id, config_revision: revision, name: string(), port_ref: ref('ResourceRef'), interface_type: string(), options: { type: 'object', additionalProperties: true } });
+s.InventoryField = open({ value: {}, availability: string(), source: ref('Source'), schema_mutable: bool, ownership: string(), editable: bool });
+Object.assign(s.Interface.properties, { bridge_ref: ref('ResourceRef'), port_kind: string(), internal: nullable(bool), local_interface: nullable(bool), ownership: string(), allowed_operations: array(string(), 64), fields: { type: 'object', additionalProperties: ref('InventoryField') } });
+s.Interface.description = 'Read-only native Interface inventory. Configuration fields require configuration.read; operational fields are observations, even when the native schema marks a column mutable. Empty optional values, unavailable columns and withheld values remain distinct. Device status is allowlisted; no hardware role or Interface type is inferred from names.';
 s.Bond = open({ ...s.Port.properties, lacp: string(), bond_mode: string(), member_refs: array(ref('ResourceRef'), 128) });
 s.User = open({ id, revision, username: string(), disabled: bool, role_ids: array(id, 64) });
 s.Role = open({ id, revision, name: string(), capabilities: array(string(), 128) });
@@ -205,6 +208,7 @@ for (const [path, kind, schema, issue] of resources) {
  add(`/${path}`, 'get', `list${name(path)}`, page, cap, issue, { page: true, kind });
  if (!api.paths[`/${path}/{${kind}_id}`]) add(`/${path}/{${kind}_id}`, 'get', `read${name(kind)}`, schema, cap, issue, { kind });
 }
+Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 api.paths['/jobs'].get.parameters.push(...structuredClone(evidenceFilters));
 for (const [path, op, issue, cap] of [['health','readHealth',45,'state.read'],['management-network','readManagementNetwork',49,'state.read'],['ovs-lifecycle','readOVSLifecycle',49,'state.read'],['aaa','readAAA',34,'access.read'],['settings','readSettings',54,'workspace.read'],['about','readAbout',55,'state.read'],['topology','readTopology',52,'state.read']]) add(`/${path}`, 'get', op, 'Resource', cap, issue);
 add('/search','get','searchResources','ResourcePage','state.read',52,{page:true,query:[param('q','query',string(256),true)]});
