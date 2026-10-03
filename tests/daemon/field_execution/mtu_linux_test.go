@@ -70,10 +70,29 @@ func TestNativeInterfaceMTU(t *testing.T) {
 		id := f.safeApply(f.prepareIntents([]any{mtuIntent(b, 2000)}))
 		f.waitSafety(id, "awaiting-confirmation")
 		f.vs("set", "Interface", name, "external_ids:added=preserve", "other_config:opaque=preserve")
+		// Establish the new metadata baseline before testing compensation. The
+		// atomic guard must still reject an unobserved change at dispatch.
+		waitFor(t, func() bool {
+			v, err := f.inventory.ExecutionView(f.ctx, []candidate.Binding{b})
+			if err != nil {
+				return false
+			}
+			labels, _ := v.Observation.Rows["Interface"][b.OVSUUID].Values["external_ids"].(map[string]any)
+			return labels["added"] == "preserve"
+		})
+		defer func() {
+			if t.Failed() {
+				s := f.safeState(id)
+				t.Logf("compensation: state=%s reason=%s outcome=%+v request=%s actual=%s writes=%d", s.State, s.Reason, s.Outcome, f.vs("get", "Interface", name, "mtu_request"), f.vs("get", "Interface", name, "mtu"), f.proxy.sent.Load())
+			}
+		}()
 		f.decide(id, "rollback")
 		f.waitSafety(id, "rolled-back")
 		if f.vs("get", "Interface", name, "mtu_request") != "1500" || f.vs("get", "Interface", name, "mtu") != "1500" || f.vs("get", "Interface", name, "_uuid") != b.OVSUUID || !strings.Contains(f.vs("get", "Interface", name, "external_ids"), "added=preserve") || f.vs("get", "Interface", name, "other_config") != "{opaque=preserve}" {
 			t.Fatal("exact compensation failed")
+		}
+		if f.proxy.sent.Load() != 2 {
+			t.Fatal("compensation replayed", f.proxy.sent.Load())
 		}
 	})
 	t.Run("late_external_request_aborts_atomic_dispatch", func(t *testing.T) {
