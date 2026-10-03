@@ -13,11 +13,13 @@ export const standardModes = [
   'native-tagged',
   'native-untagged',
 ] as const;
+export const vlanModes = [...standardModes, 'dot1q-tunnel'] as const;
 export function has(session: Session | null, capability: string): boolean {
   return !!session?.effective_capabilities.includes(capability);
 }
 export function vlanText(v: NativeVlan | null): string {
   if (!v) return 'Unknown / withheld';
+  if (v.vlan_mode === 'dot1q-tunnel') return `QinQ · service VLAN ${v.tag ?? '—'} · customer VLANs ${v.cvlans.length ? v.cvlans.join(', ') : 'all customer VLANs (empty set)'}`;
   return `${v.vlan_mode ?? 'Native default'} · tag ${v.tag ?? '—'} · trunks ${v.trunks.length ? v.trunks.join(', ') : 'all VLANs (empty set)'}${v.cvlans.length ? ` · CVLANs ${v.cvlans.join(', ')}` : ''}`;
 }
 export function editReason(
@@ -42,12 +44,13 @@ export function editReason(
   const native = p.vlan.native;
   if (
     !native ||
-    !standardModes.some((m) => m === native.vlan_mode) ||
-    native.cvlans.length ||
+    !vlanModes.some((m) => m === native.vlan_mode) ||
+    (native.vlan_mode === 'dot1q-tunnel' ? p.qinq_editable !== true || native.tag === null || native.trunks.length > 0 : native.cvlans.length > 0) ||
+    native.cvlans.some((v) => v < 1 || v > 4094) ||
     (native.tag !== null && (native.tag < 1 || native.tag > 4094)) ||
     native.trunks.some((v) => v < 1 || v > 4094)
   ) {
-    return 'Preserved native, advanced or unknown value. Editing this value is outside the first slice.';
+    return 'This native configuration or QinQ context has not passed the supported editing gates.';
   }
   return '';
 }

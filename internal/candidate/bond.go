@@ -182,6 +182,9 @@ func currentOriginal(i *StoredIntent, p Port) {
 	} else {
 		i.Before = normalize(p.VLAN)
 		i.Dependency = p.Dependency
+		if UsesQinQ(*i) {
+			i.QinQ = cloneQinQ(p.QinQ)
+		}
 	}
 }
 

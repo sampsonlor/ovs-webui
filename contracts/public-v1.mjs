@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.12.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. General graph deletion, physical/member changes and full pages retain separate gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.13.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. General graph deletion, physical/member changes and full pages retain separate gates.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -52,6 +52,9 @@ s.Runtime = open({ state: string(), scope: string(), configuration_ready: bool, 
 s.ContractInfo = open({ major: { type: 'integer', const: 1 }, version: string(), openapi_url: string(), service_state: string(), request_domains: array(string(), 2) });
 s.Subscription = closed({ resources: array(closed({ kind: string(64), id }), 32, 1), cursor: nullable(closed({ stream_id: id, sequence: ref('Sequence') })) });
 
+s.QinQContext = open({ dependency_revision: revision, ethertype: nullable({ type: 'string' }) });
+s.ObservedIntent.properties.qinq_context = ref('QinQContext');
+Object.assign(s.Port.properties, { qinq_editable: bool, qinq_ethertype: nullable({ type: 'string' }) });
 // Switching mutations remain Candidate intents, never live PATCH on OVS objects.
 s.InterfaceSpec = closed({ name: string(), type: choices('system', 'internal', 'patch', 'vxlan', 'geneve', 'gre'), options: strMap });
 const intent = (operation, properties) => closed({ intent_id: id, operation: { type: 'string', const: operation }, ...properties });

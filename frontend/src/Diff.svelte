@@ -5,7 +5,21 @@
   const internalPorts = $derived(fields.filter((field) => field.operation === 'port.create-internal'));
   const portDeletions = $derived(fields.filter((field) => field.operation === 'port.delete-internal'));
   const deletions = $derived(fields.filter((field) => field.operation === 'bridge.delete-isolated'));
-  function display(value: unknown, field: DiffField) {
+  const qinq = $derived(fields.filter((field) => field.field === 'qinq_context'));
+  function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
+    if (field.field === 'qinq_context' && value && typeof value === 'object') {
+      const context = value as Record<string, unknown>;
+      return `TPID ${context.ethertype ?? '802.1ad (native default)'} · preserved`;
+    }
+    if (Array.isArray(value) && value.length === 0 && ['trunks', 'cvlans'].includes(field.field)) {
+      let mode = fields.find((other) => other.intent_id === field.intent_id && other.field === 'vlan_mode')?.[side];
+      if (mode === null) {
+        const tag = fields.find((other) => other.intent_id === field.intent_id && other.field === 'tag')?.[side];
+        if (tag !== undefined) mode = tag === null ? 'trunk' : 'access';
+      }
+      if (field.field === 'cvlans') return mode === 'dot1q-tunnel' ? '∅ · all customer VLANs' : '∅ · not used';
+      return ['trunk', 'native-tagged', 'native-untagged'].includes(String(mode)) ? '∅ · all VLANs' : '∅ · not used';
+    }
     if (field.operation === 'port.delete-internal') {
       if (value === 'absent') return 'Not present';
       if (value && typeof value === 'object') {
@@ -39,6 +53,10 @@
         : JSON.stringify(value);
 </script>
 
+{#if qinq.length}
+  <div class="notice warning"><strong>QinQ service and customer VLANs</strong><p>The service VLAN is the outer tag. An empty customer VLAN list permits all customer VLANs. The native TPID is preserved; external dependency changes block reuse of this review and guarded rollback.</p></div>
+  {#if expert}{#each qinq as field}<details><summary>QinQ native dependency evidence</summary><pre>{JSON.stringify({ original: field.before, current: field.current }, null, 2)}</pre></details>{/each}{/if}
+{/if}
 {#if internalPorts.length}
   <div class="notice">
     <strong>New internal access Port and Interface</strong>
@@ -84,9 +102,9 @@
               >{field.object.management_id.slice(0, 8)}</Link
             >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
-          ><td>{display(field.before, field)}</td><td
-            >{display(field.current, field)}</td
-          ><td>{display(field.after, field)}</td></tr
+          ><td>{display(field.before, field, 'before')}</td><td
+            >{display(field.current, field, 'current')}</td
+          ><td>{display(field.after, field, 'after')}</td></tr
         >
       {:else}<tr><td colspan="4">No field changes to review.</td></tr>{/each}
     </tbody>

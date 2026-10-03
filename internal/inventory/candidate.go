@@ -224,6 +224,7 @@ func candidateSnapshot(v *view, localVLAN, localBond map[string]bool, bindings [
 		}
 		p.Dependency = Digest([]any{bridge.UUID, bridge.Values["name"], bridge.Values["datapath_type"], row.Values["name"], members, p.Authority})
 		projectBond(v, row, bridge, localBond[b.ManagementID], &p)
+		projectQinQ(v, row, bridge, &p)
 		out.Ports[b.ManagementID] = p
 	}
 	// Copy projected values before releasing the lock. No caller receives live

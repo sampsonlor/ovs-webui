@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.12.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. General graph deletion, physical/member changes and full pages retain separate gates."
+    "version": "1.13.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. General graph deletion, physical/member changes and full pages retain separate gates."
   },
   "servers": [
     {
@@ -28259,6 +28259,9 @@
             "minLength": 1,
             "maxLength": 128
           },
+          "qinq_context": {
+            "$ref": "#/components/schemas/QinQContext"
+          },
           "internal_port_creation": {
             "$ref": "#/components/schemas/InternalPortCreation"
           },
@@ -28386,6 +28389,19 @@
             },
             "minItems": 0,
             "maxItems": 128
+          },
+          "qinq_editable": {
+            "type": "boolean"
+          },
+          "qinq_ethertype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -30419,6 +30435,29 @@
           "cursor"
         ],
         "additionalProperties": false
+      },
+      "QinQContext": {
+        "type": "object",
+        "properties": {
+          "dependency_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "ethertype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dependency_revision",
+          "ethertype"
+        ],
+        "additionalProperties": true
       },
       "InterfaceSpec": {
         "type": "object",

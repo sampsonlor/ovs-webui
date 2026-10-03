@@ -273,6 +273,12 @@ await test('semantic gates preserve advanced VLANs and keep mode depth separate 
     vlan: { native, availability: 'known', source: { freshness: 'fresh' } },
   };
   assert.equal(editReason(p, session, true), '');
+  const qinq = { ...p, qinq_editable: true, vlan: { ...p.vlan, native: { vlan_mode: 'dot1q-tunnel', tag: 200, trunks: [], cvlans: [30] } } };
+  assert.equal(editReason(qinq, session, true), '');
+  assert.ok(editReason({ ...qinq, qinq_editable: false }, session, true));
+  assert.ok(editReason(qinq, session, false));
+  assert.ok(editReason(qinq, { ...session, effective_capabilities: [] }, true));
+  assert.ok(editReason({ ...qinq, vlan: { ...qinq.vlan, native: { ...qinq.vlan.native, cvlans: [4095] } } }, session, true));
   assert.ok(editReason(p, session, false));
   assert.ok(
     editReason(

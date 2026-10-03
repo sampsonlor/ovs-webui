@@ -281,6 +281,7 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 	seen := map[string]bool{}
 	for _, intent := range envelope.Candidate.Intents {
 		isBond := candidate.IsBondOperation(intent.Operation)
+		isQinQ := candidate.UsesQinQ(intent)
 		if intent.Operation != "port.vlan.set" && !isBond || seen[intent.Object.OVSUUID] {
 			return out, apitypes.Fail(422, "INVALID_EXECUTION_SCOPE")
 		}
@@ -288,6 +289,9 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]
 		where := []any{uuidCondition(port.UUID)}
 		columns := []string{"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "external_ids"}
+		if isQinQ {
+			columns = append(columns, "other_config")
+		}
 		if isBond {
 			if intent.Bond == nil || intent.BeforeBond == nil {
 				return out, apitypes.Fail(422, "INVALID_EXECUTION_SCOPE")
@@ -339,7 +343,7 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 				return out, err
 			}
 			n.Operations = append(n.Operations, g)
-			if isBond {
+			if isBond || isQinQ {
 				n.Operations = append(n.Operations, waitRows("Port", []any{[]any{"interfaces", "includes", uuidSet(id)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(port.UUID)}}))
 			}
 		}

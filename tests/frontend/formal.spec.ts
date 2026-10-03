@@ -207,6 +207,52 @@ async function screen(page: Page, name: string) {
 }
 const pageErrors = new WeakMap<Page, string[]>();
 
+test('QinQ editor preserves TPID, reviews all customer VLANs and safely restores native fields', async ({ page, context }) => {
+  const account = 'browser-qinq';
+  await login(page, account);
+  await clean(context);
+  const original = vsctl('get', 'Port', 'inv-p1', '_uuid');
+  await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+  await page.getByRole('link', { name: 'Edit VLAN intent →', exact: true }).click();
+  await page.getByRole('combobox', { name: 'VLAN mode', exact: true }).selectOption('dot1q-tunnel');
+  await page.getByLabel('Service VLAN tag', { exact: true }).fill('200');
+  await page.getByLabel('Customer VLANs', { exact: true }).fill('30, 30');
+  await page.getByRole('button', { name: 'Stage in Candidate', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('unique');
+  await page.getByLabel('Customer VLANs', { exact: true }).fill('');
+  await expect(page.getByText('Service TPID:', { exact: false })).toContainText('802.1ad');
+  await screen(page, 'qinq-editor');
+  await page.getByRole('button', { name: 'Stage in Candidate', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Candidate Workspace', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: '∅ · all customer VLANs', exact: true })).toBeVisible();
+  expect(vsctl('get', 'Port', 'inv-p1', 'vlan_mode')).toBe('access');
+  const c = await get(context, '/candidate');
+  expect(c.intents[0].qinq_context.ethertype).toBe(null);
+  await screen(page, 'qinq-standard');
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await page.getByText('QinQ native dependency evidence', { exact: true }).click();
+  await screen(page, 'qinq-expert');
+  for (const [width, height, device] of [[900,1000,'tablet'],[390,844,'mobile']] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole('button', { name: 'Validate Candidate', exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await screen(page, 'qinq-' + device);
+  }
+  await page.setViewportSize({ width:1280,height:1000 });
+  await validate(page);
+  await prepareApply(page, account);
+  await page.getByRole('button', { name:'Start Safe Apply',exact:true }).click();
+  await awaiting(page);
+  expect(vsctl('get','Port','inv-p1','vlan_mode')).toBe('dot1q-tunnel');
+  expect(vsctl('get','Port','inv-p1','cvlans')).toBe('[]');
+  await screen(page,'qinq-awaiting');
+  await chooseDecision(page,'Request rollback','rolled-back');
+  expect(vsctl('get','Port','inv-p1','vlan_mode')).toBe('access');
+  expect(vsctl('get','Port','inv-p1','tag')).toBe('10');
+  expect(vsctl('get','Port','inv-p1','_uuid')).toBe(original);
+  await screen(page,'qinq-rolled-back');
+});
+
 test('managed internal Port deletion preserves its parent and restores fresh child identities', async ({
   page,
   context,
@@ -735,7 +781,7 @@ test('real login, native identity, approved depth and responsive responsibilitie
     .click();
   await screen(page, 'ports-expert-dark');
   await page.getByRole('link', { name: 'inv-p2', exact: true }).click();
-  await expect(page.getByText(/dot1q-tunnel · tag 200/)).toBeVisible();
+  await expect(page.getByText(/QinQ · service VLAN 200/)).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Edit VLAN intent →' }),
   ).toHaveCount(0);

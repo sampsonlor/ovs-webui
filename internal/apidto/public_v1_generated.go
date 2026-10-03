@@ -115,6 +115,7 @@ type ObservedIntent struct {
 	Before                 NativeVlan                 `json:"before,omitempty"`
 	DependencyRevision     Revision                   `json:"dependency_revision,omitempty"`
 	SchemaDigest           string                     `json:"schema_digest,omitempty"`
+	QinqContext            QinQContext                `json:"qinq_context,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
 	Bond                   NativeBond                 `json:"bond,omitempty"`
@@ -147,6 +148,8 @@ type Port struct {
 	OvsLinkState       map[string]json.RawMessage `json:"ovs_link_state"`
 	LinuxCarrier       map[string]json.RawMessage `json:"linux_carrier"`
 	AllowedOperations  []string                   `json:"allowed_operations"`
+	QinqEditable       bool                       `json:"qinq_editable,omitempty"`
+	QinqEthertype      json.RawMessage            `json:"qinq_ethertype,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
@@ -787,6 +790,21 @@ type Subscription struct {
 	Resources []map[string]json.RawMessage `json:"resources"`
 	Cursor    json.RawMessage              `json:"cursor"`
 }
+type QinQContext struct {
+	DependencyRevision Revision                   `json:"dependency_revision"`
+	Ethertype          json.RawMessage            `json:"ethertype"`
+	ExtraFields        map[string]json.RawMessage `json:"-"`
+}
+
+func (v *QinQContext) UnmarshalJSON(data []byte) error {
+	type plain QinQContext
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v QinQContext) MarshalJSON() ([]byte, error) {
+	type plain QinQContext
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type InterfaceSpec struct {
 	Name    string                     `json:"name"`
 	Type    string                     `json:"type"`

@@ -19,14 +19,14 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     for name, role in [('browser-admin', 'Administrator'), ('browser-deadline', 'Administrator'),
                        ('browser-reader', 'Reader'), ('browser-revoke', 'NetworkAdmin'),
                        ('browser-bridge', 'NetworkAdmin'), ('browser-bridge-delete', 'NetworkAdmin'),
-                       ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin')]:
+                       ('browser-qinq', 'NetworkAdmin'), ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin')]:
         secret = 'synthetic-browser-' + secrets.token_hex(16)
         credentials.append(secret)
         code, _, _ = call('/users', 'POST', {'request_id': request_id(), 'username': name, 'password': secret, 'role_ids': [roles[role]]})
         assert code == 202
         accounts[name] = secret
     vsctl('set', 'Port', 'inv-p1', 'vlan_mode=access', 'tag=10', 'trunks=[]', 'cvlans=[]')
-    vsctl('set', 'Port', 'inv-p2', 'vlan_mode=dot1q-tunnel', 'tag=200', 'cvlans=300,301')
+    vsctl('set', 'Port', 'inv-p2', 'vlan_mode=dot1q-tunnel', 'tag=200', 'cvlans=300,301', 'other_config:qinq-ethtype=unproven')
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
                 'ovsDirectory': str(ovs), 'database': str(conf)}
     path = fixture / 'browser-private.json'
