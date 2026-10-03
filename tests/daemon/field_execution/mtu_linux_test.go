@@ -130,7 +130,7 @@ func TestNativeInterfaceMTU(t *testing.T) {
 		r := f.observe(id, func(r execution.Record) bool { return r.Outcome.Commit == "committed" })
 		must(t, f.engine.SafetyTick(f.ctx))
 		s := f.safeState(id)
-		if r.Outcome.Applied == "applied" || s.State != "preparing" || f.vs("get", "Interface", name, "mtu") != "1500" {
+		if r.Outcome.Applied == "applied" || s.Confirmation != nil || s.State == "awaiting-confirmation" || f.vs("get", "Interface", name, "mtu") != "1500" {
 			t.Fatal("confirmation opened without actual MTU", s)
 		}
 		must(t, syscall.Kill(f.pid("switch"), syscall.SIGCONT))
