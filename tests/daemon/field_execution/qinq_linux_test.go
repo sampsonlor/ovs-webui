@@ -16,7 +16,7 @@ import (
 )
 
 func newQinQFixture(t *testing.T) *fixture {
-	f := newFixture(t)
+	f := newFixtureWithVLANLimit(t, "2")
 	f.vs("--", "--id=@dp", "create", "Datapath", "external_ids:synthetic-qinq=fixture", "--", "set", "Open_vSwitch", ".", "datapaths:dummy=@dp", "other_config:vlan-limit=2")
 	b := f.binding("field-p1")
 	t.Cleanup(func() {

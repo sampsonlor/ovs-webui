@@ -206,6 +206,9 @@ def main():
         assert references == [{'table': 'Interface', 'strength': 'strong', 'position': 'key'}]
         checks.append('unavailable has no fabricated generation; genuinely empty monitored DB is complete; discovered types, references, indexes and mutability')
 
+        if args.frontend_browser:
+            vsctl('--no-wait', 'init', '--', 'set', 'Open_vSwitch', '.', 'other_config:vlan-limit=2')
+
         ovs_run('ovs-vswitchd', f'unix:{db_socket}', '--enable-dummy', f'--pidfile={ovs}/switch.pid',
                 f'--unixctl={ovs}/switch.ctl', '--detach', '--no-chdir')
         vsctl('add-br', 'br-inv', '--', 'set', 'Bridge', 'br-inv', 'datapath_type=dummy',
