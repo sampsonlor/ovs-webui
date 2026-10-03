@@ -30,7 +30,7 @@ const unit = (action: string, name: string) =>
 const evidence = 'test-results/frontend-evidence';
 
 async function mtuEditor(page: Page) {
-  const list = await get(page.context(), '/interfaces');
+  const list = await get(page.context(), '/interfaces?filter=pi-ui-mtu');
   const item = list.items.find((i: { name: string }) => i.name === 'pi-ui-mtu');
   expect(item?.mtu_editable).toBe(true);
   await page.goto(fixture.origin + `/interfaces/${item.management_id}`);
@@ -286,14 +286,42 @@ test('native Interfaces support snapshot filters, pagination, depth and responsi
     await page.getByRole('button', { name: 'Expert', exact: true }).click();
     await screen(page, 'interfaces-standard');
     await page.getByRole('button', { name: 'Standard', exact: true }).click();
-    const nextPage = page.waitForResponse(
-      (response) =>
-        response.url().includes('/api/v1/interfaces?') &&
-        response.url().includes('cursor=') &&
-        response.status() === 200,
-    );
-    await page.getByRole('button', { name: 'Next page', exact: true }).click();
-    await nextPage;
+    let paged = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const nextPage = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/interfaces?') &&
+          response.url().includes('cursor='),
+      );
+      await page
+        .getByRole('button', { name: 'Next page', exact: true })
+        .click();
+      const response = await nextPage;
+      if (response.status() === 200) {
+        paged = true;
+        break;
+      }
+      // Real daemon observations can invalidate the snapshot while reviewing
+      // mode screenshots. Exercise explicit UI recovery; never ignore errors
+      // or accept pagination without a successful snapshot-bound second page.
+      expect(response.status()).toBe(410);
+      expect((await response.json()).code).toBe('CURSOR_EXPIRED');
+      await expect(
+        page.getByText('The page snapshot changed or expired.', {
+          exact: false,
+        }),
+      ).toBeVisible();
+      await page
+        .getByRole('button', { name: 'First page', exact: true })
+        .click();
+      await expect(
+        page.getByRole('button', { name: 'Next page', exact: true }),
+      ).toBeEnabled();
+    }
+    expect(
+      paged,
+      'Successful snapshot-bound second page after explicit recovery',
+    ).toBe(true);
     await expect(
       page.getByRole('region', { name: 'Interfaces inventory', exact: true }),
     ).toBeVisible();
