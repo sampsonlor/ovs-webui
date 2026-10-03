@@ -19,6 +19,16 @@ func newQinQFixture(t *testing.T) *fixture {
 	f := newFixture(t)
 	f.vs("--", "--id=@dp", "create", "Datapath", "external_ids:synthetic-qinq=fixture", "--", "set", "Open_vSwitch", ".", "datapaths:dummy=@dp", "other_config:vlan-limit=2")
 	b := f.binding("field-p1")
+	t.Cleanup(func() {
+		if t.Failed() {
+			s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{b})
+			p := s.Ports[b.ManagementID]
+			t.Logf("QinQ projection: error=%v supported=%v context=%+v", err, p.QinQSupported, p.QinQ)
+			t.Log("native datapaths", f.vs("get", "Open_vSwitch", ".", "datapaths"))
+			t.Log("native capabilities", f.vs("--columns=capabilities", "list", "Datapath"))
+			t.Log("native parser", f.vs("get", "Open_vSwitch", ".", "other_config:vlan-limit"))
+		}
+	})
 	waitFor(t, func() bool {
 		s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{b})
 		return err == nil && s.Ports[b.ManagementID].QinQSupported
