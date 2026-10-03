@@ -443,7 +443,9 @@ tr.conflict {
   margin-bottom: 20px;
 }
 .inventory-filters label {
-  margin: 0;
+  margin: 0 0 6px;
+}
+.inventory-filters .filter-control {
   flex: 1 1 180px;
 }
 .breadcrumbs {

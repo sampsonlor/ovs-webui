@@ -299,9 +299,10 @@ export class Controller {
           );
         else {
           const query = new URLSearchParams({
-            filter: this.state.interfaceFilter,
             limit: String(this.state.interfaceLimit),
           });
+          if (this.state.interfaceFilter)
+            query.set('filter', this.state.interfaceFilter);
           if (this.interfaceCursor) query.set('cursor', this.interfaceCursor);
           tasks.push(
             read<InterfacePage>(`/interfaces?${query}`, 'inventory.read').then(

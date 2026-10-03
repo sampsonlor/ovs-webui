@@ -26,8 +26,8 @@
   <button onclick={() => controller.interfacePage()}>Refresh inventory</button>
 </header>
 <form class="inventory-filters" onsubmit={search}>
-  <label>Interface name<input type="search" bind:value={filter} maxlength="1024" placeholder="Filter all observed Interfaces" /></label>
-  <label>Page size<select bind:value={limit}>{#each [10, 25, 50, 100] as size}<option value={String(size)}>{size}</option>{/each}</select></label>
+  <div class="filter-control"><label for="interface-filter">Interface name</label><input id="interface-filter" type="search" bind:value={filter} maxlength="1024" placeholder="Filter all observed Interfaces" /></div>
+  <div class="filter-control"><label for="interface-limit">Page size</label><select id="interface-limit" bind:value={limit}>{#each [10, 25, 50, 100] as size}<option value={String(size)}>{size}</option>{/each}</select></div>
   <button type="submit">Apply filter</button><button type="button" onclick={clear}>Clear filters</button>
 </form>
 <LoadNotice load={model.interfaces} />

@@ -103,6 +103,12 @@ await test('Interface filters fence old replies and retain filter and limit on s
   const c = new Controller(api, '/interfaces');
   const first = c.refresh();
   await until(() => release);
+  assert.equal(
+    new URL(urls.at(-1), 'https://synthetic.invalid').searchParams.has(
+      'filter',
+    ),
+    false,
+  );
   c.interfacePage('native port & member', 10);
   release();
   await first;
