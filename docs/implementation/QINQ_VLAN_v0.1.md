@@ -14,7 +14,7 @@
 
 沿用 root 的 --local-vlan-ports 管理 ID 授权，以及 workspace.write、ovs.port.vlan.write 和共享 apply/confirm/rollback 权限。Standard/Expert 只改变信息深度，二者均可审阅和配置已获授权的 Advanced VLAN；UI 模式不能授予权限。
 
-对象必须是现有、单 Interface、具有唯一父 Port/Bridge 的对象；成员类型为 system（含原生空字符串）或隔离测试 dummy，无未验证 options；Bridge 为 root 可达的 system（含空字符串）或隔离测试 dummy datapath。local/internal、共享成员、未知/退休身份、外控、过期 provider、不兼容 schema 和未知 TPID 均不开放 QinQ。普通 VLAN 已接受边界不扩大为图或成员写入。另须 root 已配置 vlan-limit=0 或 2，并观察到对应 Datapath.capabilities.max_vlan_headers ≥ 2；默认的一层解析、未知或缺失 capability 均阻止 QinQ。新增只读 Datapath monitor 不分配管理身份或参与 switching generation anchors；本操作不修改全局解析设置。
+对象必须是现有、单 Interface、具有唯一父 Port/Bridge 的对象；成员类型为 system（含原生空字符串）或隔离测试 dummy，无未验证 options；Bridge 为 root 可达的 system（含空字符串）或隔离测试 dummy datapath。local/internal、共享成员、未知/退休身份、外控、过期 provider、不兼容 schema 和未知 TPID 均不开放 QinQ。普通 VLAN 已接受边界不扩大为图或成员写入。另须 root 已配置 vlan-limit=0 或 2，并观察到对应 Datapath.capabilities.max_vlan_headers ≥ 2；默认的一层解析、未知或缺失 capability 均阻止 QinQ。Datapath 记录须先受 Open_vSwitch.datapaths 的实际类型键引用，ovs-vswitchd 才填入实测能力；缺失时保持 unavailable，不伪造 capability。新增只读 Datapath monitor 不分配管理身份或参与 switching generation anchors；本操作不修改全局解析设置。
 
 ## 签名、并发与恢复
 

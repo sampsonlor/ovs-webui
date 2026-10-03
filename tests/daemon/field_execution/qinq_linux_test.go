@@ -17,7 +17,7 @@ import (
 
 func newQinQFixture(t *testing.T) *fixture {
 	f := newFixture(t)
-	f.vs("set", "Open_vSwitch", ".", "other_config:vlan-limit=2")
+	f.vs("--", "--id=@dp", "create", "Datapath", "external_ids:synthetic-qinq=fixture", "--", "set", "Open_vSwitch", ".", "datapaths:dummy=@dp", "other_config:vlan-limit=2")
 	b := f.binding("field-p1")
 	waitFor(t, func() bool {
 		s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{b})
