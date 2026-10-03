@@ -58,6 +58,40 @@ async function get(context: BrowserContext, path: string) {
   expect(response.status(), path).toBe(200);
   return response.json();
 }
+async function portPage(page: Page, name: string) {
+  // Inventory is bounded by both row count and bytes. A synthetic object is
+  // not guaranteed to be on page one, regardless of the configured page size.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await expect(
+      page.getByRole('region', { name: 'Ports inventory', exact: true }),
+    ).toBeVisible();
+    const target = page.getByRole('link', { name, exact: true });
+    if (await target.count()) {
+      await expect(target).toBeVisible();
+      return;
+    }
+    const reply = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/v1/ports' && url.searchParams.has('cursor');
+    });
+    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    const response = await reply;
+    if (response.status() !== 200) {
+      expect(response.status()).toBe(410);
+      expect((await response.json()).code).toBe('CURSOR_EXPIRED');
+      await expect(page.getByRole('status')).toContainText('CURSOR_EXPIRED');
+      await page
+        .getByRole('button', { name: 'Refresh inventory', exact: true })
+        .click();
+    }
+  }
+  throw new Error(`Port ${name} was not found through bounded inventory pages`);
+}
+async function openPort(page: Page, name: string) {
+  await page.goto(fixture.origin + '/ports');
+  await portPage(page, name);
+  await page.getByRole('link', { name, exact: true }).click();
+}
 async function command(
   context: BrowserContext,
   path: string,
@@ -131,9 +165,7 @@ async function login(page: Page, name = 'browser-admin') {
   await expect(
     page.getByRole('heading', { name: 'Ports', exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: 'inv-p1', exact: true }),
-  ).toBeVisible();
+  await portPage(page, 'inv-p1');
 }
 async function clean(context: BrowserContext) {
   const c = await get(context, '/candidate');
@@ -147,8 +179,7 @@ async function clean(context: BrowserContext) {
     );
 }
 async function stage(page: Page, tag: string) {
-  await page.goto(fixture.origin + '/ports');
-  await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+  await openPort(page, 'inv-p1');
   await page
     .getByRole('link', { name: 'Edit VLAN intent →', exact: true })
     .click();
@@ -525,7 +556,7 @@ test('QinQ editor preserves TPID, reviews all customer VLANs and safely restores
   await login(page, account);
   await clean(context);
   const original = vsctl('get', 'Port', 'inv-p1', '_uuid');
-  await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+  await openPort(page, 'inv-p1');
   await page
     .getByRole('link', { name: 'Edit VLAN intent →', exact: true })
     .click();
@@ -600,9 +631,9 @@ test('managed internal Port deletion preserves its parent and restores fresh chi
   const account = 'browser-internal-delete';
   await login(page, account);
   await clean(context);
-  const parent = (await get(context, '/bridges')).items.find(
-    (b: { name: string }) => b.name === 'br-ui-parent',
-  );
+  const parent = (
+    await get(context, '/bridges?filter=br-ui-parent')
+  ).items.find((b: { name: string }) => b.name === 'br-ui-parent');
   expect(parent).toBeTruthy();
   const parentBinding = {
     management_id: parent.management_id,
@@ -770,7 +801,7 @@ test('internal access Port preserves its parent through responsive review and gu
   const account = 'browser-internal-port';
   await login(page, account);
   await clean(context);
-  const bridges = await get(context, '/bridges');
+  const bridges = await get(context, '/bridges?filter=br-ui-parent');
   const parent = bridges.items.find(
     (b: { name: string }) => b.name === 'br-ui-parent',
   );
@@ -1074,7 +1105,7 @@ test('isolated Bridge staged by API uses shared responsive Diff, Safe Apply and 
     .getByRole('button', { name: 'Start Safe Apply', exact: true })
     .click();
   await awaiting(page);
-  const inventory = await get(context, '/bridges');
+  const inventory = await get(context, '/bridges?filter=br-ui-create');
   const bridge = inventory.items.find(
     (b: { name: string }) => b.name === 'br-ui-create',
   );
@@ -1120,7 +1151,7 @@ test('real login, native identity, approved depth and responsive responsibilitie
     .getByRole('button', { name: 'Toggle color theme', exact: true })
     .click();
   await screen(page, 'ports-expert-dark');
-  await page.getByRole('link', { name: 'inv-p2', exact: true }).click();
+  await openPort(page, 'inv-p2');
   await expect(page.getByText(/QinQ · service VLAN 200/)).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Edit VLAN intent →' }),
@@ -1132,8 +1163,7 @@ test('real login, native identity, approved depth and responsive responsibilitie
   const bridgeURL = page.url();
   await page.reload();
   expect(page.url()).toBe(bridgeURL);
-  await page.goto(fixture.origin + '/ports');
-  await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+  await openPort(page, 'inv-p1');
   const portURL = page.url();
   await page.reload();
   expect(page.url()).toBe(portURL);
@@ -1413,7 +1443,7 @@ test('reader depth never grants edit rights; revoked permissions fence an alread
 }) => {
   await login(page, 'browser-reader');
   await page.getByRole('button', { name: 'Standard', exact: true }).click();
-  await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+  await openPort(page, 'inv-p1');
   await expect(
     page.getByText('Current permissions do not allow VLAN changes.'),
   ).toBeVisible();
