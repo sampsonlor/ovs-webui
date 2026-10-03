@@ -47,11 +47,14 @@ func TestInterfaceMTUValidationRequiresIndependentCapabilityAndCurrentCeiling(t 
 			t.Fatal(err)
 		}
 	}
+	a := execution.Authorization{Owner: g.Claims.PrincipalID, Credential: g.Claims.CredentialID, Epoch: g.Claims.RequestEpoch, FieldCapabilities: "ovs.interface.mtu.write"}
+	if err := r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error { return r.safeAuthority(ctx, q, a) }); err != nil {
+		t.Fatal("valid MTU Safe Apply authority rejected", err)
+	}
 	setCaps(slices.DeleteFunc(append([]string{}, g.Claims.Capabilities...), func(c string) bool { return c == "ovs.interface.mtu.write" }))
 	if readPlanValidation(t, r, g.Grant, e, valid.Receipt.Resource.ID).Usable {
 		t.Fatal("MTU retained revoked capability")
 	}
-	a := execution.Authorization{Owner: g.Claims.PrincipalID, Credential: g.Claims.CredentialID, Epoch: g.Claims.RequestEpoch, FieldCapabilities: "ovs.interface.mtu.write"}
 	wantCode(t, r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error { return r.safeAuthority(ctx, q, a) }), "APPLY_AUTHORITY_REVOKED")
 	limited := login(t, r, "admin", false)
 	setCaps(g.Claims.Capabilities)
