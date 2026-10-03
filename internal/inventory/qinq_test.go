@@ -9,7 +9,7 @@ import (
 )
 
 func TestQinQProjectionPreservesTPIDAndRejectsUnprovenGraph(t *testing.T) {
-	for _, scenario := range []string{"default", "802.1q", "802.1ad", "unknown-tpid", "internal", "netdev", "bond", "shared-member", "orphan", "retired-member", "options"} {
+	for _, scenario := range []string{"default", "802.1q", "802.1ad", "unknown-tpid", "internal", "netdev", "bond", "shared-member", "orphan", "retired-member", "options", "one-header", "default-limit", "missing-datapath"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, o, d, _ := fixture(t)
 			var row, bridge Row
@@ -27,9 +27,19 @@ func TestQinQProjectionPreservesTPIDAndRejectsUnprovenGraph(t *testing.T) {
 			root := repository.NewID()
 			o.Rows["Open_vSwitch"][root] = Row{UUID: root, Values: map[string]any{"bridges": []any{bridge.UUID}}}
 			o.Evidence.Root = root
+			dp := repository.NewID()
+			o.Rows["Open_vSwitch"][root].Values["other_config"] = map[string]any{"vlan-limit": "2"}
+			o.Rows["Open_vSwitch"][root].Values["datapaths"] = map[string]any{"system": dp}
+			o.Rows["Datapath"] = map[string]Row{dp: {UUID: dp, Values: map[string]any{"capabilities": map[string]any{"max_vlan_headers": "2"}}}}
 			switch scenario {
 			case "802.1q", "802.1ad", "unknown-tpid":
 				config["qinq-ethtype"] = scenario
+			case "one-header":
+				o.Rows["Datapath"][dp].Values["capabilities"] = map[string]any{"max_vlan_headers": "1"}
+			case "default-limit":
+				o.Rows["Open_vSwitch"][root].Values["other_config"] = map[string]any{}
+			case "missing-datapath":
+				delete(o.Rows["Datapath"], dp)
 			case "internal":
 				o.Rows["Interface"][ids[0]].Values["type"] = "internal"
 			case "netdev":

@@ -14,7 +14,7 @@
 
 沿用 root 的 --local-vlan-ports 管理 ID 授权，以及 workspace.write、ovs.port.vlan.write 和共享 apply/confirm/rollback 权限。Standard/Expert 只改变信息深度，二者均可审阅和配置已获授权的 Advanced VLAN；UI 模式不能授予权限。
 
-对象必须是现有、单 Interface、具有唯一父 Port/Bridge 的对象；成员类型为 system（含原生空字符串）或隔离测试 dummy，无未验证 options；Bridge 为 root 可达的 system（含空字符串）或隔离测试 dummy datapath。local/internal、共享成员、未知/退休身份、外控、过期 provider、不兼容 schema 和未知 TPID 均不开放 QinQ。普通 VLAN 已接受边界不扩大为图或成员写入。
+对象必须是现有、单 Interface、具有唯一父 Port/Bridge 的对象；成员类型为 system（含原生空字符串）或隔离测试 dummy，无未验证 options；Bridge 为 root 可达的 system（含空字符串）或隔离测试 dummy datapath。local/internal、共享成员、未知/退休身份、外控、过期 provider、不兼容 schema 和未知 TPID 均不开放 QinQ。普通 VLAN 已接受边界不扩大为图或成员写入。另须 root 已配置 vlan-limit=0 或 2，并观察到对应 Datapath.capabilities.max_vlan_headers ≥ 2；默认的一层解析、未知或缺失 capability 均阻止 QinQ。新增只读 Datapath monitor 不分配管理身份或参与 switching generation anchors；本操作不修改全局解析设置。
 
 ## 签名、并发与恢复
 
@@ -22,7 +22,7 @@ API 1.13.0 新增可选 qinq_context（TPID 原始值和依赖摘要）及库存
 
 QinQ 的进入、编辑和退出均捕获上下文；复用草稿保留原始上下文，显式 snapshot-bound rebase 才能接受外部变更。After-image 与补偿保留上下文，即使补偿结果已离开 QinQ，也仍检查原 TPID 与成员关系。
 
-原生事务只 update vlan_mode/tag/trunks/cvlans，另按既有协议写 commit marker、递增 next_cfg 并 durable commit。事务重复检查 TPID 所在 other_config、成员唯一父关系及既有身份/authority/root/结构/字段条件。dispatch 前后出现重叠变化时整个事务拒绝。other_config 的派发 guard 保守比较整张 map，晚到的无关 map 变更可能需要重试审阅；回滚使用新观察并只恢复四个 VLAN 字段，保留无关 map key。
+原生事务只 update vlan_mode/tag/trunks/cvlans，另按既有协议写 commit marker、递增 next_cfg 并 durable commit。事务重复检查 TPID 所在 other_config、root 解析设置和 datapath 引用、实际 datapath capability、成员唯一父关系及既有身份/authority/root/结构/字段条件。dispatch 前后出现重叠变化时整个事务拒绝。other_config 的派发 guard 保守比较整张 map，晚到的无关 map 变更可能需要重试审阅；回滚使用新观察并只恢复四个 VLAN 字段，保留无关 map key。
 
 Commit、Applied 和确认继续分离。Applied 是只读原生 proof；正式确认仍要求服务端健康 probe。丢失响应不重放、不推测 target；原始字段、TPID 或依赖被外部修改时保留冲突/恢复状态，不强行覆盖。可恢复的原生缺省 mode 保持缺失值，不能在补偿时静默写成 access/trunk。
 

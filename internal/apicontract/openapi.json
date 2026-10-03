@@ -30439,6 +30439,15 @@
       "QinQContext": {
         "type": "object",
         "properties": {
+          "vlan_limit": {
+            "type": "string"
+          },
+          "datapath_uuid": {
+            "type": "string"
+          },
+          "max_vlan_headers": {
+            "type": "string"
+          },
           "dependency_revision": {
             "$ref": "#/components/schemas/Revision"
           },
@@ -30454,6 +30463,9 @@
           }
         },
         "required": [
+          "vlan_limit",
+          "datapath_uuid",
+          "max_vlan_headers",
           "dependency_revision",
           "ethertype"
         ],

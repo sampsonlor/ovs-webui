@@ -791,6 +791,9 @@ type Subscription struct {
 	Cursor    json.RawMessage              `json:"cursor"`
 }
 type QinQContext struct {
+	VlanLimit          string                     `json:"vlan_limit"`
+	DatapathUuid       string                     `json:"datapath_uuid"`
+	MaxVlanHeaders     string                     `json:"max_vlan_headers"`
 	DependencyRevision Revision                   `json:"dependency_revision"`
 	Ethertype          json.RawMessage            `json:"ethertype"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`

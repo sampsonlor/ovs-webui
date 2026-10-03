@@ -52,7 +52,7 @@ s.Runtime = open({ state: string(), scope: string(), configuration_ready: bool, 
 s.ContractInfo = open({ major: { type: 'integer', const: 1 }, version: string(), openapi_url: string(), service_state: string(), request_domains: array(string(), 2) });
 s.Subscription = closed({ resources: array(closed({ kind: string(64), id }), 32, 1), cursor: nullable(closed({ stream_id: id, sequence: ref('Sequence') })) });
 
-s.QinQContext = open({ dependency_revision: revision, ethertype: nullable({ type: 'string' }) });
+s.QinQContext = open({ vlan_limit: { type: 'string' }, datapath_uuid: { type: 'string' }, max_vlan_headers: { type: 'string' }, dependency_revision: revision, ethertype: nullable({ type: 'string' }) });
 s.ObservedIntent.properties.qinq_context = ref('QinQContext');
 Object.assign(s.Port.properties, { qinq_editable: bool, qinq_ethertype: nullable({ type: 'string' }) });
 // Switching mutations remain Candidate intents, never live PATCH on OVS objects.

@@ -107,7 +107,7 @@
     {:else if original.vlan.native?.vlan_mode === 'dot1q-tunnel'}
       <p class="notice warning">Leaving QinQ clears the customer VLAN list. The Diff shows the original list and rollback restores it.</p>
     {/if}
-    {#if port.qinq_editable !== true}<p>QinQ requires a supported native schema, a known TPID and an eligible locally managed single-interface system Port.</p>{/if}
+    {#if port.qinq_editable !== true}<p>QinQ requires a supported native schema, a known TPID, verified two-tag parsing and an eligible locally managed single-interface system Port.</p>{/if}
     <div class="actions">
       <button type="submit" class="primary">Stage in Candidate</button><Link
         href={`/ports/${port.management_id}`}>Cancel</Link

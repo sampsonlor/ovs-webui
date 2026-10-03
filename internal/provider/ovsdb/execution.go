@@ -273,7 +273,11 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 		}
 	}
 	n := nativePlan{Operations: []map[string]any{}, CountIndexes: []int{}, Evidence: view.Observation.Evidence}
-	rootGuard, err := guard(d, "Open_vSwitch", root, []string{"external_ids"}, []any{uuidCondition(root.UUID), []any{"next_cfg", "<", json.Number(strconv.FormatInt(math.MaxInt64, 10))}, []any{"next_cfg", ">=", next}, []any{"cur_cfg", ">=", cur}})
+	rootColumns := []string{"external_ids"}
+	if slices.ContainsFunc(envelope.Candidate.Intents, candidate.UsesQinQ) {
+		rootColumns = append(rootColumns, "other_config", "datapaths")
+	}
+	rootGuard, err := guard(d, "Open_vSwitch", root, rootColumns, []any{uuidCondition(root.UUID), []any{"next_cfg", "<", json.Number(strconv.FormatInt(math.MaxInt64, 10))}, []any{"next_cfg", ">=", next}, []any{"cur_cfg", ">=", cur}})
 	if err != nil {
 		return out, err
 	}
@@ -290,6 +294,14 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 		where := []any{uuidCondition(port.UUID)}
 		columns := []string{"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "external_ids"}
 		if isQinQ {
+			if intent.QinQ == nil {
+				return out, apitypes.Fail(409, "QINQ_CONTEXT_UNSUPPORTED")
+			}
+			capability, err := guard(d, "Datapath", view.Observation.Rows["Datapath"][intent.QinQ.DatapathUUID], []string{"capabilities"}, []any{uuidCondition(intent.QinQ.DatapathUUID)})
+			if err != nil {
+				return out, err
+			}
+			n.Operations = append(n.Operations, capability)
 			columns = append(columns, "other_config")
 		}
 		if isBond {

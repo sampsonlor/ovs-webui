@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"slices"
+	"strconv"
 
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 )
@@ -20,6 +21,20 @@ func projectQinQ(v *view, row, bridge Row, p *candidate.Port) {
 	known = known && len(v.observation.Rows["Open_vSwitch"]) == 1 && root.UUID != "" && slices.Contains(refs(root.Values["bridges"]), bridge.UUID)
 	datapath, ok := bridge.Values["datapath_type"].(string)
 	known = known && ok && slices.Contains([]string{"", "system", "dummy"}, datapath) && row.Values["name"] != bridge.Values["name"]
+	// QinQ requires two-tag parsing in both directions; schema presence alone
+	// cannot establish the running datapath's capability.
+	rootConfig, rootKnown := root.Values["other_config"].(map[string]any)
+	q.VLANLimit, _ = rootConfig["vlan-limit"].(string)
+	paths, pathsKnown := root.Values["datapaths"].(map[string]any)
+	kind := datapath
+	if kind == "" {
+		kind = "system"
+	}
+	q.DatapathUUID, _ = paths[kind].(string)
+	capabilities, capsKnown := v.observation.Rows["Datapath"][q.DatapathUUID].Values["capabilities"].(map[string]any)
+	q.MaxVLANHeaders, _ = capabilities["max_vlan_headers"].(string)
+	maxHeaders, parseErr := strconv.Atoi(q.MaxVLANHeaders)
+	known = known && rootKnown && (q.VLANLimit == "0" || q.VLANLimit == "2") && pathsKnown && capsKnown && q.DatapathUUID != "" && parseErr == nil && maxHeaders >= 2
 	ids := refs(row.Values["interfaces"])
 	known = known && len(ids) == 1
 	members := map[string]any{}
@@ -37,6 +52,6 @@ func projectQinQ(v *view, row, bridge Row, p *candidate.Port) {
 		known = known && member.UUID != "" && binding.State == "active" && parents == 1 && kindOK && slices.Contains([]string{"", "system", "dummy"}, kind) && optionsOK && len(options) == 0
 		members[id] = []any{binding.ManagementID, parents}
 	}
-	q.Dependency = Digest([]any{root.UUID, bridge.UUID, members, known, q.EtherType})
+	q.Dependency = Digest([]any{root.UUID, bridge.UUID, members, known, q.EtherType, q.VLANLimit, q.DatapathUUID, q.MaxVLANHeaders})
 	p.QinQ, p.QinQSupported = q, known
 }

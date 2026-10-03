@@ -6,8 +6,11 @@ import "slices"
 // A nil EtherType means the native key is absent (OVS defaults to 802.1ad).
 // Keeping this optional preserves serialization of older signed field journals.
 type QinQContext struct {
-	Dependency string  `json:"dependency_revision"`
-	EtherType  *string `json:"ethertype"`
+	VLANLimit      string  `json:"vlan_limit"`
+	DatapathUUID   string  `json:"datapath_uuid"`
+	MaxVLANHeaders string  `json:"max_vlan_headers"`
+	Dependency     string  `json:"dependency_revision"`
+	EtherType      *string `json:"ethertype"`
 }
 
 func UsesQinQ(i StoredIntent) bool {
@@ -20,7 +23,9 @@ func cloneQinQ(q *QinQContext) *QinQContext {
 	if q == nil {
 		return nil
 	}
-	return &QinQContext{Dependency: q.Dependency, EtherType: copyString(q.EtherType)}
+	copy := *q
+	copy.EtherType = copyString(q.EtherType)
+	return &copy
 }
 
 // An absent mode is preserved for compensation. Validate its effective native

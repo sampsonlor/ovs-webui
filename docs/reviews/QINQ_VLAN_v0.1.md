@@ -13,7 +13,7 @@
 | 页面 | 真 Go/IPC/OVS 的编辑器输入错误、Standard/Expert、平板/手机审阅、Safe Apply/回滚与原身份；截图 qinq-*.png |
 | 兼容/回归 | 旧请求兼容检查、已有标准 VLAN/Bond/对象生命周期、完整领域与浏览器、双架构 Go race、Safe Apply VM 管理连接故障 |
 
-新增独立 TestNativeQinQ：每份 schema 12 个叶子场景，每架构 36 个。保留 go-qinq-{3.3.9,3.7.1,4.0.0}.json、frontend.xml、frontend-evidence/qinq-*.png，CI 失败或跳过不能当成接受。已有工作流的原生测试和 30 分钟 job 上限保持不变。
+新增独立 TestNativeQinQ：每份 schema 14 个叶子场景，每架构 42 个。保留 go-qinq-{3.3.9,3.7.1,4.0.0}.json、frontend.xml、frontend-evidence/qinq-*.png，CI 失败或跳过不能当成接受。已有工作流的原生测试和 30 分钟 job 上限保持不变。
 
 ## Review disposition
 
