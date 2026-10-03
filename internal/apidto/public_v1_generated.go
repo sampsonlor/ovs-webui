@@ -620,6 +620,13 @@ type Interface struct {
 	PortRef            ResourceRef                `json:"port_ref"`
 	InterfaceType      string                     `json:"interface_type"`
 	Options            map[string]json.RawMessage `json:"options"`
+	BridgeRef          ResourceRef                `json:"bridge_ref,omitempty"`
+	PortKind           string                     `json:"port_kind,omitempty"`
+	Internal           json.RawMessage            `json:"internal,omitempty"`
+	LocalInterface     json.RawMessage            `json:"local_interface,omitempty"`
+	Ownership          string                     `json:"ownership,omitempty"`
+	AllowedOperations  []string                   `json:"allowed_operations,omitempty"`
+	Fields             map[string]json.RawMessage `json:"fields,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
@@ -629,6 +636,25 @@ func (v *Interface) UnmarshalJSON(data []byte) error {
 }
 func (v Interface) MarshalJSON() ([]byte, error) {
 	type plain Interface
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type InventoryField struct {
+	Value         json.RawMessage            `json:"value"`
+	Availability  string                     `json:"availability"`
+	Source        Source                     `json:"source"`
+	SchemaMutable bool                       `json:"schema_mutable"`
+	Ownership     string                     `json:"ownership"`
+	Editable      bool                       `json:"editable"`
+	ExtraFields   map[string]json.RawMessage `json:"-"`
+}
+
+func (v *InventoryField) UnmarshalJSON(data []byte) error {
+	type plain InventoryField
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v InventoryField) MarshalJSON() ([]byte, error) {
+	type plain InventoryField
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
@@ -1235,6 +1261,10 @@ type InterfacePage struct {
 	Items              []Interface                `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Source             Source                     `json:"source,omitempty"`
+	Availability       string                     `json:"availability,omitempty"`
+	Reason             json.RawMessage            `json:"reason,omitempty"`
+	Coverage           map[string]json.RawMessage `json:"coverage,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

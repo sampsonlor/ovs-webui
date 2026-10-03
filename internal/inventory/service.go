@@ -342,7 +342,7 @@ func coverage(v *view) map[string]any {
 	for table, rows := range v.observation.Rows {
 		counts[table] = len(rows)
 	}
-	return map[string]any{"state": "complete-for-selected-columns", "row_counts": counts, "max_rows": MaxRows, "max_bytes": MaxSnapshotBytes, "includes_linux": false, "option_keys": "peer,remote_ip,local_ip,dst_port,key; remaining keys withheld", "schema_columns": "see /api/v1/inventory/schema"}
+	return map[string]any{"state": "complete-for-selected-columns", "row_counts": counts, "max_rows": MaxRows, "max_bytes": MaxSnapshotBytes, "includes_linux": false, "option_keys": "peer,remote_ip,local_ip,dst_port,key; remaining keys withheld", "interface_status_keys": "driver_name,driver_version,firmware_version,bus_info,numa_id,if_type; remaining keys withheld", "schema_columns": "see /api/v1/inventory/schema"}
 }
 func source(v *view, fresh, authority string) map[string]any {
 	var at any
@@ -415,16 +415,20 @@ func ref(v *view, table, uuid string) map[string]any {
 	return map[string]any{"kind": kindFor(table), "id": b.ManagementID}
 }
 func parent(v *view, table, column, uuid string) (Row, bool) {
+	var found Row
 	for _, row := range v.observation.Rows[table] {
 		if slices.Contains(refs(row.Values[column]), uuid) {
-			return row, true
+			if found.UUID != "" {
+				return Row{}, false
+			}
+			found = row
 		}
 	}
-	return Row{}, false
+	return found, found.UUID != ""
 }
 
 func operational(table, column string) bool {
-	return table == "Interface" && slices.Contains([]string{"link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "error"}, column)
+	return table == "Interface" && slices.Contains([]string{"link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "status", "error"}, column)
 }
 func resource(v *view, b Binding, fresh string, config bool, kind string) (map[string]any, error) {
 	row, exists := v.observation.Rows[b.Table][b.UUID]
@@ -560,10 +564,29 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 			return nil, apitypes.Fail(503, "INVENTORY_RELATION_UNKNOWN")
 		}
 		out["port_ref"] = ref(v, "Port", p.UUID)
+		bridge, ok := parent(v, "Bridge", "ports", p.UUID)
+		if !ok {
+			return nil, apitypes.Fail(503, "INVENTORY_RELATION_UNKNOWN")
+		}
+		out["bridge_ref"] = ref(v, "Bridge", bridge.UUID)
+		out["port_kind"] = "single"
+		if len(refs(p.Values["interfaces"])) > 1 {
+			out["port_kind"] = "bond"
+		}
 		out["interface_type"] = nativeType(row, "type", config)
 		out["internal"] = nil
-		if typ, known := row.Values["type"].(string); known {
+		out["local_interface"] = nil
+		if typ, known := row.Values["type"].(string); known && config {
 			out["internal"] = typ == "internal"
+			out["local_interface"] = typ == "internal" && len(refs(p.Values["interfaces"])) == 1 && row.Values["name"] == bridge.Values["name"] && p.Values["name"] == bridge.Values["name"]
+		}
+		if externalControl(row.Values["external_ids"]) || externalControl(p.Values["external_ids"]) || externalControl(bridge.Values["external_ids"]) {
+			out["ownership"] = "externally-controlled"
+		}
+		for _, root := range v.observation.Rows["Open_vSwitch"] {
+			if externalControl(root.Values["external_ids"]) {
+				out["ownership"] = "externally-controlled"
+			}
 		}
 		out["options"] = map[string]any{}
 		if config {

@@ -435,6 +435,19 @@ tr.conflict {
 .search {
   max-width: 440px;
 }
+.inventory-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.inventory-filters label {
+  margin: 0 0 6px;
+}
+.inventory-filters .filter-control {
+  flex: 1 1 180px;
+}
 .breadcrumbs {
   display: flex;
   flex-wrap: wrap;

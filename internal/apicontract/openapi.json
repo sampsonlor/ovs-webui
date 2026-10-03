@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.13.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. General graph deletion, physical/member changes and full pages retain separate gates."
+    "version": "1.14.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through read-only list/detail pages. General graph deletion, physical/member/Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -29974,6 +29974,55 @@
           "options": {
             "type": "object",
             "additionalProperties": true
+          },
+          "bridge_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "port_kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "internal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "local_interface": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownership": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "allowed_operations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 64
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InventoryField"
+            }
           }
         },
         "required": [
@@ -29991,6 +30040,41 @@
           "port_ref",
           "interface_type",
           "options"
+        ],
+        "additionalProperties": true,
+        "description": "Read-only native Interface inventory. Configuration fields require configuration.read; operational fields are observations, even when the native schema marks a column mutable. Empty optional values, unavailable columns and withheld values remain distinct. Device status is allowlisted; no hardware role or Interface type is inferred from names."
+      },
+      "InventoryField": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "schema_mutable": {
+            "type": "boolean"
+          },
+          "ownership": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "editable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "value",
+          "availability",
+          "source",
+          "schema_mutable",
+          "ownership",
+          "editable"
         ],
         "additionalProperties": true
       },
@@ -32318,6 +32402,28 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage": {
+            "type": "object",
+            "additionalProperties": true
           }
         },
         "required": [

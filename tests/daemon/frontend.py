@@ -12,6 +12,9 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                     db_socket, ovs, conf, credentials, network_metrics):
     assert node and Path(node).is_file(), 'an explicit CI Node build/test tool is required'
     assert call('/session/reauthentication', 'POST', {'password': password})[0] == 200
+    code, _, _ = call('/roles', 'POST', {'request_id': request_id(), 'name': 'InterfaceObserver',
+                                      'capabilities': ['state.read', 'inventory.read']})
+    assert code == 202
     roles = {role['name']: role['id'] for role in get('/roles')['items']}
     accounts = {}
     # The deadline scenario has its own principal so rapid test logins/step-ups
@@ -19,7 +22,9 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     for name, role in [('browser-admin', 'Administrator'), ('browser-deadline', 'Administrator'),
                        ('browser-reader', 'Reader'), ('browser-revoke', 'NetworkAdmin'),
                        ('browser-bridge', 'NetworkAdmin'), ('browser-bridge-delete', 'NetworkAdmin'),
-                       ('browser-qinq', 'NetworkAdmin'), ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin')]:
+                       ('browser-qinq', 'NetworkAdmin'), ('browser-interfaces', 'Reader'),
+                       ('browser-interface-observer', 'InterfaceObserver'),
+                       ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin')]:
         secret = 'synthetic-browser-' + secrets.token_hex(16)
         credentials.append(secret)
         code, _, _ = call('/users', 'POST', {'request_id': request_id(), 'username': name, 'password': secret, 'role_ids': [roles[role]]})

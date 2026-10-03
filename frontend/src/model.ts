@@ -3,6 +3,8 @@ import type {
   Accepted,
   Candidate,
   Login,
+  Interface,
+  InterfacePage,
   Port,
   PortsPage,
   ResourceRef,
@@ -40,6 +42,10 @@ export type Model = {
   path: string;
   ports: Load<PortsPage>;
   port: Load<Port>;
+  interfaces: Load<InterfacePage>;
+  interface: Load<Interface>;
+  interfaceFilter: string;
+  interfaceLimit: number;
   workspace: Load<Workspace>;
   validation: Load<Validation>;
   transaction: Load<Transaction>;
@@ -56,6 +62,10 @@ function initial(path: string): Model {
     path,
     ports: empty(),
     port: empty(),
+    interfaces: empty(),
+    interface: empty(),
+    interfaceFilter: '',
+    interfaceLimit: 25,
     workspace: empty(),
     validation: empty(),
     transaction: empty(),
@@ -107,6 +117,7 @@ export class Controller {
     this.context++;
     this.fence.reset();
     this.api.session = session;
+    this.interfaceCursor = '';
     this.state = {
       ...initial(this.state.path),
       session,
@@ -174,6 +185,8 @@ export class Controller {
     this.update({
       path,
       port: empty(),
+      interfaces: empty(),
+      interface: empty(),
       validation: empty(),
       transaction: empty(),
       resource: empty(),
@@ -275,6 +288,31 @@ export class Controller {
             }),
           );
       }
+      if (parts[0] === 'interfaces') {
+        if (parts[1])
+          tasks.push(
+            read<Interface>(`/interfaces/${parts[1]}`, 'inventory.read').then(
+              (value) => {
+                changes.interface = value;
+              },
+            ),
+          );
+        else {
+          const query = new URLSearchParams({
+            limit: String(this.state.interfaceLimit),
+          });
+          if (this.state.interfaceFilter)
+            query.set('filter', this.state.interfaceFilter);
+          if (this.interfaceCursor) query.set('cursor', this.interfaceCursor);
+          tasks.push(
+            read<InterfacePage>(`/interfaces?${query}`, 'inventory.read').then(
+              (value) => {
+                changes.interfaces = value;
+              },
+            ),
+          );
+        }
+      }
       if (validationID && has(session, 'configuration.validate'))
         tasks.push(
           read<Validation>(
@@ -307,7 +345,7 @@ export class Controller {
               audit: 'audit.read',
             } as Record<string, string>
           )[parts[1]] ?? 'unavailable';
-      } else if (parts[0] === 'bridges' || parts[0] === 'interfaces') {
+      } else if (parts[0] === 'bridges') {
         resourceURL = path;
         capability = 'inventory.read';
       } else if (path === '/changes/transactions') {
@@ -342,6 +380,8 @@ export class Controller {
           message: errorText(e),
           ports: empty(),
           port: empty(),
+          interfaces: empty(),
+          interface: empty(),
           workspace: empty(),
           validation: empty(),
           transaction: empty(),
@@ -357,6 +397,21 @@ export class Controller {
     }
   }
   private portCursor = '';
+  private interfaceCursor = '';
+  interfacePage(
+    filter = this.state.interfaceFilter,
+    limit = this.state.interfaceLimit,
+    cursor = '',
+  ) {
+    this.fence.reset();
+    this.interfaceCursor = cursor;
+    this.update({
+      interfaces: empty(),
+      interfaceFilter: filter,
+      interfaceLimit: limit,
+    });
+    void this.refresh();
+  }
   page(cursor = '') {
     this.portCursor = cursor;
     this.update({ ports: empty() });

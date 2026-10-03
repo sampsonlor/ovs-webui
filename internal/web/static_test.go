@@ -18,6 +18,7 @@ func TestEmbeddedSPADeepLinksAndStaticSecurityBoundary(t *testing.T) {
 		status int
 	}{
 		{"/", 200}, {"/ports", 200}, {"/changes/candidates/11111111-1111-4111-8111-111111111111", 200},
+		{"/interfaces", 200}, {"/interfaces/11111111-1111-4111-8111-111111111111", 200}, {"/interfaces/not-an-identity", 404},
 		{"/changes/transactions/11111111-1111-4111-8111-111111111111", 200}, {"/operations/jobs/11111111-1111-4111-8111-111111111111", 200},
 		{"/assets/index-abc.js", 200}, {"/api/v1/unknown", 404}, {"/.env", 404}, {"/assets/../index.html", 404}, {"/assets/index.js.map", 404}, {"/unknown", 404},
 	} {

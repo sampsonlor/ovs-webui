@@ -207,50 +207,338 @@ async function screen(page: Page, name: string) {
 }
 const pageErrors = new WeakMap<Page, string[]>();
 
-test('QinQ editor preserves TPID, reviews all customer VLANs and safely restores native fields', async ({ page, context }) => {
+test('native Interfaces support snapshot filters, pagination, depth and responsive observation', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-interfaces');
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions|interfaces)/.test(r.url())
+    )
+      mutations.push(r.method());
+  });
+  const names = Array.from(
+    { length: 11 },
+    (_, i) => `if-observe-${String(i).padStart(2, '0')}`,
+  );
+  vsctl(
+    'add-br',
+    'br-if-ui',
+    '--',
+    'set',
+    'Bridge',
+    'br-if-ui',
+    'datapath_type=dummy',
+    ...names.flatMap((name) => [
+      '--',
+      'add-port',
+      'br-if-ui',
+      name,
+      '--',
+      'set',
+      'Interface',
+      name,
+      'type=dummy',
+    ]),
+  );
+  try {
+    vsctl('set', 'Interface', 'inv-p1', 'mtu_request=1500');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await page.getByRole('link', { name: 'Interfaces', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Interfaces', exact: true }),
+    ).toBeVisible();
+    await page.getByLabel('Page size', { exact: true }).selectOption('10');
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Next page', exact: true }),
+    ).toBeEnabled();
+    await screen(page, 'interfaces-expert');
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await screen(page, 'interfaces-standard');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    const nextPage = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/v1/interfaces?') &&
+        response.url().includes('cursor=') &&
+        response.status() === 200,
+    );
+    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await nextPage;
+    await expect(
+      page.getByRole('region', { name: 'Interfaces inventory', exact: true }),
+    ).toBeVisible();
+    vsctl('set', 'Interface', 'inv-p1', 'mtu_request=1600');
+    await expect(
+      page.getByText('The page snapshot changed or expired.', { exact: false }),
+    ).toBeVisible();
+    await screen(page, 'interfaces-cursor-expired');
+    await page.getByRole('button', { name: 'First page', exact: true }).click();
+    await expect(
+      page.getByRole('region', { name: 'Interfaces inventory', exact: true }),
+    ).toBeVisible();
+    await page.getByLabel('Interface name', { exact: true }).fill('inv-p1');
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    await expect(
+      page.getByRole('link', { name: 'inv-p1', exact: true }),
+    ).toBeVisible();
+    const filtered = await get(context, '/interfaces?filter=inv-p1');
+    expect(filtered.items).toHaveLength(1);
+    const iface = filtered.items[0];
+    expect(iface.fields.mtu_request.value).toEqual(['1600']);
+    await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+    await expect(page).toHaveURL(
+      fixture.origin + '/interfaces/' + iface.management_id,
+    );
+    await expect(
+      page.getByRole('heading', {
+        name: 'Native Interface fields',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('row').filter({
+        has: page.getByRole('rowheader', {
+          name: 'Requested MTU',
+          exact: false,
+        }),
+      }),
+    ).toContainText('1600');
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await screen(page, 'interface-standard');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-expert-dark');
+    for (const [width, name] of [
+      [900, 'interface-tablet'],
+      [390, 'interface-mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height: 980 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, name);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page
+      .getByRole('link', { name: 'Review owning Port →', exact: true })
+      .focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(
+      fixture.origin + '/ports/' + iface.port_ref.id,
+    );
+    expect(mutations).toEqual([]);
+  } finally {
+    vsctl('clear', 'Interface', 'inv-p1', 'mtu_request');
+    vsctl('del-br', 'br-if-ui');
+  }
+});
+
+test('Interface configuration withholding, empty filters, stale provider and retired identities remain explicit', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-interface-observer');
+  await page.goto(fixture.origin + '/interfaces');
+  await page
+    .getByLabel('Interface name', { exact: true })
+    .fill('synthetic-no-interface');
+  await page.getByRole('button', { name: 'Apply filter', exact: true }).click();
+  await expect(
+    page.getByText('No Interfaces match this filter.', { exact: false }),
+  ).toBeVisible();
+  await screen(page, 'interfaces-empty');
+  await page.getByLabel('Interface name', { exact: true }).fill('inv-p1');
+  await page.getByRole('button', { name: 'Apply filter', exact: true }).click();
+  await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
+  await expect(
+    page.getByRole('row').filter({
+      has: page.getByRole('rowheader', { name: 'Native type', exact: true }),
+    }),
+  ).toContainText('Withheld');
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await expect(
+    page.getByRole('row').filter({
+      has: page.getByRole('rowheader', {
+        name: 'Requested MTU',
+        exact: false,
+      }),
+    }),
+  ).toContainText('Withheld');
+  await screen(page, 'interface-withheld');
+  execFileSync('ovs-appctl', ['-t', `${fixture.ovsDirectory}/db.ctl`, 'exit']);
+  try {
+    await expect(
+      page.getByText('Stale observation.', { exact: false }),
+    ).toBeVisible();
+    await screen(page, 'interface-provider-stale');
+  } finally {
+    execFileSync(
+      'ovsdb-server',
+      [
+        fixture.database,
+        `--remote=punix:${fixture.dbSocket}`,
+        `--pidfile=${fixture.ovsDirectory}/db.pid`,
+        `--unixctl=${fixture.ovsDirectory}/db.ctl`,
+        '--detach',
+        '--no-chdir',
+        '--overwrite-pidfile',
+      ],
+      {
+        env: {
+          ...process.env,
+          OVS_RUNDIR: fixture.ovsDirectory,
+          OVS_LOGDIR: fixture.ovsDirectory,
+          OVS_DBDIR: fixture.ovsDirectory,
+        },
+        stdio: 'pipe',
+      },
+    );
+  }
+  await expect(
+    page.getByText('Stale observation.', { exact: false }),
+  ).toHaveCount(0);
+  vsctl(
+    'add-port',
+    'br-inv',
+    'if-retire',
+    '--',
+    'set',
+    'Interface',
+    'if-retire',
+    'type=dummy',
+  );
+  try {
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/interfaces?filter=if-retire')).items.length,
+      )
+      .toBe(1);
+    const old = (await get(context, '/interfaces?filter=if-retire')).items[0];
+    await page.goto(fixture.origin + '/interfaces/' + old.management_id);
+    await expect(
+      page.getByRole('heading', { name: 'if-retire', exact: true }),
+    ).toBeVisible();
+    vsctl('del-port', 'br-inv', 'if-retire');
+    vsctl(
+      'add-port',
+      'br-inv',
+      'if-retire',
+      '--',
+      'set',
+      'Interface',
+      'if-retire',
+      'type=dummy',
+    );
+    await expect(
+      page.getByText('This Interface identity is no longer available.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await screen(page, 'interface-retired');
+    const replacement = (await get(context, '/interfaces?filter=if-retire'))
+      .items[0];
+    expect(replacement.management_id).not.toBe(old.management_id);
+    expect(replacement.ovs_uuid).not.toBe(old.ovs_uuid);
+    await page.goto(fixture.origin + '/interfaces');
+    await page.getByLabel('Interface name', { exact: true }).fill('if-retire');
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    await expect(
+      page.getByRole('link', { name: 'if-retire', exact: true }),
+    ).toHaveAttribute('href', '/interfaces/' + replacement.management_id);
+  } finally {
+    vsctl('--if-exists', 'del-port', 'br-inv', 'if-retire');
+  }
+});
+
+test('QinQ editor preserves TPID, reviews all customer VLANs and safely restores native fields', async ({
+  page,
+  context,
+}) => {
   const account = 'browser-qinq';
   await login(page, account);
   await clean(context);
   const original = vsctl('get', 'Port', 'inv-p1', '_uuid');
   await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
-  await page.getByRole('link', { name: 'Edit VLAN intent →', exact: true }).click();
-  await page.getByRole('combobox', { name: 'VLAN mode', exact: true }).selectOption('dot1q-tunnel');
+  await page
+    .getByRole('link', { name: 'Edit VLAN intent →', exact: true })
+    .click();
+  await page
+    .getByRole('combobox', { name: 'VLAN mode', exact: true })
+    .selectOption('dot1q-tunnel');
   await page.getByLabel('Service VLAN tag', { exact: true }).fill('200');
   await page.getByLabel('Customer VLANs', { exact: true }).fill('30, 30');
-  await page.getByRole('button', { name: 'Stage in Candidate', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Stage in Candidate', exact: true })
+    .click();
   await expect(page.getByRole('alert')).toContainText('unique');
   await page.getByLabel('Customer VLANs', { exact: true }).fill('');
-  await expect(page.getByText('Service TPID:', { exact: false })).toContainText('802.1ad');
+  await expect(page.getByText('Service TPID:', { exact: false })).toContainText(
+    '802.1ad',
+  );
   await screen(page, 'qinq-editor');
-  await page.getByRole('button', { name: 'Stage in Candidate', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Candidate Workspace', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: '∅ · all customer VLANs', exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Stage in Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: '∅ · all customer VLANs', exact: true }),
+  ).toBeVisible();
   expect(vsctl('get', 'Port', 'inv-p1', 'vlan_mode')).toBe('access');
   const c = await get(context, '/candidate');
   expect(c.intents[0].qinq_context.ethertype).toBe(null);
   await screen(page, 'qinq-standard');
   await page.getByRole('button', { name: 'Standard', exact: true }).click();
-  await page.getByText('QinQ native dependency evidence', { exact: true }).click();
+  await page
+    .getByText('QinQ native dependency evidence', { exact: true })
+    .click();
   await screen(page, 'qinq-expert');
-  for (const [width, height, device] of [[900,1000,'tablet'],[390,844,'mobile']] as const) {
+  for (const [width, height, device] of [
+    [900, 1000, 'tablet'],
+    [390, 844, 'mobile'],
+  ] as const) {
     await page.setViewportSize({ width, height });
-    await expect(page.getByRole('button', { name: 'Validate Candidate', exact: true })).toBeDisabled();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await expect(
+      page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+    ).toBeDisabled();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
     await screen(page, 'qinq-' + device);
   }
-  await page.setViewportSize({ width:1280,height:1000 });
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await validate(page);
   await prepareApply(page, account);
-  await page.getByRole('button', { name:'Start Safe Apply',exact:true }).click();
+  await page
+    .getByRole('button', { name: 'Start Safe Apply', exact: true })
+    .click();
   await awaiting(page);
-  expect(vsctl('get','Port','inv-p1','vlan_mode')).toBe('dot1q-tunnel');
-  expect(vsctl('get','Port','inv-p1','cvlans')).toBe('[]');
-  await screen(page,'qinq-awaiting');
-  await chooseDecision(page,'Request rollback','rolled-back');
-  expect(vsctl('get','Port','inv-p1','vlan_mode')).toBe('access');
-  expect(vsctl('get','Port','inv-p1','tag')).toBe('10');
-  expect(vsctl('get','Port','inv-p1','_uuid')).toBe(original);
-  await screen(page,'qinq-rolled-back');
+  expect(vsctl('get', 'Port', 'inv-p1', 'vlan_mode')).toBe('dot1q-tunnel');
+  expect(vsctl('get', 'Port', 'inv-p1', 'cvlans')).toBe('[]');
+  await screen(page, 'qinq-awaiting');
+  await chooseDecision(page, 'Request rollback', 'rolled-back');
+  expect(vsctl('get', 'Port', 'inv-p1', 'vlan_mode')).toBe('access');
+  expect(vsctl('get', 'Port', 'inv-p1', 'tag')).toBe('10');
+  expect(vsctl('get', 'Port', 'inv-p1', '_uuid')).toBe(original);
+  await screen(page, 'qinq-rolled-back');
 });
 
 test('managed internal Port deletion preserves its parent and restores fresh child identities', async ({

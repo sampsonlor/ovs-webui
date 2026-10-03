@@ -23,7 +23,7 @@ var selected = map[string][]string{
 	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "external_ids"},
-	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "error", "external_ids"},
+	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
 
@@ -311,6 +311,16 @@ func sanitize(table, name string, n any) any {
 		m, _ := n.(map[string]any)
 		for k, v := range m {
 			if slices.Contains([]string{"peer", "remote_ip", "local_ip", "dst_port", "key"}, k) {
+				safe[k] = v
+			}
+		}
+		return safe
+	}
+	if name == "status" {
+		safe := map[string]any{}
+		m, _ := n.(map[string]any)
+		for k, v := range m {
+			if slices.Contains([]string{"driver_name", "driver_version", "firmware_version", "bus_info", "numa_id", "if_type"}, k) {
 				safe[k] = v
 			}
 		}

@@ -227,6 +227,11 @@ def main():
         bond = get('/bonds')['items'][0]
         assert bond['management_id'] == by_name['inv-bond']['management_id'] and len(bond['member_refs']) == 2
         assert all(i['port_ref']['id'] in {p['management_id'] for p in page['items']} for i in interfaces)
+        assert all(i['bridge_ref']['id'] == bridge['management_id'] for i in interfaces)
+        assert all(i['port_kind'] == ('bond' if i['port_ref']['id'] == bond['management_id'] else 'single') for i in interfaces)
+        assert all(i['allowed_operations'] == [] and all(not f['editable'] for f in i['fields'].values()) for i in interfaces)
+        assert all(i['fields']['mtu']['source']['authority'] == 'ovs-vswitchd-observation' and
+                   i['fields']['mtu_request']['source']['authority'] == 'ovsdb-configuration' for i in interfaces)
         assert any(i['internal'] for i in interfaces)
         assert all(p['allowed_operations'] == [] and p['linux_carrier']['value'] is None for p in page['items'])
         vsctl('set', 'Port', 'inv-p1', 'vlan_mode=native-untagged', 'tag=37', 'trunks=[]')
@@ -254,6 +259,13 @@ def main():
         credentials.append(token['secret'])
         code, filtered, _ = call('/ports', bearer=token['secret'])
         assert code == 200 and all(p['vlan']['native'] is None for p in filtered['items'])
+        code, observer_interfaces, _ = call('/interfaces', bearer=token['secret'])
+        assert code == 200
+        assert all(i['interface_type'] == 'unknown' and i['internal'] is None and i['local_interface'] is None and
+                   i['fields']['type']['availability'] == 'withheld' and
+                   i['fields']['mtu_request']['availability'] == 'withheld' and
+                   i['fields']['mtu']['availability'] == 'known' for i in observer_interfaces['items'])
+        assert all(i['fields']['status']['source']['authority'] == 'ovs-vswitchd-observation' for i in observer_interfaces['items'])
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 
