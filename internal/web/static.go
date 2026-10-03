@@ -16,7 +16,7 @@ import (
 //go:embed assets
 var staticAssets embed.FS
 
-var uiRoute = regexp.MustCompile(`^/(?:ports(?:/[0-9a-f-]{36}(?:/vlan)?)?|bridges/[0-9a-f-]{36}|interfaces(?:/[0-9a-f-]{36})?|changes/(?:candidate|candidates/[0-9a-f-]{36}|validations/[0-9a-f-]{36}|transactions(?:/[0-9a-f-]{36})?)|operations/(?:jobs|events|audit)(?:/[0-9a-f-]{36})?|overview|visibility|administration)?$`)
+var uiRoute = regexp.MustCompile(`^/(?:ports(?:/[0-9a-f-]{36}(?:/vlan)?)?|bridges/[0-9a-f-]{36}|interfaces(?:/[0-9a-f-]{36}(?:/mtu)?)?|changes/(?:candidate|candidates/[0-9a-f-]{36}|validations/[0-9a-f-]{36}|transactions(?:/[0-9a-f-]{36})?)|operations/(?:jobs|events|audit)(?:/[0-9a-f-]{36})?|overview|visibility|administration)?$`)
 
 func staticHandler(assets fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

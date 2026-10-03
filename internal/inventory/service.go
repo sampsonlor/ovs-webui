@@ -36,6 +36,7 @@ type Service struct {
 	now                            func() time.Time
 	localVLAN                      map[string]bool
 	localBond                      map[string]bool
+	localMTU                       map[string]bool
 	localBridgeNames               map[string]bool
 	localBridgeDeleteNames         map[string]bool
 	localInternalPortTargets       map[string]bool
@@ -120,7 +121,7 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	s.mu.RLock()
-	v, failure, localVLAN, localBond := s.current, s.failure, s.localVLAN, s.localBond
+	v, failure, localVLAN, localBond, localMTU := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU
 	s.mu.RUnlock()
 	now := s.now()
 	fresh := "unknown"
@@ -155,6 +156,20 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 	// SetLocalVLANPorts replaces the map; published observations are immutable.
 	project := func(b Binding, kind string) (map[string]any, error) {
 		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err == nil && b.Table == "Interface" && allowedConfig {
+			binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Interface", Generation: v.decision.Generation}
+			snapshot := candidate.Snapshot{Generation: v.decision.Generation}
+			projectMTU(v, localMTU, &snapshot, []candidate.Binding{binding})
+			p := snapshot.Interfaces[b.ManagementID]
+			editable := fresh == "fresh" && candidate.MTUEditable(p) && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.interface.mtu.write")
+			item["mtu_ownership"], item["mtu_editable"] = p.Authority, editable
+			if field, ok := item["fields"].(map[string]any)["mtu_request"].(map[string]any); ok {
+				field["ownership"], field["editable"] = p.Authority, editable
+			}
+			if editable {
+				item["allowed_operations"] = []string{candidate.InterfaceMTUSet}
+			}
+		}
 		if err != nil || b.Table != "Port" || !allowedConfig {
 			return item, err
 		}

@@ -123,6 +123,7 @@ type ObservedIntent struct {
 	BondMemberInterfaceIds []Id                       `json:"bond_member_interface_ids,omitempty"`
 	BridgeCreation         BridgeCreation             `json:"bridge_creation,omitempty"`
 	BridgeDeletion         BridgeDeletion             `json:"bridge_deletion,omitempty"`
+	MtuChange              MTUChange                  `json:"mtu_change,omitempty"`
 	ExtraFields            map[string]json.RawMessage `json:"-"`
 }
 
@@ -627,6 +628,8 @@ type Interface struct {
 	Ownership          string                     `json:"ownership,omitempty"`
 	AllowedOperations  []string                   `json:"allowed_operations,omitempty"`
 	Fields             map[string]json.RawMessage `json:"fields,omitempty"`
+	MtuOwnership       string                     `json:"mtu_ownership,omitempty"`
+	MtuEditable        bool                       `json:"mtu_editable,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
@@ -981,6 +984,12 @@ type InternalPortCreateIntent struct {
 	Name      string        `json:"name"`
 	VlanId    int64         `json:"vlan_id"`
 }
+type InterfaceMTUIntent struct {
+	IntentId   Id            `json:"intent_id"`
+	Operation  string        `json:"operation"`
+	Object     ObjectBinding `json:"object"`
+	MtuRequest int64         `json:"mtu_request"`
+}
 type InternalPortCreation struct {
 	Name            string                     `json:"name"`
 	VlanId          int64                      `json:"vlan_id"`
@@ -1116,6 +1125,23 @@ func (v *IdentityReplacement) UnmarshalJSON(data []byte) error {
 }
 func (v IdentityReplacement) MarshalJSON() ([]byte, error) {
 	type plain IdentityReplacement
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type MTUChange struct {
+	Before      int64                      `json:"before"`
+	After       int64                      `json:"after"`
+	Port        ObjectBinding              `json:"port"`
+	Bridge      ObjectBinding              `json:"bridge"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *MTUChange) UnmarshalJSON(data []byte) error {
+	type plain MTUChange
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v MTUChange) MarshalJSON() ([]byte, error) {
+	type plain MTUChange
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

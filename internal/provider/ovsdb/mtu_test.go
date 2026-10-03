@@ -1,0 +1,102 @@
+package ovsdb
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
+)
+
+func TestMTUCompilationAndAppliedProofAcrossNativeSchemas(t *testing.T) {
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			d, view, e := executionFixture(t, version)
+			prior := e.Candidate.Intents[0]
+			port := view.Observation.Rows["Port"][prior.Object.OVSUUID]
+			id := nativeRefs(port.Values["interfaces"])[0]
+			iface := view.Observation.Rows["Interface"][id]
+			empty := true
+			iface.InterfaceOptionsEmpty = &empty
+			iface.Values["mtu_request"] = []any{"1500"}
+			iface.Values["mtu"] = []any{"1500"}
+			iface.Values["error"] = []any{}
+			view.Observation.Rows["Interface"][id] = iface
+			i := candidate.StoredIntent{Operation: candidate.InterfaceMTUSet, Object: candidate.Binding{ManagementID: repository.NewID(), OVSUUID: id, Table: "Interface", Generation: prior.Object.Generation}, MTU: &candidate.MTUChange{Before: 1500, After: 2000, Port: prior.Object}}
+			for uuid := range view.Observation.Rows["Bridge"] {
+				i.MTU.Bridge = candidate.Binding{OVSUUID: uuid}
+			}
+			e.Candidate.Intents = []candidate.StoredIntent{i}
+			p, err := compileExecution(repository.NewID(), "marker", e, view, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var n nativePlan
+			if json.Unmarshal(p.Native, &n) != nil {
+				t.Fatal("plan decode")
+			}
+			updates := 0
+			for _, op := range n.Operations {
+				if op["op"] == "update" {
+					updates++
+					if op["table"] != "Interface" || len(op["row"].(map[string]any)) != 1 || op["row"].(map[string]any)["mtu_request"] == nil {
+						t.Fatal("unrelated field updated", op)
+					}
+				}
+			}
+			if updates != 1 {
+				t.Fatal(n)
+			}
+			iface.Values["mtu_request"] = []any{"2000"}
+			iface.Values["mtu"] = []any{"2000"}
+			ops, err := appliedProofOperations(p, view, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual := false
+			for _, op := range ops {
+				o := op.(map[string]any)
+				if o["op"] != "wait" && o["op"] != "select" {
+					t.Fatal("proof writes live fields")
+				}
+				if columns, ok := o["columns"].([]string); ok {
+					for _, col := range columns {
+						actual = actual || col == "mtu"
+					}
+				}
+			}
+			if !actual {
+				t.Fatal("actual MTU omitted from proof")
+			}
+			*iface.InterfaceOptionsEmpty = false
+			if _, err = compileExecution(repository.NewID(), "marker", e, view, d); err == nil {
+				t.Fatal("empty safe subset treated as raw empty map")
+			}
+			if !mtuConstraint(d.native.Tables["Interface"].Columns["mtu_request"]) {
+				t.Fatal("supported native constraint")
+			}
+		})
+	}
+}
+func TestMTUProviderDoesNotInferRawOptionEmptinessFromSafeSubset(t *testing.T) {
+	d := schema(t, "3.3.9")
+	id := repository.NewID()
+	rows := inventory.Rows{}
+	for n, options := range []any{[]any{"map", []any{[]any{"opaque-native", "synthetic"}}}, []any{"map", []any{}}} {
+		change := map[string]any{"new": map[string]any{"options": options}}
+		if n == 0 {
+			change["new"].(map[string]any)["name"] = "synthetic"
+		} else {
+			change["old"] = map[string]any{"options": []any{"map", []any{[]any{"opaque-native", "synthetic"}}}}
+		}
+		data, _ := json.Marshal(map[string]any{"Interface": map[string]any{id: change}})
+		if err := update(d, rows, data, n == 0); err != nil {
+			t.Fatal(err)
+		}
+		r := rows["Interface"][id]
+		if r.InterfaceOptionsEmpty == nil || *r.InterfaceOptionsEmpty != (n == 1) || len(r.Values["options"].(map[string]any)) != 0 {
+			t.Fatal(r)
+		}
+	}
+}

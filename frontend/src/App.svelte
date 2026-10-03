@@ -10,6 +10,7 @@
   import Changes from './Changes.svelte';
   import Interfaces from './Interfaces.svelte';
   import InterfaceDetail from './InterfaceDetail.svelte';
+  import MTUEditor from './MTUEditor.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -441,7 +442,9 @@
         {:else if path === '/interfaces'}
           <Interfaces model={$model} {expert} />
         {:else if path.startsWith('/interfaces/')}
-          <InterfaceDetail model={$model} {expert} />
+          {#if path.endsWith('/mtu') && $model.interface.value}
+            {#key path}<MTUEditor item={$model.interface.value} model={$model} {desktop} />{/key}
+          {:else}<InterfaceDetail model={$model} {expert} {desktop} />{/if}
         {:else if path.startsWith('/changes/') && path !== '/changes/transactions'}
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
         {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path.startsWith('/bridges/')}

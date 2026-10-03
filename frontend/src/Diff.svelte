@@ -6,6 +6,7 @@
   const portDeletions = $derived(fields.filter((field) => field.operation === 'port.delete-internal'));
   const deletions = $derived(fields.filter((field) => field.operation === 'bridge.delete-isolated'));
   const qinq = $derived(fields.filter((field) => field.field === 'qinq_context'));
+  const mtu = $derived(fields.some((field) => field.operation === 'interface.mtu.set'));
   function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
     if (field.field === 'qinq_context' && value && typeof value === 'object') {
       const context = value as Record<string, unknown>;
@@ -53,6 +54,7 @@
         : JSON.stringify(value);
 </script>
 
+{#if mtu}<div class="notice warning"><strong>Explicit Interface MTU request</strong><p>Values are bytes. Review the peer and management path before Safe Apply. The confirmation window waits for the actual device MTU; rollback restores the original explicit request and verifies the original device value.</p></div>{/if}
 {#if qinq.length}
   <div class="notice warning"><strong>QinQ service and customer VLANs</strong><p>The service VLAN is the outer tag. An empty customer VLAN list permits all customer VLANs. The native TPID is preserved; external dependency changes block reuse of this review and guarded rollback.</p></div>
   {#if expert}{#each qinq as field}<details><summary>QinQ native dependency evidence</summary><pre>{JSON.stringify({ original: field.before, current: field.current }, null, 2)}</pre></details>{/each}{/if}
@@ -100,7 +102,7 @@
           ><th scope="row"
             >{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field, 'before')}</td><td
             >{display(field.current, field, 'current')}</td

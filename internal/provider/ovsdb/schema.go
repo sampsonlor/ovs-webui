@@ -76,6 +76,9 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			if t == "Interface" && name == "mtu_request" {
+				c.MTUCompatible = mtuConstraint(col)
+			}
 			if t == "Port" {
 				c.VLANCompatible, c.VLANModes = vlanConstraint(name, col)
 				c.BondCompatible = bondConstraint(name, col)
@@ -290,6 +293,11 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					return err
 				}
 				prior.Values[name] = sanitize(table, name, n)
+				if table == "Interface" && name == "options" {
+					m, ok := n.(map[string]any)
+					empty := ok && len(m) == 0
+					prior.InterfaceOptionsEmpty = &empty
+				}
 			}
 			b, _ := json.Marshal(prior)
 			if len(b) > inventory.MaxRowBytes {

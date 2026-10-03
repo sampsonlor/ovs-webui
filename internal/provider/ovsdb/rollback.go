@@ -45,7 +45,11 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 			candidate.Reverse(intent)
 			continue
 		}
-		labels, _ := view.Observation.Rows["Port"][intent.Object.OVSUUID].Values["external_ids"].(map[string]any)
+		table := "Port"
+		if intent.Operation == candidate.InterfaceMTUSet {
+			table = "Interface"
+		}
+		labels, _ := view.Observation.Rows[table][intent.Object.OVSUUID].Values["external_ids"].(map[string]any)
 		if labels[execution.MarkerKey] != original.Marker {
 			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 		}

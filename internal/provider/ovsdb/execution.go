@@ -242,6 +242,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return compileExecution(id, marker, envelope, view, d)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.InterfaceMTUSet {
+		return compileMTUExecution(id, marker, envelope, view, d)
+	}
 	if _, ok := internalPortIntent(envelope.Candidate); ok {
 		creationMarker := marker
 		if deletion := envelope.Candidate.Intents[0].PortDeletion; deletion != nil && !deletion.Restoring {
@@ -551,6 +554,9 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	all, anyMarker := true, false
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
+		if intent.Operation == candidate.InterfaceMTUSet {
+			row, exists = view.Observation.Rows["Interface"][intent.Object.OVSUUID]
+		}
 		markerKey := execution.MarkerKey
 		if candidate.IsGraphOperation(intent.Operation) {
 			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
@@ -607,6 +613,22 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
+		if intent.Operation == candidate.InterfaceMTUSet {
+			iface := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
+			values, ok := iface.Values["error"].([]any)
+			if !ok || len(values) != 0 {
+				out.Applied = "unknown"
+				out.Reason = "interface-apply-error"
+				return out
+			}
+			values, ok = iface.Values["mtu"].([]any)
+			if !ok || len(values) != 1 || values[0] != strconv.Itoa(intent.MTU.After) {
+				out.Applied = "pending"
+				out.Reason = "awaiting-interface-mtu"
+				return out
+			}
+			continue
+		}
 		if candidate.IsGraphOperation(intent.Operation) {
 			continue
 		}

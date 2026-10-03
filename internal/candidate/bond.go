@@ -20,6 +20,9 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if i.Operation == InterfaceMTUSet {
+			cap = "ovs.interface.mtu.write"
+		}
 		if i.Operation == InternalPortDelete {
 			cap = "ovs.port.internal.delete"
 		}
@@ -192,6 +195,12 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.MTU != nil {
+		m := *i.MTU
+		m.Before = m.After
+		i.MTU = &m
+		return
+	}
 	if i.PortDeletion != nil {
 		i.PortDeletion = clonePortDeletion(i.PortDeletion)
 		i.PortDeletion.Observed = true
@@ -219,6 +228,12 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.MTU != nil {
+		m := *i.MTU
+		m.Before, m.After = m.After, m.Before
+		i.MTU = &m
+		return
+	}
 	if i.PortDeletion != nil {
 		i.PortDeletion = clonePortDeletion(i.PortDeletion)
 		i.PortDeletion.Restoring, i.PortDeletion.Observed = true, false

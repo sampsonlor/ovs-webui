@@ -479,6 +479,41 @@ export class Controller {
       (v) => `/changes/candidates/${(v as Candidate).id}`,
     );
   }
+  stageMTU(item: Interface, requested: number) {
+    const c = this.state.workspace.value?.candidate;
+    if (!c) return;
+    const existing = c.intents.find(
+      (i) =>
+        i.operation === 'interface.mtu.set' &&
+        i.object.management_id === item.management_id,
+    );
+    return this.mutate(
+      () =>
+        this.api.command<Candidate>(
+          '/candidate',
+          'PATCH',
+          'workspace',
+          {
+            operation: 'stage',
+            intents: [
+              {
+                intent_id: existing?.intent_id ?? crypto.randomUUID(),
+                operation: 'interface.mtu.set',
+                object: {
+                  management_id: item.management_id,
+                  ovs_uuid: item.ovs_uuid,
+                  instance_generation: item.instance_generation,
+                  table: 'Interface',
+                },
+                mtu_request: requested,
+              },
+            ],
+          },
+          c.revision,
+        ),
+      (v) => `/changes/candidates/${(v as Candidate).id}`,
+    );
+  }
   candidateCommand(body: object) {
     const c = this.state.workspace.value?.candidate;
     if (!c) return;

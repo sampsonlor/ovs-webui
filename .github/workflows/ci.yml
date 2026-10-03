@@ -182,6 +182,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch
+      - name: Native explicit internal Interface MTU and compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeInterfaceMTU$' -test.v -test.timeout=240s \
+              | go tool test2json -p "native-interface-mtu-$schema" | tee "test-results/go-interface-mtu-$schema.json"
+          done
       - name: Native QinQ customer VLAN and guarded compensation matrix
         run: |
           set -o pipefail
@@ -306,6 +314,7 @@ jobs:
             test-results/go-execution-*.json
             test-results/go-bond-lacp-*.json
             test-results/go-qinq-*.json
+            test-results/go-interface-mtu-*.json
             test-results/go-isolated-bridge-*.json
             test-results/go-internal-port-*.json
             test-results/go-safe-apply-*.json

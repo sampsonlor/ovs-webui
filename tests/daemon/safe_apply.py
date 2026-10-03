@@ -114,6 +114,9 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         if exercise is not None:
             vsctl('add-br', 'br-ui-parent', '--', 'set', 'Bridge', 'br-ui-parent', 'datapath_type=system')
             parent = eventually(lambda: next((b for b in get('/bridges')['items'] if b['name'] == 'br-ui-parent'), None))
+            vsctl('add-port', 'br-ui-parent', 'pi-ui-mtu', '--', 'set', 'Interface', 'pi-ui-mtu', 'type=internal', 'mtu_request=1500', 'external_ids:synthetic-mtu=keep')
+            mtu_interface = eventually(lambda: next((i for i in get('/interfaces?filter=pi-ui-mtu')['items'] if i['name'] == 'pi-ui-mtu'), None))
+            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-mtu-interfaces=' + mtu_interface['management_id'])
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-internal-port-targets=' + parent['management_id'] + ':pi-ui-create,' + parent['management_id'] + ':pi-ui-delete --local-internal-port-delete-targets=' + parent['management_id'] + ':pi-ui-delete')
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-bridge-create-names=br-ui-create,br-ui-delete --local-bridge-delete-names=br-ui-delete')
         unit_path.write_text(text)
