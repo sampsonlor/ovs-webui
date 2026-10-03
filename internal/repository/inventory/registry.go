@@ -182,7 +182,7 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 				return err
 			}
 			for table, objects := range o.Rows {
-				if table == "Open_vSwitch" {
+				if table == "Open_vSwitch" || table == "Datapath" {
 					continue
 				}
 				for uuid := range objects {

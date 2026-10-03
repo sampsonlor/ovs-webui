@@ -167,6 +167,10 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 			}
 		}
 		item["vlan_ownership"], item["vlan_modes"] = p.Authority, p.Modes
+		item["qinq_editable"] = editable && candidate.QinQEditable(p)
+		if p.QinQ != nil {
+			item["qinq_ethertype"] = p.QinQ.EtherType
+		}
 		if editable {
 			item["allowed_operations"] = []string{"port.vlan.set"}
 		}

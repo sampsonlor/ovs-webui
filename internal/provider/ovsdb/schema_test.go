@@ -27,7 +27,7 @@ func TestActualSchemaVersionsAndMetadata(t *testing.T) {
 	for _, v := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		t.Run(v, func(t *testing.T) {
 			d := schema(t, v)
-			if len(d.requests) != 4 {
+			if len(d.requests) != 5 {
 				t.Fatal("monitor coverage")
 			}
 			found := false

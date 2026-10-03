@@ -129,7 +129,7 @@ func evidence(o Options, d discovered, rows inventory.Rows, identity string, pid
 		e.Root = id
 	}
 	for table, objects := range rows {
-		if table == "Open_vSwitch" {
+		if table == "Open_vSwitch" || table == "Datapath" {
 			continue
 		}
 		for id := range objects {

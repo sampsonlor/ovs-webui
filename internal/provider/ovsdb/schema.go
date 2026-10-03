@@ -19,7 +19,8 @@ import (
 )
 
 var selected = map[string][]string{
-	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids"},
+	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths"},
+	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "external_ids"},
 	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "error", "external_ids"},
@@ -367,7 +368,7 @@ func validateRelations(rows inventory.Rows) error {
 		}
 	}
 	for table, objects := range rows {
-		if table == "Open_vSwitch" {
+		if table == "Open_vSwitch" || table == "Datapath" {
 			continue
 		}
 		for uuid, row := range objects {

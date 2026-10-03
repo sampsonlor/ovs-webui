@@ -72,6 +72,9 @@ func comparison(i StoredIntent, s Snapshot) (Port, string) {
 	if IsBondOperation(i.Operation) {
 		dependency = p.BondDependency
 	}
+	if UsesQinQ(i) && (i.QinQ == nil || p.QinQ == nil || Digest(i.QinQ) != Digest(p.QinQ)) {
+		return p, "QINQ_DEPENDENCY_CHANGED"
+	}
 	if dependency != i.Dependency {
 		return p, "DEPENDENCY_CHANGED"
 	}
@@ -156,6 +159,10 @@ func Compare(c Candidate, s Snapshot) View {
 				after = []any{i.Bond.LACP, i.Bond.Mode, i.Bond.Fallback}
 			}
 			known = p.BondKnown
+		}
+		if UsesQinQ(i) {
+			fields = append(fields, "qinq_context")
+			before, after, current = append(before, i.QinQ), append(after, i.QinQ), append(current, p.QinQ)
 		}
 		for n, field := range fields {
 			var now any
@@ -286,6 +293,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 					}
 				}
 				c.Intents[index].Value = normalize(in.Value)
+				if UsesQinQ(c.Intents[index]) && c.Intents[index].QinQ == nil {
+					c.Intents[index].QinQ = cloneQinQ(p.QinQ)
+				}
 				c.Intents[index].Bond = desired
 			} else {
 				i := StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Value: normalize(in.Value), Bond: desired, Schema: s.Schema}
@@ -410,7 +420,15 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 			checks = append(checks, bondChecks(i, p)...)
 			continue
 		}
-		if !p.SchemaSupported || i.Value.Mode == nil || !slices.Contains(p.Modes, *i.Value.Mode) {
+		mode := i.Value.Mode
+		if mode == nil && UsesQinQ(i) {
+			implicit := "trunk"
+			if i.Value.Tag != nil {
+				implicit = "access"
+			}
+			mode = &implicit
+		}
+		if !p.SchemaSupported || mode == nil || !slices.Contains(p.Modes, *mode) {
 			checks = append(checks, gate("SCHEMA_UNSUPPORTED", "blocked", i.ID))
 		}
 		if p.Authority != "local-managed" {
@@ -420,14 +438,13 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 			}
 			checks = append(checks, gate(code, "blocked", i.ID))
 		}
-		if i.Before.Mode != nil && !slices.Contains([]string{"access", "trunk", "native-tagged", "native-untagged"}, *i.Before.Mode) || len(i.Before.CVLANs) != 0 {
+		if UsesQinQ(i) {
+			checks = append(checks, qinqChecks(i, p)...)
+		} else if i.Before.Mode != nil && !slices.Contains([]string{"access", "trunk", "native-tagged", "native-untagged"}, *i.Before.Mode) || len(i.Before.CVLANs) != 0 {
 			checks = append(checks, gate("NATIVE_SEMANTICS_UNPROVEN", "blocked", i.ID))
 		}
 		if i.Before.Mode == nil {
 			checks = append(checks, gate("NATIVE_DEFAULT_MODE_PRESERVED", "allowed", i.ID))
-		}
-		if i.Value.Mode != nil && *i.Value.Mode == "dot1q-tunnel" {
-			checks = append(checks, gate("QINQ_VALIDATOR_UNAVAILABLE", "blocked", i.ID))
 		}
 		for _, n := range append(append([]int{}, i.Before.Trunks...), i.Before.CVLANs...) {
 			if n == 0 || n == 4095 {

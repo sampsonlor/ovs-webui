@@ -243,7 +243,9 @@ func must(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
-func newFixture(t *testing.T) *fixture {
+func newFixture(t *testing.T) *fixture { return newFixtureWithVLANLimit(t, "") }
+
+func newFixtureWithVLANLimit(t *testing.T, vlanLimit string) *fixture {
 	t.Helper()
 	root, err := os.MkdirTemp("/run", "ovs-field-test-")
 	must(t, err)
@@ -272,6 +274,9 @@ func newFixture(t *testing.T) *fixture {
 	f.run("ovsdb-tool", "create", f.conf, os.Getenv("OVS_EXECUTION_SCHEMA"))
 	f.startDB()
 	f.vs("init")
+	if vlanLimit != "" {
+		f.vs("set", "Open_vSwitch", ".", "other_config:vlan-limit="+vlanLimit)
+	}
 	f.run("ovs-vswitchd", "--enable-dummy", "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"), "--detach", "--no-chdir", "unix:"+f.dbSocket)
 	f.vs("add-br", "br-field", "--", "set", "Bridge", "br-field", "datapath_type=dummy", "--", "add-port", "br-field", "field-p1", "--", "set", "Interface", "field-p1", "type=dummy", "--", "set", "Port", "field-p1", "vlan_mode=access", "tag=10", "--", "add-port", "br-field", "field-p2", "--", "set", "Interface", "field-p2", "type=dummy", "--", "set", "Port", "field-p2", "vlan_mode=access", "tag=10")
 	// The trusted test proxy holds the actual DB file. Production still verifies

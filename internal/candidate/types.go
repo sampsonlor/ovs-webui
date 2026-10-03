@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "internal-port-delete-v1"
+const ValidatorVersion = "qinq-vlan-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -44,6 +44,7 @@ type Intent struct {
 	VLANID    int      `json:"vlan_id,omitempty"`
 }
 type StoredIntent struct {
+	QinQ *QinQContext `json:"qinq_context,omitempty"`
 	// IPC fields are explicit: strict request decoding deliberately does not
 	// infer encoding/json's anonymous-field promotion rules.
 	ID           string                `json:"intent_id"`
@@ -125,6 +126,8 @@ type View struct {
 // Snapshot is one coherent, immutable projection of mgrd's current monitor.
 // Dependencies contain only digests of the relevant structural/native fields.
 type Port struct {
+	QinQ                            *QinQContext
+	QinQSupported                   bool
 	Binding                         Binding
 	VLAN                            VLAN
 	Known, SchemaSupported          bool
