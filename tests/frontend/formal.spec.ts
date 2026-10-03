@@ -1592,7 +1592,14 @@ test('explicit internal Interface MTU follows responsive Candidate review, actua
       'external_ids:unrelated=preserve',
       'other_config:opaque=preserve',
     );
-    await chooseDecision(page, 'Rollback now', 'rolled-back');
+    await expect
+      .poll(
+        async () =>
+          (await get(page.context(), `/interfaces/${before.management_id}`))
+            .fields.external_ids.value.unrelated,
+      )
+      .toBe('preserve');
+    await chooseDecision(page, 'Request rollback', 'rolled-back');
     expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu_request')).toBe('1500');
     expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu')).toBe('1500');
     expect(
@@ -1612,6 +1619,9 @@ test('explicit internal Interface MTU follows responsive Candidate review, actua
     expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'other_config')).toBe(
       '{opaque=preserve}',
     );
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-mtu', 'external_ids:unrelated'),
+    ).toBe('preserve');
     await screen(page, 'interface-mtu-rolled-back');
     await mtuEditor(page);
     await stageMTU(page, '2200');
@@ -1639,9 +1649,6 @@ test('MTU drift, hidden native options, reader permissions and mobile direct edi
   try {
     await stageMTU(page, '2000');
     vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1800');
-    await page
-      .getByRole('button', { name: 'Refresh evidence', exact: true })
-      .click();
     await expect(
       page.getByRole('region', { name: 'Configuration Diff' }),
     ).toContainText('1800');
@@ -1653,7 +1660,13 @@ test('MTU drift, hidden native options, reader permissions and mobile direct edi
         name: 'Rebase reviewed choices',
         exact: true,
       }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', {
+        name: 'Review and restage this MTU request',
+        exact: true,
+      }),
+    ).toBeVisible();
     await screen(page, 'interface-mtu-drift');
     await clean(page.context());
     vsctl('set', 'Interface', 'pi-ui-mtu', 'options:unpublished=synthetic');

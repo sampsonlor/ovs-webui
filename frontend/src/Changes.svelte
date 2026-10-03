@@ -97,6 +97,12 @@
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
+    {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set')}
+      <section class="panel">
+        <h2>Review and restage this MTU request</h2>
+        <p>Live configuration or attachment changed. Discard this intent, review the current Interface and stage a new request with its current binding.</p>
+      </section>
+    {/if}
     {#if c.state === 'conflict'}
       <section class="panel">
         <h2>Resolve against this snapshot</h2>
