@@ -11,14 +11,14 @@
 | 草稿和旧 journal | 保留 sealed empty/数字及依赖，不能通过编辑重捕获默认；旧明确请求 JSON 仍能精确反向恢复 |
 | Standard / Expert | 请求与自动依赖两行 Diff 相同，单位/风险/恢复语义在两种模式均可读；Expert 不增加权限 |
 | 响应式 | 桌面编辑/验证；900px 平板与 390px 手机审阅禁用新验证且无整页横溢出；既有 Safe Apply 处理保持共享行为 |
-| 异常和权限 | 依赖漂移需重新 stage，无贡献者默认不可编辑并保留深色证据；E2a 的 Reader、手机直接编辑和隐藏原生 options 场景继续通过 |
+| 异常和权限 | 原生空请求但设备实际值与推导值不一致时不可编辑，保留真实 kernel 例外；依赖漂移需重新 stage，无贡献者默认不可编辑并保留深色证据；E2a 的 Reader、手机直接编辑和隐藏原生 options 场景继续通过 |
 | 回归 | E1/ E2a 全部截图、分页/provider/退休身份；既有三 schema 原生矩阵、管理连接恢复 VM、认证/TLS、正式与原型浏览器持续通过 |
 
 新矩阵 `go-interface-mtu-default-{3.3.9,3.7.1,4.0.0}.json`：每架构、每 schema 12 项不跳过原生场景。E2a 的 11 项 × 三 schema 原生矩阵继续独立执行。schema fixture 不等于三种实际 OVS 二进制版本；原生字段矩阵使用隔离 dummy provider 的 system 映射，正式浏览器在实际 system kernel Bridge 上检查 OVS 报告和 Linux `ip link` MTU。
 
 完整验收目标：每架构 208 个唯一 Go race 顶层测试、18 项正式浏览器流程、10 次额外 Safe Apply 准入重复和全部旧原生矩阵；共享 233 项单元、3 项隔离集成、31 项原型浏览器。数字仅为核验目标，须从 PR 与 main 实际报告分别核对，失败或跳过不算完成。
 
-新增截图：interface-mtu-default-editor、interface-mtu-default-standard、interface-mtu-default-expert、interface-mtu-default-tablet-review、interface-mtu-default-mobile-review、interface-mtu-default-awaiting-confirmation、interface-mtu-default-rolled-back、interface-mtu-clear-standard、interface-mtu-clear-rolled-back、interface-mtu-clear-confirmed、interface-mtu-default-drift、interface-mtu-default-unavailable-dark。保留双架构 frontend-evidence，并查看两种模式、窄屏与异常图像。
+新增截图：interface-mtu-default-unapplied、interface-mtu-default-editor、interface-mtu-default-standard、interface-mtu-default-expert、interface-mtu-default-tablet-review、interface-mtu-default-mobile-review、interface-mtu-default-awaiting-confirmation、interface-mtu-default-rolled-back、interface-mtu-clear-standard、interface-mtu-clear-rolled-back、interface-mtu-clear-confirmed、interface-mtu-default-drift、interface-mtu-default-unavailable-dark。保留双架构 frontend-evidence，并查看两种模式、窄屏与异常图像。
 
 ## Review disposition
 

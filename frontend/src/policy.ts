@@ -46,6 +46,14 @@ export function mtuEditReason(
   )
     return 'MTU configuration is stale, unavailable or withheld.';
   if (
+    Array.isArray(item.fields?.mtu_request?.value) &&
+    item.fields.mtu_request.value.length === 0 &&
+    Number.isSafeInteger(item.mtu_default) &&
+    (item.fields?.mtu?.availability !== 'known' ||
+      mtuNumber(item.fields?.mtu?.value) !== item.mtu_default)
+  )
+    return 'Automatic MTU is not proven by the current device observation. Review the actual value and Bridge devices.';
+  if (
     item.mtu_editable !== true ||
     !item.allowed_operations?.includes('interface.mtu.set') ||
     item.fields?.mtu_request?.editable !== true ||

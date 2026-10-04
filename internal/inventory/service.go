@@ -172,6 +172,8 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 				item["mtu_default_reason"] = ""
 				if p.Requested != nil && p.Observed != *p.Requested {
 					item["mtu_default_reason"] = "Wait for the current explicit MTU to be applied before switching to automatic MTU."
+				} else if p.Requested == nil && p.Observed != p.Default.MTU {
+					item["mtu_default_reason"] = "Automatic MTU is not yet proven by the observed device value."
 				}
 			}
 			if field, ok := item["fields"].(map[string]any)["mtu_request"].(map[string]any); ok {

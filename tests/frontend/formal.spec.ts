@@ -1850,8 +1850,59 @@ test('automatic MTU original survives responsive review and exact native-empty r
   await login(page, account);
   await clean(page.context());
   vsctl('set', 'Interface', 'pi-ui-mtu-peer', 'mtu_request=1800');
-  vsctl('clear', 'Interface', 'pi-ui-mtu', 'mtu_request');
   try {
+    // Native empty is configuration, not proof of the actual automatic value.
+    // A kernel MTU below the derived minimum can persist after clearing. Keep
+    // this real exception gated, then prepare a proven automatic fixture.
+    vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1500');
+    await waitMTUDefault(page, '1500', 1800);
+    vsctl('clear', 'Interface', 'pi-ui-mtu', 'mtu_request');
+    execFileSync('ip', ['link', 'set', 'dev', 'pi-ui-mtu', 'mtu', '1500'], {
+      stdio: 'pipe',
+    });
+    await expect
+      .poll(async () => {
+        const list = await get(page.context(), '/interfaces?filter=pi-ui-mtu');
+        const item = list.items.find(
+          (i: { name: string }) => i.name === 'pi-ui-mtu',
+        );
+        return {
+          request: item?.fields?.mtu_request?.value,
+          actual: item?.fields?.mtu?.value,
+          default: item?.mtu_default,
+          editable: item?.mtu_editable,
+        };
+      })
+      .toEqual({
+        request: [],
+        actual: ['1500'],
+        default: 1800,
+        editable: false,
+      });
+    const unavailableList = await get(
+      page.context(),
+      '/interfaces?filter=pi-ui-mtu',
+    );
+    const unavailable = unavailableList.items.find(
+      (i: { name: string }) => i.name === 'pi-ui-mtu',
+    );
+    await page.goto(
+      fixture.origin + `/interfaces/${unavailable.management_id}/mtu`,
+    );
+    await expect(
+      page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toBeDisabled();
+    expect(actualLinuxMTU()).toBe(1500);
+    await expect(
+      page.getByText(
+        'Automatic MTU is not proven by the current device observation. Review the actual value and Bridge devices.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await screen(page, 'interface-mtu-default-unapplied');
+    vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=2400');
+    await waitMTUDefault(page, '2400', 1800);
+    vsctl('clear', 'Interface', 'pi-ui-mtu', 'mtu_request');
     await waitMTUDefault(page, null, 1800);
     const before = await mtuEditor(page);
     const originalPort = vsctl('get', 'Port', 'pi-ui-mtu', '_uuid');

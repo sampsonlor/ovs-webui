@@ -29,7 +29,16 @@ await test('known native empty MTU remains editable only with a valid server def
   const automatic = item();
   automatic.fields.mtu_request.value = [];
   automatic.mtu_default = 1800;
+  automatic.fields.mtu = { availability: 'known', value: ['1800'] };
   assert.equal(mtuEditReason(automatic, session, true), '');
+  for (const value of [[], ['1500'], ['bad']]) {
+    const changed = structuredClone(automatic);
+    changed.fields.mtu.value = value;
+    assert.match(
+      mtuEditReason(changed, session, true),
+      /not proven by the current device observation/,
+    );
+  }
   for (const value of [undefined, null, 0, 575, 65536, '1800', 1800.5]) {
     assert.notEqual(
       mtuEditReason({ ...automatic, mtu_default: value }, session, true),
