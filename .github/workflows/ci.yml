@@ -197,6 +197,9 @@ jobs:
             sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
               outputs/runtime/execution.test -test.run '^TestNativeInterfaceMTUDefaults$' -test.v -test.timeout=240s \
               | go tool test2json -p "native-interface-mtu-default-$schema" | tee "test-results/go-interface-mtu-default-$schema.json"
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeInterfaceMTUDefaults$/^paused_daemon_does_not_prove_automatic_device_mtu$' -test.count=5 -test.v -test.timeout=90s \
+              | go tool test2json -p "native-interface-mtu-default-recovery-$schema" | tee "test-results/go-interface-mtu-default-recovery-$schema.json"
           done
       - name: Native QinQ customer VLAN and guarded compensation matrix
         run: |
