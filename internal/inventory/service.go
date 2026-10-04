@@ -163,11 +163,25 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 			p := snapshot.Interfaces[b.ManagementID]
 			editable := fresh == "fresh" && candidate.MTUEditable(p) && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.interface.mtu.write")
 			item["mtu_ownership"], item["mtu_editable"] = p.Authority, editable
+			item["mtu_clearable"] = editable && candidate.MTUClearable(p)
+			if p.Default != nil {
+				item["mtu_default"] = p.Default.MTU
+			}
+			item["mtu_default_reason"] = "Default MTU needs proven, stable Bridge devices and at least one contributor."
+			if p.Default != nil {
+				item["mtu_default_reason"] = ""
+				if p.Requested != nil && p.Observed != *p.Requested {
+					item["mtu_default_reason"] = "Wait for the current explicit MTU to be applied before switching to automatic MTU."
+				}
+			}
 			if field, ok := item["fields"].(map[string]any)["mtu_request"].(map[string]any); ok {
 				field["ownership"], field["editable"] = p.Authority, editable
 			}
 			if editable {
 				item["allowed_operations"] = []string{candidate.InterfaceMTUSet}
+				if candidate.MTUClearable(p) {
+					item["allowed_operations"] = []string{candidate.InterfaceMTUSet, candidate.InterfaceMTUClear}
+				}
 			}
 		}
 		if err != nil || b.Table != "Port" || !allowedConfig {

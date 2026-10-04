@@ -49,9 +49,17 @@ export function mtuEditReason(
     item.mtu_editable !== true ||
     !item.allowed_operations?.includes('interface.mtu.set') ||
     item.fields?.mtu_request?.editable !== true ||
-    mtuNumber(item.fields?.mtu_request?.value) === null
+    (mtuNumber(item.fields?.mtu_request?.value) === null &&
+      !(
+        Array.isArray(item.fields?.mtu_request?.value) &&
+        item.fields.mtu_request.value.length === 0 &&
+        typeof item.mtu_default === 'number' &&
+        Number.isSafeInteger(item.mtu_default) &&
+        item.mtu_default >= 576 &&
+        item.mtu_default <= 65535
+      ))
   )
-    return 'MTU editing requires an explicitly authorized standalone internal Interface with an existing MTU request. Local interfaces, Bond members, other types and native defaults are read-only.';
+    return 'MTU editing requires an explicitly authorized standalone internal Interface with a valid request or proven automatic MTU. Local interfaces, Bond members, other types and unproven defaults are read-only.';
   return '';
 }
 export function vlanText(v: NativeVlan | null): string {
@@ -118,6 +126,7 @@ export function applyReady(
           'port.create-internal': 'ovs.port.internal.create',
           'port.delete-internal': 'ovs.port.internal.delete',
           'interface.mtu.set': 'ovs.interface.mtu.write',
+          'interface.mtu.clear': 'ovs.interface.mtu.write',
         } as Record<string, string>
       )[i.operation];
       return !!capability && has(session, capability);

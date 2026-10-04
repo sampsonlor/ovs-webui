@@ -31,7 +31,7 @@ func compileMTUExecution(id, marker string, envelope candidate.Envelope, view in
 		return out, apitypes.Fail(422, "MTU_SINGLE_INTENT_REQUIRED")
 	}
 	i := envelope.Candidate.Intents[0]
-	if i.Operation != candidate.InterfaceMTUSet || i.MTU == nil || !candidate.ValidMTU(i.MTU.Before) || !candidate.ValidMTU(i.MTU.After) || !mtuConstraint(d.native.Tables["Interface"].Columns["mtu_request"]) {
+	if !candidate.IsMTUOperation(i.Operation) || i.MTU == nil || i.MTU.Before != nil && !candidate.ValidMTU(*i.MTU.Before) || !candidate.ValidMTU(candidate.ExpectedMTU(i.MTU)) || (i.MTU.Before == nil || i.MTU.After == nil) && i.MTU.Default == nil || !mtuConstraint(d.native.Tables["Interface"].Columns["mtu_request"]) {
 		return out, apitypes.Fail(409, "MTU_SCHEMA_UNSUPPORTED")
 	}
 	root := view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root]
@@ -80,8 +80,61 @@ func compileMTUExecution(id, marker string, envelope candidate.Envelope, view in
 	}
 	// These set-wide guards detect a late second parent as well as detachment.
 	n.Operations = append(n.Operations, waitRows("Port", []any{[]any{"interfaces", "includes", uuidSet(iface.UUID)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(port.UUID)}}), waitRows("Bridge", []any{[]any{"ports", "includes", uuidSet(port.UUID)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(bridge.UUID)}}))
+	if context := i.MTU.Default; context != nil {
+		current := view.Candidate.Interfaces[i.Object.ManagementID].Default
+		if current == nil || candidate.Digest(context) != candidate.Digest(current) || len(context.Bindings) == 0 || len(context.Bindings) > 64 {
+			return out, apitypes.Fail(409, "MTU_DEFAULT_DEPENDENCY_CHANGED")
+		}
+		for _, b := range context.Bindings {
+			row, present := view.Observation.Rows[b.Table][b.OVSUUID]
+			if !present || b.Generation != view.Candidate.Generation || !apitypes.ManagementID(b.ManagementID) || (b.Table != "Port" && b.Table != "Interface") {
+				return out, apitypes.Fail(409, "MTU_DEFAULT_DEPENDENCY_CHANGED")
+			}
+			columns := []string{"name", "interfaces", "external_ids"}
+			if b.Table == "Interface" {
+				if row.InterfaceOptionsEmpty == nil || !*row.InterfaceOptionsEmpty {
+					return out, apitypes.Fail(409, "MTU_OPTIONS_UNPROVEN")
+				}
+				columns = []string{"name", "type", "options", "mtu_request", "ofport", "error", "external_ids"}
+				request, known := row.Values["mtu_request"].([]any)
+				if !known {
+					return out, apitypes.Fail(409, "MTU_DEFAULT_DEPENDENCY_CHANGED")
+				}
+				if row.Values["type"] != "internal" || len(request) != 0 {
+					columns = append(columns, "mtu")
+				}
+			}
+			g, err := guard(d, b.Table, row, columns, []any{uuidCondition(row.UUID)})
+			if err != nil {
+				return out, err
+			}
+			n.Operations = append(n.Operations, g)
+			if b.Table == "Port" {
+				n.Operations = append(n.Operations, waitRows("Bridge", []any{[]any{"ports", "includes", uuidSet(row.UUID)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(bridge.UUID)}}))
+			} else {
+				parentID := ""
+				for _, parentBinding := range context.Bindings {
+					if parentBinding.Table == "Port" {
+						for _, id := range nativeRefs(view.Observation.Rows["Port"][parentBinding.OVSUUID].Values["interfaces"]) {
+							if id == row.UUID {
+								parentID = parentBinding.OVSUUID
+							}
+						}
+					}
+				}
+				if parentID == "" {
+					return out, apitypes.Fail(409, "MTU_DEFAULT_DEPENDENCY_CHANGED")
+				}
+				n.Operations = append(n.Operations, waitRows("Port", []any{[]any{"interfaces", "includes", uuidSet(row.UUID)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(parentID)}}))
+			}
+		}
+	}
+	after := []any{}
+	if i.MTU.After != nil {
+		after = append(after, *i.MTU.After)
+	}
 	n.CountIndexes = append(n.CountIndexes, len(n.Operations))
-	n.Operations = append(n.Operations, map[string]any{"op": "update", "table": "Interface", "where": []any{uuidCondition(iface.UUID)}, "row": map[string]any{"mtu_request": []any{"set", []any{i.MTU.After}}}})
+	n.Operations = append(n.Operations, map[string]any{"op": "update", "table": "Interface", "where": []any{uuidCondition(iface.UUID)}, "row": map[string]any{"mtu_request": []any{"set", after}}})
 	n.CountIndexes = append(n.CountIndexes, len(n.Operations))
 	n.Operations = append(n.Operations, map[string]any{"op": "mutate", "table": "Interface", "where": []any{uuidCondition(iface.UUID)}, "mutations": []any{[]any{"external_ids", "delete", []any{"set", []any{execution.MarkerKey}}}, []any{"external_ids", "insert", []any{"map", []any{[]any{execution.MarkerKey, marker}}}}}})
 	n.CountIndexes = append(n.CountIndexes, len(n.Operations))

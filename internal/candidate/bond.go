@@ -20,7 +20,7 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
-		if i.Operation == InterfaceMTUSet {
+		if IsMTUOperation(i.Operation) {
 			cap = "ovs.interface.mtu.write"
 		}
 		if i.Operation == InternalPortDelete {
@@ -231,6 +231,11 @@ func Reverse(i *StoredIntent) {
 	if i.MTU != nil {
 		m := *i.MTU
 		m.Before, m.After = m.After, m.Before
+		if m.After == nil {
+			i.Operation = InterfaceMTUClear
+		} else {
+			i.Operation = InterfaceMTUSet
+		}
 		i.MTU = &m
 		return
 	}

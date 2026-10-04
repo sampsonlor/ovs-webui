@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import {
   mtuNumber,
   mtuEditReason,
@@ -14,6 +17,7 @@ const item = () => ({
     mtu_request: { availability: 'known', value: ['1500'], editable: true },
   },
 });
+
 const session = {
   effective_capabilities: [
     'workspace.write',
@@ -21,6 +25,90 @@ const session = {
     'ovs.interface.mtu.write',
   ],
 };
+await test('known native empty MTU remains editable only with a valid server default and original field gates', () => {
+  const automatic = item();
+  automatic.fields.mtu_request.value = [];
+  automatic.mtu_default = 1800;
+  assert.equal(mtuEditReason(automatic, session, true), '');
+  for (const value of [undefined, null, 0, 575, 65536, '1800', 1800.5]) {
+    assert.notEqual(
+      mtuEditReason({ ...automatic, mtu_default: value }, session, true),
+      '',
+    );
+  }
+  for (const value of [null, ['bad'], ['1800', '2000']]) {
+    const changed = structuredClone(automatic);
+    changed.fields.mtu_request.value = value;
+    assert.notEqual(mtuEditReason(changed, session, true), '');
+  }
+  const hidden = structuredClone(automatic);
+  hidden.fields.mtu_request.availability = 'withheld';
+  assert.notEqual(mtuEditReason(hidden, session, true), '');
+  assert.notEqual(mtuEditReason(automatic, session, false), '');
+});
+
+await test('clearing MTU uses the independent Interface permission in the shared Apply gate', () => {
+  const candidate = {
+    id: 'c',
+    revision: 'r',
+    state: 'dirty',
+    safe_apply_available: true,
+    intents: [{ operation: 'interface.mtu.clear' }],
+  };
+  const validation = {
+    candidate_id: 'c',
+    candidate_revision: 'r',
+    state: 'passed',
+    usable: true,
+    execution_ready: true,
+  };
+  assert.equal(applyReady(candidate, validation, session, true), true);
+  assert.equal(
+    applyReady(
+      candidate,
+      validation,
+      {
+        effective_capabilities: ['configuration.apply', 'ovs.port.vlan.write'],
+      },
+      true,
+    ),
+    false,
+  );
+  assert.equal(applyReady(candidate, validation, session, false), false);
+});
+
+await test('public MTU clear is a closed object-only intent and never accepts a browser-selected default or outcome', () => {
+  const contract = JSON.parse(
+    readFileSync(new URL('../contracts/v1.openapi.json', import.meta.url)),
+  );
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  addFormats(ajv);
+  const schemaId = 'urn:ovs:mtu-default-contract';
+  ajv.addSchema({ $id: schemaId, components: contract.components });
+  const check = ajv.compile({
+    $ref: `${schemaId}#/components/schemas/InterfaceMTUClearIntent`,
+  });
+  const intent = {
+    intent_id: '12345678-1234-4234-8234-123456789012',
+    operation: 'interface.mtu.clear',
+    object: {
+      management_id: '12345678-1234-4234-8234-123456789012',
+      ovs_uuid: '22345678-1234-4234-8234-123456789012',
+      table: 'Interface',
+      instance_generation: '33345678-1234-4234-8234-123456789012',
+    },
+  };
+  assert.equal(check(intent), true, JSON.stringify(check.errors));
+  for (const extra of [
+    { mtu_request: null },
+    { mtu_request: 0 },
+    { default_context: { mtu: 1500 } },
+    { observed_after: 1500 },
+    { ovsdb: { op: 'update' } },
+  ]) {
+    assert.equal(check({ ...intent, ...extra }), false);
+  }
+});
 await test('MTU UI retains explicit optional values without normalizing native defaults', () => {
   assert.equal(mtuNumber(['1500']), 1500);
   for (const value of [

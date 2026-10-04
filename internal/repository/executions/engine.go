@@ -228,7 +228,22 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
 			if m := intent.MTU; m != nil {
-				if err = protectGraph(ctx, tx, id, p.Root, []candidate.Binding{m.Bridge, m.Port, intent.Object}); err != nil {
+				bindings := []candidate.Binding{m.Bridge, m.Port, intent.Object}
+				if m.Default != nil {
+					for _, b := range m.Default.Bindings {
+						duplicate := false
+						for _, prior := range bindings {
+							if prior == b {
+								duplicate = true
+								break
+							}
+						}
+						if !duplicate {
+							bindings = append(bindings, b)
+						}
+					}
+				}
+				if err = protectGraph(ctx, tx, id, p.Root, bindings); err != nil {
 					return requests.Mutation{}, err
 				}
 				continue

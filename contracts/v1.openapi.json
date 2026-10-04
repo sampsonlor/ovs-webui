@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.15.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit MTU requests on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
+    "version": "1.16.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -28239,7 +28239,8 @@
               "bridge.delete-isolated",
               "port.create-internal",
               "port.delete-internal",
-              "interface.mtu.set"
+              "interface.mtu.set",
+              "interface.mtu.clear"
             ]
           },
           "object": {
@@ -30035,6 +30036,18 @@
           },
           "mtu_editable": {
             "type": "boolean"
+          },
+          "mtu_clearable": {
+            "type": "boolean"
+          },
+          "mtu_default": {
+            "type": "integer",
+            "minimum": 576,
+            "maximum": 65535
+          },
+          "mtu_default_reason": {
+            "type": "string",
+            "maxLength": 256
           }
         },
         "required": [
@@ -30054,7 +30067,7 @@
           "options"
         ],
         "additionalProperties": true,
-        "description": "Native Interface inventory with explicitly admitted MTU edits. Configuration fields require configuration.read; operational fields remain observations. Empty optional values, unavailable columns and withheld values remain distinct. No hardware role or Interface type is inferred from names. MTU editing requires independent root Interface authority and an existing explicit request on a standalone non-local internal Interface."
+        "description": "Native Interface inventory with explicitly admitted MTU edits. Configuration fields require configuration.read; operational fields remain observations. Empty optional values, unavailable columns and withheld values remain distinct. No hardware role or Interface type is inferred from names. MTU editing requires independent root Interface authority on a standalone non-local internal Interface. Empty native requests require proven default dependencies."
       },
       "InventoryField": {
         "type": "object",
@@ -31407,7 +31420,29 @@
           "mtu_request"
         ],
         "additionalProperties": false,
-        "description": "Change an existing explicit mtu_request on one standalone non-local internal Interface with proven empty raw options. Requires ovs.interface.mtu.write and independent root Interface management ID authority. Single intent only; no clearing the request, type/options mutation, Bond member, local Interface or physical adoption. Safe Apply requires actual MTU proof and compensation restores the captured explicit request."
+        "description": "Set an explicit mtu_request on one independently authorized standalone non-local internal Interface. Empty original requests require sealed, proven Bridge MTU dependencies. Single intent only; actual MTU proof and exact original explicit or empty request restoration are required. No type/options mutation, Bond member, local Interface or physical adoption."
+      },
+      "InterfaceMTUClearIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "interface.mtu.clear"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object"
+        ],
+        "additionalProperties": false,
+        "description": "Clear an existing explicit request to the native empty optional set. Requires the same independent root Interface authority and ovs.interface.mtu.write. Captured Bridge MTU contributors, parent relations and actual MTU proof guard execution, confirmation and compensation. No guessed 1500 default or unknown-result write replay."
       },
       "InternalPortCreation": {
         "type": "object",
@@ -31657,20 +31692,37 @@
         "type": "object",
         "properties": {
           "before": {
-            "type": "integer",
-            "minimum": 576,
-            "maximum": 65535
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 576,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "after": {
-            "type": "integer",
-            "minimum": 576,
-            "maximum": 65535
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 576,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "port": {
             "$ref": "#/components/schemas/ObjectBinding"
           },
           "bridge": {
             "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "default_context": {
+            "$ref": "#/components/schemas/MTUDefaultContext"
           }
         },
         "required": [
@@ -31678,6 +31730,33 @@
           "after",
           "port",
           "bridge"
+        ],
+        "additionalProperties": true
+      },
+      "MTUDefaultContext": {
+        "type": "object",
+        "properties": {
+          "mtu": {
+            "type": "integer",
+            "minimum": 576,
+            "maximum": 65535
+          },
+          "dependency": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectBinding"
+            },
+            "minItems": 1,
+            "maxItems": 64
+          }
+        },
+        "required": [
+          "mtu",
+          "dependency",
+          "bindings"
         ],
         "additionalProperties": true
       },
@@ -31748,6 +31827,9 @@
           },
           {
             "$ref": "#/components/schemas/InterfaceMTUIntent"
+          },
+          {
+            "$ref": "#/components/schemas/InterfaceMTUClearIntent"
           }
         ]
       },

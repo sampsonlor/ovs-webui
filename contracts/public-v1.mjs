@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.15.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit MTU requests on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.16.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates.' };
 api['x-review-status'] = 'implementation-review';
 api['x-contract-baseline'] = 'v1.0.0';
 api.servers = [{ url: '/api/v1' }];
@@ -44,8 +44,8 @@ s.Bridge = open({ ...s.Resource.properties, management_id: id, ovs_uuid: id, ins
 s.Interface = open({ ...s.Resource.properties, management_id: id, ovs_uuid: id, instance_generation: id, config_revision: revision, name: string(), port_ref: ref('ResourceRef'), interface_type: string(), options: { type: 'object', additionalProperties: true } });
 s.InventoryField = open({ value: {}, availability: string(), source: ref('Source'), schema_mutable: bool, ownership: string(), editable: bool });
 Object.assign(s.Interface.properties, { bridge_ref: ref('ResourceRef'), port_kind: string(), internal: nullable(bool), local_interface: nullable(bool), ownership: string(), allowed_operations: array(string(), 64), fields: { type: 'object', additionalProperties: ref('InventoryField') } });
-s.Interface.description = 'Native Interface inventory with explicitly admitted MTU edits. Configuration fields require configuration.read; operational fields remain observations. Empty optional values, unavailable columns and withheld values remain distinct. No hardware role or Interface type is inferred from names. MTU editing requires independent root Interface authority and an existing explicit request on a standalone non-local internal Interface.';
-Object.assign(s.Interface.properties, { mtu_ownership: string(), mtu_editable: bool });
+s.Interface.description = 'Native Interface inventory with explicitly admitted MTU edits. Configuration fields require configuration.read; operational fields remain observations. Empty optional values, unavailable columns and withheld values remain distinct. No hardware role or Interface type is inferred from names. MTU editing requires independent root Interface authority on a standalone non-local internal Interface. Empty native requests require proven default dependencies.';
+Object.assign(s.Interface.properties, { mtu_ownership: string(), mtu_editable: bool, mtu_clearable: bool, mtu_default: integer(576,65535), mtu_default_reason: {type:'string', maxLength:256} });
 s.Bond = open({ ...s.Port.properties, lacp: string(), bond_mode: string(), member_refs: array(ref('ResourceRef'), 128) });
 s.User = open({ id, revision, username: string(), disabled: bool, role_ids: array(id, 64) });
 s.Role = open({ id, revision, name: string(), capabilities: array(string(), 128) });
@@ -85,6 +85,7 @@ const intentSchemas = {
  InternalPortDeleteIntent: intent('port.delete-internal', { object }),
  InternalPortCreateIntent: intent('port.create-internal', { object, name: {type: 'string', minLength: 1, maxLength: 15, pattern: '^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$'}, vlan_id: integer(1,4094) }),
  InterfaceMTUIntent: intent('interface.mtu.set', { object, mtu_request: integer(576,65535) }),
+ InterfaceMTUClearIntent: intent('interface.mtu.clear', { object }),
 };
 Object.assign(s, intentSchemas);
 s.InternalPortCreateIntent.description = 'Create one fresh internal access Port and Interface under an existing system Bridge binding. Requires ovs.port.internal.create and a root-owned Bridge management-id:name grant. No physical adoption, local-port change, host IP configuration or direct live write. Safe Apply rollback removes only unchanged created children and preserves the captured parent membership.';
@@ -111,10 +112,13 @@ s.IdentityReplacement.description = 'Only restored proves settled compensation w
 s.Transaction.properties.identity_replacements = array(ref('IdentityReplacement'), 3);
 s.ObservedIntent.properties.operation['x-known-values'] = ['port.vlan.set', 'bond.configure', 'port.lacp.set', 'bridge.create-isolated', 'bridge.delete-isolated', 'port.create-internal', 'port.delete-internal'];
 s.ObservedIntent.description = 'The operation selects its typed field group. VLAN uses value/before; Bond and LACP use bond/before_bond; Interface MTU uses mtu_change. Unknown native values are preserved and never silently normalized.';
-s.InterfaceMTUIntent.description = 'Change an existing explicit mtu_request on one standalone non-local internal Interface with proven empty raw options. Requires ovs.interface.mtu.write and independent root Interface management ID authority. Single intent only; no clearing the request, type/options mutation, Bond member, local Interface or physical adoption. Safe Apply requires actual MTU proof and compensation restores the captured explicit request.';
-s.MTUChange = open({ before: integer(576,65535), after: integer(576,65535), port: object, bridge: object });
+s.InterfaceMTUIntent.description = 'Set an explicit mtu_request on one independently authorized standalone non-local internal Interface. Empty original requests require sealed, proven Bridge MTU dependencies. Single intent only; actual MTU proof and exact original explicit or empty request restoration are required. No type/options mutation, Bond member, local Interface or physical adoption.';
+s.InterfaceMTUClearIntent.description = 'Clear an existing explicit request to the native empty optional set. Requires the same independent root Interface authority and ovs.interface.mtu.write. Captured Bridge MTU contributors, parent relations and actual MTU proof guard execution, confirmation and compensation. No guessed 1500 default or unknown-result write replay.';
+s.MTUChange = open({ before: nullable(integer(576,65535)), after: nullable(integer(576,65535)), port: object, bridge: object });
+s.MTUDefaultContext = open({mtu: integer(576,65535), dependency: revision, bindings: array(object,64,1)});
+s.MTUChange.properties.default_context = ref('MTUDefaultContext');
 s.ObservedIntent.properties.mtu_change = ref('MTUChange');
-s.ObservedIntent.properties.operation['x-known-values'].push('interface.mtu.set');
+s.ObservedIntent.properties.operation['x-known-values'].push('interface.mtu.set', 'interface.mtu.clear');
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');
 s.ProfileCommand = command({ name: string(), description: { type: 'string', maxLength: 4096 }, intents: array(ref('Intent'), 32) });

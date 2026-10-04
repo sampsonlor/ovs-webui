@@ -39,7 +39,7 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
-		if intent.Operation == candidate.InterfaceMTUSet {
+		if candidate.IsMTUOperation(intent.Operation) {
 			row := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 			g, err := guard(d, "Interface", row, []string{"error", "mtu"}, []any{uuidCondition(row.UUID)})
 			if err != nil {

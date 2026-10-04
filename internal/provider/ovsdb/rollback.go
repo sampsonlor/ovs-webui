@@ -46,7 +46,7 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 			continue
 		}
 		table := "Port"
-		if intent.Operation == candidate.InterfaceMTUSet {
+		if candidate.IsMTUOperation(intent.Operation) {
 			table = "Interface"
 		}
 		labels, _ := view.Observation.Rows[table][intent.Object.OVSUUID].Values["external_ids"].(map[string]any)

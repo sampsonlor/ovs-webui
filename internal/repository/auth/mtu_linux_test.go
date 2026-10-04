@@ -22,7 +22,7 @@ func TestInterfaceMTUValidationRequiresIndependentCapabilityAndCurrentCeiling(t 
 	bind := func(table string) plan.Binding {
 		return plan.Binding{ManagementID: repository.NewID(), OVSUUID: repository.NewID(), Table: table, Generation: p.snapshot.Generation}
 	}
-	i := plan.InterfaceMTU{Binding: bind("Interface"), Port: bind("Port"), Bridge: bind("Bridge"), Requested: 1500, Known: true, Supported: true, Eligible: true, Authority: "local-managed", Dependency: "captured"}
+	i := plan.InterfaceMTU{Binding: bind("Interface"), Port: bind("Port"), Bridge: bind("Bridge"), Requested: plan.MTUPointer(1500), Known: true, Supported: true, Eligible: true, Authority: "local-managed", Dependency: "captured"}
 	p.snapshot.Interfaces = map[string]plan.InterfaceMTU{i.Binding.ManagementID: i}
 	id := planRequestID()
 	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{map[string]any{"intent_id": repository.NewID(), "operation": plan.InterfaceMTUSet, "object": i.Binding, "mtu_request": 2000}}})

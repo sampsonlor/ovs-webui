@@ -115,7 +115,7 @@ func TestNativeInterfaceMTU(t *testing.T) {
 			waitFor(t, func() bool {
 				s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{b})
 				p := s.Interfaces[b.ManagementID]
-				return err == nil && (p.Requested == 1800 || !p.Eligible || p.Authority == "externally-controlled")
+				return err == nil && (p.Requested != nil && *p.Requested == 1800 || !p.Eligible || p.Authority == "externally-controlled")
 			})
 			f.decide(id, "rollback")
 			f.waitSafety(id, "rollback-conflict")
