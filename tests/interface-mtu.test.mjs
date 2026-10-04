@@ -112,6 +112,7 @@ await test('public MTU clear is a closed object-only intent and never accepts a 
     { mtu_request: null },
     { mtu_request: 0 },
     { default_context: { mtu: 1500 } },
+    { compensating: true },
     { observed_after: 1500 },
     { ovsdb: { op: 'update' } },
   ]) {

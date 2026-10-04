@@ -29,6 +29,8 @@ type MTUChange struct {
 	Port    Binding     `json:"port"`
 	Bridge  Binding     `json:"bridge"`
 	Default *MTUDefault `json:"default_context,omitempty"`
+	// Only Reverse derives this private journal state; public intents cannot set it.
+	Compensating bool `json:"compensating,omitempty"`
 }
 type MTUDefault struct {
 	MTU        int       `json:"mtu"`
@@ -42,6 +44,19 @@ func validMTURequest(n *int) bool { return n == nil || ValidMTU(*n) }
 func ExpectedMTU(m *MTUChange) int {
 	if m.After != nil {
 		return *m.After
+	}
+	if m.Default != nil {
+		return m.Default.MTU
+	}
+	return 0
+}
+
+func MTUOriginalDeviceRequired(m *MTUChange) bool {
+	return m != nil && m.Default != nil && !m.Compensating && !SameMTU(m.Before, m.After) && (m.Before == nil || m.After == nil)
+}
+func OriginalMTU(m *MTUChange) int {
+	if m.Before != nil {
+		return *m.Before
 	}
 	if m.Default != nil {
 		return m.Default.MTU
@@ -81,6 +96,9 @@ func mtuProblem(i StoredIntent, s Snapshot) string {
 	}
 	if i.MTU.Default != nil && (p.Default == nil || Digest(i.MTU.Default) != Digest(p.Default)) {
 		return "MTU_DEFAULT_DEPENDENCY_CHANGED"
+	}
+	if MTUOriginalDeviceRequired(i.MTU) && p.Observed != OriginalMTU(i.MTU) {
+		return "MTU_ORIGINAL_DEVICE_UNPROVEN"
 	}
 	return ""
 }

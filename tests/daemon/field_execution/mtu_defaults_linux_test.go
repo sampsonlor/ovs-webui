@@ -97,6 +97,37 @@ func TestNativeInterfaceMTUDefaults(t *testing.T) {
 			t.Fatal("late default dependency overwritten", r)
 		}
 	})
+	t.Run("original_device_drift_rejects_validated_execution", func(t *testing.T) {
+		f, name, _, b := nativeMTUDefaultFixture(t, true)
+		in := f.prepareIntents([]any{mtuIntent(b, 2400)})
+		subject := publicapi.Subject{ID: f.login.Claims.PrincipalID, Credential: f.login.Grant}
+		lease, err := f.workspace.ReserveExecution(f.ctx, subject, in, isolatedSafety{f})
+		must(t, err)
+		must(t, syscall.Kill(f.pid("switch"), syscall.SIGSTOP))
+		t.Cleanup(func() { _ = syscall.Kill(f.pid("switch"), syscall.SIGCONT) })
+		// Fault the native observation while its publisher is paused. Kernel
+		// mismatch is independently covered by the formal browser fixture.
+		f.vs("set", "Interface", name, "mtu=1500")
+		waitFor(t, func() bool {
+			s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{b})
+			return err == nil && s.Interfaces[b.ManagementID].Observed == 1500
+		})
+		_, err = f.engine.Submit(f.ctx, in, f.auth.ExecutionAuthorizer(f.login.Grant), lease)
+		if err == nil || f.proxy.sent.Load() != 0 || f.vs("get", "Interface", name, "mtu_request") != "[]" {
+			t.Fatal("original device drift inherited validated execution", err)
+		}
+	})
+	t.Run("late_original_device_drift_aborts_atomic_dispatch", func(t *testing.T) {
+		f, name, _, b := nativeMTUDefaultFixture(t, true)
+		in := f.prepareIntents([]any{mtuIntent(b, 2400)})
+		must(t, syscall.Kill(f.pid("switch"), syscall.SIGSTOP))
+		t.Cleanup(func() { _ = syscall.Kill(f.pid("switch"), syscall.SIGCONT) })
+		f.proxy.hook(func() { f.vs("set", "Interface", name, "mtu=1500") })
+		r := f.submit(in)
+		if r.Outcome.Commit != "rejected" || f.vs("get", "Interface", name, "mtu_request") != "[]" {
+			t.Fatal("late original device drift overwritten", r)
+		}
+	})
 	t.Run("peer_drift_blocks_confirmation_and_compensation", func(t *testing.T) {
 		f, _, peer, b := nativeMTUDefaultFixture(t, true)
 		var offset atomic.Int64
@@ -173,9 +204,12 @@ func TestNativeInterfaceMTUDefaults(t *testing.T) {
 		if r.Outcome.Applied == "applied" || f.safeState(id).Confirmation != nil || f.vs("get", "Interface", name, "mtu") != "2400" {
 			t.Fatal("automatic confirmation fabricated")
 		}
-		must(t, syscall.Kill(f.pid("switch"), syscall.SIGCONT))
-		f.waitSafety(id, "awaiting-confirmation")
 		f.decide(id, "rollback")
+		waitFor(t, func() bool {
+			must(t, f.engine.SafetyTick(f.ctx))
+			return f.proxy.sent.Load() == 2 && f.vs("get", "Interface", name, "mtu_request") == "2400"
+		})
+		must(t, syscall.Kill(f.pid("switch"), syscall.SIGCONT))
 		f.waitSafety(id, "rolled-back")
 	})
 	t.Run("same_name_peer_replacement_blocks_old_compensation", func(t *testing.T) {
