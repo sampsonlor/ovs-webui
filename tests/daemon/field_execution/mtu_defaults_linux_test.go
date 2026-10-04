@@ -199,7 +199,17 @@ func TestNativeInterfaceMTUDefaults(t *testing.T) {
 		must(t, syscall.Kill(f.pid("switch"), syscall.SIGSTOP))
 		t.Cleanup(func() { _ = syscall.Kill(f.pid("switch"), syscall.SIGCONT) })
 		id := f.safeApply(in)
-		r := f.observe(id, func(r execution.Record) bool { return r.Outcome.Commit == "committed" })
+		// A commit reply can precede the monitor's atomic after-image. Wait for
+		// that configuration proof while the daemon and device remain paused.
+		r := f.observe(id, func(r execution.Record) bool {
+			return r.Outcome.Commit == "committed" && r.Outcome.Reason == "awaiting-ovs-vswitchd"
+		})
+		t.Cleanup(func() {
+			if t.Failed() {
+				s := f.safeState(id)
+				t.Logf("paused recovery: state=%s reason=%s writes=%d request=%s device=%s", s.State, s.Reason, f.proxy.sent.Load(), f.vs("get", "Interface", name, "mtu_request"), f.vs("get", "Interface", name, "mtu"))
+			}
+		})
 		must(t, f.engine.SafetyTick(f.ctx))
 		if r.Outcome.Applied == "applied" || f.safeState(id).Confirmation != nil || f.vs("get", "Interface", name, "mtu") != "2400" {
 			t.Fatal("automatic confirmation fabricated")

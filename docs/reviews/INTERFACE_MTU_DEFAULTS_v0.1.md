@@ -16,7 +16,9 @@
 
 新矩阵 `go-interface-mtu-default-{3.3.9,3.7.1,4.0.0}.json`：每架构、每 schema 14 项不跳过原生场景。E2a 的 11 项 × 三 schema 原生矩阵继续独立执行。schema fixture 不等于三种实际 OVS 二进制版本；原生字段矩阵使用隔离 dummy provider 的 system 映射，新增原设备漂移场景在暂停发布守护进程后注入 OVSDB 观察故障。正式浏览器在实际 system kernel Bridge 上检查 OVS 报告和 Linux `ip link` MTU，独立覆盖真实设备与推导值不一致的例外。
 
-完整验收目标：每架构 209 个唯一 Go race 顶层测试、18 项正式浏览器流程、10 次额外 Safe Apply 准入重复和全部旧原生矩阵；共享 233 项单元、3 项隔离集成、31 项原型浏览器。数字仅为核验目标，须从 PR 与 main 实际报告分别核对，失败或跳过不算完成。
+暂停守护进程的回滚用例先等待 monitor 已观察到配置后像和 pending counter，再请求补偿；Commit 回复本身不能替代这项前置证据。设备仍保持原值，原有 12 秒观察预算不延长，每架构、每份 schema 额外重复该用例 5 次，并保留失败状态、原因、写次数和原生请求/设备值的诊断。
+
+完整验收目标：每架构 209 个唯一 Go race 顶层测试、18 项正式浏览器流程、10 次额外 Safe Apply 准入重复、15 次额外暂停恢复重复和全部旧原生矩阵；共享 233 项单元、3 项隔离集成、31 项原型浏览器。数字仅为核验目标，须从 PR 与 main 实际报告分别核对，失败或跳过不算完成。
 
 新增截图：interface-mtu-default-unapplied、interface-mtu-default-editor、interface-mtu-default-standard、interface-mtu-default-expert、interface-mtu-default-tablet-review、interface-mtu-default-mobile-review、interface-mtu-default-awaiting-confirmation、interface-mtu-default-rolled-back、interface-mtu-clear-standard、interface-mtu-clear-rolled-back、interface-mtu-clear-confirmed、interface-mtu-default-drift、interface-mtu-default-unavailable-dark。保留双架构 frontend-evidence，并查看两种模式、窄屏与异常图像。
 
