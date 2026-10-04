@@ -98,7 +98,9 @@ func Compare(c Candidate, s Snapshot) View {
 				v.State = "reconciliation-required"
 			}
 			v.Diff = append(v.Diff, mtuDiff(i, s))
-			if i.MTU != nil && i.MTU.Default != nil { v.Diff = append(v.Diff, mtuDefaultDiff(i,s)) }
+			if i.MTU != nil && i.MTU.Default != nil {
+				v.Diff = append(v.Diff, mtuDefaultDiff(i, s))
+			}
 			continue
 		}
 		if i.Operation == InternalPortDelete {
