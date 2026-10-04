@@ -92,12 +92,15 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
-		if i.Operation == InterfaceMTUSet {
+		if IsMTUOperation(i.Operation) {
 			if problem := mtuProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
 				v.State = "reconciliation-required"
 			}
 			v.Diff = append(v.Diff, mtuDiff(i, s))
+			if i.MTU != nil && i.MTU.Default != nil {
+				v.Diff = append(v.Diff, mtuDefaultDiff(i, s))
+			}
 			continue
 		}
 		if i.Operation == InternalPortDelete {
@@ -212,7 +215,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		if len(cmd.Intents) == 0 || len(cmd.Intents) > MaxIntents {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
-		if hasMTU(c.Intents) || cmd.Intents[0].Operation == InterfaceMTUSet {
+		if hasMTU(c.Intents) || IsMTUOperation(cmd.Intents[0].Operation) {
 			var err error
 			c, err = stageMTU(c, cmd, s)
 			if err != nil {
@@ -360,7 +363,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
-			if i.Operation == InterfaceMTUSet {
+			if IsMTUOperation(i.Operation) {
 				return e, apitypes.Fail(409, "MTU_RESTAGE_REQUIRED")
 			}
 			if i.Operation == BridgeDelete || i.Operation == InternalPortDelete {
@@ -415,7 +418,7 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
-		if i.Operation == InterfaceMTUSet {
+		if IsMTUOperation(i.Operation) {
 			checks = append(checks, mtuChecks(i, s)...)
 			continue
 		}

@@ -97,7 +97,7 @@
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
-    {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set')}
+    {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear')}
       <section class="panel">
         <h2>Review and restage this MTU request</h2>
         <p>Live configuration or attachment changed. Discard this intent, review the current Interface and stage a new request with its current binding.</p>
@@ -122,14 +122,14 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
-            c.intents.some((i) => i.operation === 'interface.mtu.set') ||
+            c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||
             c.intents.some((i) => !resolutions[i.intent_id])}
           >Rebase reviewed choices</button
         >
-        {#if c.intents.some((i) => i.operation === 'interface.mtu.set')}<p>MTU configuration or attachment changed. Discard this intent, review the current Interface and stage a new request. Rebase cannot change its captured binding.</p>{/if}
+        {#if c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear')}<p>MTU configuration or attachment changed. Discard this intent, review the current Interface and stage a new request. Rebase cannot change its captured binding.</p>{/if}
       </section>
     {/if}
     {#if !desktop}<p class="notice">

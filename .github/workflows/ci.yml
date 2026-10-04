@@ -190,6 +190,14 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeInterfaceMTU$' -test.v -test.timeout=240s \
               | go tool test2json -p "native-interface-mtu-$schema" | tee "test-results/go-interface-mtu-$schema.json"
           done
+      - name: Native automatic Interface MTU and sealed dependency compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeInterfaceMTUDefaults$' -test.v -test.timeout=240s \
+              | go tool test2json -p "native-interface-mtu-default-$schema" | tee "test-results/go-interface-mtu-default-$schema.json"
+          done
       - name: Native QinQ customer VLAN and guarded compensation matrix
         run: |
           set -o pipefail

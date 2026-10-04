@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "interface-explicit-mtu-v1"
+const ValidatorVersion = "interface-optional-mtu-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -224,6 +224,9 @@ func Bindings(c Candidate) []Binding {
 		out = append(out, i.Object)
 		if i.MTU != nil {
 			out = append(out, i.MTU.Port, i.MTU.Bridge)
+			if i.MTU.Default != nil {
+				out = append(out, i.MTU.Default.Bindings...)
+			}
 		}
 		if d := i.PortDeletion; d != nil {
 			p := d.Source.Configuration

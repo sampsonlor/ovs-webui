@@ -479,12 +479,12 @@ export class Controller {
       (v) => `/changes/candidates/${(v as Candidate).id}`,
     );
   }
-  stageMTU(item: Interface, requested: number) {
+  stageMTU(item: Interface, requested: number | null) {
     const c = this.state.workspace.value?.candidate;
     if (!c) return;
     const existing = c.intents.find(
       (i) =>
-        i.operation === 'interface.mtu.set' &&
+        (i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear') &&
         i.object.management_id === item.management_id,
     );
     return this.mutate(
@@ -498,14 +498,14 @@ export class Controller {
             intents: [
               {
                 intent_id: existing?.intent_id ?? crypto.randomUUID(),
-                operation: 'interface.mtu.set',
+                operation: requested === null ? 'interface.mtu.clear' : 'interface.mtu.set',
                 object: {
                   management_id: item.management_id,
                   ovs_uuid: item.ovs_uuid,
                   instance_generation: item.instance_generation,
                   table: 'Interface',
                 },
-                mtu_request: requested,
+                ...(requested === null ? {} : { mtu_request: requested }),
               },
             ],
           },

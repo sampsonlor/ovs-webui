@@ -630,6 +630,9 @@ type Interface struct {
 	Fields             map[string]json.RawMessage `json:"fields,omitempty"`
 	MtuOwnership       string                     `json:"mtu_ownership,omitempty"`
 	MtuEditable        bool                       `json:"mtu_editable,omitempty"`
+	MtuClearable       bool                       `json:"mtu_clearable,omitempty"`
+	MtuDefault         int64                      `json:"mtu_default,omitempty"`
+	MtuDefaultReason   string                     `json:"mtu_default_reason,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
@@ -990,6 +993,11 @@ type InterfaceMTUIntent struct {
 	Object     ObjectBinding `json:"object"`
 	MtuRequest int64         `json:"mtu_request"`
 }
+type InterfaceMTUClearIntent struct {
+	IntentId  Id            `json:"intent_id"`
+	Operation string        `json:"operation"`
+	Object    ObjectBinding `json:"object"`
+}
 type InternalPortCreation struct {
 	Name            string                     `json:"name"`
 	VlanId          int64                      `json:"vlan_id"`
@@ -1129,11 +1137,12 @@ func (v IdentityReplacement) MarshalJSON() ([]byte, error) {
 }
 
 type MTUChange struct {
-	Before      int64                      `json:"before"`
-	After       int64                      `json:"after"`
-	Port        ObjectBinding              `json:"port"`
-	Bridge      ObjectBinding              `json:"bridge"`
-	ExtraFields map[string]json.RawMessage `json:"-"`
+	Before         json.RawMessage            `json:"before"`
+	After          json.RawMessage            `json:"after"`
+	Port           ObjectBinding              `json:"port"`
+	Bridge         ObjectBinding              `json:"bridge"`
+	DefaultContext MTUDefaultContext          `json:"default_context,omitempty"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
 }
 
 func (v *MTUChange) UnmarshalJSON(data []byte) error {
@@ -1142,6 +1151,22 @@ func (v *MTUChange) UnmarshalJSON(data []byte) error {
 }
 func (v MTUChange) MarshalJSON() ([]byte, error) {
 	type plain MTUChange
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type MTUDefaultContext struct {
+	Mtu         int64                      `json:"mtu"`
+	Dependency  Revision                   `json:"dependency"`
+	Bindings    []ObjectBinding            `json:"bindings"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *MTUDefaultContext) UnmarshalJSON(data []byte) error {
+	type plain MTUDefaultContext
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v MTUDefaultContext) MarshalJSON() ([]byte, error) {
+	type plain MTUDefaultContext
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

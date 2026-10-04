@@ -23,7 +23,7 @@ func TestMTUCompilationAndAppliedProofAcrossNativeSchemas(t *testing.T) {
 			iface.Values["mtu"] = []any{"1500"}
 			iface.Values["error"] = []any{}
 			view.Observation.Rows["Interface"][id] = iface
-			i := candidate.StoredIntent{Operation: candidate.InterfaceMTUSet, Object: candidate.Binding{ManagementID: repository.NewID(), OVSUUID: id, Table: "Interface", Generation: prior.Object.Generation}, MTU: &candidate.MTUChange{Before: 1500, After: 2000, Port: prior.Object}}
+			i := candidate.StoredIntent{Operation: candidate.InterfaceMTUSet, Object: candidate.Binding{ManagementID: repository.NewID(), OVSUUID: id, Table: "Interface", Generation: prior.Object.Generation}, MTU: &candidate.MTUChange{Before: candidate.MTUPointer(1500), After: candidate.MTUPointer(2000), Port: prior.Object}}
 			for uuid := range view.Observation.Rows["Bridge"] {
 				i.MTU.Bridge = candidate.Binding{OVSUUID: uuid}
 			}
@@ -77,6 +77,64 @@ func TestMTUCompilationAndAppliedProofAcrossNativeSchemas(t *testing.T) {
 				t.Fatal("supported native constraint")
 			}
 		})
+	}
+}
+
+func TestMTUClearPlanPreservesEmptySetAndGuardsPeerMTUWithoutWritingPeers(t *testing.T) {
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		d, v, e := executionFixture(t, version)
+		prior := e.Candidate.Intents[0]
+		port := v.Observation.Rows["Port"][prior.Object.OVSUUID]
+		id := nativeRefs(port.Values["interfaces"])[0]
+		iface := v.Observation.Rows["Interface"][id]
+		empty := true
+		iface.InterfaceOptionsEmpty = &empty
+		iface.Values["mtu_request"] = []any{"2400"}
+		iface.Values["mtu"] = []any{"2400"}
+		v.Observation.Rows["Interface"][id] = iface
+		peerID, peerPortID := repository.NewID(), repository.NewID()
+		v.Observation.Rows["Interface"][peerID] = inventory.Row{UUID: peerID, InterfaceOptionsEmpty: &empty, Values: map[string]any{"name": "peer", "type": "internal", "options": map[string]any{}, "mtu_request": []any{"1800"}, "mtu": []any{"1800"}, "ofport": []any{"2"}, "error": []any{}, "external_ids": map[string]any{}}}
+		v.Observation.Rows["Port"][peerPortID] = inventory.Row{UUID: peerPortID, Values: map[string]any{"name": "peer", "interfaces": []any{peerID}, "external_ids": map[string]any{}}}
+		binding := candidate.Binding{ManagementID: repository.NewID(), OVSUUID: id, Table: "Interface", Generation: v.Candidate.Generation}
+		ctx := &candidate.MTUDefault{MTU: 1800, Dependency: "captured", Bindings: []candidate.Binding{{ManagementID: repository.NewID(), OVSUUID: peerPortID, Table: "Port", Generation: v.Candidate.Generation}, {ManagementID: repository.NewID(), OVSUUID: peerID, Table: "Interface", Generation: v.Candidate.Generation}}}
+		v.Candidate.Interfaces = map[string]candidate.InterfaceMTU{binding.ManagementID: {Default: ctx}}
+		m := &candidate.MTUChange{Before: candidate.MTUPointer(2400), After: nil, Port: prior.Object, Default: ctx}
+		for uuid := range v.Observation.Rows["Bridge"] {
+			m.Bridge = candidate.Binding{OVSUUID: uuid}
+		}
+		e.Candidate.Intents = []candidate.StoredIntent{{Operation: candidate.InterfaceMTUClear, Object: binding, MTU: m}}
+		p, err := compileExecution(repository.NewID(), "marker", e, v, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var n nativePlan
+		if json.Unmarshal(p.Native, &n) != nil {
+			t.Fatal("native plan")
+		}
+		guarded, emptyWrite := false, false
+		for _, op := range n.Operations {
+			if op["op"] == "update" {
+				if op["table"] != "Interface" || len(op["row"].(map[string]any)) != 1 {
+					t.Fatal("broad write", op)
+				}
+				value := op["row"].(map[string]any)["mtu_request"].([]any)
+				emptyWrite = value[0] == "set" && len(value[1].([]any)) == 0
+			}
+			if op["op"] == "wait" && op["table"] == "Interface" {
+				for _, col := range op["columns"].([]any) {
+					guarded = guarded || col == "mtu"
+				}
+			}
+		}
+		if !guarded || !emptyWrite {
+			t.Fatal("empty request or runtime dependency missing")
+		}
+		copyContext := *ctx
+		copyContext.Dependency = "changed"
+		v.Candidate.Interfaces[binding.ManagementID] = candidate.InterfaceMTU{Default: &copyContext}
+		if _, err = compileExecution(repository.NewID(), "marker", e, v, d); err == nil {
+			t.Fatal("recompiled with different default")
+		}
 	}
 }
 func TestMTUProviderDoesNotInferRawOptionEmptinessFromSafeSubset(t *testing.T) {
