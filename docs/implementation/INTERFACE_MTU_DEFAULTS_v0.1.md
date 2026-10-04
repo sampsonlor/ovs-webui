@@ -8,7 +8,7 @@
 
 沿用 E2a 的独立 root `--local-mtu-interfaces`、`ovs.interface.mtu.write`、单 intent、非 Bridge 本地 standalone internal Interface、已有 system Bridge、唯一父身份和 raw options 空证明。Bridge 依赖图上所有成员必须具有有效管理身份、唯一 Port/Bridge 归属、已知 type/request、无错误、有效 ofport、无外部控制及完整 options 空证明。仅 internal/system/原生空 type 被纳入；未知、patch、tunnel、DPDK 等保持 Observe。贡献设备的实际 MTU 必须有效，已有请求必须已实际应用。
 
-从空请求设置时，当前目标实际 MTU 必须等于已证明的自动值；清空时，当前明确请求必须已实际应用。自动依赖限制为 32 个 Port、32 个 Interface 和最多 60 个绑定，保留现有 64 个 Candidate 绑定及执行计划大小预算。图超限、设备状态不明或无贡献者拒绝自动转换，既有明确请求之间的 E2a 修改仍可按其独立边界使用。
+从空请求设置时，当前目标实际 MTU 必须等于已证明的自动值；清空时，当前明确请求必须已实际应用。这个原设备证明贯穿 stage、Validation、执行预检与最终原子 dispatch，设备观察漂移不能继承旧 Validation。自动依赖限制为 32 个 Port、32 个 Interface 和最多 60 个绑定，保留现有 64 个 Candidate 绑定及执行计划大小预算。图超限、设备状态不明或无贡献者拒绝自动转换，既有明确请求之间的 E2a 修改仍可按其独立边界使用。
 
 清空请求本身不证明推导值已经应用。实际 kernel 设备可能保留低于推导值的 MTU；请求虽为原生空 set，当前设备值不一致时仍不可编辑，也不能据此开启确认。正式浏览器保留这个真实例外及实际值已达到推导值的正常路径，恢复不会直接操作 Linux 设备来绕过 provider。
 
@@ -18,9 +18,9 @@ mgrd 捕获请求原值和自动依赖：Bridge 成员、每个 Port 的 Interfa
 
 Diff 同时展示 Original / Current / Yours 的请求和自动 MTU 依赖值。草稿修改保留 sealed original，不能重捕获依赖、静默 rebase 或改换对象。若明确请求草稿原先未捕获自动依赖，切换为清空必须丢弃并重新 stage。依赖图身份纳入 pending transaction 保护，防止管理器内部删除或改变恢复所需对象。
 
-原生单次事务对所有捕获依赖执行零超时 CAS 和唯一父关系检查，只更新目标 `mtu_request`，以原生 `set []` 清空；提交 marker 和 next_cfg 沿用共享执行服务。其他设备和未知配置不写入。Applied 仍需精确返回的 next_cfg、目标 after-image、无错误、实际 MTU 等于明确请求或 captured automatic value，并重新取得只读原子证明；共享健康探测通过后才开启确认窗。
+原生单次事务对目标原设备 MTU、所有捕获依赖执行零超时 CAS 和唯一父关系检查，只更新目标 `mtu_request`，以原生 `set []` 清空；提交 marker 和 next_cfg 沿用共享执行服务。其他设备和未知配置不写入。Applied 仍需精确返回的 next_cfg、目标 after-image、无错误、实际 MTU 等于明确请求或 captured automatic value，并重新取得只读原子证明；该证明比较 after-image，不要求设备仍为原值。共享健康探测通过后才开启确认窗。
 
-回滚精确恢复原来的数字或空请求，并验证对应设备值。贡献值漂移、未知图状态、同名依赖重建等阻断旧 Validation、确认和补偿；不能用同名新对象替代捕获身份。丢失执行回复不会重放或制造 Applied target；丢失补偿回复保留 recovery-required。持久 Safe Apply、独立 Watchdog、Job、Event、Audit、Last Known Good 不改为页面状态。
+回滚精确恢复原来的数字或空请求，并验证对应设备值。只有服务从持久原计划派生的补偿携带 private `compensating` journal 标记，公开 intent 不接受该字段。补偿保留原请求、marker、身份和全部默认依赖 CAS，但不等待尚未 Applied 的新设备值，允许 ovs-vswitchd 暂停期间恢复原请求；恢复后的设备证明仍不可省略。贡献值漂移、未知图状态、同名依赖重建等阻断旧 Validation、确认和补偿；不能用同名新对象替代捕获身份。丢失执行回复不会重放或制造 Applied target；丢失补偿回复保留 recovery-required。持久 Safe Apply、独立 Watchdog、Job、Event、Audit、Last Known Good 不改为页面状态。
 
 ## 契约和页面
 

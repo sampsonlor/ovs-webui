@@ -41,6 +41,14 @@ func compileMTUExecution(id, marker string, envelope candidate.Envelope, view in
 	if iface.InterfaceOptionsEmpty == nil || !*iface.InterfaceOptionsEmpty {
 		return out, apitypes.Fail(409, "MTU_OPTIONS_UNPROVEN")
 	}
+	interfaceColumns := []string{"name", "type", "options", "mtu_request", "external_ids"}
+	if candidate.MTUOriginalDeviceRequired(i.MTU) {
+		actual, known := iface.Values["mtu"].([]any)
+		if !known || len(actual) != 1 || actual[0] != strconv.Itoa(candidate.OriginalMTU(i.MTU)) {
+			return out, apitypes.Fail(409, "MTU_ORIGINAL_DEVICE_UNPROVEN")
+		}
+		interfaceColumns = append(interfaceColumns, "mtu")
+	}
 	next, e1 := number(root.Values["next_cfg"])
 	cur, e2 := number(root.Values["cur_cfg"])
 	if e1 != nil || e2 != nil || next == math.MaxInt64 || cur > next {
@@ -70,7 +78,7 @@ func compileMTUExecution(id, marker string, envelope candidate.Envelope, view in
 		{"Open_vSwitch", root, []string{"external_ids"}, []any{uuidCondition(root.UUID), []any{"bridges", "includes", uuidSet(bridge.UUID)}, []any{"next_cfg", "<", json.Number(strconv.FormatInt(math.MaxInt64, 10))}, []any{"next_cfg", ">=", next}, []any{"cur_cfg", ">=", cur}}},
 		{"Bridge", bridge, []string{"name", "datapath_type", "ports", "external_ids"}, []any{uuidCondition(bridge.UUID)}},
 		{"Port", port, []string{"name", "interfaces", "external_ids"}, []any{uuidCondition(port.UUID)}},
-		{"Interface", iface, []string{"name", "type", "options", "mtu_request", "external_ids"}, []any{uuidCondition(iface.UUID)}},
+		{"Interface", iface, interfaceColumns, []any{uuidCondition(iface.UUID)}},
 	} {
 		op, err := guard(d, g.table, g.row, g.columns, g.where)
 		if err != nil {

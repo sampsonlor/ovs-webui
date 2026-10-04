@@ -143,6 +143,61 @@ func TestMTUDefaultsRequireProvenStableValuesAndModeEditsCannotReplaceOriginal(t
 	}
 }
 
+func TestMTUOriginalDeviceDriftBlocksForwardButPreservesUnappliedCompensation(t *testing.T) {
+	for _, clear := range []bool{false, true} {
+		e, s, cmd := mtuFixture()
+		p := s.Interfaces[cmd.Intents[0].Object.ManagementID]
+		p.Default = &MTUDefault{MTU: 1800, Dependency: "stable-peers", Bindings: []Binding{p.Port}}
+		p.Observed = 1500
+		if clear {
+			cmd.Intents[0].Operation, cmd.Intents[0].MTURequest = InterfaceMTUClear, 0
+		} else {
+			p.Requested, p.Observed = nil, 1800
+		}
+		s.Interfaces[p.Binding.ManagementID] = p
+		staged, err := Prepare(e, cmd, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checks, _ := Checks(staged.Candidate, s)
+		if !Passed(checks) {
+			t.Fatal(checks)
+		}
+		p.Observed = 1400
+		s.Interfaces[p.Binding.ManagementID] = p
+		checks, _ = Checks(staged.Candidate, s)
+		if Passed(checks) || mtuProblem(staged.Candidate.Intents[0], s) != "MTU_ORIGINAL_DEVICE_UNPROVEN" || Compare(staged.Candidate, s).State != "reconciliation-required" {
+			t.Fatal("original device drift inherited validation", checks)
+		}
+		forward := staged.Candidate.Intents[0]
+		compensation := forward
+		Reverse(&compensation)
+		data, err := json.Marshal(compensation.MTU)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var restored MTUChange
+		if json.Unmarshal(data, &restored) != nil || !restored.Compensating || forward.MTU.Compensating {
+			t.Fatal("private compensation checkpoint changed original", string(data))
+		}
+		compensation.MTU = &restored
+		p.Requested = forward.MTU.After
+		s.Interfaces[p.Binding.ManagementID] = p
+		derived := staged.Candidate
+		derived.Intents = []StoredIntent{compensation}
+		checks, _ = Checks(derived, s)
+		if !Passed(checks) || MTUOriginalDeviceRequired(compensation.MTU) {
+			t.Fatal("unapplied device blocked exact original restoration", checks)
+		}
+		AfterImage(&forward)
+		derived.Intents = []StoredIntent{forward}
+		checks, _ = Checks(derived, s)
+		if !Passed(checks) || MTUOriginalDeviceRequired(forward.MTU) {
+			t.Fatal("after-image compared to original device", checks)
+		}
+	}
+}
+
 func TestLegacyExplicitMTUJournalRemainsNumericAndCompensatable(t *testing.T) {
 	var m MTUChange
 	if err := json.Unmarshal([]byte(`{"before":1500,"after":2000,"port":{},"bridge":{}}`), &m); err != nil {

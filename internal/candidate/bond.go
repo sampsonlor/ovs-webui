@@ -231,6 +231,7 @@ func Reverse(i *StoredIntent) {
 	if i.MTU != nil {
 		m := *i.MTU
 		m.Before, m.After = m.After, m.Before
+		m.Compensating = true
 		if m.After == nil {
 			i.Operation = InterfaceMTUClear
 		} else {

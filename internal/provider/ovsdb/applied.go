@@ -22,7 +22,14 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	if _, ok := bridgeIntent(p.Envelope.Candidate); ok {
 		return bridgeProof(p, view, d)
 	}
-	checked, err := compileExecution(p.ID, p.Marker, p.Envelope, view, d)
+	proof := p.Envelope
+	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
+	for i := range proof.Candidate.Intents {
+		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) {
+			candidate.AfterImage(&proof.Candidate.Intents[i])
+		}
+	}
+	checked, err := compileExecution(p.ID, p.Marker, proof, view, d)
 	if err != nil {
 		return nil, err
 	}
