@@ -285,6 +285,63 @@ def main():
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 
+        # Patch observation is native configuration evidence only. No host path,
+        # graph write intent or dataplane connectivity claim is introduced.
+        patch_checks = []
+        vsctl('add-br', 'br-patch-a', '--', 'set', 'Bridge', 'br-patch-a', 'datapath_type=dummy',
+              '--', 'add-br', 'br-patch-b', '--', 'set', 'Bridge', 'br-patch-b', 'datapath_type=dummy',
+              '--', 'add-port', 'br-patch-a', 'patch-a', '--', 'set', 'Interface', 'patch-a', 'type=patch', 'options:peer=patch-b',
+              '--', 'add-port', 'br-patch-b', 'patch-b', '--', 'set', 'Interface', 'patch-b', 'type=patch', 'options:peer=patch-a')
+        try:
+            def patch_resource(reason):
+                values = get('/interfaces?filter=patch-a')['items']
+                value = next((i for i in values if i['name'] == 'patch-a'), None)
+                return value if value and value['patch_peer']['reason'] == reason else None
+            paired = eventually(lambda: patch_resource('PATCH_RECIPROCAL_CONFIGURATION'))
+            peer = next(i for i in get('/interfaces?filter=patch-b')['items'] if i['name'] == 'patch-b')
+            assert paired['patch_peer']['peer_ref'] == {'kind': 'interface', 'id': peer['management_id']}
+            assert paired['patch_peer']['peer_port_ref'] == peer['port_ref']
+            assert paired['patch_peer']['peer_bridge_ref'] == peer['bridge_ref']
+            assert paired['patch_peer']['source']['authority'] == 'ovsdb-configuration'
+            assert get('/interfaces/' + paired['management_id'])['patch_peer']['peer_ref'] == paired['patch_peer']['peer_ref']
+            patch_checks.append('reciprocal peer uses exact Interface, Port and Bridge identities')
+            code, hidden, _ = call('/interfaces/' + paired['management_id'], bearer=token['secret'])
+            assert code == 200 and hidden['patch_peer']['availability'] == 'withheld'
+            assert hidden['patch_peer']['reason'] == 'CONFIGURATION_WITHHELD'
+            assert all(hidden['patch_peer'][key] is None for key in ['peer_ref', 'peer_port_ref', 'peer_bridge_ref'])
+            patch_checks.append('configuration permission hides applicability and all peer identities')
+            for name, reason in [('unobserved-peer', 'PATCH_PEER_NOT_RECIPROCAL')]:
+                vsctl('set', 'Interface', 'patch-b', 'options:peer=' + name)
+                value = eventually(lambda: patch_resource(reason))
+                assert value['patch_peer']['peer_ref'] is None
+                patch_checks.append('one-way configuration never fabricates a link')
+            vsctl('set', 'Interface', 'patch-b', 'options:peer=patch-a')
+            vsctl('set', 'Interface', 'patch-a', 'options:peer=unobserved-peer')
+            assert eventually(lambda: patch_resource('PATCH_PEER_NOT_FOUND'))['patch_peer']['peer_ref'] is None
+            patch_checks.append('missing peer remains unknown')
+            vsctl('set', 'Interface', 'patch-a', 'options:peer=patch-b')
+            vsctl('--no-wait', 'set', 'Bridge', 'br-patch-b', 'datapath_type=netdev')
+            assert eventually(lambda: patch_resource('PATCH_DATAPATH_MISMATCH'))['patch_peer']['peer_ref'] is None
+            patch_checks.append('different datapath types do not produce current peer links')
+            vsctl('--no-wait', 'set', 'Bridge', 'br-patch-b', 'datapath_type=dummy')
+            eventually(lambda: patch_resource('PATCH_RECIPROCAL_CONFIGURATION'))
+            vsctl('del-port', 'br-patch-b', 'patch-b')
+            eventually(lambda: patch_resource('PATCH_PEER_NOT_FOUND'))
+            assert call('/interfaces/' + peer['management_id'])[0] == 404
+            vsctl('add-port', 'br-patch-b', 'patch-b', '--', 'set', 'Interface', 'patch-b', 'type=patch', 'options:peer=patch-a')
+            replacement = eventually(lambda: patch_resource('PATCH_RECIPROCAL_CONFIGURATION'))
+            assert replacement['patch_peer']['peer_ref']['id'] != peer['management_id']
+            assert get('/interfaces/' + replacement['patch_peer']['peer_ref']['id'])['name'] == 'patch-b'
+            assert call('/interfaces/' + peer['management_id'])[0] == 404
+            patch_checks.append('same-name recreation uses a fresh identity; retired link stays 404')
+            metrics['interface_patch_peer'] = {'verified': True, 'checks': patch_checks,
+                                               'source_authority': 'ovsdb-configuration', 'editable': False,
+                                               'forwarding_claimed': False}
+        finally:
+            vsctl('--no-wait', '--if-exists', 'del-br', 'br-patch-a', '--', '--if-exists', 'del-br', 'br-patch-b')
+        checks.append('native reciprocal patch observation and exception matrix passed without write authority or forwarding inference')
+
+
         # Shared evidence runs through the real HTTPS -> Unix IPC -> manager
         # authority. Inventory-only tokens cannot inspect jobs or audit data.
         assert call('/audit', bearer=token['secret'])[0] == 403

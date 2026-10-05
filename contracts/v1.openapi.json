@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.18.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
+    "version": "1.19.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -29980,6 +29980,9 @@
             "type": "object",
             "additionalProperties": true
           },
+          "patch_peer": {
+            "$ref": "#/components/schemas/InterfacePatchPeer"
+          },
           "bridge_ref": {
             "$ref": "#/components/schemas/ResourceRef"
           },
@@ -30071,6 +30074,63 @@
         ],
         "additionalProperties": true,
         "description": "Native Interface inventory with explicitly admitted MTU edits. Configuration fields require configuration.read; operational fields remain observations. Empty optional values, unavailable columns and withheld values remain distinct. No hardware role or Interface type is inferred from names. MTU editing requires independent root Interface authority on a standalone non-local internal Interface. Empty native requests require proven default dependencies."
+      },
+      "InterfacePatchPeer": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "peer_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "peer_port_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "peer_bridge_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          }
+        },
+        "required": [
+          "availability",
+          "reason",
+          "peer_ref",
+          "peer_port_ref",
+          "peer_bridge_ref",
+          "source"
+        ],
+        "additionalProperties": true,
+        "description": "Read-only reciprocal patch configuration resolved within one fresh confirmed inventory snapshot and known native schema. Missing, ambiguous, one-way, incompatible-datapath, stale or unauthorized observations expose no peer identity. configuration.read is required even for applicability. This is configuration evidence, never packet forwarding, hardware ownership or write authority."
       },
       "InventoryField": {
         "type": "object",

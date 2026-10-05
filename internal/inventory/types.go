@@ -40,6 +40,7 @@ type Column struct {
 	BondCompatible            bool            `json:"-"`
 	MTUCompatible             bool            `json:"-"`
 	InterfaceConfigCompatible bool            `json:"-"`
+	PatchCompatible           bool            `json:"-"`
 }
 type Table struct {
 	Name    string     `json:"name"`

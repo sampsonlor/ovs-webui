@@ -76,6 +76,7 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			c.PatchCompatible = patchColumnConstraint(t, name, col)
 			if t == "Interface" && name == "mtu_request" {
 				c.MTUCompatible = mtuConstraint(col)
 			}

@@ -30,6 +30,93 @@ const unit = (action: string, name: string) =>
   execFileSync('systemctl', [action, fixture.units[name]], { stdio: 'pipe' });
 const evidence = 'test-results/frontend-evidence';
 
+async function patchItem(context: BrowserContext, name: string) {
+  const values: InterfacePage = await get(
+    context,
+    `/interfaces?filter=${name}`,
+  );
+  const item = values.items.find((i) => i.name === name);
+  if (!item)
+    throw new Error('The exact patch fixture Interface is unavailable');
+  return item;
+}
+
+async function observedPatchReason(context: BrowserContext, name: string) {
+  const values: InterfacePage = await get(
+    context,
+    `/interfaces?filter=${name}`,
+  );
+  // OVSDB commit precedes asynchronous inventory publication. Absence is a
+  // pending observation for this bounded read poll, not a failed assertion.
+  return values.items.find((i) => i.name === name)?.patch_peer?.reason;
+}
+
+async function nativeTypeDepth(page: Page, mode: 'Standard' | 'Expert') {
+  const toggle = page.getByRole('button', { name: /^(Standard|Expert)$/ });
+  await expect(toggle).toBeVisible();
+  if ((await toggle.textContent()) !== mode) await toggle.click();
+  await expect(toggle).toHaveText(mode);
+  await expect(toggle).toHaveAttribute(
+    'aria-pressed',
+    String(mode === 'Expert'),
+  );
+}
+
+function createPatchPair(suffix: string) {
+  vsctl(
+    'add-br',
+    `br-patch-${suffix}a`,
+    '--',
+    'set',
+    'Bridge',
+    `br-patch-${suffix}a`,
+    'datapath_type=dummy',
+    'fail_mode=secure',
+    '--',
+    'add-br',
+    `br-patch-${suffix}b`,
+    '--',
+    'set',
+    'Bridge',
+    `br-patch-${suffix}b`,
+    'datapath_type=dummy',
+    'fail_mode=secure',
+    '--',
+    'add-port',
+    `br-patch-${suffix}a`,
+    `patch-${suffix}a`,
+    '--',
+    'set',
+    'Interface',
+    `patch-${suffix}a`,
+    'type=patch',
+    `options:peer=patch-${suffix}b`,
+    '--',
+    'add-port',
+    `br-patch-${suffix}b`,
+    `patch-${suffix}b`,
+    '--',
+    'set',
+    'Interface',
+    `patch-${suffix}b`,
+    'type=patch',
+    `options:peer=patch-${suffix}a`,
+  );
+}
+
+function clearPatchPair(suffix: string) {
+  vsctl(
+    '--no-wait',
+    '--if-exists',
+    'del-br',
+    `br-patch-${suffix}a`,
+    '--',
+    '--if-exists',
+    'del-br',
+    `br-patch-${suffix}b`,
+  );
+}
+
 async function mtuEditor(page: Page) {
   const list = await get(page.context(), '/interfaces?filter=pi-ui-mtu');
   const item = list.items.find((i: { name: string }) => i.name === 'pi-ui-mtu');
@@ -2693,5 +2780,254 @@ test('Linux device identity mismatch, disappearance, unsupported types and withh
     if (paused) process.kill(pid, 'SIGCONT');
     vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
     spawnSync('ip', ['link', 'del', name], { stdio: 'pipe' });
+  }
+});
+
+test('native types and reciprocal patch configuration preserve exact navigation through exceptions and recreation', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-native-types');
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions|interfaces)/.test(r.url())
+    )
+      mutations.push(r.method());
+  });
+  createPatchPair('ui');
+  try {
+    await expect
+      .poll(async () => await observedPatchReason(context, 'patch-uia'))
+      .toBe('PATCH_RECIPROCAL_CONFIGURATION');
+    const a = await patchItem(context, 'patch-uia');
+    const b = await patchItem(context, 'patch-uib');
+    expect(a.patch_peer?.peer_ref?.id).toBe(b.management_id);
+    expect(a.patch_peer?.peer_port_ref).toEqual(b.port_ref);
+    expect(a.patch_peer?.peer_bridge_ref).toEqual(b.bridge_ref);
+    await page.goto(fixture.origin + `/interfaces/${a.management_id}`);
+    const panel = page.getByRole('region', {
+      name: 'Native type and associations',
+    });
+    await nativeTypeDepth(page, 'Standard');
+    await expect(panel).toContainText('Reciprocal configuration observed.');
+    await expect(panel).toContainText('does not prove packet forwarding');
+    await expect(
+      panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toHaveAttribute('href', `/interfaces/${b.management_id}`);
+    await panel
+      .getByRole('link', { name: 'Peer Interface →', exact: true })
+      .focus();
+    await expect(
+      panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(
+      fixture.origin + `/interfaces/${b.management_id}`,
+    );
+    await page.goto(fixture.origin + `/interfaces/${a.management_id}`);
+    await nativeTypeDepth(page, 'Standard');
+    await expect(
+      panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toHaveAttribute('href', `/interfaces/${b.management_id}`);
+    await screen(page, 'interface-native-types-standard');
+    await nativeTypeDepth(page, 'Expert');
+    await expect(panel).toContainText('PATCH_RECIPROCAL_CONFIGURATION');
+    await screen(page, 'interface-native-types-expert');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-native-types-dark');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await nativeTypeDepth(page, 'Standard');
+    for (const [name, width, height] of [
+      ['tablet', 820, 1180],
+      ['mobile', 390, 844],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(
+        panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, `interface-native-types-${name}`);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    vsctl('set', 'Interface', 'patch-uib', 'options:peer=missing-ui-peer');
+    await expect(panel).toContainText('does not point back');
+    await expect(panel.getByRole('link')).toHaveCount(0);
+    await screen(page, 'interface-patch-one-way');
+    vsctl('set', 'Interface', 'patch-uib', 'options:peer=patch-uia');
+    vsctl('set', 'Interface', 'patch-uia', 'options:peer=missing-ui-peer');
+    await expect(panel).toContainText('absent from this inventory snapshot');
+    await expect(panel.getByRole('link')).toHaveCount(0);
+    await screen(page, 'interface-patch-missing');
+    vsctl('set', 'Interface', 'patch-uia', 'options:peer=patch-uib');
+    vsctl('--no-wait', 'set', 'Bridge', 'br-patch-uib', 'datapath_type=netdev');
+    await expect(panel).toContainText('different Bridge datapath types');
+    await expect(panel.getByRole('link')).toHaveCount(0);
+    await screen(page, 'interface-patch-datapath-mismatch');
+    vsctl('--no-wait', 'set', 'Bridge', 'br-patch-uib', 'datapath_type=dummy');
+    await expect(
+      panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toBeVisible();
+    vsctl('del-port', 'br-patch-uib', 'patch-uib');
+    await expect(panel).toContainText('absent from this inventory snapshot');
+    vsctl(
+      'add-port',
+      'br-patch-uib',
+      'patch-uib',
+      '--',
+      'set',
+      'Interface',
+      'patch-uib',
+      'type=patch',
+      'options:peer=patch-uia',
+    );
+    await expect
+      .poll(async () => await observedPatchReason(context, 'patch-uia'))
+      .toBe('PATCH_RECIPROCAL_CONFIGURATION');
+    const replacement = await patchItem(context, 'patch-uib');
+    expect(replacement.management_id).not.toBe(b.management_id);
+    await expect(
+      panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toHaveAttribute('href', `/interfaces/${replacement.management_id}`);
+    await page.goto(fixture.origin + `/interfaces/${b.management_id}`);
+    await expect(
+      page.getByText('This Interface identity is no longer available.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await screen(page, 'interface-patch-retired');
+    await page.goto(fixture.origin + `/interfaces/${a.management_id}`);
+    vsctl('--no-wait', 'set', 'Interface', 'patch-uia', 'type=future-native');
+    await expect(panel).toContainText(
+      'Unrecognized native type · future-native',
+    );
+    await expect(panel.getByRole('link')).toHaveCount(0);
+    await screen(page, 'interface-native-types-unknown');
+    vsctl('--no-wait', 'set', 'Interface', 'patch-uia', 'type=dpdk');
+    await expect(panel).toContainText('DPDK · dpdk');
+    await expect(panel).toContainText(
+      'no hardware association, runtime readiness or tuning authority',
+    );
+    await screen(page, 'interface-native-types-dpdk');
+    vsctl(
+      '--no-wait',
+      'clear',
+      'Interface',
+      'patch-uia',
+      'options',
+      '--',
+      'set',
+      'Interface',
+      'patch-uia',
+      'type=geneve',
+      'options:remote_ip=flow',
+      'options:key=flow',
+    );
+    await expect(panel).toContainText('Tunnel · geneve');
+    await expect(panel).toContainText('depend on OpenFlow actions');
+    await screen(page, 'interface-native-types-tunnel');
+    expect(mutations).toEqual([]);
+  } finally {
+    clearPatchPair('ui');
+  }
+});
+
+test('patch configuration stays withheld across modes and removes navigation when the real provider stops', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-patch-observer');
+  createPatchPair('sec');
+  const readerContext = await context
+    .browser()!
+    .newContext({ ignoreHTTPSErrors: true });
+  const reader = await readerContext.newPage();
+  try {
+    await login(reader, 'browser-native-types');
+    await expect
+      .poll(async () => await observedPatchReason(readerContext, 'patch-seca'))
+      .toBe('PATCH_RECIPROCAL_CONFIGURATION');
+    const a = await patchItem(readerContext, 'patch-seca');
+    await page.goto(fixture.origin + `/interfaces/${a.management_id}`);
+    const hidden = await get(context, `/interfaces/${a.management_id}`);
+    expect(hidden.patch_peer.availability).toBe('withheld');
+    for (const key of ['peer_ref', 'peer_port_ref', 'peer_bridge_ref'])
+      expect(hidden.patch_peer[key]).toBeNull();
+    const panel = page.getByRole('region', {
+      name: 'Native type and associations',
+    });
+    for (const mode of ['Standard', 'Expert'] as const) {
+      await nativeTypeDepth(page, mode);
+      await expect(panel).toContainText('Withheld');
+      await expect(panel.getByRole('link')).toHaveCount(0);
+      await expect(
+        panel.getByRole('heading', {
+          name: 'Configured patch peer',
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await screen(page, `interface-patch-withheld-${mode.toLowerCase()}`);
+    }
+    await reader.goto(fixture.origin + `/interfaces/${a.management_id}`);
+    const visible = reader.getByRole('region', {
+      name: 'Native type and associations',
+    });
+    await expect(
+      visible.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toBeVisible();
+    execFileSync('ovs-appctl', [
+      '-t',
+      `${fixture.ovsDirectory}/db.ctl`,
+      'exit',
+    ]);
+    try {
+      await expect(visible).toContainText('The association is not current.');
+      await expect(visible).toContainText('Last observed: Patch');
+      await expect(visible.getByRole('link')).toHaveCount(0);
+      const stale = await get(readerContext, `/interfaces/${a.management_id}`);
+      expect(stale.patch_peer.reason).toBe('PATCH_OBSERVATION_STALE');
+      expect(stale.patch_peer.peer_ref).toBeNull();
+      await screen(reader, 'interface-patch-stale');
+      const stillHidden = await get(context, `/interfaces/${a.management_id}`);
+      expect(stillHidden.patch_peer.reason).toBe('CONFIGURATION_WITHHELD');
+      expect(stillHidden.patch_peer.peer_ref).toBeNull();
+    } finally {
+      execFileSync(
+        'ovsdb-server',
+        [
+          fixture.database,
+          `--remote=punix:${fixture.dbSocket}`,
+          `--pidfile=${fixture.ovsDirectory}/db.pid`,
+          `--unixctl=${fixture.ovsDirectory}/db.ctl`,
+          '--detach',
+          '--no-chdir',
+          '--overwrite-pidfile',
+        ],
+        {
+          env: {
+            ...process.env,
+            OVS_RUNDIR: fixture.ovsDirectory,
+            OVS_LOGDIR: fixture.ovsDirectory,
+            OVS_DBDIR: fixture.ovsDirectory,
+          },
+          stdio: 'pipe',
+        },
+      );
+    }
+    await expect(
+      visible.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toBeVisible();
+  } finally {
+    await readerContext.close();
+    clearPatchPair('sec');
   }
 });
