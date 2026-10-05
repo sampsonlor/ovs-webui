@@ -653,6 +653,7 @@ type InventoryField struct {
 	SchemaMutable bool                       `json:"schema_mutable"`
 	Ownership     string                     `json:"ownership"`
 	Editable      bool                       `json:"editable"`
+	Reason        string                     `json:"reason,omitempty"`
 	ExtraFields   map[string]json.RawMessage `json:"-"`
 }
 

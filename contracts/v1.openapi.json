@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.17.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
+    "version": "1.18.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -30094,6 +30094,10 @@
           },
           "editable": {
             "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
           }
         },
         "required": [
@@ -30104,7 +30108,8 @@
           "ownership",
           "editable"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "description": "Native field with independent authority and observation provenance. Selected Interface configuration requests distinguish known native empty/zero, unsupported schema shapes, unknown observations and configuration withheld. Schema mutability grants no write authority; configuration values do not prove runtime enforcement."
       },
       "LinuxDeviceField": {
         "type": "object",

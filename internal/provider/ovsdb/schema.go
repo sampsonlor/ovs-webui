@@ -23,7 +23,7 @@ var selected = map[string][]string{
 	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "external_ids"},
-	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
+	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
 
@@ -78,6 +78,12 @@ func discover(data []byte) (discovered, error) {
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
 			if t == "Interface" && name == "mtu_request" {
 				c.MTUCompatible = mtuConstraint(col)
+			}
+			if t == "Interface" {
+				c.InterfaceConfigCompatible = interfaceConfigurationConstraint(name, col)
+				if slices.Contains(inventory.InterfaceConfigurationColumns, name) {
+					c.Monitored = c.Monitored && c.InterfaceConfigCompatible
+				}
 			}
 			if t == "Port" {
 				c.VLANCompatible, c.VLANModes = vlanConstraint(name, col)
@@ -254,7 +260,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					return errors.New("OVSDB_ROW_INVALID")
 				}
 				for name, value := range old {
-					if !slices.Contains(selected[table], name) || d.native.Tables[table].Columns[name] == nil {
+					if !monitoredColumn(d, table, name) {
 						return errors.New("OVSDB_UNREQUESTED_COLUMN")
 					}
 					n, err := normalize(value, d.native.Tables[table].Columns[name])
@@ -285,7 +291,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 				}
 			}
 			for name, v := range values {
-				if !slices.Contains(selected[table], name) || d.native.Tables[table].Columns[name] == nil {
+				if !monitoredColumn(d, table, name) {
 					return errors.New("OVSDB_UNREQUESTED_COLUMN")
 				}
 				n, err := normalize(v, d.native.Tables[table].Columns[name])

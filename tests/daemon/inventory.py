@@ -266,6 +266,22 @@ def main():
                    i['fields']['mtu_request']['availability'] == 'withheld' and
                    i['fields']['mtu']['availability'] == 'known' for i in observer_interfaces['items'])
         assert all(i['fields']['status']['source']['authority'] == 'ovs-vswitchd-observation' for i in observer_interfaces['items'])
+        config_columns = ['ofport_request', 'ingress_policing_rate', 'ingress_policing_burst',
+                          'ingress_policing_kpkts_rate', 'ingress_policing_kpkts_burst']
+        assert all(i['fields'][name]['availability'] == 'withheld' and i['fields'][name]['value'] is None
+                   for i in observer_interfaces['items'] for name in config_columns)
+        native_interfaces = get('/interfaces')['items']
+        assert all(i['fields'][name]['availability'] == 'known' and
+                   i['fields'][name]['source']['authority'] == 'ovsdb-configuration' and
+                   i['fields'][name]['editable'] is False for i in native_interfaces for name in config_columns)
+        assert all(i['fields']['ofport_request']['value'] == [] for i in native_interfaces)
+        assert all(i['fields'][name]['value'] == '0' for i in native_interfaces for name in config_columns[1:])
+        metrics['interface_native_configuration'] = {
+            'verified': True, 'columns': config_columns, 'permission_withholding_verified': True,
+            'empty_request_preserved': True, 'zero_policing_defaults_preserved': True,
+            'source_authority': 'ovsdb-configuration', 'editable': False,
+        }
+        checks.append('five native Interface configuration observations preserve empty/zero and withhold all values for inventory-only tokens')
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 

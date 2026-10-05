@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page, BrowserContext } from '@playwright/test';
+import type { InterfacePage } from '../../clients/typescript/public-v1.generated';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { requestID } from '../../frontend/src/api';
@@ -508,6 +509,17 @@ test('Interface configuration withholding, empty filters, stale provider and ret
     }),
   ).toContainText('Withheld');
   await screen(page, 'interface-withheld');
+  const readerContext = await context
+    .browser()!
+    .newContext({ ignoreHTTPSErrors: true });
+  const readerPage = await readerContext.newPage();
+  const readerErrors: string[] = [];
+  readerPage.on('pageerror', (error) => readerErrors.push(error.message));
+  await login(readerPage, 'browser-interface-config');
+  await readerPage.goto(fixture.origin + '/interfaces/' + iface.management_id);
+  await expect(
+    configurationRow(readerPage, 'Ingress bandwidth limit'),
+  ).toContainText('Disabled (0 kbit/s)');
   execFileSync('ovs-appctl', ['-t', `${fixture.ovsDirectory}/db.ctl`, 'exit']);
   try {
     await expect(
@@ -518,6 +530,21 @@ test('Interface configuration withholding, empty filters, stale provider and ret
     expect(stale.linux_device.source.freshness).toBe('unavailable');
     expect(stale.linux_device.fields).toEqual({});
     await screen(page, 'interface-provider-stale');
+    await expect(
+      configurationRow(readerPage, 'Ingress bandwidth limit'),
+    ).toContainText('Last observed: Disabled (0 kbit/s)');
+    await screen(readerPage, 'interface-config-stale');
+    for (const name of [
+      'ofport_request',
+      'ingress_policing_rate',
+      'ingress_policing_burst',
+      'ingress_policing_kpkts_rate',
+      'ingress_policing_kpkts_burst',
+    ]) {
+      expect(stale.fields[name].availability).toBe('withheld');
+      expect(stale.fields[name].value).toBeNull();
+      expect(stale.fields[name].source.freshness).toBe('stale');
+    }
   } finally {
     execFileSync(
       'ovsdb-server',
@@ -540,6 +567,8 @@ test('Interface configuration withholding, empty filters, stale provider and ret
         stdio: 'pipe',
       },
     );
+    await readerContext.close();
+    expect(readerErrors).toEqual([]);
   }
   await expect(
     page.getByText('Stale observation.', { exact: false }),
@@ -2222,6 +2251,308 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
   } finally {
     vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
     spawnSync('ip', ['link', 'del', name], { stdio: 'pipe' });
+  }
+});
+
+function configurationRow(page: Page, label: string) {
+  return page
+    .getByRole('region', { name: 'Native configuration requests', exact: true })
+    .getByRole('row')
+    .filter({
+      has: page.getByRole('rowheader', { name: label, exact: false }),
+    });
+}
+
+const configurationColumns = [
+  'ofport_request',
+  'ingress_policing_rate',
+  'ingress_policing_burst',
+  'ingress_policing_kpkts_rate',
+  'ingress_policing_kpkts_burst',
+];
+
+test('Interface configuration requests retain native units and empty values without implying runtime application', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-interface-config');
+  const bridge = 'br-if-config',
+    name = 'pif-config';
+  const pid = Number(
+    readFileSync(`${fixture.ovsDirectory}/switch.pid`, 'utf8'),
+  );
+  let paused = false;
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions|interfaces)/.test(r.url())
+    )
+      mutations.push(r.method());
+  });
+  vsctl(
+    'add-br',
+    bridge,
+    '--',
+    'set',
+    'Bridge',
+    bridge,
+    'datapath_type=dummy',
+    '--',
+    'add-port',
+    bridge,
+    name,
+    '--',
+    'set',
+    'Interface',
+    name,
+    'type=dummy',
+    'ofport_request=24000',
+    'ingress_policing_rate=1000',
+    'ingress_policing_burst=0',
+    'ingress_policing_kpkts_rate=5',
+    'ingress_policing_kpkts_burst=0',
+  );
+  try {
+    await expect
+      .poll(async () => {
+        const list = (await get(
+          context,
+          '/interfaces?filter=' + name,
+        )) as InterfacePage;
+        const iface = list.items.find((i) => i.name === name);
+        return [
+          iface?.fields?.ofport_request?.value,
+          iface?.fields?.ofport?.value,
+        ];
+      })
+      .toEqual([['24000'], ['24000']]);
+    const list = (await get(
+      context,
+      '/interfaces?filter=' + name,
+    )) as InterfacePage;
+    const iface = list.items.find((i) => i.name === name);
+    if (!iface?.fields)
+      throw new Error('Native Interface configuration fields missing');
+    const revision = iface.config_revision;
+    for (const key of configurationColumns) {
+      expect(iface.fields[key].availability).toBe('known');
+      expect(iface.fields[key].source.authority).toBe('ovsdb-configuration');
+      expect(iface.fields[key].editable).toBe(false);
+    }
+    expect(vsctl('get', 'Interface', name, 'ingress_policing_rate')).toBe(
+      '1000',
+    );
+    await page.goto(fixture.origin + '/interfaces/' + iface.management_id);
+    if (await page.getByRole('button', { name: 'Expert', exact: true }).count())
+      await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await expect(
+      configurationRow(page, 'Requested OpenFlow port'),
+    ).toContainText('24000');
+    await expect(
+      configurationRow(page, 'Ingress bandwidth limit'),
+    ).toContainText('1000 kbit/s');
+    await expect(
+      configurationRow(page, 'Ingress bandwidth burst'),
+    ).toContainText('Native default (0 kbit)');
+    await expect(configurationRow(page, 'Ingress packet limit')).toContainText(
+      '5 kpps',
+    );
+    await expect(configurationRow(page, 'Ingress packet burst')).toContainText(
+      'Native default (0 kpackets)',
+    );
+    await screen(page, 'interface-config-standard');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await expect(
+      configurationRow(page, 'Requested OpenFlow port'),
+    ).toContainText('ovsdb-configuration');
+    await screen(page, 'interface-config-expert');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-config-dark');
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    for (const [width, label] of [
+      [900, 'tablet'],
+      [390, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height: 980 });
+      await expect(
+        configurationRow(page, 'Ingress bandwidth limit'),
+      ).toContainText('1000 kbit/s');
+      const region = page.getByRole('region', {
+        name: 'Native configuration requests',
+        exact: true,
+      });
+      await region.focus();
+      await expect(region).toBeFocused();
+      await page.keyboard.press('ArrowRight');
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, 'interface-config-' + label);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    process.kill(pid, 'SIGSTOP');
+    paused = true;
+    vsctl('--no-wait', 'set', 'Interface', name, 'ofport_request=24001');
+    await expect
+      .poll(async () => {
+        const current = await get(
+          context,
+          '/interfaces/' + iface.management_id,
+        );
+        return [
+          current.fields.ofport_request.value,
+          current.fields.ofport.value,
+        ];
+      })
+      .toEqual([['24001'], ['24000']]);
+    const pending = await get(context, '/interfaces/' + iface.management_id);
+    expect(pending.config_revision).not.toBe(revision);
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(
+      configurationRow(page, 'Requested OpenFlow port'),
+    ).toContainText('24001');
+    await expect(
+      page
+        .getByRole('region', { name: 'Native Interface fields', exact: true })
+        .getByRole('row')
+        .filter({
+          has: page.getByRole('rowheader', {
+            name: 'OpenFlow port',
+            exact: true,
+          }),
+        }),
+    ).toContainText('24000');
+    await screen(page, 'interface-config-request-pending');
+    process.kill(pid, 'SIGCONT');
+    paused = false;
+    vsctl(
+      'clear',
+      'Interface',
+      name,
+      'ofport_request',
+      '--',
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=0',
+      'ingress_policing_kpkts_rate=0',
+    );
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/interfaces/' + iface.management_id)).fields
+            .ofport_request.value,
+      )
+      .toEqual([]);
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(
+      configurationRow(page, 'Requested OpenFlow port'),
+    ).toContainText('Automatic allocation (native empty request)');
+    await expect(
+      configurationRow(page, 'Ingress bandwidth limit'),
+    ).toContainText('Disabled (0 kbit/s)');
+    await expect(configurationRow(page, 'Ingress packet limit')).toContainText(
+      'Disabled (0 kpps)',
+    );
+    await screen(page, 'interface-config-empty-zero');
+    expect(mutations).toEqual([]);
+  } finally {
+    if (paused) process.kill(pid, 'SIGCONT');
+    vsctl('--if-exists', 'del-br', bridge);
+  }
+});
+
+test('Interface configuration permission withholding remains identical in Standard and Expert', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-interface-config-observer');
+  const bridge = 'br-if-cfg-view',
+    name = 'pif-cfg-view';
+  vsctl(
+    'add-br',
+    bridge,
+    '--',
+    'set',
+    'Bridge',
+    bridge,
+    'datapath_type=dummy',
+    '--',
+    'add-port',
+    bridge,
+    name,
+    '--',
+    'set',
+    'Interface',
+    name,
+    'type=dummy',
+    'ofport_request=24100',
+    'ingress_policing_rate=73',
+    'ingress_policing_burst=8',
+    'ingress_policing_kpkts_rate=5',
+    'ingress_policing_kpkts_burst=3',
+  );
+  try {
+    await expect
+      .poll(async () => {
+        const list = (await get(
+          context,
+          '/interfaces?filter=' + name,
+        )) as InterfacePage;
+        const iface = list.items.find((i) => i.name === name);
+        return iface?.fields?.ofport?.value;
+      })
+      .toEqual(['24100']);
+    const list = (await get(
+      context,
+      '/interfaces?filter=' + name,
+    )) as InterfacePage;
+    const iface = list.items.find((i) => i.name === name);
+    if (!iface) throw new Error('Native Interface missing');
+    const detail = await get(context, '/interfaces/' + iface.management_id);
+    for (const key of configurationColumns) {
+      expect(detail.fields[key].availability).toBe('withheld');
+      expect(detail.fields[key].value).toBeNull();
+      expect(detail.fields[key].reason).toBe('CONFIGURATION_WITHHELD');
+      expect(detail.fields[key].editable).toBe(false);
+    }
+    await page.goto(fixture.origin + '/interfaces/' + iface.management_id);
+    for (const label of ['standard', 'expert']) {
+      if (
+        label === 'standard' &&
+        (await page
+          .getByRole('button', { name: 'Expert', exact: true })
+          .count())
+      )
+        await page.getByRole('button', { name: 'Expert', exact: true }).click();
+      if (label === 'expert')
+        await page
+          .getByRole('button', { name: 'Standard', exact: true })
+          .click();
+      const region = page.getByRole('region', {
+        name: 'Native configuration requests',
+        exact: true,
+      });
+      await expect(region.getByText('Withheld', { exact: true })).toHaveCount(
+        5,
+      );
+      await expect(region).not.toContainText('73 kbit/s');
+      await screen(page, 'interface-config-withheld-' + label);
+    }
+    await expect(
+      page.getByRole('link', { name: 'Edit MTU request →', exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    vsctl('--if-exists', 'del-br', bridge);
   }
 });
 
