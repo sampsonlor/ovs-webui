@@ -41,6 +41,16 @@ async function patchItem(context: BrowserContext, name: string) {
   return item;
 }
 
+async function observedPatchReason(context: BrowserContext, name: string) {
+  const values: InterfacePage = await get(
+    context,
+    `/interfaces?filter=${name}`,
+  );
+  // OVSDB commit precedes asynchronous inventory publication. Absence is a
+  // pending observation for this bounded read poll, not a failed assertion.
+  return values.items.find((i) => i.name === name)?.patch_peer?.reason;
+}
+
 function createPatchPair(suffix: string) {
   vsctl(
     'add-br',
@@ -2778,9 +2788,7 @@ test('native types and reciprocal patch configuration preserve exact navigation 
   createPatchPair('ui');
   try {
     await expect
-      .poll(
-        async () => (await patchItem(context, 'patch-uia')).patch_peer?.reason,
-      )
+      .poll(async () => await observedPatchReason(context, 'patch-uia'))
       .toBe('PATCH_RECIPROCAL_CONFIGURATION');
     const a = await patchItem(context, 'patch-uia');
     const b = await patchItem(context, 'patch-uib');
@@ -2868,9 +2876,7 @@ test('native types and reciprocal patch configuration preserve exact navigation 
       'options:peer=patch-uia',
     );
     await expect
-      .poll(
-        async () => (await patchItem(context, 'patch-uia')).patch_peer?.reason,
-      )
+      .poll(async () => await observedPatchReason(context, 'patch-uia'))
       .toBe('PATCH_RECIPROCAL_CONFIGURATION');
     const replacement = await patchItem(context, 'patch-uib');
     expect(replacement.management_id).not.toBe(b.management_id);
@@ -2933,10 +2939,7 @@ test('patch configuration stays withheld across modes and removes navigation whe
   try {
     await login(reader, 'browser-native-types');
     await expect
-      .poll(
-        async () =>
-          (await patchItem(readerContext, 'patch-seca')).patch_peer?.reason,
-      )
+      .poll(async () => await observedPatchReason(readerContext, 'patch-seca'))
       .toBe('PATCH_RECIPROCAL_CONFIGURATION');
     const a = await patchItem(readerContext, 'patch-seca');
     await page.goto(fixture.origin + `/interfaces/${a.management_id}`);

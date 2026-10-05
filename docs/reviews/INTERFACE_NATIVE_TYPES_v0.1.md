@@ -19,3 +19,5 @@
 证据存入忽略的 `outputs/interface-native-types-{pr,main}/<run>/`，最终汇总 `outputs/interface-native-types-acceptance.json`。复核必须检查具体 reason/ref/source、终态报告无 fail/skip、模式/异常截图及 PR/main 的精确代码树；CI 全绿不能替代这些记录。本批不宣称实物 DPDK NIC、Tunnel 数据面转发、patch 无环策略、类型编辑或一般对象图生命周期完成。
 
 最终接受后追加 #21/#42 完整验收记录并维持 In Progress；记录 annotated tag `phase1-interface-native-types-v0.1`，删除已接受的唯一特性分支。#71 登录根因保持独立开放。
+
+首轮 PR CI `37312321010` 在新增配对流程的初次库存读取失败：OVSDB 创建已返回，但异步 inventory 尚未发布该 Interface，测试 helper 在有界 poll 内直接抛错，未等待后续真实状态。修正仅让该 poll 的 pending absence 保持未满足，继续等待 `PATCH_RECIPROCAL_CONFIGURATION`；之后的对象读取仍严格要求精确存在。保留首轮报告和截图，原超时/零 retry/所有用例/生产门禁不变，接受必须基于修正后完整 PR/main 验收。
