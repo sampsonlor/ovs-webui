@@ -5,6 +5,8 @@ import {
   availability,
   deviceObservation,
   pciAssociation,
+  linuxObservation,
+  linuxReason,
 } from '../frontend/src/interface-observation.ts';
 import { API } from '../frontend/src/api.ts';
 import { Controller } from '../frontend/src/model.ts';
@@ -46,6 +48,54 @@ await test('Interface values retain empty, withheld, unknown and exact native in
   value('mtu', 1500, 'future-availability');
   assert.equal(observation(item, 'mtu'), 'Unknown');
   assert.equal(availability(item, 'duplex'), 'unavailable');
+});
+
+await test('Linux carrier false, native unknown and unavailable hardware retain separate meanings and sources', () => {
+  const item = {
+    linux_device: {
+      availability: 'known',
+      source: { freshness: 'fresh', confidence: 'proven' },
+      fields: {
+        carrier: { availability: 'known', value: false },
+        operstate: { availability: 'known', value: 'unknown' },
+        mtu: { availability: 'known', value: 9000 },
+        speed_mbps: { availability: 'known', value: 10000 },
+        pci_address: { availability: 'unavailable', value: null },
+        numa_node: { availability: 'unknown', value: null },
+      },
+    },
+  };
+  assert.equal(linuxObservation(item, 'carrier'), 'Down (0)');
+  assert.equal(linuxObservation(item, 'operstate'), 'unknown (reported)');
+  assert.equal(linuxObservation(item, 'mtu'), '9000 bytes');
+  assert.equal(linuxObservation(item, 'speed_mbps'), '10000 Mbit/s');
+  assert.equal(linuxObservation(item, 'pci_address'), 'Unavailable');
+  assert.equal(linuxObservation(item, 'numa_node'), 'Unknown');
+  item.linux_device.source.freshness = 'stale';
+  assert.equal(linuxObservation(item, 'carrier'), 'Unknown');
+  item.linux_device.source.freshness = 'fresh';
+  item.linux_device.source.confidence = 'partial';
+  assert.equal(linuxObservation(item, 'mtu'), 'Unknown');
+});
+
+await test('Linux observations cannot display values after unknown binding or source failure', () => {
+  const item = {
+    name: '0000:01:00.0',
+    interface_type: 'dpdk',
+    linux_device: {
+      availability: 'unavailable',
+      reason: 'LINUX_IFINDEX_MISMATCH',
+      fields: { pci_address: { availability: 'known', value: '0000:01:00.0' } },
+    },
+  };
+  assert.equal(linuxObservation(item, 'pci_address'), 'Unavailable');
+  assert.match(linuxReason(item), /different device identities/);
+  item.linux_device.reason = 'future-reason';
+  assert.equal(linuxReason(item), 'Linux device observations are unavailable.');
+  item.linux_device.availability = 'future-availability';
+  assert.equal(linuxObservation(item, 'pci_address'), 'Unavailable');
+  delete item.linux_device;
+  assert.equal(linuxObservation(item, 'carrier'), 'Unavailable');
 });
 
 await test('PCI association requires reported bus evidence, independently of name and native type', () => {

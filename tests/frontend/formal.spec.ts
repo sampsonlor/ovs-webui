@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page, BrowserContext } from '@playwright/test';
 import { readFileSync, mkdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { requestID } from '../../frontend/src/api';
 
 type Fixture = {
@@ -477,6 +477,10 @@ test('Interface configuration withholding, empty filters, stale provider and ret
   context,
 }) => {
   await login(page, 'browser-interface-observer');
+  const iface = (await get(context, '/interfaces?filter=inv-p1')).items.find(
+    (i: { name: string }) => i.name === 'inv-p1',
+  );
+  expect(iface).toBeDefined();
   await page.goto(fixture.origin + '/interfaces');
   await page
     .getByLabel('Interface name', { exact: true })
@@ -509,6 +513,10 @@ test('Interface configuration withholding, empty filters, stale provider and ret
     await expect(
       page.getByText('Stale observation.', { exact: false }),
     ).toBeVisible();
+    const stale = await get(context, `/interfaces/${iface.management_id}`);
+    expect(stale.linux_device.reason).toBe('OVS_ASSOCIATION_STALE');
+    expect(stale.linux_device.source.freshness).toBe('unavailable');
+    expect(stale.linux_device.fields).toEqual({});
     await screen(page, 'interface-provider-stale');
   } finally {
     execFileSync(
@@ -2078,5 +2086,281 @@ test('clear MTU confirms the actual automatic value, restores explicit originals
   } finally {
     vsctl('set', 'Interface', 'pi-ui-mtu-peer', 'mtu_request=1800');
     vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1500');
+  }
+});
+
+function linuxRow(page: Page, label: string) {
+  return page
+    .getByRole('region', { name: 'Linux device observations', exact: true })
+    .getByRole('row')
+    .filter({
+      has: page.getByRole('rowheader', { name: label, exact: false }),
+    });
+}
+function hostLink(name: string) {
+  return JSON.parse(
+    execFileSync('ip', ['-j', 'link', 'show', 'dev', name], {
+      encoding: 'utf8',
+    }),
+  )[0];
+}
+async function kernelInterface(context: BrowserContext, name: string) {
+  let managementID = '';
+  await expect
+    .poll(async () => {
+      const iface = (
+        await get(context, '/interfaces?filter=' + name)
+      ).items.find((i: { name: string }) => i.name === name) as
+        | { management_id: string }
+        | undefined;
+      if (!iface) return null;
+      managementID = iface.management_id;
+      const detail = await get(context, '/interfaces/' + iface.management_id);
+      return detail.linux_device?.availability;
+    })
+    .toBe('known');
+  return get(context, '/interfaces/' + managementID);
+}
+
+test('Linux device detail separates real kernel carrier and MTU, hardware absence, depth and responsive review', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-linux-device');
+  const name = 'plinux-ui',
+    peer = 'plinux-peer';
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions|interfaces)/.test(r.url())
+    )
+      mutations.push(r.method());
+  });
+  try {
+    execFileSync('ip', [
+      'link',
+      'add',
+      name,
+      'type',
+      'veth',
+      'peer',
+      'name',
+      peer,
+    ]);
+    vsctl('add-port', 'br-ui-parent', name);
+    execFileSync('ip', ['link', 'set', name, 'up']);
+    execFileSync('ip', ['link', 'set', peer, 'up']);
+    const iface = await kernelInterface(context, name);
+    expect(iface.linux_device.ifindex).toBe(hostLink(name).ifindex);
+    expect(iface.linux_device.fields.mtu.value).toBe(hostLink(name).mtu);
+    expect(iface.linux_device.fields.carrier.value).toBe(true);
+    expect(iface.linux_device.source.provider_id).toBe('linux');
+    expect(iface.fields.link_state.source.provider_id).toBe('ovsdb');
+    expect(iface.linux_device.fields.pci_address.availability).toBe(
+      'unavailable',
+    );
+    expect(iface.linux_device.fields.pci_address.value).toBeNull();
+    expect(iface.allowed_operations).toEqual([]);
+    await page.goto(fixture.origin + '/interfaces/' + iface.management_id);
+    await expect(linuxRow(page, 'Linux carrier')).toContainText('Up (1)');
+    await expect(linuxRow(page, 'Host PCI association')).toContainText(
+      'Unavailable',
+    );
+    await expect(
+      linuxRow(page, 'Host PCI association').locator('.badge'),
+    ).toHaveAttribute('data-tone', 'neutral');
+    await screen(page, 'interface-linux-standard');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await expect(
+      page.getByText('Linux association evidence', { exact: true }),
+    ).toBeVisible();
+    await screen(page, 'interface-linux-expert');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-linux-dark');
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    for (const [width, label] of [
+      [900, 'tablet'],
+      [390, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height: 980 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, 'interface-linux-' + label);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    execFileSync('ip', ['link', 'set', peer, 'down']);
+    execFileSync('ip', ['link', 'set', name, 'mtu', '1800']);
+    await expect
+      .poll(async () => {
+        const current = await get(
+          context,
+          '/interfaces/' + iface.management_id,
+        );
+        return [
+          current.linux_device.fields.carrier.value,
+          current.linux_device.fields.mtu.value,
+          current.config_revision,
+        ];
+      })
+      .toEqual([false, 1800, iface.config_revision]);
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .focus();
+    await page.keyboard.press('Enter');
+    await expect(linuxRow(page, 'Linux carrier')).toContainText('Down (0)');
+    await expect(linuxRow(page, 'Linux device MTU')).toContainText(
+      '1800 bytes',
+    );
+    await screen(page, 'interface-linux-carrier-down');
+    expect(mutations).toEqual([]);
+  } finally {
+    vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
+    spawnSync('ip', ['link', 'del', name], { stdio: 'pipe' });
+  }
+});
+
+test('Linux device identity mismatch, disappearance, unsupported types and withheld configuration stay explicit', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-linux-exceptions');
+  const name = 'plinux-err',
+    peer = 'plinux-epeer';
+  const pid = Number(
+    readFileSync(fixture.ovsDirectory + '/switch.pid', 'utf8').trim(),
+  );
+  let paused = false;
+  try {
+    execFileSync('ip', [
+      'link',
+      'add',
+      name,
+      'type',
+      'veth',
+      'peer',
+      'name',
+      peer,
+    ]);
+    vsctl('add-port', 'br-ui-parent', name);
+    execFileSync('ip', ['link', 'set', name, 'up']);
+    execFileSync('ip', ['link', 'set', peer, 'up']);
+    const iface = await kernelInterface(context, name);
+    expect(iface.fields.type.availability).toBe('withheld');
+    expect(iface.fields.mtu_request.availability).toBe('withheld');
+    expect(iface.linux_device.fields.carrier.value).toBe(true);
+    await page.goto(fixture.origin + '/interfaces/' + iface.management_id);
+    await expect(linuxRow(page, 'Linux carrier')).toContainText('Up (1)');
+    await screen(page, 'interface-linux-withheld');
+    process.kill(pid, 'SIGSTOP');
+    paused = true;
+    vsctl(
+      '--no-wait',
+      'set',
+      'Interface',
+      name,
+      'ifindex=' + (iface.linux_device.ifindex + 1000),
+    );
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/interfaces/' + iface.management_id))
+            .linux_device.reason,
+      )
+      .toBe('LINUX_IFINDEX_MISMATCH');
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(
+      page.getByText('Linux and OVS report different device identities.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(linuxRow(page, 'Linux carrier')).toContainText('Unavailable');
+    await screen(page, 'interface-linux-identity-mismatch');
+    vsctl(
+      '--no-wait',
+      'set',
+      'Interface',
+      name,
+      'ifindex=' + iface.linux_device.ifindex,
+    );
+    execFileSync('ip', ['link', 'del', name]);
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/interfaces/' + iface.management_id))
+            .linux_device.reason,
+      )
+      .toBe('LINUX_DEVICE_NOT_FOUND');
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(
+      page.getByText('The associated Linux device is not present.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await screen(page, 'interface-linux-device-missing');
+    // A same-name Linux replacement cannot inherit the original OVS ifindex.
+    execFileSync('ip', [
+      'link',
+      'add',
+      name,
+      'type',
+      'veth',
+      'peer',
+      'name',
+      peer,
+    ]);
+    expect(hostLink(name).ifindex).not.toBe(iface.linux_device.ifindex);
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/interfaces/' + iface.management_id))
+            .linux_device.reason,
+      )
+      .toBe('LINUX_IFINDEX_MISMATCH');
+    process.kill(pid, 'SIGCONT');
+    paused = false;
+    vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
+    const response = await context.request.get(
+      fixture.origin + '/api/v1/interfaces/' + iface.management_id,
+    );
+    await expect
+      .poll(async () =>
+        (
+          await context.request.get(
+            fixture.origin + '/api/v1/interfaces/' + iface.management_id,
+          )
+        ).status(),
+      )
+      .toBe(404);
+    expect([200, 404]).toContain(response.status());
+    const dummy = (await get(context, '/interfaces?filter=inv-p1')).items.find(
+      (i: { name: string }) => i.name === 'inv-p1',
+    );
+    const unsupported = await get(
+      context,
+      '/interfaces/' + dummy.management_id,
+    );
+    expect(unsupported.linux_device.reason).toBe('OVS_DEVICE_BINDING_UNPROVEN');
+    expect(unsupported.linux_device.fields).toEqual({});
+    await page.goto(fixture.origin + '/interfaces/' + dummy.management_id);
+    await expect(
+      page.getByText('This Interface has no proven Linux device association.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await screen(page, 'interface-linux-unsupported');
+  } finally {
+    if (paused) process.kill(pid, 'SIGCONT');
+    vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
+    spawnSync('ip', ['link', 'del', name], { stdio: 'pipe' });
   }
 });

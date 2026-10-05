@@ -633,6 +633,7 @@ type Interface struct {
 	MtuClearable       bool                       `json:"mtu_clearable,omitempty"`
 	MtuDefault         int64                      `json:"mtu_default,omitempty"`
 	MtuDefaultReason   string                     `json:"mtu_default_reason,omitempty"`
+	LinuxDevice        LinuxDeviceObservation     `json:"linux_device,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
@@ -661,6 +662,40 @@ func (v *InventoryField) UnmarshalJSON(data []byte) error {
 }
 func (v InventoryField) MarshalJSON() ([]byte, error) {
 	type plain InventoryField
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type LinuxDeviceField struct {
+	Value        json.RawMessage            `json:"value"`
+	Availability string                     `json:"availability"`
+	Reason       string                     `json:"reason"`
+	ExtraFields  map[string]json.RawMessage `json:"-"`
+}
+
+func (v *LinuxDeviceField) UnmarshalJSON(data []byte) error {
+	type plain LinuxDeviceField
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v LinuxDeviceField) MarshalJSON() ([]byte, error) {
+	type plain LinuxDeviceField
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type LinuxDeviceObservation struct {
+	Availability string                     `json:"availability"`
+	Reason       string                     `json:"reason"`
+	Ifindex      json.RawMessage            `json:"ifindex"`
+	Source       Source                     `json:"source"`
+	Fields       map[string]json.RawMessage `json:"fields"`
+	ExtraFields  map[string]json.RawMessage `json:"-"`
+}
+
+func (v *LinuxDeviceObservation) UnmarshalJSON(data []byte) error {
+	type plain LinuxDeviceObservation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v LinuxDeviceObservation) MarshalJSON() ([]byte, error) {
+	type plain LinuxDeviceObservation
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.16.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
+    "version": "1.17.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -30048,6 +30048,9 @@
           "mtu_default_reason": {
             "type": "string",
             "maxLength": 256
+          },
+          "linux_device": {
+            "$ref": "#/components/schemas/LinuxDeviceObservation"
           }
         },
         "required": [
@@ -30102,6 +30105,72 @@
           "editable"
         ],
         "additionalProperties": true
+      },
+      "LinuxDeviceField": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "value",
+          "availability",
+          "reason"
+        ],
+        "additionalProperties": true
+      },
+      "LinuxDeviceObservation": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "ifindex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "fields": {
+            "type": "object",
+            "maxProperties": 10,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LinuxDeviceField"
+            }
+          }
+        },
+        "required": [
+          "availability",
+          "reason",
+          "ifindex",
+          "source",
+          "fields"
+        ],
+        "additionalProperties": true,
+        "description": "Detail-only read observation. Native OVS name/type/ifindex and confirmed, fresh identity gate a bounded Linux sysfs sample; association is rechecked after reading. Carrier, operstate, MTU and speed remain distinct from OVS values. PCI requires the first actual ancestor subsystem to be PCI; OVS bus_info is only a reported hint. Unavailable fields are not replaced with defaults. No paths, host attachment candidates, write authority, caching or device mutation."
       },
       "Bond": {
         "type": "object",
