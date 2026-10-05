@@ -5,6 +5,7 @@
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
   import Status from './Status.svelte';
+  import LinuxDevice from './LinuxDevice.svelte';
   import { mtuEditReason } from './policy';
   let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const item = $derived(model.interface.value);
@@ -23,7 +24,8 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users must be able to scroll the native fields.) -->
     <div class="table-scroll" tabindex="0" role="region" aria-label="Native Interface fields"><table><thead><tr><th>Field</th><th>Native value</th><th>Availability</th>{#if expert}<th>Source / observation</th>{/if}</tr></thead><tbody>{#each interfaceFields as [name, label]}{@const nativeSource = field(item, name)?.source}<tr><th scope="row">{label}{#if expert}<small>{name}</small>{/if}</th><td>{observation(item, name)}</td><td><Status value={availability(item, name)} /></td>{#if expert}<td>{nativeSource?.provider_id ?? 'Unavailable'} · {nativeSource?.authority ?? 'Unknown'}<small>{nativeSource?.freshness ?? 'Unavailable'} · {nativeSource?.confidence ?? 'Unknown'}</small><small>{nativeSource?.observed_at ?? 'Not observed'}</small></td>{/if}</tr>{/each}</tbody></table></div>
   </section>
-  <div class="columns"><section class="panel"><h2>Device observations</h2><dl>{#each deviceFields as [key, label]}<dt>{label}</dt><dd>{deviceObservation(item, key)}</dd>{/each}<dt>PCI association</dt><dd>{pciAssociation(item)}</dd></dl><p class="muted">Source: OVS Interface status. Hardware role and PCI association require provider evidence. Linux carrier is unavailable.</p></section>
+  <LinuxDevice {item} {expert} />
+  <div class="columns"><section class="panel"><h2>OVS reported device status</h2><dl>{#each deviceFields as [key, label]}<dt>{label}</dt><dd>{deviceObservation(item, key)}</dd>{/each}<dt>Reported PCI bus</dt><dd>{pciAssociation(item)}</dd></dl><p class="muted">Source: OVS Interface status. Reported bus and driver hints are independent of the host association above.</p></section>
     <section class="panel"><h2>Configuration context</h2><dl><dt>Ownership</dt><dd>{typeof item.ownership === 'string' ? item.ownership : 'Unknown'}</dd><dt>MTU authority</dt><dd>{typeof item.mtu_ownership === 'string' ? item.mtu_ownership : 'Unknown'}</dd></dl>{#if !mtuEditReason(item, model.session, desktop)}<Link href={`/interfaces/${item.management_id}/mtu`}>Edit MTU request →</Link>{:else}<p class="muted">{mtuEditReason(item, model.session, desktop)}</p>{/if}<p>Review supported Port changes through its Candidate workflow.</p><Link href={`/ports/${item.port_ref.id}`}>Review owning Port →</Link>{#if expert}<h3>Observed safe options</h3><Status value={availability(item, 'options')} />{#if availability(item, 'options') === 'known'}<pre>{JSON.stringify(item.options, null, 2)}</pre>{:else}<p>{observation(item, 'options')}</p>{/if}<p class="muted">Only the reported safe option subset is shown. An empty subset does not prove that all native options are empty.</p>{/if}</section></div>
   {#if expert}<details open><summary>Native identity and evidence</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Configuration revision</dt><dd class="mono">{item.config_revision}</dd></dl><pre>{JSON.stringify(item.fields, null, 2)}</pre></details>{/if}
 {/if}

@@ -41,6 +41,7 @@ type Service struct {
 	localBridgeDeleteNames         map[string]bool
 	localInternalPortTargets       map[string]bool
 	localInternalPortDeleteTargets map[string]bool
+	deviceObserver                 DeviceObserver
 }
 
 func New(r Registry) *Service {
@@ -113,7 +114,7 @@ type cursor struct {
 	Expires                                                               int64
 }
 
-func (s *Service) Read(_ context.Context, op string, path map[string]string, q url.Values, c authn.Claims) (any, error) {
+func (s *Service) Read(ctx context.Context, op string, path map[string]string, q url.Values, c authn.Claims) (any, error) {
 	if !Operation(op) {
 		return nil, apitypes.Fail(403, "OPERATION_DENIED")
 	}
@@ -225,6 +226,9 @@ func (s *Service) Read(_ context.Context, op string, path map[string]string, q u
 					item, err := project(b, kind)
 					if err != nil {
 						return nil, err
+					}
+					if op == "readInterface" {
+						item["linux_device"] = s.readDevice(ctx, v, b, fresh)
 					}
 					return item, nil
 				}
@@ -373,7 +377,7 @@ func coverage(v *view) map[string]any {
 	for table, rows := range v.observation.Rows {
 		counts[table] = len(rows)
 	}
-	return map[string]any{"state": "complete-for-selected-columns", "row_counts": counts, "max_rows": MaxRows, "max_bytes": MaxSnapshotBytes, "includes_linux": false, "option_keys": "peer,remote_ip,local_ip,dst_port,key; remaining keys withheld", "interface_status_keys": "driver_name,driver_version,firmware_version,bus_info,numa_id,if_type; remaining keys withheld", "schema_columns": "see /api/v1/inventory/schema"}
+	return map[string]any{"state": "complete-for-selected-columns", "row_counts": counts, "max_rows": MaxRows, "max_bytes": MaxSnapshotBytes, "includes_linux": false, "linux_observations": "bounded Interface detail samples only; not an inventory-wide hardware scan", "option_keys": "peer,remote_ip,local_ip,dst_port,key; remaining keys withheld", "interface_status_keys": "driver_name,driver_version,firmware_version,bus_info,numa_id,if_type; remaining keys withheld", "schema_columns": "see /api/v1/inventory/schema"}
 }
 func source(v *view, fresh, authority string) map[string]any {
 	var at any

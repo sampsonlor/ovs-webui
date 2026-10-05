@@ -21,6 +21,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
+	linuxprovider "github.com/sampsonlor/ovs-webui/internal/provider/linux"
 	ovsprovider "github.com/sampsonlor/ovs-webui/internal/provider/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -219,6 +220,7 @@ func run() int {
 			return 1
 		}
 		inventoryService = inventory.New(reg)
+		inventoryService.SetDeviceObserver(linuxprovider.New())
 		var vlanIDs []string
 		if *localVLANPorts != "" {
 			vlanIDs = strings.Split(*localVLANPorts, ",")

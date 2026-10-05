@@ -73,3 +73,56 @@ export function pciAssociation(resource: Interface): string {
       ? bus
       : 'Not proven';
 }
+
+export function linuxReason(resource: Interface): string {
+  const code = resource.linux_device?.reason;
+  return (
+    (
+      {
+        OVS_ASSOCIATION_STALE:
+          'The OVS association is stale. Refresh after the provider recovers.',
+        OVS_DEVICE_BINDING_UNPROVEN:
+          'This Interface has no proven Linux device association. Userspace and tunnel devices may have no kernel link.',
+        OVS_DEVICE_BINDING_CHANGED:
+          'The device association changed during refresh. Refresh to review the current Interface.',
+        LINUX_IFINDEX_MISMATCH:
+          'Linux and OVS report different device identities. Host values are unavailable until they agree.',
+        LINUX_DEVICE_CHANGED:
+          'The Linux device changed during refresh. Refresh to review its current identity.',
+        LINUX_DEVICE_NOT_FOUND: 'The associated Linux device is not present.',
+        LINUX_PROVIDER_BUSY:
+          'The Linux observation service is busy. Refresh to try again.',
+        LINUX_OBSERVATION_TIMEOUT:
+          'The Linux observation did not finish in time. Refresh to try again.',
+        LINUX_OBSERVATION_EXPIRED:
+          'The Linux observation is no longer fresh. Refresh to sample the device.',
+      } as Record<string, string>
+    )[code ?? ''] ?? 'Linux device observations are unavailable.'
+  );
+}
+
+export function linuxObservation(resource: Interface, key: string): string {
+  const device = resource.linux_device;
+  if (!device || device.availability !== 'known') return 'Unavailable';
+  if (
+    device.source.freshness !== 'fresh' ||
+    device.source.confidence !== 'proven'
+  )
+    return 'Unknown';
+  const f = device.fields[key];
+  if (!f || f.availability === 'unavailable') return 'Unavailable';
+  if (f.availability !== 'known') return 'Unknown';
+  if (key === 'carrier')
+    return typeof f.value === 'boolean'
+      ? f.value
+        ? 'Up (1)'
+        : 'Down (0)'
+      : 'Unknown';
+  if (key === 'operstate' && f.value === 'unknown') return 'unknown (reported)';
+  if (typeof f.value === 'number' && Number.isSafeInteger(f.value)) {
+    if (key === 'speed_mbps') return `${f.value} Mbit/s`;
+    if (key === 'mtu') return `${f.value} bytes`;
+    return String(f.value);
+  }
+  return typeof f.value === 'string' ? f.value : 'Unknown';
+}
