@@ -28,6 +28,8 @@ OVS stale、类型或 ifindex 不可证明、sysfs 不可用、设备消失、�
 
 正式 Svelte 详情的 Standard 显示可读值与 availability，Expert 增加关联来源与字段证据；桌面、平板 Standard 和手机均只读，保留表格键盘访问。没有新配置按钮。
 
+设备本身已证明、但没有硬件关联的字段使用中性 unavailable 标记，避免把正常虚拟接口缺少 PCI 信息呈现为设备故障；关联不匹配、来源不可用等真实例外仍明确提示。
+
 本地 Windows 检查不能运行 Linux 设备验收。双架构 native CI 使用真实 kernel sysfs loopback 和正式 Go/OVS 浏览器中的隔离 veth：验证 index、MTU、carrier up/down、消失、同名新设备拒绝、配置权限隐藏与原生 provider stale。PCI/USB/driver 的成功解析使用受限 sysfs 文件系统夹具，不能等同真实 NIC/DPDK/Offload 硬件 qualification。三份 OVS schema fixture 亦不代表三个 daemon 二进制版本。
 
 完整证据与接受门禁见[审阅矩阵](../reviews/INTERFACE_LINUX_DEVICE_v0.1.md)。接受标签 `phase1-interface-linux-device-v0.1` 仅在 PR/main 完整 CI、报告和截图复核后记录；#21 / #42 / #54 继续独立开放，#71 未被本批宣称修复。

@@ -2167,6 +2167,9 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
     await expect(linuxRow(page, 'Host PCI association')).toContainText(
       'Unavailable',
     );
+    await expect(
+      linuxRow(page, 'Host PCI association').locator('.badge'),
+    ).toHaveAttribute('data-tone', 'neutral');
     await screen(page, 'interface-linux-standard');
     await page.getByRole('button', { name: 'Standard', exact: true }).click();
     await expect(

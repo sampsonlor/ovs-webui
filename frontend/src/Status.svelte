@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { value }: { value: string | null | undefined } = $props();
+  let { value, neutral = false }: { value: string | null | undefined; neutral?: boolean } = $props();
   const green = [
     'ready',
     'fresh',
@@ -22,7 +22,7 @@
 
 <span
   class="badge"
-  data-tone={green.includes(value ?? '')
+  data-tone={neutral ? 'neutral' : green.includes(value ?? '')
     ? 'good'
     : red.includes(value ?? '')
       ? 'bad'
