@@ -2827,6 +2827,10 @@ test('native types and reciprocal patch configuration preserve exact navigation 
       fixture.origin + `/interfaces/${b.management_id}`,
     );
     await page.goto(fixture.origin + `/interfaces/${a.management_id}`);
+    await nativeTypeDepth(page, 'Standard');
+    await expect(
+      panel.getByRole('link', { name: 'Peer Interface →', exact: true }),
+    ).toHaveAttribute('href', `/interfaces/${b.management_id}`);
     await screen(page, 'interface-native-types-standard');
     await nativeTypeDepth(page, 'Expert');
     await expect(panel).toContainText('PATCH_RECIPROCAL_CONFIGURATION');
