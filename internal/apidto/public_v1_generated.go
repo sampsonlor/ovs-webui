@@ -621,6 +621,7 @@ type Interface struct {
 	PortRef            ResourceRef                `json:"port_ref"`
 	InterfaceType      string                     `json:"interface_type"`
 	Options            map[string]json.RawMessage `json:"options"`
+	PatchPeer          InterfacePatchPeer         `json:"patch_peer,omitempty"`
 	BridgeRef          ResourceRef                `json:"bridge_ref,omitempty"`
 	PortKind           string                     `json:"port_kind,omitempty"`
 	Internal           json.RawMessage            `json:"internal,omitempty"`
@@ -643,6 +644,25 @@ func (v *Interface) UnmarshalJSON(data []byte) error {
 }
 func (v Interface) MarshalJSON() ([]byte, error) {
 	type plain Interface
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type InterfacePatchPeer struct {
+	Availability  string                     `json:"availability"`
+	Reason        string                     `json:"reason"`
+	PeerRef       json.RawMessage            `json:"peer_ref"`
+	PeerPortRef   json.RawMessage            `json:"peer_port_ref"`
+	PeerBridgeRef json.RawMessage            `json:"peer_bridge_ref"`
+	Source        Source                     `json:"source"`
+	ExtraFields   map[string]json.RawMessage `json:"-"`
+}
+
+func (v *InterfacePatchPeer) UnmarshalJSON(data []byte) error {
+	type plain InterfacePatchPeer
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v InterfacePatchPeer) MarshalJSON() ([]byte, error) {
+	type plain InterfacePatchPeer
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

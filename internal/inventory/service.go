@@ -612,6 +612,7 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 			out["port_kind"] = "bond"
 		}
 		out["interface_type"] = nativeType(row, "type", config)
+		out["patch_peer"] = interfacePatchPeer(v, row, bridge, fresh, config)
 		out["internal"] = nil
 		out["local_interface"] = nil
 		if typ, known := row.Values["type"].(string); known && config {
