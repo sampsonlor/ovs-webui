@@ -510,6 +510,9 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 			}
 		}
 	}
+	if b.Table == "Interface" {
+		projectInterfaceConfiguration(v, row, fields, values, fresh, config)
+	}
 	out["fields"] = fields
 	out["config_revision"] = Digest(values)
 	out["ownership"] = "unknown"

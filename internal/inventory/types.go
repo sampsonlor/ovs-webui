@@ -28,17 +28,18 @@ type Reference struct {
 	Position string `json:"position"`
 }
 type Column struct {
-	Name           string          `json:"name"`
-	Type           string          `json:"type"`
-	NativeType     json.RawMessage `json:"native_type"`
-	Mutable        bool            `json:"mutable"`
-	Ephemeral      bool            `json:"ephemeral"`
-	References     []Reference     `json:"references"`
-	Monitored      bool            `json:"monitored"`
-	VLANCompatible bool            `json:"-"`
-	VLANModes      []string        `json:"-"`
-	BondCompatible bool            `json:"-"`
-	MTUCompatible  bool            `json:"-"`
+	Name                      string          `json:"name"`
+	Type                      string          `json:"type"`
+	NativeType                json.RawMessage `json:"native_type"`
+	Mutable                   bool            `json:"mutable"`
+	Ephemeral                 bool            `json:"ephemeral"`
+	References                []Reference     `json:"references"`
+	Monitored                 bool            `json:"monitored"`
+	VLANCompatible            bool            `json:"-"`
+	VLANModes                 []string        `json:"-"`
+	BondCompatible            bool            `json:"-"`
+	MTUCompatible             bool            `json:"-"`
+	InterfaceConfigCompatible bool            `json:"-"`
 }
 type Table struct {
 	Name    string     `json:"name"`
