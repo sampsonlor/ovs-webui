@@ -21,3 +21,5 @@
 最终接受后追加 #21/#42 完整验收记录并维持 In Progress；记录 annotated tag `phase1-interface-native-types-v0.1`，删除已接受的唯一特性分支。#71 登录根因保持独立开放。
 
 首轮 PR CI `37312321010` 在新增配对流程的初次库存读取失败：OVSDB 创建已返回，但异步 inventory 尚未发布该 Interface，测试 helper 在有界 poll 内直接抛错，未等待后续真实状态。修正仅让该 poll 的 pending absence 保持未满足，继续等待 `PATCH_RECIPROCAL_CONFIGURATION`；之后的对象读取仍严格要求精确存在。保留首轮报告和截图，原超时/零 retry/所有用例/生产门禁不变，接受必须基于修正后完整 PR/main 验收。
+
+第二轮 PR CI `37315198894` 已越过初次库存读取；新增流程在要求 Expert reason 的断言失败。按钮显示的是当前模式，测试误将点击当前模式当作选择该模式，导致实际 Standard 内容被当作 Expert 检查。修正仅在实际模式不符时切换，并核对显示文字和 aria-pressed；Standard/Expert 截图以实际状态为准。第二轮原始日志/报告/截图保留，生产逻辑、超时、零 retry 和完整用例不变。

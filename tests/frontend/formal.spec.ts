@@ -51,6 +51,17 @@ async function observedPatchReason(context: BrowserContext, name: string) {
   return values.items.find((i) => i.name === name)?.patch_peer?.reason;
 }
 
+async function nativeTypeDepth(page: Page, mode: 'Standard' | 'Expert') {
+  const toggle = page.getByRole('button', { name: /^(Standard|Expert)$/ });
+  await expect(toggle).toBeVisible();
+  if ((await toggle.textContent()) !== mode) await toggle.click();
+  await expect(toggle).toHaveText(mode);
+  await expect(toggle).toHaveAttribute(
+    'aria-pressed',
+    String(mode === 'Expert'),
+  );
+}
+
 function createPatchPair(suffix: string) {
   vsctl(
     'add-br',
@@ -2799,7 +2810,7 @@ test('native types and reciprocal patch configuration preserve exact navigation 
     const panel = page.getByRole('region', {
       name: 'Native type and associations',
     });
-    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await nativeTypeDepth(page, 'Standard');
     await expect(panel).toContainText('Reciprocal configuration observed.');
     await expect(panel).toContainText('does not prove packet forwarding');
     await expect(
@@ -2817,7 +2828,7 @@ test('native types and reciprocal patch configuration preserve exact navigation 
     );
     await page.goto(fixture.origin + `/interfaces/${a.management_id}`);
     await screen(page, 'interface-native-types-standard');
-    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await nativeTypeDepth(page, 'Expert');
     await expect(panel).toContainText('PATCH_RECIPROCAL_CONFIGURATION');
     await screen(page, 'interface-native-types-expert');
     await page
@@ -2827,7 +2838,7 @@ test('native types and reciprocal patch configuration preserve exact navigation 
     await page
       .getByRole('button', { name: 'Toggle color theme', exact: true })
       .click();
-    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await nativeTypeDepth(page, 'Standard');
     for (const [name, width, height] of [
       ['tablet', 820, 1180],
       ['mobile', 390, 844],
@@ -2950,8 +2961,8 @@ test('patch configuration stays withheld across modes and removes navigation whe
     const panel = page.getByRole('region', {
       name: 'Native type and associations',
     });
-    for (const mode of ['Standard', 'Expert']) {
-      await page.getByRole('button', { name: mode, exact: true }).click();
+    for (const mode of ['Standard', 'Expert'] as const) {
+      await nativeTypeDepth(page, mode);
       await expect(panel).toContainText('Withheld');
       await expect(panel.getByRole('link')).toHaveCount(0);
       await expect(
