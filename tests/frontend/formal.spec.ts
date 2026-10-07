@@ -621,6 +621,15 @@ test('Interface configuration withholding, empty filters, stale provider and ret
       configurationRow(readerPage, 'Ingress bandwidth limit'),
     ).toContainText('Last observed: Disabled (0 kbit/s)');
     await screen(readerPage, 'interface-config-stale');
+    const staleRules = await get(
+      readerContext,
+      `/interfaces/${iface.management_id}`,
+    );
+    expect(staleRules.linux_ingress_policing.reason).toBe(
+      'OVS_ASSOCIATION_STALE',
+    );
+    expect(staleRules.linux_ingress_policing.actions).toEqual([]);
+    await screen(readerPage, 'interface-policing-stale');
     for (const name of [
       'ofport_request',
       'ingress_policing_rate',
@@ -2412,6 +2421,305 @@ function hostLink(name: string) {
     }),
   )[0];
 }
+
+function policingPanel(page: Page) {
+  return page.getByRole('region', {
+    name: 'Linux ingress policing',
+    exact: true,
+  });
+}
+const tc = (...args: string[]) =>
+  execFileSync('tc', args, { encoding: 'utf8' }).trim();
+
+test('Linux ingress policing separates real installed rules, pending configuration, partial coverage and identity changes', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-policing');
+  const name = 'pol-ui',
+    peer = 'pol-peer';
+  const pid = Number(
+    readFileSync(fixture.ovsDirectory + '/switch.pid', 'utf8').trim(),
+  );
+  let paused = false;
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions|interfaces)/.test(r.url())
+    )
+      mutations.push(r.method());
+  });
+  try {
+    execFileSync('ip', [
+      'link',
+      'add',
+      name,
+      'type',
+      'veth',
+      'peer',
+      'name',
+      peer,
+    ]);
+    execFileSync('ip', ['link', 'set', name, 'up']);
+    execFileSync('ip', ['link', 'set', peer, 'up']);
+    vsctl(
+      'add-port',
+      'br-ui-parent',
+      name,
+      '--',
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=1000',
+      'ingress_policing_kpkts_rate=0',
+    );
+    const iface = await kernelInterface(context, name);
+    const path = '/interfaces/' + iface.management_id;
+    await expect
+      .poll(async () => {
+        const detail = await get(context, path);
+        return detail.linux_ingress_policing.actions.map(
+          (a: { bytes_per_second: string; packets_per_second: string }) => [
+            a.bytes_per_second,
+            a.packets_per_second,
+          ],
+        );
+      })
+      .toContainEqual(['125000', null]);
+    const initial = await get(context, path);
+    expect(initial.linux_ingress_policing.availability).toBe('known');
+    expect(initial.linux_ingress_policing.ifindex).toBe(hostLink(name).ifindex);
+    expect(initial.linux_ingress_policing.source.authority).toBe(
+      'linux-netlink-observation',
+    );
+    expect(initial.allowed_operations).toEqual([]);
+    expect(
+      JSON.parse(
+        tc('-j', 'filter', 'show', 'dev', name, 'parent', 'ffff:'),
+      ).some((f: { options?: { actions?: { kind: string }[] } }) =>
+        f.options?.actions?.some((a) => a.kind === 'police'),
+      ),
+    ).toBe(true);
+    await page.goto(fixture.origin + path);
+    await expect(policingPanel(page)).toContainText('125000 bytes/s');
+    await expect(policingPanel(page)).toContainText('Not reported');
+    await screen(page, 'interface-policing-standard');
+    await nativeTypeDepth(page, 'Expert');
+    await expect(policingPanel(page)).toContainText('Filter evidence');
+    await screen(page, 'interface-policing-expert');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-policing-dark');
+    await nativeTypeDepth(page, 'Standard');
+    for (const [width, label] of [
+      [900, 'tablet'],
+      [390, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height: 980 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await expect(policingPanel(page).getByRole('button')).toHaveCount(0);
+      await screen(page, 'interface-policing-' + label);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    tc(
+      'filter',
+      'add',
+      'dev',
+      name,
+      'parent',
+      'ffff:',
+      'protocol',
+      'all',
+      'pref',
+      '80',
+      'matchall',
+      'action',
+      'pass',
+    );
+    const partial = await get(context, path);
+    expect(partial.linux_ingress_policing.availability).toBe('partial');
+    expect(partial.config_revision).toBe(initial.config_revision);
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(policingPanel(page)).toContainText('Partial coverage.');
+    await expect(policingPanel(page)).toContainText('125000 bytes/s');
+    await screen(page, 'interface-policing-partial');
+    tc('filter', 'del', 'dev', name, 'parent', 'ffff:', 'pref', '80');
+    process.kill(pid, 'SIGSTOP');
+    paused = true;
+    vsctl('--no-wait', 'set', 'Interface', name, 'ingress_policing_rate=2000');
+    await expect
+      .poll(
+        async () =>
+          (await get(context, path)).fields.ingress_policing_rate.value,
+      )
+      .toBe('2000');
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(
+      configurationRow(page, 'Ingress bandwidth limit'),
+    ).toContainText('2000 kbit/s');
+    await expect(policingPanel(page)).toContainText('125000 bytes/s');
+    await screen(page, 'interface-policing-config-pending');
+    vsctl(
+      '--no-wait',
+      'set',
+      'Interface',
+      name,
+      'ifindex=' + String(hostLink(name).ifindex + 100000),
+    );
+    await expect
+      .poll(
+        async () => (await get(context, path)).linux_ingress_policing.reason,
+      )
+      .toBe('LINUX_IFINDEX_MISMATCH');
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(policingPanel(page)).toContainText(
+      'identities no longer match',
+    );
+    await expect(policingPanel(page)).not.toContainText('125000 bytes/s');
+    await screen(page, 'interface-policing-identity-mismatch');
+    vsctl(
+      '--no-wait',
+      'set',
+      'Interface',
+      name,
+      'ifindex=' + String(hostLink(name).ifindex),
+    );
+    process.kill(pid, 'SIGCONT');
+    paused = false;
+    vsctl(
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=0',
+      'ingress_policing_kpkts_rate=5',
+    );
+    await expect
+      .poll(async () => {
+        const v = (await get(context, path)).linux_ingress_policing;
+        return v.actions.map(
+          (a: {
+            bytes_per_second: string | null;
+            packets_per_second: string | null;
+          }) => [a.bytes_per_second, a.packets_per_second],
+        );
+      })
+      .toContainEqual([null, '5000']);
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(policingPanel(page)).toContainText('5000 packets/s');
+    await expect(policingPanel(page)).toContainText('Not reported');
+    await screen(page, 'interface-policing-packet');
+    vsctl(
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=0',
+      'ingress_policing_kpkts_rate=0',
+    );
+    await expect
+      .poll(async () => {
+        const v = (await get(context, path)).linux_ingress_policing;
+        return [v.availability, v.actions.length];
+      })
+      .toEqual(['known', 0]);
+    const refresh = page.getByRole('button', {
+      name: 'Refresh resource',
+      exact: true,
+    });
+    await refresh.focus();
+    await page.keyboard.press('Enter');
+    await expect(policingPanel(page)).toContainText(
+      'No police action observed',
+    );
+    await screen(page, 'interface-policing-empty');
+    vsctl(
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=1000',
+      'ingress_policing_kpkts_rate=5',
+    );
+    await expect
+      .poll(async () => {
+        const v = await get(context, path);
+        return [
+          v.fields.ingress_policing_rate.value,
+          v.fields.ingress_policing_kpkts_rate.value,
+          v.linux_ingress_policing.actions.length,
+        ];
+      })
+      .toEqual(['1000', '5', 0]);
+    await refresh.click();
+    await expect(
+      configurationRow(page, 'Ingress bandwidth limit'),
+    ).toContainText('1000 kbit/s');
+    await expect(policingPanel(page)).toContainText(
+      'No police action observed',
+    );
+    await expect(policingPanel(page)).toContainText(
+      'does not establish that traffic is unrestricted',
+    );
+    await screen(page, 'interface-policing-conflicting-request');
+    expect(mutations).toEqual([]);
+  } finally {
+    if (paused) process.kill(pid, 'SIGCONT');
+    vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
+    spawnSync('ip', ['link', 'del', name]);
+  }
+});
+
+test('Linux ingress policing withholds runtime configuration in both modes and marks unsupported bindings explicitly', async ({
+  page,
+  context,
+  browser,
+}) => {
+  await login(page, 'browser-policing-observer');
+  const iface = (await get(context, '/interfaces?filter=inv-p1')).items.find(
+    (i: { name: string }) => i.name === 'inv-p1',
+  );
+  const detail = await get(context, '/interfaces/' + iface.management_id);
+  expect(detail.linux_ingress_policing.availability).toBe('withheld');
+  expect(detail.linux_ingress_policing.actions).toEqual([]);
+  expect(detail.linux_ingress_policing.ifindex).toBeNull();
+  await page.goto(fixture.origin + '/interfaces/' + iface.management_id);
+  await expect(policingPanel(page)).toContainText(
+    'Configuration read permission is required',
+  );
+  await screen(page, 'interface-policing-withheld-standard');
+  await nativeTypeDepth(page, 'Expert');
+  await expect(
+    policingPanel(page).getByRole('region', {
+      name: 'Linux ingress police actions',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await screen(page, 'interface-policing-withheld-expert');
+  const other = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const reader = await other.newPage();
+    await login(reader, 'browser-policing');
+    await reader.goto(fixture.origin + '/interfaces/' + iface.management_id);
+    await expect(policingPanel(reader)).toContainText(
+      'No proven Linux device association',
+    );
+    await screen(reader, 'interface-policing-unsupported');
+  } finally {
+    await other.close();
+  }
+});
 async function kernelInterface(context: BrowserContext, name: string) {
   let managementID = '';
   await expect

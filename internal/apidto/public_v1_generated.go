@@ -609,35 +609,36 @@ func (v Bridge) MarshalJSON() ([]byte, error) {
 }
 
 type Interface struct {
-	Id                 Id                         `json:"id"`
-	State              string                     `json:"state"`
-	Sequence           Sequence                   `json:"sequence"`
-	ResourceKind       string                     `json:"resource_kind"`
-	Source             Source                     `json:"source"`
-	AllowedActions     []string                   `json:"allowed_actions"`
-	ManagementId       Id                         `json:"management_id"`
-	OvsUuid            Id                         `json:"ovs_uuid"`
-	InstanceGeneration Id                         `json:"instance_generation"`
-	ConfigRevision     Revision                   `json:"config_revision"`
-	Name               string                     `json:"name"`
-	PortRef            ResourceRef                `json:"port_ref"`
-	InterfaceType      string                     `json:"interface_type"`
-	Options            map[string]json.RawMessage `json:"options"`
-	PatchPeer          InterfacePatchPeer         `json:"patch_peer,omitempty"`
-	BridgeRef          ResourceRef                `json:"bridge_ref,omitempty"`
-	PortKind           string                     `json:"port_kind,omitempty"`
-	Internal           json.RawMessage            `json:"internal,omitempty"`
-	LocalInterface     json.RawMessage            `json:"local_interface,omitempty"`
-	Ownership          string                     `json:"ownership,omitempty"`
-	AllowedOperations  []string                   `json:"allowed_operations,omitempty"`
-	Fields             map[string]json.RawMessage `json:"fields,omitempty"`
-	MtuOwnership       string                     `json:"mtu_ownership,omitempty"`
-	MtuEditable        bool                       `json:"mtu_editable,omitempty"`
-	MtuClearable       bool                       `json:"mtu_clearable,omitempty"`
-	MtuDefault         int64                      `json:"mtu_default,omitempty"`
-	MtuDefaultReason   string                     `json:"mtu_default_reason,omitempty"`
-	LinuxDevice        LinuxDeviceObservation     `json:"linux_device,omitempty"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	Id                   Id                         `json:"id"`
+	State                string                     `json:"state"`
+	Sequence             Sequence                   `json:"sequence"`
+	ResourceKind         string                     `json:"resource_kind"`
+	Source               Source                     `json:"source"`
+	AllowedActions       []string                   `json:"allowed_actions"`
+	ManagementId         Id                         `json:"management_id"`
+	OvsUuid              Id                         `json:"ovs_uuid"`
+	InstanceGeneration   Id                         `json:"instance_generation"`
+	ConfigRevision       Revision                   `json:"config_revision"`
+	Name                 string                     `json:"name"`
+	PortRef              ResourceRef                `json:"port_ref"`
+	InterfaceType        string                     `json:"interface_type"`
+	Options              map[string]json.RawMessage `json:"options"`
+	PatchPeer            InterfacePatchPeer         `json:"patch_peer,omitempty"`
+	BridgeRef            ResourceRef                `json:"bridge_ref,omitempty"`
+	PortKind             string                     `json:"port_kind,omitempty"`
+	Internal             json.RawMessage            `json:"internal,omitempty"`
+	LocalInterface       json.RawMessage            `json:"local_interface,omitempty"`
+	Ownership            string                     `json:"ownership,omitempty"`
+	AllowedOperations    []string                   `json:"allowed_operations,omitempty"`
+	Fields               map[string]json.RawMessage `json:"fields,omitempty"`
+	MtuOwnership         string                     `json:"mtu_ownership,omitempty"`
+	MtuEditable          bool                       `json:"mtu_editable,omitempty"`
+	MtuClearable         bool                       `json:"mtu_clearable,omitempty"`
+	MtuDefault           int64                      `json:"mtu_default,omitempty"`
+	MtuDefaultReason     string                     `json:"mtu_default_reason,omitempty"`
+	LinuxDevice          LinuxDeviceObservation     `json:"linux_device,omitempty"`
+	LinuxIngressPolicing LinuxIngressPolicing       `json:"linux_ingress_policing,omitempty"`
+	ExtraFields          map[string]json.RawMessage `json:"-"`
 }
 
 func (v *Interface) UnmarshalJSON(data []byte) error {
@@ -719,6 +720,47 @@ func (v *LinuxDeviceObservation) UnmarshalJSON(data []byte) error {
 }
 func (v LinuxDeviceObservation) MarshalJSON() ([]byte, error) {
 	type plain LinuxDeviceObservation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type LinuxPolicingAction struct {
+	FilterKind       string                     `json:"filter_kind"`
+	Priority         int64                      `json:"priority"`
+	Handle           string                     `json:"handle"`
+	Index            int64                      `json:"index"`
+	BytesPerSecond   json.RawMessage            `json:"bytes_per_second"`
+	PacketsPerSecond json.RawMessage            `json:"packets_per_second"`
+	ExceedAction     string                     `json:"exceed_action"`
+	ConformAction    string                     `json:"conform_action"`
+	ExtraFields      map[string]json.RawMessage `json:"-"`
+}
+
+func (v *LinuxPolicingAction) UnmarshalJSON(data []byte) error {
+	type plain LinuxPolicingAction
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v LinuxPolicingAction) MarshalJSON() ([]byte, error) {
+	type plain LinuxPolicingAction
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type LinuxIngressPolicing struct {
+	Availability string                     `json:"availability"`
+	Reason       string                     `json:"reason"`
+	Ifindex      json.RawMessage            `json:"ifindex"`
+	FilterCount  json.RawMessage            `json:"filter_count"`
+	Actions      []LinuxPolicingAction      `json:"actions"`
+	Coverage     string                     `json:"coverage"`
+	Source       Source                     `json:"source"`
+	ExtraFields  map[string]json.RawMessage `json:"-"`
+}
+
+func (v *LinuxIngressPolicing) UnmarshalJSON(data []byte) error {
+	type plain LinuxIngressPolicing
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v LinuxIngressPolicing) MarshalJSON() ([]byte, error) {
+	type plain LinuxIngressPolicing
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

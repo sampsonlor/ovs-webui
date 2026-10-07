@@ -8,6 +8,7 @@
   import LinuxDevice from './LinuxDevice.svelte';
   import InterfaceConfiguration from './InterfaceConfiguration.svelte';
   import InterfaceNativeType from './InterfaceNativeType.svelte';
+  import InterfacePolicing from './InterfacePolicing.svelte';
   import { has, mtuEditReason } from './policy';
   let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const item = $derived(model.interface.value);
@@ -31,6 +32,7 @@
     <div class="table-scroll" tabindex="0" role="region" aria-label="Native Interface fields"><table><thead><tr><th>Field</th><th>Native value</th><th>Availability</th>{#if expert}<th>Source / observation</th>{/if}</tr></thead><tbody>{#each interfaceFields as [name, label]}{@const nativeSource = field(item, name)?.source}<tr><th scope="row">{label}{#if expert}<small>{name}</small>{/if}</th><td>{observation(item, name)}</td><td><Status value={availability(item, name)} /></td>{#if expert}<td>{nativeSource?.provider_id ?? 'Unavailable'} · {nativeSource?.authority ?? 'Unknown'}<small>{nativeSource?.freshness ?? 'Unavailable'} · {nativeSource?.confidence ?? 'Unknown'}</small><small>{nativeSource?.observed_at ?? 'Not observed'}</small></td>{/if}</tr>{/each}</tbody></table></div>
   </section>
   <InterfaceConfiguration {item} {expert} />
+  <InterfacePolicing {item} {expert} />
   <InterfaceNativeType {item} {expert} />
   <LinuxDevice {item} {expert} />
   <div class="columns"><section class="panel"><h2>OVS reported device status</h2><dl>{#each deviceFields as [key, label]}<dt>{label}</dt><dd>{deviceObservation(item, key)}</dd>{/each}<dt>Reported PCI bus</dt><dd>{pciAssociation(item)}</dd></dl><p class="muted">Source: OVS Interface status. Reported bus and driver hints are independent of the host association above.</p></section>

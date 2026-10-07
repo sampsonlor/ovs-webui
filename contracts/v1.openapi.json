@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.20.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
+    "version": "1.21.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
   },
   "servers": [
     {
@@ -30070,6 +30070,9 @@
           },
           "linux_device": {
             "$ref": "#/components/schemas/LinuxDeviceObservation"
+          },
+          "linux_ingress_policing": {
+            "$ref": "#/components/schemas/LinuxIngressPolicing"
           }
         },
         "required": [
@@ -30252,6 +30255,149 @@
         ],
         "additionalProperties": true,
         "description": "Detail-only read observation. Native OVS name/type/ifindex and confirmed, fresh identity gate a bounded Linux sysfs sample; association is rechecked after reading. Carrier, operstate, MTU and speed remain distinct from OVS values. PCI requires the first actual ancestor subsystem to be PCI; OVS bus_info is only a reported hint. Unavailable fields are not replaced with defaults. No paths, host attachment candidates, write authority, caching or device mutation."
+      },
+      "LinuxPolicingAction": {
+        "type": "object",
+        "properties": {
+          "filter_kind": {
+            "type": "string",
+            "enum": [
+              "basic",
+              "matchall",
+              "u32"
+            ]
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "handle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "bytes_per_second": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packets_per_second": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exceed_action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "conform_action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "filter_kind",
+          "priority",
+          "handle",
+          "index",
+          "bytes_per_second",
+          "packets_per_second",
+          "exceed_action",
+          "conform_action"
+        ],
+        "additionalProperties": true
+      },
+      "LinuxIngressPolicing": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "string",
+            "enum": [
+              "known",
+              "partial",
+              "unavailable",
+              "withheld"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "ifindex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filter_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinuxPolicingAction"
+            },
+            "minItems": 0,
+            "maxItems": 16
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "linux-tc-ingress"
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          }
+        },
+        "required": [
+          "availability",
+          "reason",
+          "ifindex",
+          "filter_count",
+          "actions",
+          "coverage",
+          "source"
+        ],
+        "additionalProperties": true,
+        "description": "Optional detail-only, read-only Linux ingress tc observation, independently sourced from NETLINK_ROUTE. Requires inventory/state/configuration read and a fresh confirmed native system/internal name and ifindex, checked before and after reading. Bounded basic/matchall/u32 police decoding; unknown classifiers/actions, future or peak/average police semantics and shared ingress blocks yield partial coverage. Errors, interruption, truncation, stale or replaced identities publish no actions. Rates are exact uint64 decimal strings in kernel bytes/s and packets/s, never converted OVS configuration units. Null means not reported, not disabled. Burst tick conversion, egress, XDP, userspace/DPDK, hardware enforcement, traffic effectiveness and installer ownership are not established. No writes, allowed operations, list scans, cache, dispatch proof or configuration revision changes."
       },
       "Bond": {
         "type": "object",

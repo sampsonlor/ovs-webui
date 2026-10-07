@@ -44,6 +44,7 @@ def main():
     parser.add_argument('--schema-version', default='3.3.9', choices=['3.3.9', '3.7.1', '4.0.0'])
     parser.add_argument('--safe-apply-network', action='store_true')
     parser.add_argument('--frontend-browser', action='store_true')
+    parser.add_argument('--policing-only', action='store_true')
     parser.add_argument('--browser-node')
     args = parser.parse_args()
     assert os.geteuid() == 0 and Path('/run/systemd/system').is_dir()
@@ -210,7 +211,7 @@ def main():
             vsctl('--no-wait', 'init', '--', 'set', 'Open_vSwitch', '.', 'other_config:vlan-limit=2')
 
         ovs_run('ovs-vswitchd', f'unix:{db_socket}', '--enable-dummy', f'--pidfile={ovs}/switch.pid',
-                f'--unixctl={ovs}/switch.ctl', '--detach', '--no-chdir')
+                f'--unixctl={ovs}/switch.ctl', f'--log-file={ovs}/switch.log', '--detach', '--no-chdir')
         vsctl('add-br', 'br-inv', '--', 'set', 'Bridge', 'br-inv', 'datapath_type=dummy',
               '--', 'add-port', 'br-inv', 'inv-p1', '--', 'set', 'Interface', 'inv-p1', 'type=dummy',
               '--', 'add-port', 'br-inv', 'inv-p2', '--', 'set', 'Interface', 'inv-p2', 'type=dummy',
@@ -282,6 +283,17 @@ def main():
             'source_authority': 'ovsdb-configuration', 'editable': False,
         }
         checks.append('five native Interface configuration observations preserve empty/zero and withhold all values for inventory-only tokens')
+        from policing import verify_policing
+        metrics['interface_linux_policing'] = verify_policing(vsctl, get, call, token['secret'], eventually, ovs / 'switch.log')
+        checks.append('real kernel ingress police rates, partial action coverage, permission withholding and removal verified independently of OVS configuration')
+        if args.policing_only:
+            evidence = {'platform': os.uname().machine, 'schema_fixture': args.schema_version,
+                        'metrics': metrics['interface_linux_policing']}
+            destination = repo / f'test-results/go-policing-native-{args.schema_version}.json'
+            destination.parent.mkdir(exist_ok=True)
+            destination.write_text(json.dumps(evidence, indent=2) + '\n')
+            print(json.dumps(evidence, indent=2))
+            return
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 
