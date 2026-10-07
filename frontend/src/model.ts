@@ -40,6 +40,7 @@ export type Model = {
   message: string;
   pending: Pending | null;
   path: string;
+  query: string;
   ports: Load<PortsPage>;
   port: Load<Port>;
   interfaces: Load<InterfacePage>;
@@ -51,6 +52,10 @@ export type Model = {
   transaction: Load<Transaction>;
   resource: Load<RecordValue>;
 };
+function route(value: string) {
+  const [path, query = ''] = value.split('?', 2);
+  return { path, query: query ? `?${query}` : '' };
+}
 function initial(path: string): Model {
   return {
     session: null,
@@ -59,7 +64,7 @@ function initial(path: string): Model {
     busy: false,
     message: '',
     pending: null,
-    path,
+    ...route(path),
     ports: empty(),
     port: empty(),
     interfaces: empty(),
@@ -119,7 +124,7 @@ export class Controller {
     this.api.session = session;
     this.interfaceCursor = '';
     this.state = {
-      ...initial(this.state.path),
+      ...initial(this.state.path + this.state.query),
       session,
       booting: false,
       sessionReady: !!session,
@@ -183,7 +188,7 @@ export class Controller {
   go(path: string) {
     this.fence.reset();
     this.update({
-      path,
+      ...route(path),
       port: empty(),
       interfaces: empty(),
       interface: empty(),
@@ -204,9 +209,10 @@ export class Controller {
     }
     this.reading = true;
     const context = this.context;
-    const ticket = this.fence.begin(this.state.path);
+    const ticket = this.fence.begin(this.state.path + this.state.query);
     const valid = () => context === this.context && this.fence.accepts(ticket);
     const path = this.state.path;
+    const query = this.state.query;
     try {
       const session = await this.api.read<Session>('/session');
       if (!valid()) return;
@@ -336,7 +342,8 @@ export class Controller {
       let resourceURL = '';
       let capability = '';
       if (parts[0] === 'operations') {
-        resourceURL = `/${parts.slice(1).join('/')}`;
+        resourceURL =
+          `/${parts.slice(1).join('/')}` + (parts.length === 2 ? query : '');
         capability =
           (
             {
@@ -484,7 +491,8 @@ export class Controller {
     if (!c) return;
     const existing = c.intents.find(
       (i) =>
-        (i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear') &&
+        (i.operation === 'interface.mtu.set' ||
+          i.operation === 'interface.mtu.clear') &&
         i.object.management_id === item.management_id,
     );
     return this.mutate(
@@ -498,7 +506,10 @@ export class Controller {
             intents: [
               {
                 intent_id: existing?.intent_id ?? crypto.randomUUID(),
-                operation: requested === null ? 'interface.mtu.clear' : 'interface.mtu.set',
+                operation:
+                  requested === null
+                    ? 'interface.mtu.clear'
+                    : 'interface.mtu.set',
                 object: {
                   management_id: item.management_id,
                   ovs_uuid: item.ovs_uuid,
@@ -600,7 +611,7 @@ export let controller: Controller;
 export function start(): Controller {
   controller = new Controller(
     new API(fetch.bind(window), localStorage),
-    location.pathname,
+    location.pathname + location.search,
   );
   return controller;
 }

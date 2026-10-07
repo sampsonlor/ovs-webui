@@ -8,9 +8,10 @@
   import LinuxDevice from './LinuxDevice.svelte';
   import InterfaceConfiguration from './InterfaceConfiguration.svelte';
   import InterfaceNativeType from './InterfaceNativeType.svelte';
-  import { mtuEditReason } from './policy';
+  import { has, mtuEditReason } from './policy';
   let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const item = $derived(model.interface.value);
+  const identity = $derived(item?.management_id ?? model.path.split('/')[2]);
   const deviceFields = [['driver_name', 'Driver'], ['driver_version', 'Driver version'], ['firmware_version', 'Firmware version'], ['bus_info', 'Reported bus'], ['numa_id', 'NUMA node'], ['if_type', 'Reported device type']];
 </script>
 
@@ -18,6 +19,9 @@
 <header class="page-heading"><div><p class="eyebrow">Switching / Interface detail</p><h1>{item?.name ?? 'Interface'}</h1><p>Native configuration and observations for this exact Interface identity.</p></div><button onclick={() => controller.refresh()}>Refresh resource</button></header>
 <LoadNotice load={model.interface} />
 {#if model.interface.error === 'NOT_FOUND'}<p class="notice warning">This Interface identity is no longer available. A same-name replacement has its own identity.</p>{/if}
+{#if refPath({kind:'interface', id:identity})}
+  <section class="panel" aria-label="Interface shared evidence"><h2>Events & Audit</h2><p>Review shared records for this exact Interface identity, including associated MTU execution and Safe Apply evidence. Retained records may not cover older changes.</p><div class="actions">{#each [['events', 'Events', 'events.read'], ['audit', 'Audit', 'audit.read']] as [collection, label, capability]}{#if model.sessionReady && has(model.session, capability)}<Link href={`/operations/${collection}?object_id=${encodeURIComponent(identity)}`}>Open Interface {label}</Link>{:else}<span>{label} unavailable with current authorization.</span>{/if}{/each}</div></section>
+{/if}
 {#if item}
   <div class="summary"><Status value={item.source.freshness} /><span>Observed {item.source.observed_at ?? 'Unknown'}</span><Status value={item.source.confidence} /></div>
   {#if item.source.freshness !== 'fresh'}<p class="notice warning" role="status">Stale observation. Refresh before relying on these values.</p>{/if}

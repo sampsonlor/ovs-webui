@@ -41,7 +41,7 @@ func Append(ctx context.Context, tx *sql.Tx, r Record) (string, error) {
 	if r.Origin != "Manager" {
 		r.Actor, r.Credential = "", ""
 	}
-	if (r.Collection != "event" && r.Collection != "audit") || (r.Origin != "Manager" && r.Origin != "External" && r.Origin != "Unknown") || !apitypes.ManagementID(r.ID) || !apitypes.ManagementID(r.Correlation) || !optionalID(r.Actor) || !optionalID(r.Credential) || !optionalID(r.ChangeSet) || !optionalID(r.Transaction) || !optionalID(r.Job) || !optionalID(r.RequestEpoch) || !optionalRequest(r.RequestID) || !validRef(r.Object) || !code(r.Operation) || !code(r.Result) || (r.Reason != "" && !code(r.Reason)) || (r.Capability != "" && !code(r.Capability)) || (r.DedupKey != "" && !code(r.DedupKey)) || (r.RequestDomain != "" && r.RequestDomain != "management" && r.RequestDomain != "workspace") {
+	if (r.Collection != "event" && r.Collection != "audit") || (r.Origin != "Manager" && r.Origin != "External" && r.Origin != "Unknown") || !apitypes.ManagementID(r.ID) || !apitypes.ManagementID(r.Correlation) || !optionalID(r.Actor) || !optionalID(r.Credential) || !optionalID(r.ChangeSet) || !optionalID(r.Transaction) || !optionalID(r.Job) || !optionalID(r.RequestEpoch) || !optionalRequest(r.RequestID) || !validRef(r.Object) || !validRelated(r.RelatedObjects) || !code(r.Operation) || !code(r.Result) || (r.Reason != "" && !code(r.Reason)) || (r.Capability != "" && !code(r.Capability)) || (r.DedupKey != "" && !code(r.DedupKey)) || (r.RequestDomain != "" && r.RequestDomain != "management" && r.RequestDomain != "workspace") {
 		return "", apitypes.Fail(422, "INVALID_EVIDENCE")
 	}
 	canonical := r
@@ -97,8 +97,19 @@ func Append(ctx context.Context, tx *sql.Tx, r Record) (string, error) {
 	if err != nil || len(b) > 8192 {
 		return "", apitypes.Fail(422, "EVIDENCE_BUDGET_EXCEEDED")
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE evidence_records SET document=? WHERE sequence=?", b, seq)
-	return r.ID, err
+	if _, err = tx.ExecContext(ctx, "UPDATE evidence_records SET document=? WHERE sequence=?", b, seq); err != nil {
+		return "", err
+	}
+	refs := append([]apitypes.Ref{}, r.RelatedObjects...)
+	if r.Object != nil {
+		refs = append(refs, *r.Object)
+	}
+	for _, ref := range refs {
+		if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO evidence_record_objects(record_id,object_id) VALUES(?,?)", r.ID, ref.ID); err != nil {
+			return "", err
+		}
+	}
+	return r.ID, nil
 }
 func nullable(s string) any {
 	if s == "" {
@@ -162,7 +173,7 @@ func CreateJob(ctx context.Context, tx *sql.Tx, j Job) (Job, error) {
 	if j.Reason == "" {
 		j.Reason = "admitted"
 	}
-	if !apitypes.ManagementID(j.ID) || !apitypes.ManagementID(j.Owner) || !apitypes.ManagementID(j.Correlation) || !code(j.Operation) || !code(j.Capability) || !validRef(j.Resource) || !optionalID(j.ChangeSet) || !optionalID(j.Transaction) || !optionalID(j.Credential) || !optionalRequest(j.RequestID) || !optionalID(j.RequestEpoch) || (j.State != "queued" && j.State != "running" && !Terminal(j.State) && j.State != "needs-attention") || (j.Handler != "none" && j.Handler != "tls-activation" && j.Handler != "provider" && j.Handler != "field-execution") {
+	if !apitypes.ManagementID(j.ID) || !apitypes.ManagementID(j.Owner) || !apitypes.ManagementID(j.Correlation) || !code(j.Operation) || !code(j.Capability) || !validRef(j.Resource) || !validRelated(j.RelatedObjects) || !optionalID(j.ChangeSet) || !optionalID(j.Transaction) || !optionalID(j.Credential) || !optionalRequest(j.RequestID) || !optionalID(j.RequestEpoch) || (j.State != "queued" && j.State != "running" && !Terminal(j.State) && j.State != "needs-attention") || (j.Handler != "none" && j.Handler != "tls-activation" && j.Handler != "provider" && j.Handler != "field-execution") {
 		return Job{}, apitypes.Fail(422, "INVALID_JOB")
 	}
 	var total, queued, running int
@@ -189,7 +200,7 @@ func CreateJob(ctx context.Context, tx *sql.Tx, j Job) (Job, error) {
 	if err := saveJob(ctx, tx, &j, true); err != nil {
 		return Job{}, err
 	}
-	_, err := Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-created", Critical: ControlOperation(j.Operation), Object: j.Resource, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: j.Created})
+	_, err := Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-created", Critical: ControlOperation(j.Operation), Object: j.Resource, RelatedObjects: j.RelatedObjects, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: j.Created})
 	return j, err
 }
 func saveJob(ctx context.Context, tx *sql.Tx, j *Job, insert bool) error {
@@ -311,7 +322,7 @@ func ChangeJob(ctx context.Context, tx *sql.Tx, id, expected string, t Transitio
 			return Job{}, err
 		}
 	}
-	_, err = Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-state-changed", Critical: true, Object: j.Resource, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: now})
+	_, err = Append(ctx, tx, Record{Collection: "event", Origin: "Manager", Capability: j.Capability, Operation: "job-state-changed", Critical: true, Object: j.Resource, RelatedObjects: j.RelatedObjects, Job: j.ID, Transaction: j.Transaction, ChangeSet: j.ChangeSet, Correlation: j.Correlation, RequestID: j.RequestID, RequestDomain: j.RequestDomain, RequestEpoch: j.RequestEpoch, Result: j.State, Reason: j.Reason, Created: now})
 	return j, err
 }
 func completeReceipts(ctx context.Context, tx *sql.Tx, j Job, now time.Time) error {
