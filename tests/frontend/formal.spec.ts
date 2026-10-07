@@ -1745,6 +1745,160 @@ test('closing the browser leaves the actual 120-second server deadline and rollb
   await screen(reopened, 'server-deadline-rollback');
 });
 
+async function traceInterfaceEvidence(
+  page: Page,
+  identity: string,
+  transaction: string,
+  result: string,
+  review = false,
+) {
+  const audit = await get(page.context(), `/audit?object_id=${identity}`);
+  const record = audit.items.find(
+    (r: Record<string, unknown>) =>
+      r.transaction_id === transaction &&
+      r.operation === 'safe-apply-state' &&
+      r.result === result,
+  );
+  expect(record).toBeTruthy();
+  expect(record.object_ref).toEqual({ kind: 'transaction', id: transaction });
+  expect(record.related_object_refs).toContainEqual({
+    kind: 'interface',
+    id: identity,
+  });
+  const events = await get(page.context(), `/events?object_id=${identity}`);
+  expect(
+    events.items.some(
+      (r: Record<string, unknown>) =>
+        r.transaction_id === transaction && r.operation === 'job-created',
+    ),
+  ).toBe(true);
+  await page.goto(fixture.origin + `/interfaces/${identity}`);
+  await expect(
+    page.getByRole('heading', { name: 'pi-ui-mtu', exact: true }),
+  ).toBeVisible();
+  const entry = page.getByRole('region', { name: 'Interface shared evidence' });
+  for (const mode of ['Standard', 'Expert'] as const) {
+    await nativeTypeDepth(page, mode);
+    await expect(
+      entry.getByRole('link', { name: 'Open Interface Audit', exact: true }),
+    ).toHaveAttribute('href', `/operations/audit?object_id=${identity}`);
+    if (review)
+      await screen(page, `interface-evidence-entry-${mode.toLowerCase()}`);
+  }
+  await nativeTypeDepth(page, 'Standard');
+  await entry
+    .getByRole('link', { name: 'Open Interface Audit', exact: true })
+    .focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Audit', exact: true }),
+  ).toBeVisible();
+  const scope = page.getByRole('region', { name: 'Evidence object scope' });
+  await expect(scope).toContainText(identity);
+  await expect(page.getByRole('row').nth(1).getByRole('link')).toBeVisible();
+  if (review) {
+    await screen(page, 'interface-evidence-audit-standard');
+    await nativeTypeDepth(page, 'Expert');
+    await expect(
+      page.getByRole('columnheader', { name: 'Correlation', exact: true }),
+    ).toBeVisible();
+    await screen(page, 'interface-evidence-audit-expert');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'interface-evidence-audit-dark');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await nativeTypeDepth(page, 'Standard');
+    for (const [width, height, device] of [
+      [900, 1000, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(scope).toContainText(identity);
+      await expect(
+        page.getByRole('button', { name: 'Start Safe Apply', exact: true }),
+      ).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, `interface-evidence-audit-${device}`);
+    }
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page
+      .getByLabel('Records per page', { exact: true })
+      .selectOption('2');
+    await expect(page.getByRole('row')).toHaveCount(3);
+    const first = await page
+      .getByRole('row')
+      .nth(1)
+      .getByRole('link')
+      .getAttribute('href');
+    await page.getByRole('button', { name: 'Next page', exact: true }).click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('cursor'))
+      .toBeTruthy();
+    await expect(
+      page.getByRole('row').nth(1).getByRole('link'),
+    ).not.toHaveAttribute('href', first!);
+    await page.reload();
+    await expect(scope).toContainText(identity);
+    await expect(page.getByRole('row')).toHaveCount(3);
+    await page.goBack();
+    await expect(
+      page.getByRole('row').nth(1).getByRole('link'),
+    ).toHaveAttribute('href', first!);
+    await page.goto(
+      fixture.origin +
+        `/operations/audit?object_id=${identity}&limit=2&cursor=expired`,
+    );
+    await expect(
+      page.getByText('CURSOR_EXPIRED.', { exact: false }),
+    ).toBeVisible();
+    await expect(scope).toContainText(identity);
+    await screen(page, 'interface-evidence-expired');
+    await page
+      .getByRole('button', { name: 'Refresh retained records', exact: true })
+      .click();
+    await expect(page.getByRole('row')).toHaveCount(3);
+    expect(new URL(page.url()).searchParams.get('object_id')).toBe(identity);
+  }
+  await page.goto(
+    fixture.origin + `/operations/audit/${record.id}?object_id=${identity}`,
+  );
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Audit record', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: `Open interface · ${identity.slice(0, 8)}`,
+      exact: true,
+    }),
+  ).toHaveAttribute('href', `/interfaces/${identity}`);
+  await expect(
+    page.getByRole('link', {
+      name: `Open transaction · ${transaction.slice(0, 8)}`,
+      exact: true,
+    }),
+  ).toHaveAttribute('href', `/changes/transactions/${transaction}`);
+  if (review) await screen(page, 'interface-evidence-record');
+  await page.getByRole('link', { name: /^Open job · / }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Jobs', exact: true }),
+  ).toBeVisible();
+  await page.goto(fixture.origin + `/operations/events?object_id=${identity}`);
+  await expect(
+    page.getByRole('heading', { name: 'Events', exact: true }),
+  ).toBeVisible();
+  await expect(scope).toContainText(identity);
+  await expect(page.getByRole('row').nth(1).getByRole('link')).toBeVisible();
+  if (review) await screen(page, 'interface-evidence-events');
+}
+
 test('explicit internal Interface MTU follows responsive Candidate review, actual device proof and exact rollback', async ({
   page,
 }) => {
@@ -1849,6 +2003,13 @@ test('explicit internal Interface MTU follows responsive Candidate review, actua
       vsctl('get', 'Interface', 'pi-ui-mtu', 'external_ids:unrelated'),
     ).toBe('preserve');
     await screen(page, 'interface-mtu-rolled-back');
+    const rolledBack = page.url().split('/').pop()!;
+    await traceInterfaceEvidence(
+      page,
+      before.management_id,
+      rolledBack,
+      'rolled-back',
+    );
     await mtuEditor(page);
     await stageMTU(page, '2200');
     await validate(page);
@@ -1860,6 +2021,13 @@ test('explicit internal Interface MTU follows responsive Candidate review, actua
     await chooseDecision(page, 'Confirm configuration', 'confirmed');
     expect(vsctl('get', 'Interface', 'pi-ui-mtu', 'mtu')).toBe('2200');
     await screen(page, 'interface-mtu-confirmed');
+    await traceInterfaceEvidence(
+      page,
+      before.management_id,
+      page.url().split('/').pop()!,
+      'confirmed',
+      true,
+    );
   } finally {
     vsctl('set', 'Interface', 'pi-ui-mtu', 'mtu_request=1500');
   }
@@ -3029,5 +3197,142 @@ test('patch configuration stays withheld across modes and removes navigation whe
   } finally {
     await readerContext.close();
     clearPatchPair('sec');
+  }
+});
+
+test('Interface evidence keeps withheld permissions, empty history and retired identities explicit', async ({
+  page,
+  browser,
+}) => {
+  await login(page, 'browser-evidence-reader');
+  const other = await browser.newContext({ ignoreHTTPSErrors: true });
+  const observer = await other.newPage();
+  createPatchPair('ev');
+  try {
+    await login(observer, 'browser-evidence-observer');
+    await expect
+      .poll(async () => await observedPatchReason(page.context(), 'patch-eva'))
+      .toBe('PATCH_RECIPROCAL_CONFIGURATION');
+    const item = await patchItem(page.context(), 'patch-eva');
+    await observer.goto(fixture.origin + `/interfaces/${item.management_id}`);
+    const hidden = observer.getByRole('region', {
+      name: 'Interface shared evidence',
+    });
+    for (const mode of ['Standard', 'Expert'] as const) {
+      await nativeTypeDepth(observer, mode);
+      await expect(hidden).toContainText(
+        'Events unavailable with current authorization.',
+      );
+      await expect(hidden).toContainText(
+        'Audit unavailable with current authorization.',
+      );
+      await expect(hidden.getByRole('link')).toHaveCount(0);
+      await screen(
+        observer,
+        `interface-evidence-withheld-${mode.toLowerCase()}`,
+      );
+    }
+    const denied = await other.request.get(
+      fixture.origin + `/api/v1/audit?object_id=${item.management_id}`,
+    );
+    expect(denied.status()).toBe(403);
+    await observer.goto(
+      fixture.origin + `/operations/audit?object_id=${item.management_id}`,
+    );
+    await expect(
+      observer.getByText('Permission denied', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      observer.getByText('No authorized retained records in this scope.', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page.goto(
+      fixture.origin + `/operations/audit?object_id=${item.management_id}`,
+    );
+    await expect(
+      page.getByText('No authorized retained records in this scope.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        'An empty result does not prove that no change occurred.',
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await screen(page, 'interface-evidence-empty');
+    const oldID = item.management_id;
+    vsctl(
+      'del-port',
+      'br-patch-eva',
+      'patch-eva',
+      '--',
+      'add-port',
+      'br-patch-eva',
+      'patch-eva',
+      '--',
+      'set',
+      'Interface',
+      'patch-eva',
+      'type=patch',
+      'options:peer=patch-evb',
+    );
+    await expect
+      .poll(async () => {
+        const values: InterfacePage = await get(
+          page.context(),
+          '/interfaces?filter=patch-eva',
+        );
+        return (
+          values.items.find((i) => i.name === 'patch-eva')?.management_id ??
+          oldID
+        );
+      })
+      .not.toBe(oldID);
+    await page.goto(fixture.origin + `/interfaces/${oldID}`);
+    await expect(
+      page.getByText('This Interface identity is no longer available.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    const entry = page.getByRole('region', {
+      name: 'Interface shared evidence',
+    });
+    await expect(
+      entry.getByRole('link', { name: 'Open Interface Audit', exact: true }),
+    ).toHaveAttribute('href', `/operations/audit?object_id=${oldID}`);
+    await screen(page, 'interface-evidence-retired');
+    await entry
+      .getByRole('link', { name: 'Open Interface Audit', exact: true })
+      .click();
+    await page.reload();
+    expect(new URL(page.url()).searchParams.get('object_id')).toBe(oldID);
+    await expect(
+      page.getByRole('region', { name: 'Evidence object scope' }),
+    ).toContainText(oldID);
+    unit('stop', 'mgrd');
+    try {
+      await expect(
+        page
+          .getByRole('alert')
+          .filter({ hasText: 'Current authorization or connection' }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('region', { name: 'Shared evidence records' }),
+      ).toHaveCount(0);
+      await screen(page, 'interface-evidence-unavailable');
+    } finally {
+      unit('start', 'mgrd');
+    }
+    await expect(
+      page.getByText('No authorized retained records in this scope.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('object_id')).toBe(oldID);
+  } finally {
+    await other.close();
+    clearPatchPair('ev');
   }
 });

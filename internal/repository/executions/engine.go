@@ -289,7 +289,7 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 			}
 		}
 		ref := &apitypes.Ref{Kind: "transaction", ID: id}
-		if _, err = evidence.CreateJob(ctx, tx, evidence.Job{ID: r.JobID, State: "running", Resource: ref, Transaction: id, ChangeSet: c.ChangeSet, Handler: "field-execution", Dispatch: "prepared", Applied: "unknown", Reason: "execution-admitted", Created: now}); err != nil {
+		if _, err = evidence.CreateJob(ctx, tx, evidence.Job{ID: r.JobID, State: "running", Resource: ref, RelatedObjects: mtuEvidenceObjects(r), Transaction: id, ChangeSet: c.ChangeSet, Handler: "field-execution", Dispatch: "prepared", Applied: "unknown", Reason: "execution-admitted", Created: now}); err != nil {
 			return requests.Mutation{}, err
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO field_executions VALUES(?,?,?,?,?,?,?)", id, r.JobID, c.Owner, in.ValidationID, r.State, now.UnixMilli(), b); err != nil {
@@ -300,7 +300,7 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 				return requests.Mutation{}, err
 			}
 		}
-		if _, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "execute-fields", Result: "admitted", Object: ref, Job: r.JobID, Transaction: id, ChangeSet: c.ChangeSet, Created: now}); err != nil {
+		if _, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "execute-fields", Result: "admitted", Object: ref, RelatedObjects: mtuEvidenceObjects(r), Job: r.JobID, Transaction: id, ChangeSet: c.ChangeSet, Created: now}); err != nil {
 			return requests.Mutation{}, err
 		}
 		return requests.Mutation{Status: 202, Body: json.RawMessage(`{}`), Resource: ref, Job: &apitypes.Ref{Kind: "job", ID: r.JobID}}, nil
@@ -477,7 +477,7 @@ func (e *Engine) transition(ctx context.Context, tx *sql.Tx, r execution.Record,
 			return r, err
 		}
 	}
-	_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "field-execution-state", Result: state, Reason: o.Reason, Object: &apitypes.Ref{Kind: "transaction", ID: r.ID}, Job: r.JobID, Transaction: r.ID, ChangeSet: r.Authorization.ChangeSet, Critical: true, Created: r.Updated})
+	_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "field-execution-state", Result: state, Reason: o.Reason, Object: &apitypes.Ref{Kind: "transaction", ID: r.ID}, RelatedObjects: mtuEvidenceObjects(r), Job: r.JobID, Transaction: r.ID, ChangeSet: r.Authorization.ChangeSet, Critical: true, Created: r.Updated})
 	return r, err
 }
 

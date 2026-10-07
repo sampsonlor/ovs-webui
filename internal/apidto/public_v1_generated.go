@@ -442,15 +442,16 @@ func (v RequestReceipt) MarshalJSON() ([]byte, error) {
 }
 
 type Job struct {
-	Id            Id                         `json:"id"`
-	Sequence      Sequence                   `json:"sequence"`
-	State         string                     `json:"state"`
-	Operation     string                     `json:"operation"`
-	OwnerId       Id                         `json:"owner_id"`
-	ResourceRef   json.RawMessage            `json:"resource_ref"`
-	Cancellable   bool                       `json:"cancellable"`
-	CorrelationId Id                         `json:"correlation_id"`
-	ExtraFields   map[string]json.RawMessage `json:"-"`
+	Id                Id                         `json:"id"`
+	Sequence          Sequence                   `json:"sequence"`
+	State             string                     `json:"state"`
+	Operation         string                     `json:"operation"`
+	OwnerId           Id                         `json:"owner_id"`
+	ResourceRef       json.RawMessage            `json:"resource_ref"`
+	Cancellable       bool                       `json:"cancellable"`
+	CorrelationId     Id                         `json:"correlation_id"`
+	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
+	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
 
 func (v *Job) UnmarshalJSON(data []byte) error {
@@ -544,13 +545,14 @@ func (v Problem) MarshalJSON() ([]byte, error) {
 }
 
 type Resource struct {
-	Id             Id                         `json:"id"`
-	State          string                     `json:"state"`
-	Sequence       Sequence                   `json:"sequence"`
-	ResourceKind   string                     `json:"resource_kind"`
-	Source         Source                     `json:"source"`
-	AllowedActions []string                   `json:"allowed_actions"`
-	ExtraFields    map[string]json.RawMessage `json:"-"`
+	Id                Id                         `json:"id"`
+	State             string                     `json:"state"`
+	Sequence          Sequence                   `json:"sequence"`
+	ResourceKind      string                     `json:"resource_kind"`
+	Source            Source                     `json:"source"`
+	AllowedActions    []string                   `json:"allowed_actions"`
+	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
+	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
 
 func (v *Resource) UnmarshalJSON(data []byte) error {

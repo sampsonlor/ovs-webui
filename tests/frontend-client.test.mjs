@@ -273,12 +273,28 @@ await test('semantic gates preserve advanced VLANs and keep mode depth separate 
     vlan: { native, availability: 'known', source: { freshness: 'fresh' } },
   };
   assert.equal(editReason(p, session, true), '');
-  const qinq = { ...p, qinq_editable: true, vlan: { ...p.vlan, native: { vlan_mode: 'dot1q-tunnel', tag: 200, trunks: [], cvlans: [30] } } };
+  const qinq = {
+    ...p,
+    qinq_editable: true,
+    vlan: {
+      ...p.vlan,
+      native: { vlan_mode: 'dot1q-tunnel', tag: 200, trunks: [], cvlans: [30] },
+    },
+  };
   assert.equal(editReason(qinq, session, true), '');
   assert.ok(editReason({ ...qinq, qinq_editable: false }, session, true));
   assert.ok(editReason(qinq, session, false));
   assert.ok(editReason(qinq, { ...session, effective_capabilities: [] }, true));
-  assert.ok(editReason({ ...qinq, vlan: { ...qinq.vlan, native: { ...qinq.vlan.native, cvlans: [4095] } } }, session, true));
+  assert.ok(
+    editReason(
+      {
+        ...qinq,
+        vlan: { ...qinq.vlan, native: { ...qinq.vlan.native, cvlans: [4095] } },
+      },
+      session,
+      true,
+    ),
+  );
   assert.ok(editReason(p, session, false));
   assert.ok(
     editReason(
@@ -402,4 +418,111 @@ await test('semantic gates preserve advanced VLANs and keep mode depth separate 
   assert.deepEqual(vlanNumbers('30, 10'), [10, 30]);
   for (const value of ['0', '4095', '1,1', '2e3', '10-20', '1,'])
     assert.throws(() => vlanNumbers(value));
+});
+
+await test('shared evidence reload preserves scope, cursor and capability across list and detail', async () => {
+  for (const collection of ['events', 'audit']) {
+    const calls = [];
+    const scoped = {
+      ...session,
+      effective_capabilities: [
+        ...session.effective_capabilities,
+        `${collection}.read`,
+      ],
+    };
+    const transport = async (url) => {
+      calls.push(url);
+      if (url.endsWith('/session')) return response(scoped);
+      if (url.endsWith('/workspace')) return response({ candidate: null });
+      return response({ items: [], snapshot_id: resource });
+    };
+    const query = `?object_id=${resource}&limit=2&cursor=sealed%2Btoken`;
+    const c = new Controller(
+      new API(transport, storage()),
+      `/operations/${collection}${query}`,
+    );
+    await c.refresh();
+    assert.equal(c.state.path, `/operations/${collection}`);
+    assert.equal(c.state.query, query);
+    assert.ok(calls.includes(`/api/v1/${collection}${query}`));
+    const detail = new Controller(
+      new API(transport, storage()),
+      `/operations/${collection}/${epoch}${query}`,
+    );
+    await detail.refresh();
+    assert.ok(calls.includes(`/api/v1/${collection}/${epoch}`));
+    assert.ok(!calls.includes(`/api/v1/${collection}/${epoch}${query}`));
+    const denied = new Controller(
+      new API(async (url) => {
+        assert.ok(!url.includes(`/api/v1/${collection}`));
+        return response(
+          url.endsWith('/session') ? session : { candidate: null },
+        );
+      }, storage()),
+      `/operations/${collection}${query}`,
+    );
+    await denied.refresh();
+    assert.equal(denied.state.resource.status, 'denied');
+    assert.equal(denied.state.query, query);
+  }
+});
+
+await test('delayed evidence cannot cross object scopes and expired cursors never remove the filter', async () => {
+  let release, requested;
+  const waiting = new Promise((r) => {
+    requested = r;
+  });
+  const delayed = new Promise((r) => {
+    release = r;
+  });
+  const scoped = {
+    ...session,
+    effective_capabilities: [...session.effective_capabilities, 'audit.read'],
+  };
+  const c = new Controller(
+    new API(async (url) => {
+      if (url.endsWith('/session')) return response(scoped);
+      if (url.endsWith('/workspace')) return response({ candidate: null });
+      if (url.includes(`object_id=${resource}`)) {
+        requested();
+        return delayed;
+      }
+      return response({ code: 'CURSOR_EXPIRED' }, 410);
+    }, storage()),
+    `/operations/audit?object_id=${resource}`,
+  );
+  const read = c.refresh();
+  await waiting;
+  c.go(`/operations/audit?object_id=${epoch}&cursor=expired`);
+  release(response({ items: [{ id: resource, private: 'old scope' }] }));
+  await read;
+  for (let i = 0; i < 20 && c.state.resource.status === 'loading'; i++)
+    await new Promise((r) => setImmediate(r));
+  assert.equal(c.state.query, `?object_id=${epoch}&cursor=expired`);
+  assert.equal(c.state.resource.value, null);
+  assert.equal(c.state.resource.error, 'CURSOR_EXPIRED');
+});
+
+await test('authorization refresh clears protected evidence while retaining the original object route', async () => {
+  let current = {
+    ...session,
+    effective_capabilities: [...session.effective_capabilities, 'audit.read'],
+  };
+  const c = new Controller(
+    new API(async (url) => {
+      if (url.endsWith('/session')) return response(current);
+      if (url.endsWith('/workspace')) return response({ candidate: null });
+      return response({ items: [{ id: resource }] });
+    }, storage()),
+    `/operations/audit?object_id=${resource}&limit=2`,
+  );
+  await c.refresh();
+  assert.equal(c.state.resource.value.items.length, 1);
+  current = session;
+  await c.refresh();
+  for (let i = 0; i < 20 && c.state.resource.status === 'loading'; i++)
+    await new Promise((r) => setImmediate(r));
+  assert.equal(c.state.resource.value, null);
+  assert.equal(c.state.resource.status, 'denied');
+  assert.equal(c.state.query, `?object_id=${resource}&limit=2`);
 });

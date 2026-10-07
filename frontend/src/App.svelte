@@ -10,6 +10,7 @@
   import Changes from './Changes.svelte';
   import Interfaces from './Interfaces.svelte';
   import InterfaceDetail from './InterfaceDetail.svelte';
+  import Evidence from './Evidence.svelte';
   import MTUEditor from './MTUEditor.svelte';
 
   const controller = start();
@@ -81,7 +82,7 @@
 
 <svelte:window
   bind:innerWidth={width}
-  onpopstate={() => controller.go(location.pathname)}
+  onpopstate={() => controller.go(location.pathname + location.search)}
   ononline={() => controller.refresh()}
   onstorage={(event) => {
     if (event.key?.startsWith('ovs.pending.v1.')) void controller.refresh();
@@ -447,6 +448,8 @@
           {:else}<InterfaceDetail model={$model} {expert} {desktop} />{/if}
         {:else if path.startsWith('/changes/') && path !== '/changes/transactions'}
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
+        {:else if path.startsWith('/operations/events') || path.startsWith('/operations/audit')}
+          <Evidence model={$model} {expert} />
         {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path.startsWith('/bridges/')}
           <header class="page-heading">
             <div>

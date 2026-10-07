@@ -5,16 +5,20 @@ package fieldexecution
 import (
 	"context"
 	"database/sql"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 )
 
 func nativeMTUFixture(t *testing.T) (*fixture, string, candidate.Binding) {
@@ -39,6 +43,47 @@ func nativeMTUFixture(t *testing.T) (*fixture, string, candidate.Binding) {
 func mtuIntent(b candidate.Binding, n int) map[string]any {
 	return map[string]any{"intent_id": repository.NewID(), "operation": candidate.InterfaceMTUSet, "object": b, "mtu_request": n}
 }
+
+// The shared public read model must associate the actual admitted Interface,
+// while preserving transaction/job identity and each independent outcome.
+func (f *fixture) assertMTUEvidence(target, transaction, state string) {
+	f.t.Helper()
+	must(f.t, f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+		for _, op := range []string{"listEvents", "listAudit"} {
+			value, err := evidence.Read(ctx, q, f.login.Claims, op, nil, url.Values{"object_id": {target}}, make([]byte, 32), time.Now())
+			if err != nil {
+				return err
+			}
+			records := value.(map[string]any)["items"].([]map[string]any)
+			created, terminal, decision := false, false, false
+			for _, r := range records {
+				if r["transaction_id"] != transaction {
+					continue
+				}
+				refs := r["object_refs"].([]apitypes.Ref)
+				exact := false
+				for _, ref := range refs {
+					exact = exact || ref.Kind == "interface" && ref.ID == target
+				}
+				if !exact {
+					f.t.Fatal("scoped record lacks exact immutable target")
+				}
+				if op == "listEvents" {
+					created = created || r["operation"] == "job-created"
+					terminal = terminal || r["result"] == "succeeded" || r["result"] == "failed"
+				} else {
+					created = created || r["operation"] == "execute-fields"
+					terminal = terminal || r["operation"] == "safe-apply-state" && r["result"] == state
+					decision = decision || r["operation"] == "safe-apply-decision"
+				}
+			}
+			if !created || !terminal || op == "listAudit" && !decision {
+				f.t.Fatal("incomplete object-associated MTU lifecycle", op, state)
+			}
+		}
+		return nil
+	}))
+}
 func TestNativeInterfaceMTU(t *testing.T) {
 	if os.Getenv("OVS_EXECUTION_NATIVE_TEST") != "1" {
 		t.Skip("explicit isolated Interface MTU matrix")
@@ -58,6 +103,7 @@ func TestNativeInterfaceMTU(t *testing.T) {
 		}
 		f.decide(id, "confirm")
 		f.waitSafety(id, "confirmed")
+		f.assertMTUEvidence(b.ManagementID, id, "confirmed")
 		must(t, f.engine.Recover(f.ctx))
 		if f.proxy.sent.Load() != 1 {
 			t.Fatal("write replayed")
@@ -88,6 +134,7 @@ func TestNativeInterfaceMTU(t *testing.T) {
 		}()
 		f.decide(id, "rollback")
 		f.waitSafety(id, "rolled-back")
+		f.assertMTUEvidence(b.ManagementID, id, "rolled-back")
 		if f.vs("get", "Interface", name, "mtu_request") != "1500" || f.vs("get", "Interface", name, "mtu") != "1500" || f.vs("get", "Interface", name, "_uuid") != b.OVSUUID || !strings.Contains(f.vs("get", "Interface", name, "external_ids"), "added=preserve") || f.vs("get", "Interface", name, "other_config") != "{opaque=preserve}" {
 			t.Fatal("exact compensation failed")
 		}

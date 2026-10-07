@@ -57,6 +57,7 @@ func recordView(r Record) map[string]any {
 	if r.Object != nil {
 		refs = append(refs, *r.Object)
 	}
+	refs = append(refs, r.RelatedObjects...)
 	if r.Job != "" {
 		refs = append(refs, apitypes.Ref{Kind: "job", ID: r.Job})
 	}
@@ -187,7 +188,7 @@ func Read(ctx context.Context, q Query, c authn.Claims, op string, path map[stri
 				return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
 			}
 		}
-		rows, err = q.QueryContext(ctx, "SELECT document,CAST(sequence AS TEXT) FROM evidence_records WHERE collection=? AND sequence>? AND sequence<=? AND instr(lower(operation),lower(?))>0 AND (?='' OR correlation_id=?) AND (?='' OR object_id=?) AND (?='' OR job_id=?) AND (?='' OR source=?) ORDER BY sequence LIMIT ?", collection, after, cur.Upper, cur.Filter, cur.Correlation, cur.Correlation, cur.Object, cur.Object, cur.Job, cur.Job, cur.Origin, cur.Origin, limit+1)
+		rows, err = q.QueryContext(ctx, "SELECT document,CAST(sequence AS TEXT) FROM evidence_records WHERE collection=? AND sequence>? AND sequence<=? AND instr(lower(operation),lower(?))>0 AND (?='' OR correlation_id=?) AND (?='' OR id IN (SELECT record_id FROM evidence_record_objects WHERE object_id=?)) AND (?='' OR job_id=?) AND (?='' OR source=?) ORDER BY sequence LIMIT ?", collection, after, cur.Upper, cur.Filter, cur.Correlation, cur.Correlation, cur.Object, cur.Object, cur.Job, cur.Job, cur.Origin, cur.Origin, limit+1)
 	}
 	if err != nil {
 		return nil, err

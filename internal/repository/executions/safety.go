@@ -184,7 +184,7 @@ func (e *Engine) updateSafety(ctx context.Context, tx *sql.Tx, r execution.Recor
 			return err
 		}
 	}
-	_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-state", Result: s.State, Reason: s.Reason, Object: &apitypes.Ref{Kind: "transaction", ID: r.ID}, Transaction: r.ID, Job: r.JobID, ChangeSet: r.Authorization.ChangeSet, Actor: r.Owner, Credential: r.Authorization.Credential, Capability: "configuration.apply", Correlation: r.Correlation, RequestID: r.RequestID, RequestDomain: "management", RequestEpoch: r.Authorization.Epoch, Critical: true, Created: r.Updated})
+	_, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-state", Result: s.State, Reason: s.Reason, Object: &apitypes.Ref{Kind: "transaction", ID: r.ID}, RelatedObjects: mtuEvidenceObjects(r), Transaction: r.ID, Job: r.JobID, ChangeSet: r.Authorization.ChangeSet, Actor: r.Owner, Credential: r.Authorization.Credential, Capability: "configuration.apply", Correlation: r.Correlation, RequestID: r.RequestID, RequestDomain: "management", RequestEpoch: r.Authorization.Epoch, Critical: true, Created: r.Updated})
 	return err
 }
 func (e *Engine) saveSafety(ctx context.Context, r execution.Record, s safety.Record) error {
@@ -519,7 +519,7 @@ func (e *Engine) Decide(ctx context.Context, id, sequence, decision string, chec
 			return requests.Mutation{}, err
 		}
 		ref := &apitypes.Ref{Kind: "transaction", ID: id}
-		if _, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-decision", Result: decision, Object: ref, Transaction: id, Job: r.JobID, Critical: true}); err != nil {
+		if _, err = evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "safe-apply-decision", Result: decision, Object: ref, RelatedObjects: mtuEvidenceObjects(r), Transaction: id, Job: r.JobID, Critical: true}); err != nil {
 			return requests.Mutation{}, err
 		}
 		return requests.Mutation{Status: 202, Body: json.RawMessage(`{}`), Resource: ref, Job: &apitypes.Ref{Kind: "job", ID: r.JobID}, Terminal: decision == "confirm"}, nil
