@@ -230,6 +230,7 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         try:
             if exercise is not None:
                 vsctl('--if-exists', 'del-br', 'br-ui-parent')
+                vsctl('--if-exists', 'del-br', 'br-ui-police')
             vsctl('--if-exists', 'del-br', bridge)
         finally:
             (Path('/etc/systemd/system') / units['mgrd']).write_text(original_unit)

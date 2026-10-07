@@ -202,7 +202,17 @@ func TestNativeInterfacePolicing(t *testing.T) {
 		must(t, syscall.Kill(f.pid("switch"), syscall.SIGSTOP))
 		t.Cleanup(func() { _ = syscall.Kill(f.pid("switch"), syscall.SIGCONT) })
 		id := f.safeApply(in)
-		r := f.observe(id, func(r execution.Record) bool { return r.Outcome.Commit == "committed" })
+		r := f.observe(id, func(r execution.Record) bool {
+			return r.Outcome.Commit == "committed" && r.Outcome.Reason == "awaiting-ovs-vswitchd"
+		})
+		t.Cleanup(func() {
+			if t.Failed() {
+				s := f.safeState(id)
+				t.Logf("paused policing recovery: state=%s reason=%s outcome=%+v writes=%d", s.State, s.Reason, s.Outcome, f.proxy.sent.Load())
+			}
+		})
+		_, err := f.executor.PrepareRollback(f.ctx, r.Plan, candidate.Digest("synthetic-read-only-compensation-check"))
+		must(t, err)
 		must(t, f.engine.SafetyTick(f.ctx))
 		s := f.safeState(id)
 		if r.Outcome.Applied == "applied" || s.Confirmation != nil || s.State == "awaiting-confirmation" {

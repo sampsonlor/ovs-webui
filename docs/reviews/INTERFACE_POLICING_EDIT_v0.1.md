@@ -13,6 +13,8 @@
 
 保留原始 CI 失败及原因；修复后需新提交的完整 PR CI 和合并 main 的独立完整 CI。不得通过跳过场景、提高重试、放宽权限/不确定结果门禁获得通过。
 
+初轮 [CI 37616861046](https://github.com/sampsonlor/ovs-webui/actions/runs/37616861046) 的共享构建/单元、集成和 31 项原型浏览器通过；双架构 native 首版在外部 ingress 补偿状态分类与暂停 daemon 恢复两项失败。其余 12 项 native 正常/例外均通过。保留原始报告；修复将已确认的内核冲突映射为 rollback-conflict，并增加暂停恢复的原生 after-image 等待及只读补偿预检诊断。
+
 新增截图前缀 `interface-policing-edit-`：bounds、standard、expert、tablet-review、mobile-review、awaiting、rolled-back、confirmed、drift、tablet-blocked、mobile-blocked、reader。最终交付检查双架构共 24 张；PR 逐张视觉审阅，main 复核代表模式、窄屏及例外。
 
 原始 burst=0 的策略范围之外继续 Observe；内核安装读证明不能替代实际流量效果验收。#21/#42 和 #71 保持各自完整范围开放。

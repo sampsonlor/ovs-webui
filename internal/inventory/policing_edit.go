@@ -127,8 +127,11 @@ func (s *Service) PolicingEvidence(ctx context.Context, expected candidate.Inter
 		return PolicingSample{}, err
 	}
 	age := s.now().Sub(sample.ObservedAt)
-	if ctx.Err() != nil || after.Policings[p.Binding.ManagementID] != p || sample.Availability != "known" || sample.IfIndex != p.IfIndex || age < 0 || age > time.Second || !validPolicingSample(sample) || !sample.WriteCompatible || len(sample.ConfigurationDigest) != 64 {
+	if ctx.Err() != nil || after.Policings[p.Binding.ManagementID] != p || (sample.Availability != "known" && sample.Availability != "partial") || sample.IfIndex != p.IfIndex || age < 0 || age > time.Second || !validPolicingSample(sample) || len(sample.ConfigurationDigest) != 64 {
 		return PolicingSample{}, apitypes.Fail(409, "POLICING_KERNEL_UNPROVEN")
+	}
+	if sample.Availability == "partial" || !sample.WriteCompatible {
+		return PolicingSample{}, apitypes.Fail(409, "POLICING_KERNEL_CONFLICT")
 	}
 	return sample, nil
 }

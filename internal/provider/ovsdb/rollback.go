@@ -99,5 +99,10 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	if err != nil {
 		return compiled, err
 	}
-	return e.preparePolicingKernel(ctx, compiled, view, &n)
+	prepared, err := e.preparePolicingKernel(ctx, compiled, view, &n)
+	var problem *apitypes.Problem
+	if errors.As(err, &problem) && (problem.Code == "POLICING_KERNEL_CONFLICT" || problem.Code == "POLICING_KERNEL_CONFIGURATION_CONFLICT") {
+		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+	}
+	return prepared, err
 }
