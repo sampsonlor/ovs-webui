@@ -10,6 +10,7 @@ import (
 // clients without the precision loss of JavaScript numbers. They are bytes/s
 // and packets/s, not the native OVS configuration units.
 type PolicingAction struct {
+	ParameterDigest  string  `json:"-"`
 	FilterKind       string  `json:"filter_kind"`
 	Priority         uint32  `json:"priority"`
 	Handle           string  `json:"handle"`
@@ -21,12 +22,16 @@ type PolicingAction struct {
 }
 
 type PolicingSample struct {
-	Availability string
-	Reason       string
-	ObservedAt   time.Time
-	IfIndex      int
-	FilterCount  int
-	Actions      []PolicingAction
+	// Private write qualification; excluded from the public diagnostic model.
+	IngressKind         string
+	WriteCompatible     bool
+	ConfigurationDigest string
+	Availability        string
+	Reason              string
+	ObservedAt          time.Time
+	IfIndex             int
+	FilterCount         int
+	Actions             []PolicingAction
 }
 
 type PolicingObserver interface {

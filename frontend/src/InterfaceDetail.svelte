@@ -9,7 +9,7 @@
   import InterfaceConfiguration from './InterfaceConfiguration.svelte';
   import InterfaceNativeType from './InterfaceNativeType.svelte';
   import InterfacePolicing from './InterfacePolicing.svelte';
-  import { has, mtuEditReason } from './policy';
+  import { has, mtuEditReason, policingEditReason } from './policy';
   let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const item = $derived(model.interface.value);
   const identity = $derived(item?.management_id ?? model.path.split('/')[2]);
@@ -21,7 +21,7 @@
 <LoadNotice load={model.interface} />
 {#if model.interface.error === 'NOT_FOUND'}<p class="notice warning">This Interface identity is no longer available. A same-name replacement has its own identity.</p>{/if}
 {#if refPath({kind:'interface', id:identity})}
-  <section class="panel" aria-label="Interface shared evidence"><h2>Events & Audit</h2><p>Review shared records for this exact Interface identity, including associated MTU execution and Safe Apply evidence. Retained records may not cover older changes.</p><div class="actions">{#each [['events', 'Events', 'events.read'], ['audit', 'Audit', 'audit.read']] as [collection, label, capability]}{#if model.sessionReady && has(model.session, capability)}<Link href={`/operations/${collection}?object_id=${encodeURIComponent(identity)}`}>Open Interface {label}</Link>{:else}<span>{label} unavailable with current authorization.</span>{/if}{/each}</div></section>
+  <section class="panel" aria-label="Interface shared evidence"><h2>Events & Audit</h2><p>Review shared records for this exact Interface identity, including associated MTU and policing execution and Safe Apply evidence. Retained records may not cover older changes.</p><div class="actions">{#each [['events', 'Events', 'events.read'], ['audit', 'Audit', 'audit.read']] as [collection, label, capability]}{#if model.sessionReady && has(model.session, capability)}<Link href={`/operations/${collection}?object_id=${encodeURIComponent(identity)}`}>Open Interface {label}</Link>{:else}<span>{label} unavailable with current authorization.</span>{/if}{/each}</div></section>
 {/if}
 {#if item}
   <div class="summary"><Status value={item.source.freshness} /><span>Observed {item.source.observed_at ?? 'Unknown'}</span><Status value={item.source.confidence} /></div>
@@ -33,6 +33,7 @@
   </section>
   <InterfaceConfiguration {item} {expert} />
   <InterfacePolicing {item} {expert} />
+  <section class="panel" aria-label="Policing configuration change"><h2>Policing change</h2><p>Ingress authority: {typeof item.policing_ownership === 'string' ? item.policing_ownership : 'Unknown'}.</p>{#if !policingEditReason(item, model.session, desktop)}<Link href={`/interfaces/${item.management_id}/policing`}>Edit ingress policing →</Link>{:else}<p class="muted">{policingEditReason(item, model.session, desktop)}</p>{/if}</section>
   <InterfaceNativeType {item} {expert} />
   <LinuxDevice {item} {expert} />
   <div class="columns"><section class="panel"><h2>OVS reported device status</h2><dl>{#each deviceFields as [key, label]}<dt>{label}</dt><dd>{deviceObservation(item, key)}</dd>{/each}<dt>Reported PCI bus</dt><dd>{pciAssociation(item)}</dd></dl><p class="muted">Source: OVS Interface status. Reported bus and driver hints are independent of the host association above.</p></section>

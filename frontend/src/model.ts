@@ -525,6 +525,44 @@ export class Controller {
       (v) => `/changes/candidates/${(v as Candidate).id}`,
     );
   }
+  stagePolicing(
+    item: Interface,
+    policing: { mode: 'disabled' | 'bandwidth' | 'packets'; rate: number },
+  ) {
+    const c = this.state.workspace.value?.candidate;
+    if (!c) return;
+    const existing = c.intents.find(
+      (i) =>
+        i.operation === 'interface.policing.set' &&
+        i.object.management_id === item.management_id,
+    );
+    return this.mutate(
+      () =>
+        this.api.command<Candidate>(
+          '/candidate',
+          'PATCH',
+          'workspace',
+          {
+            operation: 'stage',
+            intents: [
+              {
+                intent_id: existing?.intent_id ?? crypto.randomUUID(),
+                operation: 'interface.policing.set',
+                object: {
+                  management_id: item.management_id,
+                  ovs_uuid: item.ovs_uuid,
+                  instance_generation: item.instance_generation,
+                  table: 'Interface',
+                },
+                policing,
+              },
+            ],
+          },
+          c.revision,
+        ),
+      (v) => `/changes/candidates/${(v as Candidate).id}`,
+    );
+  }
   candidateCommand(body: object) {
     const c = this.state.workspace.value?.candidate;
     if (!c) return;

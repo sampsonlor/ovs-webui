@@ -394,6 +394,259 @@ async function screen(page: Page, name: string) {
 }
 const pageErrors = new WeakMap<Page, string[]>();
 
+async function policingEditor(page: Page) {
+  const item = (
+    await get(page.context(), '/interfaces?filter=pi-ui-police')
+  ).items.find((i: { name: string }) => i.name === 'pi-ui-police');
+  expect(item?.policing_editable).toBe(true);
+  await page.goto(fixture.origin + `/interfaces/${item.management_id}`);
+  await page
+    .getByRole('link', { name: 'Edit ingress policing →', exact: true })
+    .click();
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Edit ingress policing', exact: true }),
+  ).toBeVisible();
+  return item;
+}
+async function stagePolicing(page: Page, mode: string, rate?: string) {
+  await page.getByLabel('Policing mode', { exact: true }).selectOption(mode);
+  if (rate !== undefined)
+    await page
+      .getByLabel(mode === 'bandwidth' ? 'Rate (kbit/s)' : 'Rate (kpps)', {
+        exact: true,
+      })
+      .fill(rate);
+  await page
+    .getByRole('button', { name: 'Stage in Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+}
+async function waitInstalledPolicing(
+  context: BrowserContext,
+  id: string,
+  rate: string | null,
+  packet: string | null,
+) {
+  await expect
+    .poll(async () => {
+      const item = await get(context, `/interfaces/${id}`);
+      const sample = item.linux_ingress_policing;
+      return {
+        availability: sample.availability,
+        actions: sample.actions.map(
+          (a: {
+            bytes_per_second: string | null;
+            packets_per_second: string | null;
+          }) => [a.bytes_per_second, a.packets_per_second],
+        ),
+      };
+    })
+    .toEqual({
+      availability: 'known',
+      actions: rate === null && packet === null ? [] : [[rate, packet]],
+    });
+}
+
+test('controlled ingress policing uses Candidate, native units, kernel proof and exact Safe Apply rollback', async ({
+  page,
+}) => {
+  const account = 'browser-policing-edit';
+  await login(page, account);
+  await clean(page.context());
+  const item = await policingEditor(page);
+  try {
+    await page
+      .getByLabel('Policing mode', { exact: true })
+      .selectOption('packets');
+    await page.getByLabel('Rate (kpps)', { exact: true }).fill('1001');
+    await page
+      .getByRole('button', { name: 'Stage in Candidate', exact: true })
+      .click();
+    await expect(page.getByRole('alert')).toHaveText('Enter 1–1000 kpps.');
+    await screen(page, 'interface-policing-edit-bounds');
+    await stagePolicing(page, 'bandwidth', '1000');
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-police', 'ingress_policing_rate'),
+    ).toBe('0');
+    const diff = page.getByRole('region', { name: 'Configuration Diff' });
+    await expect(diff).toContainText('1000 kbit/s');
+    await expect(diff).toContainText('OVS-selected default preserved');
+    const standard = await diff.innerText();
+    await screen(page, 'interface-policing-edit-standard');
+    await nativeTypeDepth(page, 'Expert');
+    expect(await diff.innerText()).toBe(standard);
+    await screen(page, 'interface-policing-edit-expert');
+    await nativeTypeDepth(page, 'Standard');
+    for (const [width, height, device] of [
+      [900, 1000, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(
+        page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+      ).toBeDisabled();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, `interface-policing-edit-${device}-review`);
+    }
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await validate(page);
+    await prepareApply(page, account);
+    await page
+      .getByRole('button', { name: 'Start Safe Apply', exact: true })
+      .click();
+    await awaiting(page);
+    await waitInstalledPolicing(
+      page.context(),
+      item.management_id,
+      '125000',
+      null,
+    );
+    await screen(page, 'interface-policing-edit-awaiting');
+    await chooseDecision(page, 'Request rollback', 'rolled-back');
+    await waitInstalledPolicing(page.context(), item.management_id, null, null);
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-police', 'ingress_policing_rate'),
+    ).toBe('0');
+    await screen(page, 'interface-policing-edit-rolled-back');
+    await traceInterfaceEvidence(
+      page,
+      item.management_id,
+      page.url().split('/').pop()!,
+      'rolled-back',
+    );
+    await policingEditor(page);
+    await stagePolicing(page, 'packets', '5');
+    await validate(page);
+    await prepareApply(page, account);
+    await page
+      .getByRole('button', { name: 'Start Safe Apply', exact: true })
+      .click();
+    await awaiting(page);
+    await waitInstalledPolicing(
+      page.context(),
+      item.management_id,
+      null,
+      '5000',
+    );
+    await chooseDecision(page, 'Confirm configuration', 'confirmed');
+    await screen(page, 'interface-policing-edit-confirmed');
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-police', 'ingress_policing_rate'),
+    ).toBe('0');
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-police', 'ingress_policing_kpkts_rate'),
+    ).toBe('5');
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-police', 'ingress_policing_burst'),
+    ).toBe('0');
+    expect(
+      vsctl('get', 'Interface', 'pi-ui-police', 'ingress_policing_kpkts_burst'),
+    ).toBe('0');
+    expect(vsctl('get', 'Interface', 'pi-ui-police', '_uuid')).toBe(
+      item.ovs_uuid,
+    );
+  } finally {
+    vsctl(
+      'set',
+      'Interface',
+      'pi-ui-police',
+      'ingress_policing_rate=0',
+      'ingress_policing_kpkts_rate=0',
+    );
+  }
+});
+
+test('policing drift, read-only identities, permissions and responsive direct editor gates remain explicit', async ({
+  page,
+  browser,
+}) => {
+  await login(page, 'browser-policing-drift');
+  await clean(page.context());
+  const item = await policingEditor(page);
+  try {
+    await stagePolicing(page, 'bandwidth', '1000');
+    vsctl('set', 'Interface', 'pi-ui-police', 'ingress_policing_rate=1800');
+    await expect(
+      page.getByRole('region', { name: 'Configuration Diff' }),
+    ).toContainText('1800 kbit/s');
+    await expect(
+      page.getByRole('heading', {
+        name: 'Review and restage this policing request',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', {
+        name: 'Rebase reviewed choices',
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await screen(page, 'interface-policing-edit-drift');
+    await clean(page.context());
+    vsctl('set', 'Interface', 'pi-ui-police', 'ingress_policing_rate=0');
+    await waitInstalledPolicing(page.context(), item.management_id, null, null);
+    await policingEditor(page);
+    for (const [width, height, device] of [
+      [900, 1000, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.reload();
+      await expect(
+        page.getByText('Use a desktop to prepare a configuration change.', {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+      ).toBeDisabled();
+      await screen(page, `interface-policing-edit-${device}-blocked`);
+    }
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const reader = await context.newPage();
+    try {
+      await login(reader, 'browser-policing-reader');
+      await reader.goto(
+        fixture.origin + `/interfaces/${item.management_id}/policing`,
+      );
+      await expect(
+        reader.getByText(
+          'Current permissions do not allow Interface policing changes.',
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        reader.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+      ).toBeDisabled();
+      await nativeTypeDepth(reader, 'Expert');
+      await expect(
+        reader.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+      ).toBeDisabled();
+      await screen(reader, 'interface-policing-edit-reader');
+    } finally {
+      await context.close();
+    }
+  } finally {
+    vsctl(
+      'set',
+      'Interface',
+      'pi-ui-police',
+      'ingress_policing_rate=0',
+      'ingress_policing_kpkts_rate=0',
+    );
+  }
+});
+
 test('native Interfaces support snapshot filters, pagination, depth and responsive observation', async ({
   page,
   context,
@@ -1761,6 +2014,8 @@ async function traceInterfaceEvidence(
   result: string,
   review = false,
 ) {
+  const target = await get(page.context(), `/interfaces/${identity}`);
+  expect(target.management_id).toBe(identity);
   const audit = await get(page.context(), `/audit?object_id=${identity}`);
   const record = audit.items.find(
     (r: Record<string, unknown>) =>
@@ -1783,7 +2038,7 @@ async function traceInterfaceEvidence(
   ).toBe(true);
   await page.goto(fixture.origin + `/interfaces/${identity}`);
   await expect(
-    page.getByRole('heading', { name: 'pi-ui-mtu', exact: true }),
+    page.getByRole('heading', { name: target.name, exact: true }),
   ).toBeVisible();
   const entry = page.getByRole('region', { name: 'Interface shared evidence' });
   for (const mode of ['Standard', 'Expert'] as const) {

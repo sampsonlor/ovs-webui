@@ -20,6 +20,9 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if i.Operation == InterfacePolicingSet {
+			cap = "ovs.interface.policing.write"
+		}
 		if IsMTUOperation(i.Operation) {
 			cap = "ovs.interface.mtu.write"
 		}
@@ -195,6 +198,12 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.Policing != nil {
+		m := *i.Policing
+		m.Before = m.After
+		i.Policing = &m
+		return
+	}
 	if i.MTU != nil {
 		m := *i.MTU
 		m.Before = m.After
@@ -228,6 +237,13 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.Policing != nil {
+		m := *i.Policing
+		m.Before, m.After = m.After, m.Before
+		m.Compensating = true
+		i.Policing = &m
+		return
+	}
 	if i.MTU != nil {
 		m := *i.MTU
 		m.Before, m.After = m.After, m.Before

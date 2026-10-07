@@ -39,6 +39,7 @@ type Column struct {
 	VLANModes                 []string        `json:"-"`
 	BondCompatible            bool            `json:"-"`
 	MTUCompatible             bool            `json:"-"`
+	PolicingCompatible        bool            `json:"-"`
 	InterfaceConfigCompatible bool            `json:"-"`
 	PatchCompatible           bool            `json:"-"`
 }

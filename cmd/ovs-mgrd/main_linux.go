@@ -58,6 +58,7 @@ func run() int {
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
 	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
 	localMTUInterfaces := flag.String("local-mtu-interfaces", "", "Reviewed Interface management IDs with explicit internal MTU authority; independent of Port grants")
+	localPolicingInterfaces := flag.String("local-policing-interfaces", "", "Reviewed internal Interface management IDs with exclusive Linux ingress management; independent of MTU/Port grants")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -245,6 +246,14 @@ func run() int {
 		}
 		if err = inventoryService.SetLocalMTUInterfaces(mtuIDs); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_MTU_AUTHORITY")
+			return 2
+		}
+		var policingIDs []string
+		if *localPolicingInterfaces != "" {
+			policingIDs = strings.Split(*localPolicingInterfaces, ",")
+		}
+		if err = inventoryService.SetLocalPolicingInterfaces(policingIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_POLICING_AUTHORITY")
 			return 2
 		}
 		var bridgeNames []string

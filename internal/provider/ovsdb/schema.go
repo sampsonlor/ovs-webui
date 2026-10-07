@@ -81,6 +81,7 @@ func discover(data []byte) (discovered, error) {
 				c.MTUCompatible = mtuConstraint(col)
 			}
 			if t == "Interface" {
+				c.PolicingCompatible = policingConstraint(name, col)
 				c.InterfaceConfigCompatible = interfaceConfigurationConstraint(name, col)
 				if slices.Contains(inventory.InterfaceConfigurationColumns, name) {
 					c.Monitored = c.Monitored && c.InterfaceConfigCompatible

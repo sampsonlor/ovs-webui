@@ -314,3 +314,5 @@ Architecture §17 另有 webd 被攻破不能自行扩大 Auth Grant 的硬不�
 范围映射完成为待审稿：58 个 Scope ID、53 个 Page ID、17 个 Architecture 能力域、10 项交付物、8 项 Exit 和 16 项 Scope AI 均有责任与 Gate。没有在本轮宣布任何正式模块完成或改变已接受 Observe 边界。#30 保持 In Progress，直到[设计审阅](../reviews/PHASE1_DESIGN_v0.1.md)接受后再关闭。
 
 #21 / #42 的 E7 子批次为 [Interface ingress policing 观察](INTERFACE_POLICING_OBSERVE_v0.1.md)，补充 Linux 实际规则证据；此增量不完成 P1-SW-01 的所有字段/类型/attachment 管理，也不替代 QoS/Queue 或实际流量验收。完整范围继续由原责任任务承担。
+
+#21 / #42 的 E8 子批次为 [Interface ingress policing 受控编辑](INTERFACE_POLICING_EDIT_v0.1.md)。在独立 root exclusive ingress 声明与字段权限下，通过 Candidate / Safe Apply 修改 standalone internal Interface 的单一 rate 或禁用，保留 burst=0 并要求原生与独立内核证据。自定义 burst、物理/成员及一般图管理继续单独验收。

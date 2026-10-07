@@ -124,6 +124,7 @@ type ObservedIntent struct {
 	BridgeCreation         BridgeCreation             `json:"bridge_creation,omitempty"`
 	BridgeDeletion         BridgeDeletion             `json:"bridge_deletion,omitempty"`
 	MtuChange              MTUChange                  `json:"mtu_change,omitempty"`
+	PolicingChange         PolicingChange             `json:"policing_change,omitempty"`
 	ExtraFields            map[string]json.RawMessage `json:"-"`
 }
 
@@ -636,6 +637,8 @@ type Interface struct {
 	MtuClearable         bool                       `json:"mtu_clearable,omitempty"`
 	MtuDefault           int64                      `json:"mtu_default,omitempty"`
 	MtuDefaultReason     string                     `json:"mtu_default_reason,omitempty"`
+	PolicingOwnership    string                     `json:"policing_ownership,omitempty"`
+	PolicingEditable     bool                       `json:"policing_editable,omitempty"`
 	LinuxDevice          LinuxDeviceObservation     `json:"linux_device,omitempty"`
 	LinuxIngressPolicing LinuxIngressPolicing       `json:"linux_ingress_policing,omitempty"`
 	ExtraFields          map[string]json.RawMessage `json:"-"`
@@ -1098,6 +1101,12 @@ type InterfaceMTUClearIntent struct {
 	Operation string        `json:"operation"`
 	Object    ObjectBinding `json:"object"`
 }
+type InterfacePolicingIntent struct {
+	IntentId  Id              `json:"intent_id"`
+	Operation string          `json:"operation"`
+	Object    ObjectBinding   `json:"object"`
+	Policing  PolicingRequest `json:"policing"`
+}
 type InternalPortCreation struct {
 	Name            string                     `json:"name"`
 	VlanId          int64                      `json:"vlan_id"`
@@ -1267,6 +1276,43 @@ func (v *MTUDefaultContext) UnmarshalJSON(data []byte) error {
 }
 func (v MTUDefaultContext) MarshalJSON() ([]byte, error) {
 	type plain MTUDefaultContext
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type PolicingRequest = json.RawMessage
+type NativePolicing struct {
+	IngressPolicingRate       int64                      `json:"ingress_policing_rate"`
+	IngressPolicingBurst      int64                      `json:"ingress_policing_burst"`
+	IngressPolicingKpktsRate  int64                      `json:"ingress_policing_kpkts_rate"`
+	IngressPolicingKpktsBurst int64                      `json:"ingress_policing_kpkts_burst"`
+	ExtraFields               map[string]json.RawMessage `json:"-"`
+}
+
+func (v *NativePolicing) UnmarshalJSON(data []byte) error {
+	type plain NativePolicing
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v NativePolicing) MarshalJSON() ([]byte, error) {
+	type plain NativePolicing
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type PolicingChange struct {
+	Before      NativePolicing             `json:"before"`
+	After       NativePolicing             `json:"after"`
+	Port        ObjectBinding              `json:"port"`
+	Bridge      ObjectBinding              `json:"bridge"`
+	Name        string                     `json:"name"`
+	Ifindex     int64                      `json:"ifindex"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *PolicingChange) UnmarshalJSON(data []byte) error {
+	type plain PolicingChange
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v PolicingChange) MarshalJSON() ([]byte, error) {
+	type plain PolicingChange
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 

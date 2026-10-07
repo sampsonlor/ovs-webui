@@ -92,6 +92,8 @@ func collectPolicing(ctx context.Context, req inventory.DeviceRequest) (inventor
 		return inventory.PolicingSample{}, err
 	}
 	sample := inventory.PolicingSample{Availability: "known", IfIndex: req.IfIndex, Actions: []inventory.PolicingAction{}}
+	sample.IngressKind, sample.WriteCompatible = policingIngressProfile(qdiscs, req.IfIndex)
+	profile := []any{sample.IngressKind, req}
 	for _, parent := range parents {
 		filters, err := s.request(ctx, unix.RTM_GETTFILTER, unix.RTM_NEWTFILTER, req.IfIndex, parent, true)
 		if err != nil {
@@ -110,6 +112,9 @@ func collectPolicing(ctx context.Context, req inventory.DeviceRequest) (inventor
 				return inventory.PolicingSample{}, errPolicingWire
 			}
 			partial = partial || incomplete
+			configuration, compatible := policingFilterProfile(filter, actions)
+			sample.WriteCompatible = sample.WriteCompatible && compatible
+			profile = append(profile, configuration)
 			sample.Actions = append(sample.Actions, actions...)
 		}
 	}
@@ -118,7 +123,12 @@ func collectPolicing(ctx context.Context, req inventory.DeviceRequest) (inventor
 	}
 	if partial {
 		sample.Availability, sample.Reason = "partial", "LINUX_POLICING_COVERAGE_PARTIAL"
+		sample.WriteCompatible = false
 	}
+	if sample.IngressKind == "ingress" && len(sample.Actions) != 1 {
+		sample.WriteCompatible = false
+	}
+	sample.ConfigurationDigest = inventory.Digest(profile)
 	sample.ObservedAt = time.Now().UTC()
 	return sample, nil
 }
@@ -495,5 +505,15 @@ func policeAction(data []byte) (inventory.PolicingAction, bool, error) {
 			partial = true
 		}
 	}
+	// Keep stable configuration, including unexposed burst ticks, for private
+	// dispatch/rollback drift checks. refcnt/bindcnt and time statistics vary.
+	configuration := map[uint16][]byte{}
+	for key, value := range attrs {
+		if key != 2 && key != 6 && key != 7 {
+			configuration[key] = value
+		}
+	}
+	configuration[1] = append(append([]byte{}, tbf[:44]...), tbf[52:56]...)
+	a.ParameterDigest = inventory.Digest(configuration)
 	return a, partial, nil
 }

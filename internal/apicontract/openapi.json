@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.21.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates."
+    "version": "1.22.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness."
   },
   "servers": [
     {
@@ -28240,7 +28240,8 @@
               "port.create-internal",
               "port.delete-internal",
               "interface.mtu.set",
-              "interface.mtu.clear"
+              "interface.mtu.clear",
+              "interface.policing.set"
             ]
           },
           "object": {
@@ -28290,6 +28291,9 @@
           },
           "mtu_change": {
             "$ref": "#/components/schemas/MTUChange"
+          },
+          "policing_change": {
+            "$ref": "#/components/schemas/PolicingChange"
           }
         },
         "required": [
@@ -30068,6 +30072,14 @@
             "type": "string",
             "maxLength": 256
           },
+          "policing_ownership": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "policing_editable": {
+            "type": "boolean"
+          },
           "linux_device": {
             "$ref": "#/components/schemas/LinuxDeviceObservation"
           },
@@ -31740,6 +31752,32 @@
         "additionalProperties": false,
         "description": "Clear an existing explicit request to the native empty optional set. Requires the same independent root Interface authority and ovs.interface.mtu.write. Captured Bridge MTU contributors, parent relations and actual MTU proof guard execution, confirmation and compensation. No guessed 1500 default or unknown-result write replay."
       },
+      "InterfacePolicingIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "interface.policing.set"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "policing": {
+            "$ref": "#/components/schemas/PolicingRequest"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "policing"
+        ],
+        "additionalProperties": false,
+        "description": "Single controlled Interface ingress policing intent. Bandwidth rate is kbit/s; packet rate is kpps. Disabled requires zero. Both native bursts must remain zero (OVS-selected defaults). Requires ovs.interface.policing.write and a root exclusive-ingress Interface identity grant, fresh standalone non-local internal system graph, no raw options and software-only supported rules. Captured parents, all four configuration values and private kernel before-image guard dispatch, Applied, confirmation and exact compensation. No client-supplied before-image, default, host path, owner, raw transaction, compensation or result evidence."
+      },
       "InternalPortCreation": {
         "type": "object",
         "properties": {
@@ -32056,6 +32094,134 @@
         ],
         "additionalProperties": true
       },
+      "PolicingRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "const": "disabled"
+              },
+              "rate": {
+                "type": "integer",
+                "const": 0
+              }
+            },
+            "required": [
+              "mode",
+              "rate"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "const": "bandwidth"
+              },
+              "rate": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
+              }
+            },
+            "required": [
+              "mode",
+              "rate"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "const": "packets"
+              },
+              "rate": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "required": [
+              "mode",
+              "rate"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "NativePolicing": {
+        "type": "object",
+        "properties": {
+          "ingress_policing_rate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "ingress_policing_burst": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "ingress_policing_kpkts_rate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "ingress_policing_kpkts_burst": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "ingress_policing_rate",
+          "ingress_policing_burst",
+          "ingress_policing_kpkts_rate",
+          "ingress_policing_kpkts_burst"
+        ],
+        "additionalProperties": true
+      },
+      "PolicingChange": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/NativePolicing"
+          },
+          "after": {
+            "$ref": "#/components/schemas/NativePolicing"
+          },
+          "port": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "bridge": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
+          "ifindex": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "port",
+          "bridge",
+          "name",
+          "ifindex"
+        ],
+        "additionalProperties": true
+      },
       "Intent": {
         "oneOf": [
           {
@@ -32126,6 +32292,9 @@
           },
           {
             "$ref": "#/components/schemas/InterfaceMTUClearIntent"
+          },
+          {
+            "$ref": "#/components/schemas/InterfacePolicingIntent"
           }
         ]
       },

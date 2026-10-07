@@ -97,9 +97,9 @@
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
-    {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear')}
+    {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set')}
       <section class="panel">
-        <h2>Review and restage this MTU request</h2>
+        <h2>{c.intents.some((i) => i.operation === 'interface.policing.set') ? 'Review and restage this policing request' : 'Review and restage this MTU request'}</h2>
         <p>Live configuration or attachment changed. Discard this intent, review the current Interface and stage a new request with its current binding.</p>
       </section>
     {/if}
@@ -122,7 +122,7 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
-            c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear') ||
+            c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||
@@ -130,6 +130,7 @@
           >Rebase reviewed choices</button
         >
         {#if c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear')}<p>MTU configuration or attachment changed. Discard this intent, review the current Interface and stage a new request. Rebase cannot change its captured binding.</p>{/if}
+        {#if c.intents.some((i) => i.operation === 'interface.policing.set')}<p>Policing configuration, authority or attachment changed. Discard this intent and review the current Interface before restaging. Rebase cannot replace its captured original.</p>{/if}
       </section>
     {/if}
     {#if !desktop}<p class="notice">

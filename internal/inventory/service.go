@@ -37,6 +37,7 @@ type Service struct {
 	localVLAN                      map[string]bool
 	localBond                      map[string]bool
 	localMTU                       map[string]bool
+	localPolicing                  map[string]bool
 	localBridgeNames               map[string]bool
 	localBridgeDeleteNames         map[string]bool
 	localInternalPortTargets       map[string]bool
@@ -123,7 +124,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	s.mu.RLock()
-	v, failure, localVLAN, localBond, localMTU := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU
+	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
 	s.mu.RUnlock()
 	now := s.now()
 	fresh := "unknown"
@@ -162,6 +163,10 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Interface", Generation: v.decision.Generation}
 			snapshot := candidate.Snapshot{Generation: v.decision.Generation}
 			projectMTU(v, localMTU, &snapshot, []candidate.Binding{binding})
+			projectPolicing(v, localPolicing, &snapshot, []candidate.Binding{binding})
+			policing := snapshot.Policings[b.ManagementID]
+			policingEditable := fresh == "fresh" && candidate.PolicingEditable(policing) && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.interface.policing.write")
+			item["policing_ownership"], item["policing_editable"] = policing.Authority, policingEditable
 			p := snapshot.Interfaces[b.ManagementID]
 			editable := fresh == "fresh" && candidate.MTUEditable(p) && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.interface.mtu.write")
 			item["mtu_ownership"], item["mtu_editable"] = p.Authority, editable
@@ -185,6 +190,15 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 				item["allowed_operations"] = []string{candidate.InterfaceMTUSet}
 				if candidate.MTUClearable(p) {
 					item["allowed_operations"] = []string{candidate.InterfaceMTUSet, candidate.InterfaceMTUClear}
+				}
+			}
+			if policingEditable {
+				ops, _ := item["allowed_operations"].([]string)
+				item["allowed_operations"] = append(ops, candidate.InterfacePolicingSet)
+				for _, name := range []string{"ingress_policing_rate", "ingress_policing_kpkts_rate"} {
+					if field, ok := item["fields"].(map[string]any)[name].(map[string]any); ok {
+						field["ownership"], field["editable"] = policing.Authority, true
+					}
 				}
 			}
 		}
