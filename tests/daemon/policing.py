@@ -4,7 +4,7 @@ import subprocess
 import uuid
 
 
-def verify_policing(vsctl, get, call, bearer, eventually):
+def verify_policing(vsctl, get, call, bearer, eventually, switch_log):
     suffix = uuid.uuid4().hex[:6]
     bridge, name, peer = 'br-pol-' + suffix, 'pol-' + suffix, 'polp-' + suffix
 
@@ -44,7 +44,10 @@ def verify_policing(vsctl, get, call, bearer, eventually):
             last = interface()
             diagnostic = {'observation': last.get('linux_ingress_policing') if last else None,
                           'native_ifindex': last['fields']['ifindex'] if last else None,
-                          'kernel_filters': json.loads(tc('-j', 'filter', 'show', 'dev', name, 'parent', 'ffff:'))}
+                          'native_configuration': vsctl('list', 'Interface', name),
+                          'kernel_qdiscs': json.loads(tc('-j', 'qdisc', 'show', 'dev', name)),
+                          'kernel_filters': json.loads(tc('-j', 'filter', 'show', 'dev', name, 'parent', 'ffff:')),
+                          'ovs_device_messages': [line for line in switch_log.read_text().splitlines() if name in line][-10:]}
             raise AssertionError('Synthetic ingress policing evidence: ' + json.dumps(diagnostic)) from error
         sample = item['linux_ingress_policing']
         assert sample['ifindex'] == json.loads(ip('-j', 'link', 'show', 'dev', name))[0]['ifindex']

@@ -211,7 +211,7 @@ def main():
             vsctl('--no-wait', 'init', '--', 'set', 'Open_vSwitch', '.', 'other_config:vlan-limit=2')
 
         ovs_run('ovs-vswitchd', f'unix:{db_socket}', '--enable-dummy', f'--pidfile={ovs}/switch.pid',
-                f'--unixctl={ovs}/switch.ctl', '--detach', '--no-chdir')
+                f'--unixctl={ovs}/switch.ctl', f'--log-file={ovs}/switch.log', '--detach', '--no-chdir')
         vsctl('add-br', 'br-inv', '--', 'set', 'Bridge', 'br-inv', 'datapath_type=dummy',
               '--', 'add-port', 'br-inv', 'inv-p1', '--', 'set', 'Interface', 'inv-p1', 'type=dummy',
               '--', 'add-port', 'br-inv', 'inv-p2', '--', 'set', 'Interface', 'inv-p2', 'type=dummy',
@@ -284,7 +284,7 @@ def main():
         }
         checks.append('five native Interface configuration observations preserve empty/zero and withhold all values for inventory-only tokens')
         from policing import verify_policing
-        metrics['interface_linux_policing'] = verify_policing(vsctl, get, call, token['secret'], eventually)
+        metrics['interface_linux_policing'] = verify_policing(vsctl, get, call, token['secret'], eventually, ovs / 'switch.log')
         checks.append('real kernel ingress police rates, partial action coverage, permission withholding and removal verified independently of OVS configuration')
         if args.policing_only:
             evidence = {'platform': os.uname().machine, 'schema_fixture': args.schema_version,

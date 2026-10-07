@@ -72,6 +72,21 @@ func TestLinuxPolicingNativeLayoutsAndExactRates(t *testing.T) {
 }
 
 func TestLinuxPolicingUnsupportedCoverageIsNeverAbsence(t *testing.T) {
+	for _, parent := range []uint32{0xffff0000, 0xfffffff1, 0xfffffff2} {
+		row := tcRow("matchall", nil)
+		binary.NativeEndian.PutUint32(row[12:16], parent)
+		if !filterBinding(row, 7, 0xffff0000) {
+			t.Fatal("same ingress block alias rejected", parent)
+		}
+		if filterBinding(row, 8, 0xffff0000) || filterBinding(row, 7, 0xfffffff2) != (parent == 0xfffffff2) {
+			t.Fatal("wrong device or clsact hook accepted", parent)
+		}
+	}
+	wrong := tcRow("matchall", nil)
+	binary.NativeEndian.PutUint32(wrong[12:16], 0xfffe0000)
+	if filterBinding(wrong, 7, 0xffff0000) || filterBinding(wrong[:19], 7, 0xffff0000) {
+		t.Fatal("unrelated qdisc or short message accepted")
+	}
 	for _, row := range [][]byte{
 		tcRow("flower", nil),
 		tcRow("basic", tcAttr(3, tcAttr(1, tcAttr(1, []byte("future\x00"))))),

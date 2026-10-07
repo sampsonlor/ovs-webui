@@ -98,7 +98,7 @@ func collectPolicing(ctx context.Context, req inventory.DeviceRequest) (inventor
 			return inventory.PolicingSample{}, err
 		}
 		for _, filter := range filters {
-			if len(filter) < 20 || int(int32(binary.NativeEndian.Uint32(filter[4:8]))) != req.IfIndex || binary.NativeEndian.Uint32(filter[12:16]) != parent {
+			if !filterBinding(filter, req.IfIndex, parent) {
 				return inventory.PolicingSample{}, errPolicingWire
 			}
 			sample.FilterCount++
@@ -212,6 +212,20 @@ func (s *tcSocket) request(ctx context.Context, op, expected uint16, index int, 
 }
 
 func align4(n int) int { return (n + 3) &^ 3 }
+
+func filterBinding(row []byte, index int, parent uint32) bool {
+	if len(row) < 20 || int(int32(binary.NativeEndian.Uint32(row[4:8]))) != index {
+		return false
+	}
+	actual := binary.NativeEndian.Uint32(row[12:16])
+	// Legacy ingress has one block. Linux returns block->classid, set from the
+	// last insertion's parent alias (OVS matchall uses ffff:fff2; tc uses ffff:).
+	// A clsact hook has distinct ingress/egress blocks and remains exact.
+	if parent == 0xffff0000 {
+		return actual&0xffff0000 == parent
+	}
+	return actual == parent
+}
 
 func tcMessages(data []byte, sequence uint32, expected uint16, dump bool) ([][]byte, bool, int, error) {
 	var rows [][]byte
