@@ -28,11 +28,11 @@ def verify_policing(vsctl, get, call, bearer, eventually, switch_log):
         ip('link', 'set', name, 'up')
         ip('link', 'set', peer, 'up')
         vsctl('add-br', bridge, '--', 'add-port', bridge, name, '--', 'set', 'Interface', name,
-              'ingress_policing_rate=1000', 'ingress_policing_kpkts_rate=5')
+              'ingress_policing_rate=1000', 'ingress_policing_kpkts_rate=0')
 
         def installed():
             item = sample_ready()
-            if item and any(a['bytes_per_second'] == '125000' and a['packets_per_second'] == '5000'
+            if item and any(a['bytes_per_second'] == '125000' and a['packets_per_second'] is None
                             and a['exceed_action'] == 'drop' for a in item['linux_ingress_policing']['actions']):
                 return item
 
@@ -68,10 +68,33 @@ def verify_policing(vsctl, get, call, bearer, eventually, switch_log):
         assert partial['linux_ingress_policing']['reason'] == 'LINUX_POLICING_COVERAGE_PARTIAL'
         assert partial['linux_ingress_policing']['actions'] and partial['config_revision'] == revision
         tc('filter', 'del', 'dev', name, 'parent', 'ffff:', 'pref', '80')
+        # Linux rejects byte and packet rate limits in a single police action.
+        # Prove the two actual modes separately, preserving unreported nulls.
+        vsctl('set', 'Interface', name, 'ingress_policing_rate=0', 'ingress_policing_kpkts_rate=5')
+
+        def packet_installed():
+            item = sample_ready()
+            if item and any(a['bytes_per_second'] is None and a['packets_per_second'] == '5000'
+                            and a['exceed_action'] == 'drop' for a in item['linux_ingress_policing']['actions']):
+                return item
+
+        eventually(packet_installed)
+        packet_kernel = json.loads(tc('-j', 'filter', 'show', 'dev', name, 'parent', 'ffff:'))
+        assert any(a.get('kind') == 'police' for f in packet_kernel for a in f.get('options', {}).get('actions', []))
         vsctl('set', 'Interface', name, 'ingress_policing_rate=0', 'ingress_policing_kpkts_rate=0')
         eventually(lambda: (i if (i := sample_ready()) and i['linux_ingress_policing']['actions'] == [] else None))
+        vsctl('set', 'Interface', name, 'ingress_policing_rate=1000', 'ingress_policing_kpkts_rate=5')
+        rejected = eventually(lambda: (i if (i := sample_ready()) and
+                              i['fields']['ingress_policing_rate']['value'] == '1000' and
+                              i['fields']['ingress_policing_kpkts_rate']['value'] == '5' and
+                              i['linux_ingress_policing']['actions'] == [] else None))
+        assert rejected['fields']['error']['value'] == []
+        assert any(name in line and 'policing action failed: Invalid argument' in line
+                   for line in switch_log.read_text().splitlines())
         return {'verified': True, 'real_kernel': True, 'configuration_permission_required': True,
                 'source_authority': 'linux-netlink-observation', 'byte_rate': '125000', 'packet_rate': '5000',
+                'separate_byte_packet_modes': True, 'combined_rates_claimed': False,
+                'combined_request_not_installed': True, 'empty_interface_error_not_applied': True,
                 'units': ['bytes/s', 'packets/s'], 'partial_coverage_verified': True,
                 'runtime_does_not_change_config_revision': True, 'list_scan': False, 'editable': False,
                 'traffic_effectiveness_claimed': False, 'installer_ownership_claimed': False}

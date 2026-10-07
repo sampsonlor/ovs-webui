@@ -10,13 +10,15 @@ API 1.21.0 为 Interface 增加可选、仅详情读取的 `linux_ingress_polici
 
 ## 内核边界与预算
 
-只发送 GETLINK、GETQDISC、GETTFILTER 读取请求；不执行 tc/shell 或变更 host。既有 systemd AF_NETLINK 允许列表保持，无新增特权。独立最多 2 个同时读取，每次总期限 250 ms；非阻塞 socket 每次最多等待 10 ms，整个读取最多 256 KiB / 512 条 Netlink 消息、64 个 filter、16 个 police action。每个 action table 最多 32 槽。关闭 socket 释放读取，不创建无法取消的后台 worker。
+只发送 GETLINK、GETQDISC、GETTFILTER 读取请求；不执行 tc/shell 或变更 host。既有 systemd AF_NETLINK 允许列表保持，无新增特权。独立最多 2 个同时读取，每次总期限 250 ms；非阻塞 socket 每次最多等待 10 ms，整个读取最多 256 KiB / 512 条 Netlink 消息、64 条 filter 记录（含内核协议/结构记录）、16 个 police action。每个 action table 最多 32 槽。关闭 socket 释放读取，不创建无法取消的后台 worker。
 
-支持 ingress 与 clsact ingress hook 的 basic/matchall/u32 police action 及旧 direct police 编码。64-bit rate 覆盖 32-bit rate；bytes/s、packets/s 以精确 uint64 十进制字符串传输，null 为未报告，不替换成 0。police exceed/conform 动作分别呈现。OVS 原生 kbit/s、kpps 与配置 burst 仍在原配置表，不做虚假等值对照。
+支持 ingress 与 clsact ingress hook 的 basic/matchall/u32 police action 及旧 direct police 编码。legacy ingress 的单个 block 可以返回插入时的 parent 别名；校验相同 qdisc major 与设备，clsact 仍严格区分 ingress/egress hook。64-bit rate 覆盖 32-bit rate；bytes/s、packets/s 以精确 uint64 十进制字符串传输，null 为未报告，不替换成 0。police exceed/conform 动作分别呈现。OVS 原生 kbit/s、kpps 与配置 burst 仍在原配置表，不做虚假等值对照。
 
 未知 classifier/action、未来 police 参数、peak/average 限制或 shared ingress block 为 partial，不声明没有 policing。消息长度、嵌套属性、重复值、seq、kernel sender、截断、dump interruption、DONE/error、总量或耗时不成立时为 unavailable，清除全部 action；读取失败不能沿用上次值。Burst 为 kernel ticks，尚未证明换算，因此未展示“有效 burst”。
 
 覆盖只到所读的 Linux tc ingress 规则；未证明匹配的全部流量、egress、XDP、userspace/DPDK、硬件执行或安装者。即使已观察 police action，也不能据此声称流量效果、规则归 OVS 所有或配置已 Applied。dump 和 OVS 库存不是原子快照。
+
+原生 fixture 将 byte/packet 分开验证：当前 Linux police 拒绝同一 action 同时设置两类 rate，配置值不能据此推出成功安装；实际回归还验证组合配置已提交但没有安装规则，且 Interface.error 为空也不能作为 Applied 证明。此前使用组合配置的失败验收保留记录，不记为通过。依据：[Linux police 实现](https://github.com/torvalds/linux/blob/v6.8/net/sched/act_police.c)、[classifier dump](https://github.com/torvalds/linux/blob/v6.8/net/sched/cls_api.c)、[ingress block](https://github.com/torvalds/linux/blob/v6.8/net/sched/sch_ingress.c)。
 
 依据：[OVS Interface 手册](https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html)、[OVS 3.3.9 Linux provider](https://github.com/openvswitch/ovs/blob/v3.3.9/lib/netdev-linux.c)、[Linux v6.8 classifier UAPI](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/pkt_cls.h)、[调度 UAPI](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/pkt_sched.h)、[rtnetlink UAPI](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/rtnetlink.h)。
 
@@ -24,6 +26,6 @@ API 1.21.0 为 Interface 增加可选、仅详情读取的 `linux_ingress_polici
 
 正式 Interface 详情独立呈现已安装规则、来源时间、完整/部分/不可用/隐藏，以及明确 kernel 单位。Expert 增加 filter kind/priority/handle、police index 和来源；两模式均不新增写入口。配置请求与实际安装规则不一致时分别保留。键盘刷新、表格滚动、深色、平板 Standard 和手机只读保持。
 
-原生三 schema fixture 都实际创建隔离 system Bridge/veth，OVS 安装 byte+packet policing，检查 API、内核 iproute2 独立读、配置权限、partial action、无逐行扫描、配置 revision 与移除后的空观察。浏览器另验证暂停 ovs-vswitchd 后配置变化但 kernel 保持旧 rate、错误 ifindex 丢弃值、真实断连、两模式隐藏和不支持类型。parser 和库存测试覆盖 wire 异常、精确 uint64、取消/并发预算、身份/代际变化及无效样本。测试 tc/ip/OVS 写入只用于 disposable fixture，不进入产品。
+原生三 schema fixture 都实际创建隔离 system Bridge/veth，OVS 分别安装 byte-only 与 packet-only policing，检查 API、内核 iproute2 独立读、配置权限、partial action、无逐行扫描、配置 revision 与移除后的空观察。浏览器另验证暂停 ovs-vswitchd 后配置变化但 kernel 保持旧 rate、错误 ifindex 丢弃值、真实断连、两模式隐藏和不支持类型。parser 和库存测试覆盖 wire 异常、精确 uint64、取消/并发预算、身份/代际变化及无效样本。测试 tc/ip/OVS 写入只用于 disposable fixture，不进入产品。
 
 接受以最终 PR/main 同树六项 CI、全部报告与视觉复核为准，见[审阅矩阵](../reviews/INTERFACE_POLICING_OBSERVE_v0.1.md)。#21/#42 保持完整范围开放，#43/#47/#54 和 #71 不因本批观察完成而关闭。

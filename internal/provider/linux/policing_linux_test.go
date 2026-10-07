@@ -56,11 +56,17 @@ func TestLinuxPolicingNativeLayoutsAndExactRates(t *testing.T) {
 	for _, kind := range []string{"basic", "matchall", "u32"} {
 		key := map[string]uint16{"basic": 3, "matchall": 2, "u32": 7}[kind]
 		police := append(tcPolice(), tcAttr(8, tcWide(18446744073709551615))...)
-		police = append(police, tcAttr(10, tcWide(5000))...)
 		rows, partial, err := filterPolicing(tcRow(kind, tcAttr(key, tcTable(police))))
-		if err != nil || partial || len(rows) != 1 || *rows[0].BytesPerSecond != "18446744073709551615" || *rows[0].PacketsPerSecond != "5000" || rows[0].ExceedAction != "drop" || rows[0].ConformAction != "continue" || rows[0].Index != 123 || rows[0].Priority != 49 || rows[0].FilterKind != kind {
+		if err != nil || partial || len(rows) != 1 || *rows[0].BytesPerSecond != "18446744073709551615" || rows[0].PacketsPerSecond != nil || rows[0].ExceedAction != "drop" || rows[0].ConformAction != "continue" || rows[0].Index != 123 || rows[0].Priority != 49 || rows[0].FilterKind != kind {
 			t.Fatal(kind, rows, partial, err)
 		}
+	}
+	packetTBF := make([]byte, 56)
+	binary.NativeEndian.PutUint32(packetTBF[4:8], 2)
+	packet := append(tcAttr(1, packetTBF), tcAttr(10, tcWide(5000))...)
+	rows, partial, err := filterPolicing(tcRow("matchall", tcAttr(2, tcTable(packet))))
+	if err != nil || partial || len(rows) != 1 || rows[0].BytesPerSecond != nil || *rows[0].PacketsPerSecond != "5000" {
+		t.Fatal("packet-only observation", rows, partial, err)
 	}
 	for _, kind := range []string{"basic", "u32"} {
 		key := map[string]uint16{"basic": 4, "u32": 6}[kind]

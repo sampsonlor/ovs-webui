@@ -2472,7 +2472,7 @@ test('Linux ingress policing separates real installed rules, pending configurati
       'Interface',
       name,
       'ingress_policing_rate=1000',
-      'ingress_policing_kpkts_rate=5',
+      'ingress_policing_kpkts_rate=0',
     );
     const iface = await kernelInterface(context, name);
     const path = '/interfaces/' + iface.management_id;
@@ -2486,7 +2486,7 @@ test('Linux ingress policing separates real installed rules, pending configurati
           ],
         );
       })
-      .toContainEqual(['125000', '5000']);
+      .toContainEqual(['125000', null]);
     const initial = await get(context, path);
     expect(initial.linux_ingress_policing.availability).toBe('known');
     expect(initial.linux_ingress_policing.ifindex).toBe(hostLink(name).ifindex);
@@ -2503,7 +2503,7 @@ test('Linux ingress policing separates real installed rules, pending configurati
     ).toBe(true);
     await page.goto(fixture.origin + path);
     await expect(policingPanel(page)).toContainText('125000 bytes/s');
-    await expect(policingPanel(page)).toContainText('5000 packets/s');
+    await expect(policingPanel(page)).toContainText('Not reported');
     await screen(page, 'interface-policing-standard');
     await nativeTypeDepth(page, 'Expert');
     await expect(policingPanel(page)).toContainText('Filter evidence');
@@ -2603,6 +2603,30 @@ test('Linux ingress policing separates real installed rules, pending configurati
       'Interface',
       name,
       'ingress_policing_rate=0',
+      'ingress_policing_kpkts_rate=5',
+    );
+    await expect
+      .poll(async () => {
+        const v = (await get(context, path)).linux_ingress_policing;
+        return v.actions.map(
+          (a: {
+            bytes_per_second: string | null;
+            packets_per_second: string | null;
+          }) => [a.bytes_per_second, a.packets_per_second],
+        );
+      })
+      .toContainEqual([null, '5000']);
+    await page
+      .getByRole('button', { name: 'Refresh resource', exact: true })
+      .click();
+    await expect(policingPanel(page)).toContainText('5000 packets/s');
+    await expect(policingPanel(page)).toContainText('Not reported');
+    await screen(page, 'interface-policing-packet');
+    vsctl(
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=0',
       'ingress_policing_kpkts_rate=0',
     );
     await expect
@@ -2621,6 +2645,34 @@ test('Linux ingress policing separates real installed rules, pending configurati
       'No police action observed',
     );
     await screen(page, 'interface-policing-empty');
+    vsctl(
+      'set',
+      'Interface',
+      name,
+      'ingress_policing_rate=1000',
+      'ingress_policing_kpkts_rate=5',
+    );
+    await expect
+      .poll(async () => {
+        const v = await get(context, path);
+        return [
+          v.fields.ingress_policing_rate.value,
+          v.fields.ingress_policing_kpkts_rate.value,
+          v.linux_ingress_policing.actions.length,
+        ];
+      })
+      .toEqual(['1000', '5', 0]);
+    await refresh.click();
+    await expect(
+      configurationRow(page, 'Ingress bandwidth limit'),
+    ).toContainText('1000 kbit/s');
+    await expect(policingPanel(page)).toContainText(
+      'No police action observed',
+    );
+    await expect(policingPanel(page)).toContainText(
+      'does not establish that traffic is unrestricted',
+    );
+    await screen(page, 'interface-policing-conflicting-request');
     expect(mutations).toEqual([]);
   } finally {
     if (paused) process.kill(pid, 'SIGCONT');
