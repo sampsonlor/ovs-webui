@@ -187,6 +187,14 @@ jobs:
           set -o pipefail
           go test -json -count=1 -run '^TestLinuxPolicing' ./internal/provider/linux | tee test-results/go-policing-protocol.json
           sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --policing-only
+      - name: Native controlled Interface ingress policing and compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeInterfacePolicing$' -test.v -test.timeout=240s \
+              | go tool test2json -p "native-interface-policing-$schema" | tee "test-results/go-interface-policing-$schema.json"
+          done
       - name: Native explicit internal Interface MTU and compensation matrix
         run: |
           set -o pipefail
@@ -332,6 +340,7 @@ jobs:
             test-results/go-bond-lacp-*.json
             test-results/go-qinq-*.json
             test-results/go-interface-mtu-*.json
+            test-results/go-interface-policing-*.json
             test-results/go-isolated-bridge-*.json
             test-results/go-internal-port-*.json
             test-results/go-safe-apply-*.json

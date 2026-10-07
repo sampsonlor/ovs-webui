@@ -29,6 +29,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-interface-observer', 'InterfaceObserver'),
                        ('browser-linux-device', 'Reader'), ('browser-linux-exceptions', 'InterfaceObserver'),
                        ('browser-policing', 'Reader'), ('browser-policing-observer', 'InterfaceObserver'),
+                       ('browser-policing-edit', 'NetworkAdmin'), ('browser-policing-drift', 'NetworkAdmin'),
+                       ('browser-policing-reader', 'Reader'),
                        ('browser-native-types', 'Reader'), ('browser-patch-observer', 'InterfaceObserver'),
                        ('browser-evidence-reader', 'Reader'), ('browser-evidence-observer', 'InterfaceObserver'),
                        ('browser-interface-config', 'Reader'), ('browser-interface-config-observer', 'InterfaceObserver'),

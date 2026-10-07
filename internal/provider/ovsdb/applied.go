@@ -25,7 +25,7 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	proof := p.Envelope
 	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
 	for i := range proof.Candidate.Intents {
-		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) {
+		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) || proof.Candidate.Intents[i].Operation == candidate.InterfacePolicingSet {
 			candidate.AfterImage(&proof.Candidate.Intents[i])
 		}
 	}
@@ -46,6 +46,15 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
+		if intent.Operation == candidate.InterfacePolicingSet {
+			row := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
+			g, err := guard(d, "Interface", row, []string{"error", "ifindex"}, []any{uuidCondition(row.UUID)})
+			if err != nil {
+				return nil, err
+			}
+			ops = append(ops, g)
+			continue
+		}
 		if candidate.IsMTUOperation(intent.Operation) {
 			row := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 			g, err := guard(d, "Interface", row, []string{"error", "mtu"}, []any{uuidCondition(row.UUID)})
@@ -71,6 +80,18 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 // claiming Applied, atomically verify its after-image, dependencies, marker and
 // interface health against OVSDB itself. This closes monitor batching latency.
 func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inventory.ExecutionView, out *execution.Outcome) error {
+	var kernelBefore *inventory.PolicingSample
+	if len(p.Envelope.Candidate.Intents) == 1 && p.Envelope.Candidate.Intents[0].Policing != nil {
+		i := p.Envelope.Candidate.Intents[0]
+		sample, err := e.inventory.PolicingEvidence(ctx, view.Candidate.Policings[i.Object.ManagementID])
+		if err != nil {
+			return err
+		}
+		if !inventory.PolicingMatches(sample, i.Policing.After) {
+			return errors.New("POLICING_INSTALLED_RATE_UNPROVEN")
+		}
+		kernelBefore = &sample
+	}
 	conn, reader, d, identity, pid, err := e.connect(ctx)
 	if err != nil {
 		return err
@@ -132,6 +153,16 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 		}
 		if err = bridgeHostApplied(p.Envelope.Candidate); err != nil {
 			return err
+		}
+		if kernelBefore != nil {
+			i := p.Envelope.Candidate.Intents[0]
+			sample, err := e.inventory.PolicingEvidence(ctx, view.Candidate.Policings[i.Object.ManagementID])
+			if err != nil {
+				return err
+			}
+			if !inventory.PolicingMatches(sample, i.Policing.After) || sample.ConfigurationDigest != kernelBefore.ConfigurationDigest {
+				return errors.New("POLICING_INSTALLED_RATE_CHANGED")
+			}
 		}
 		value, observed := strconv.FormatInt(current, 10), time.Now().UTC()
 		out.Current, out.Observed = &value, &observed

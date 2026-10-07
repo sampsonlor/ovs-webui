@@ -76,6 +76,55 @@ export function vlanText(v: NativeVlan | null): string {
     return `QinQ · service VLAN ${v.tag ?? '—'} · customer VLANs ${v.cvlans.length ? v.cvlans.join(', ') : 'all customer VLANs (empty set)'}`;
   return `${v.vlan_mode ?? 'Native default'} · tag ${v.tag ?? '—'} · trunks ${v.trunks.length ? v.trunks.join(', ') : 'all VLANs (empty set)'}${v.cvlans.length ? ` · CVLANs ${v.cvlans.join(', ')}` : ''}`;
 }
+export function policingNumber(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value))
+    return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 0 && n <= 1000000 ? n : null;
+}
+export function policingEditReason(
+  item: Interface,
+  session: Session | null,
+  desktop: boolean,
+): string {
+  if (!desktop) return 'Use a desktop to prepare a configuration change.';
+  if (
+    !has(session, 'workspace.write') ||
+    !has(session, 'ovs.interface.policing.write')
+  )
+    return 'Current permissions do not allow Interface policing changes.';
+  const names = [
+    'ingress_policing_rate',
+    'ingress_policing_burst',
+    'ingress_policing_kpkts_rate',
+    'ingress_policing_kpkts_burst',
+  ];
+  if (
+    item.source.freshness !== 'fresh' ||
+    names.some((name) => item.fields?.[name]?.availability !== 'known')
+  )
+    return 'Policing configuration is stale, unavailable or withheld.';
+  const values = names.map((name) =>
+    policingNumber(item.fields?.[name]?.value),
+  );
+  if (
+    item.policing_editable !== true ||
+    item.policing_ownership !== 'local-exclusive' ||
+    !item.allowed_operations?.includes('interface.policing.set') ||
+    ['ingress_policing_rate', 'ingress_policing_kpkts_rate'].some(
+      (name) => item.fields?.[name]?.editable !== true,
+    ) ||
+    values.some((n) => n === null) ||
+    values[1] !== 0 ||
+    values[3] !== 0 ||
+    values[2]! > 1000 ||
+    (values[0] !== 0 && values[2] !== 0)
+  )
+    return 'Editing requires exclusive ingress management on a standalone internal Interface with native default bursts. Other types, custom bursts, offload and external control remain read-only.';
+  if (item.linux_ingress_policing?.availability !== 'known')
+    return 'Linux ingress observation is unavailable or partial. Refresh and review before preparing a change.';
+  return '';
+}
 export function editReason(
   p: Port,
   session: Session | null,
@@ -135,6 +184,7 @@ export function applyReady(
           'port.delete-internal': 'ovs.port.internal.delete',
           'interface.mtu.set': 'ovs.interface.mtu.write',
           'interface.mtu.clear': 'ovs.interface.mtu.write',
+          'interface.policing.set': 'ovs.interface.policing.write',
         } as Record<string, string>
       )[i.operation];
       return !!capability && has(session, capability);

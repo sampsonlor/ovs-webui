@@ -16,6 +16,12 @@ import (
 )
 
 func TestInterfaceMTUValidationRequiresIndependentCapabilityAndCurrentCeiling(t *testing.T) {
+	testInterfaceFieldCapability(t, false)
+}
+func TestInterfacePolicingValidationRequiresIndependentCapabilityAndCurrentCeiling(t *testing.T) {
+	testInterfaceFieldCapability(t, true)
+}
+func testInterfaceFieldCapability(t *testing.T, policing bool) {
 	r, _ := fixture(t)
 	g := login(t, r, "admin", false)
 	e, p, _ := planSetup(t, r, g)
@@ -25,7 +31,14 @@ func TestInterfaceMTUValidationRequiresIndependentCapabilityAndCurrentCeiling(t 
 	i := plan.InterfaceMTU{Binding: bind("Interface"), Port: bind("Port"), Bridge: bind("Bridge"), Requested: plan.MTUPointer(1500), Known: true, Supported: true, Eligible: true, Authority: "local-managed", Dependency: "captured"}
 	p.snapshot.Interfaces = map[string]plan.InterfaceMTU{i.Binding.ManagementID: i}
 	id := planRequestID()
-	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{map[string]any{"intent_id": repository.NewID(), "operation": plan.InterfaceMTUSet, "object": i.Binding, "mtu_request": 2000}}})
+	capability := "ovs.interface.mtu.write"
+	intent := map[string]any{"intent_id": repository.NewID(), "operation": plan.InterfaceMTUSet, "object": i.Binding, "mtu_request": 2000}
+	if policing {
+		capability = "ovs.interface.policing.write"
+		p.snapshot.Policings = map[string]plan.InterfacePolicing{i.Binding.ManagementID: {Binding: i.Binding, Port: i.Port, Bridge: i.Bridge, Name: "synthetic-pi", Type: "internal", IfIndex: 7, Known: true, Supported: true, Eligible: true, Authority: "local-exclusive", Dependency: "captured"}}
+		intent = map[string]any{"intent_id": repository.NewID(), "operation": plan.InterfacePolicingSet, "object": i.Binding, "policing": map[string]any{"mode": "bandwidth", "rate": 1000}}
+	}
+	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{intent}})
 	e, err := r.PrepareCandidate(testContext, g.Grant, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}})
 	if err != nil {
 		t.Fatal(err)
@@ -47,11 +60,11 @@ func TestInterfaceMTUValidationRequiresIndependentCapabilityAndCurrentCeiling(t 
 			t.Fatal(err)
 		}
 	}
-	a := execution.Authorization{Owner: g.Claims.PrincipalID, Credential: g.Claims.CredentialID, Epoch: g.Claims.RequestEpoch, FieldCapabilities: "ovs.interface.mtu.write"}
+	a := execution.Authorization{Owner: g.Claims.PrincipalID, Credential: g.Claims.CredentialID, Epoch: g.Claims.RequestEpoch, FieldCapabilities: capability}
 	if err := r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error { return r.safeAuthority(ctx, q, a) }); err != nil {
 		t.Fatal("valid MTU Safe Apply authority rejected", err)
 	}
-	setCaps(slices.DeleteFunc(append([]string{}, g.Claims.Capabilities...), func(c string) bool { return c == "ovs.interface.mtu.write" }))
+	setCaps(slices.DeleteFunc(append([]string{}, g.Claims.Capabilities...), func(c string) bool { return c == capability }))
 	if readPlanValidation(t, r, g.Grant, e, valid.Receipt.Resource.ID).Usable {
 		t.Fatal("MTU retained revoked capability")
 	}

@@ -27,12 +27,13 @@ type Executor struct {
 func (p *Provider) Executor(s *inventory.Service) *Executor { return &Executor{p, s} }
 
 type nativePlan struct {
-	Operations     []map[string]any   `json:"operations"`
-	CountIndexes   []int              `json:"count_indexes"`
-	TargetIndex    int                `json:"target_index"`
-	Evidence       inventory.Evidence `json:"evidence"`
-	CreationMarker string             `json:"creation_marker,omitempty"`
-	InsertUUIDs    map[int]string     `json:"insert_uuids,omitempty"`
+	PolicingKernelBefore string             `json:"policing_kernel_before,omitempty"`
+	Operations           []map[string]any   `json:"operations"`
+	CountIndexes         []int              `json:"count_indexes"`
+	TargetIndex          int                `json:"target_index"`
+	Evidence             inventory.Evidence `json:"evidence"`
+	CreationMarker       string             `json:"creation_marker,omitempty"`
+	InsertUUIDs          map[int]string     `json:"insert_uuids,omitempty"`
 }
 
 func uuidValue(id string) []any     { return []any{"uuid", id} }
@@ -239,9 +240,16 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 			return out, err
 		}
 	}
-	return compileExecution(id, marker, envelope, view, d)
+	compiled, err := compileExecution(id, marker, envelope, view, d)
+	if err != nil {
+		return compiled, err
+	}
+	return e.preparePolicingKernel(ctx, compiled, view, nil)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.InterfacePolicingSet {
+		return compilePolicingExecution(id, marker, envelope, view, d)
+	}
 	if len(envelope.Candidate.Intents) > 0 && candidate.IsMTUOperation(envelope.Candidate.Intents[0].Operation) {
 		return compileMTUExecution(id, marker, envelope, view, d)
 	}
@@ -441,6 +449,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		return notSent
 	}
 	data = append(data, '\n')
+	if err = e.policingDispatchCheck(ctx, p, n); err != nil {
+		notSent.Reason = "policing-dispatch-unproven"
+		return notSent
+	}
 	if beforeSend == nil || beforeSend() != nil {
 		notSent.Reason = "dispatch-admission-denied"
 		return notSent
@@ -554,7 +566,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	all, anyMarker := true, false
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
-		if candidate.IsMTUOperation(intent.Operation) {
+		if candidate.IsMTUOperation(intent.Operation) || intent.Operation == candidate.InterfacePolicingSet {
 			row, exists = view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 		}
 		markerKey := execution.MarkerKey
@@ -613,6 +625,15 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
+		if intent.Operation == candidate.InterfacePolicingSet {
+			iface := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
+			values, ok := iface.Values["error"].([]any)
+			if !ok || len(values) != 0 {
+				out.Applied, out.Reason = "unknown", "interface-apply-error"
+				return out
+			}
+			continue
+		}
 		if candidate.IsMTUOperation(intent.Operation) {
 			iface := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 			values, ok := iface.Values["error"].([]any)

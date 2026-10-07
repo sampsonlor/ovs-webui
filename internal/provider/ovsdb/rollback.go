@@ -46,7 +46,7 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 			continue
 		}
 		table := "Port"
-		if candidate.IsMTUOperation(intent.Operation) {
+		if candidate.IsMTUOperation(intent.Operation) || intent.Operation == candidate.InterfacePolicingSet {
 			table = "Interface"
 		}
 		labels, _ := view.Observation.Rows[table][intent.Object.OVSUUID].Values["external_ids"].(map[string]any)
@@ -95,5 +95,9 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	}
 	// This private derived envelope is never accepted as a user Candidate or
 	// validation. Commit checks its current before-image again before sending.
-	return compileExecution(original.ID, marker, envelope, view, d)
+	compiled, err := compileExecution(original.ID, marker, envelope, view, d)
+	if err != nil {
+		return compiled, err
+	}
+	return e.preparePolicingKernel(ctx, compiled, view, &n)
 }

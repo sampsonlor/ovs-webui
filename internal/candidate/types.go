@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "interface-optional-mtu-v1"
+const ValidatorVersion = "interface-policing-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -32,21 +32,23 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
-	ID         string   `json:"intent_id"`
-	Operation  string   `json:"operation"`
-	Object     Binding  `json:"object"`
-	Value      VLAN     `json:"value"`
-	Mode       string   `json:"mode,omitempty"`
-	LACP       string   `json:"lacp,omitempty"`
-	Members    []string `json:"member_interface_ids,omitempty"`
-	Fallback   string   `json:"fallback,omitempty"`
-	Name       string   `json:"name,omitempty"`
-	VLANID     int      `json:"vlan_id,omitempty"`
-	MTURequest int      `json:"mtu_request,omitempty"`
+	Policing   *PolicingRequest `json:"policing,omitempty"`
+	ID         string           `json:"intent_id"`
+	Operation  string           `json:"operation"`
+	Object     Binding          `json:"object"`
+	Value      VLAN             `json:"value"`
+	Mode       string           `json:"mode,omitempty"`
+	LACP       string           `json:"lacp,omitempty"`
+	Members    []string         `json:"member_interface_ids,omitempty"`
+	Fallback   string           `json:"fallback,omitempty"`
+	Name       string           `json:"name,omitempty"`
+	VLANID     int              `json:"vlan_id,omitempty"`
+	MTURequest int              `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
-	QinQ *QinQContext `json:"qinq_context,omitempty"`
-	MTU  *MTUChange   `json:"mtu_change,omitempty"`
+	Policing *PolicingChange `json:"policing_change,omitempty"`
+	QinQ     *QinQContext    `json:"qinq_context,omitempty"`
+	MTU      *MTUChange      `json:"mtu_change,omitempty"`
 	// IPC fields are explicit: strict request decoding deliberately does not
 	// infer encoding/json's anonymous-field promotion rules.
 	ID           string                `json:"intent_id"`
@@ -147,6 +149,7 @@ type Snapshot struct {
 	Generation, Revision, Schema, Policy string
 	Ports                                map[string]Port
 	Interfaces                           map[string]InterfaceMTU
+	Policings                            map[string]InterfacePolicing
 	Creation                             CreationSnapshot
 	Deletion                             DeletionSnapshot
 	PortDeletions                        InternalPortDeletionSnapshot
@@ -222,6 +225,9 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if i.Policing != nil {
+			out = append(out, i.Policing.Port, i.Policing.Bridge)
+		}
 		if i.MTU != nil {
 			out = append(out, i.MTU.Port, i.MTU.Bridge)
 			if i.MTU.Default != nil {

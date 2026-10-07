@@ -12,6 +12,7 @@
   import InterfaceDetail from './InterfaceDetail.svelte';
   import Evidence from './Evidence.svelte';
   import MTUEditor from './MTUEditor.svelte';
+  import PolicingEditor from './PolicingEditor.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -445,6 +446,8 @@
         {:else if path.startsWith('/interfaces/')}
           {#if path.endsWith('/mtu') && $model.interface.value}
             {#key path}<MTUEditor item={$model.interface.value} model={$model} {desktop} />{/key}
+          {:else if path.endsWith('/policing') && $model.interface.value}
+            {#key path}<PolicingEditor item={$model.interface.value} model={$model} {desktop} />{/key}
           {:else}<InterfaceDetail model={$model} {expert} {desktop} />{/if}
         {:else if path.startsWith('/changes/') && path !== '/changes/transactions'}
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}

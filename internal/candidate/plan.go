@@ -92,6 +92,14 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == InterfacePolicingSet {
+			if problem := policingProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, policingDiff(i, s)...)
+			continue
+		}
 		if IsMTUOperation(i.Operation) {
 			if problem := mtuProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -214,6 +222,19 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 	case "stage":
 		if len(cmd.Intents) == 0 || len(cmd.Intents) > MaxIntents {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
+		}
+		for _, in := range cmd.Intents {
+			if in.Policing != nil && in.Operation != InterfacePolicingSet {
+				return e, apitypes.Fail(422, "INVALID_INTERFACE_POLICING")
+			}
+		}
+		if hasPolicing(c.Intents) || cmd.Intents[0].Operation == InterfacePolicingSet {
+			var err error
+			c, err = stagePolicing(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if hasMTU(c.Intents) || IsMTUOperation(cmd.Intents[0].Operation) {
 			var err error
@@ -363,6 +384,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if i.Operation == InterfacePolicingSet {
+				return e, apitypes.Fail(409, "POLICING_RESTAGE_REQUIRED")
+			}
 			if IsMTUOperation(i.Operation) {
 				return e, apitypes.Fail(409, "MTU_RESTAGE_REQUIRED")
 			}
@@ -418,6 +442,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == InterfacePolicingSet {
+			checks = append(checks, policingChecks(i, s)...)
+			continue
+		}
 		if IsMTUOperation(i.Operation) {
 			checks = append(checks, mtuChecks(i, s)...)
 			continue
