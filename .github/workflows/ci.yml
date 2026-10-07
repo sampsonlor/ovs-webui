@@ -182,6 +182,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch
+      - name: Linux ingress policing protocol and early kernel gate
+        run: |
+          set -o pipefail
+          go test -json -count=1 -run '^TestLinuxPolicing' ./internal/provider/linux | tee test-results/go-policing-protocol.json
+          sudo -- python3 tests/daemon/inventory.py --bin-dir outputs/runtime --policing-only
       - name: Native explicit internal Interface MTU and compensation matrix
         run: |
           set -o pipefail
@@ -314,6 +319,7 @@ jobs:
           path: |
             test-results/go-tests.json
             test-results/go-safe-admission.json
+            test-results/go-policing-*.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json

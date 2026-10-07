@@ -36,7 +36,16 @@ def verify_policing(vsctl, get, call, bearer, eventually):
                             and a['exceed_action'] == 'drop' for a in item['linux_ingress_policing']['actions']):
                 return item
 
-        item = eventually(installed)
+        try:
+            item = eventually(installed)
+        except AssertionError as error:
+            # Only synthetic fixture state and kernel rates; never credentials,
+            # headers, sessions or a general-purpose HTTP dump.
+            last = interface()
+            diagnostic = {'observation': last.get('linux_ingress_policing') if last else None,
+                          'native_ifindex': last['fields']['ifindex'] if last else None,
+                          'kernel_filters': json.loads(tc('-j', 'filter', 'show', 'dev', name, 'parent', 'ffff:'))}
+            raise AssertionError('Synthetic ingress policing evidence: ' + json.dumps(diagnostic)) from error
         sample = item['linux_ingress_policing']
         assert sample['ifindex'] == json.loads(ip('-j', 'link', 'show', 'dev', name))[0]['ifindex']
         assert sample['source']['authority'] == 'linux-netlink-observation'
