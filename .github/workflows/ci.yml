@@ -122,7 +122,9 @@ jobs:
   go-runtime:
     name: Go runtime (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    # The full native/schema/browser/race matrix can exceed 30m on arm64.
+    # This is the job budget; test and production recovery deadlines stay bounded.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:

@@ -17,6 +17,8 @@
 
 第二轮 [CI 37618173795](https://github.com/sampsonlor/ovs-webui/actions/runs/37618173795) 双架构三 schema 共 84 项受控 policing native 场景全部通过；正式浏览器两项失败分别为审计 helper 写死 MTU 测试名称和限速编辑深链未加入服务端静态路由白名单。修复为使用精确身份的实际名称，并只增加合法 policing 页面路径，保留无效身份及额外子路径拒绝；正式流程增加桌面刷新，窄屏和 Reader 直接访问检查不移除。原始报告与失败截图独立保留，最终提交仍须完整 PR/main 门禁。
 
+[PR #88 最终 CI 37621394675](https://github.com/sampsonlor/ovs-webui/actions/runs/37621394675) 六项通过，双架构各 243 项 Go race、29 项正式浏览器及全部 native 矩阵报告/摘要和 24 张新截图已核验。合并至 main 后 [CI 37626916108](https://github.com/sampsonlor/ovs-webui/actions/runs/37626916108) 的 amd64 完整通过，arm64 在最后一项原生执行恢复步骤触及整个 job 的 30 分钟上限，被 GitHub 取消；明确 annotation 为 `The job has exceeded the maximum execution time of 30m0s`。其余 arm64 native、正式浏览器、race、系统/认证/TLS/库存步骤已通过，缺失尾部矩阵不能计为完整验收。新增限速矩阵后为完整 CI 作业配置 40 分钟预算；单项测试超时、重试及生产确认/恢复期限不变。原 main 取消报告独立保留，预算修复仍须完整 PR 和独立 main CI。
+
 新增截图前缀 `interface-policing-edit-`：bounds、standard、expert、tablet-review、mobile-review、awaiting、rolled-back、confirmed、drift、tablet-blocked、mobile-blocked、reader。最终交付检查双架构共 24 张；PR 逐张视觉审阅，main 复核代表模式、窄屏及例外。
 
 原始 burst=0 的策略范围之外继续 Observe；内核安装读证明不能替代实际流量效果验收。#21/#42 和 #71 保持各自完整范围开放。
