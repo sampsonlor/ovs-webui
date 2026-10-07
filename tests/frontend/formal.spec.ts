@@ -1841,9 +1841,18 @@ async function traceInterfaceEvidence(
     await expect
       .poll(() => new URL(page.url()).searchParams.get('cursor'))
       .toBeTruthy();
-    await expect(
-      page.getByRole('row').nth(1).getByRole('link'),
-    ).not.toHaveAttribute('href', first!);
+    await expect
+      .poll(
+        async () =>
+          (
+            await page
+              .getByRole('row')
+              .nth(1)
+              .getByRole('link')
+              .getAttribute('href')
+          )?.split('?')[0],
+      )
+      .not.toBe(first!.split('?')[0]);
     await page.reload();
     await expect(scope).toContainText(identity);
     await expect(page.getByRole('row')).toHaveCount(3);
