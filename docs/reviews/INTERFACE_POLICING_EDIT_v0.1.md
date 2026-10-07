@@ -15,6 +15,8 @@
 
 初轮 [CI 37616861046](https://github.com/sampsonlor/ovs-webui/actions/runs/37616861046) 的共享构建/单元、集成和 31 项原型浏览器通过；双架构 native 首版在外部 ingress 补偿状态分类与暂停 daemon 恢复两项失败。其余 12 项 native 正常/例外均通过。保留原始报告；修复将已确认的内核冲突映射为 rollback-conflict，并增加暂停恢复的原生 after-image 等待及只读补偿预检诊断。
 
+第二轮 [CI 37618173795](https://github.com/sampsonlor/ovs-webui/actions/runs/37618173795) 双架构三 schema 共 84 项受控 policing native 场景全部通过；正式浏览器两项失败分别为审计 helper 写死 MTU 测试名称和限速编辑深链未加入服务端静态路由白名单。修复为使用精确身份的实际名称，并只增加合法 policing 页面路径，保留无效身份及额外子路径拒绝；正式流程增加桌面刷新，窄屏和 Reader 直接访问检查不移除。原始报告与失败截图独立保留，最终提交仍须完整 PR/main 门禁。
+
 新增截图前缀 `interface-policing-edit-`：bounds、standard、expert、tablet-review、mobile-review、awaiting、rolled-back、confirmed、drift、tablet-blocked、mobile-blocked、reader。最终交付检查双架构共 24 张；PR 逐张视觉审阅，main 复核代表模式、窄屏及例外。
 
 原始 burst=0 的策略范围之外继续 Observe；内核安装读证明不能替代实际流量效果验收。#21/#42 和 #71 保持各自完整范围开放。

@@ -403,6 +403,7 @@ async function policingEditor(page: Page) {
   await page
     .getByRole('link', { name: 'Edit ingress policing →', exact: true })
     .click();
+  await page.reload();
   await expect(
     page.getByRole('heading', { name: 'Edit ingress policing', exact: true }),
   ).toBeVisible();
@@ -2013,6 +2014,8 @@ async function traceInterfaceEvidence(
   result: string,
   review = false,
 ) {
+  const target = await get(page.context(), `/interfaces/${identity}`);
+  expect(target.management_id).toBe(identity);
   const audit = await get(page.context(), `/audit?object_id=${identity}`);
   const record = audit.items.find(
     (r: Record<string, unknown>) =>
@@ -2035,7 +2038,7 @@ async function traceInterfaceEvidence(
   ).toBe(true);
   await page.goto(fixture.origin + `/interfaces/${identity}`);
   await expect(
-    page.getByRole('heading', { name: 'pi-ui-mtu', exact: true }),
+    page.getByRole('heading', { name: target.name, exact: true }),
   ).toBeVisible();
   const entry = page.getByRole('region', { name: 'Interface shared evidence' });
   for (const mode of ['Standard', 'Expert'] as const) {
