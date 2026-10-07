@@ -1866,6 +1866,21 @@ async function traceInterfaceEvidence(
     await expect(page.getByRole('row')).toHaveCount(3);
     expect(new URL(page.url()).searchParams.get('object_id')).toBe(identity);
   }
+  if (review) {
+    const unrelated = '99999999-9999-4999-8999-999999999999';
+    await page.goto(
+      fixture.origin + `/operations/audit/${record.id}?object_id=${unrelated}`,
+    );
+    await expect(
+      page.getByText(
+        'This record does not contain the selected object identity.',
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /^Open transaction · / }),
+    ).toHaveCount(0);
+  }
   await page.goto(
     fixture.origin + `/operations/audit/${record.id}?object_id=${identity}`,
   );
