@@ -282,6 +282,9 @@ def main():
             'source_authority': 'ovsdb-configuration', 'editable': False,
         }
         checks.append('five native Interface configuration observations preserve empty/zero and withhold all values for inventory-only tokens')
+        from policing import verify_policing
+        metrics['interface_linux_policing'] = verify_policing(vsctl, get, call, token['secret'], eventually)
+        checks.append('real kernel ingress police rates, partial action coverage, permission withholding and removal verified independently of OVS configuration')
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 

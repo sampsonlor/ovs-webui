@@ -42,6 +42,7 @@ type Service struct {
 	localInternalPortTargets       map[string]bool
 	localInternalPortDeleteTargets map[string]bool
 	deviceObserver                 DeviceObserver
+	policingObserver               PolicingObserver
 }
 
 func New(r Registry) *Service {
@@ -229,6 +230,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 					}
 					if op == "readInterface" {
 						item["linux_device"] = s.readDevice(ctx, v, b, fresh)
+						item["linux_ingress_policing"] = s.readPolicing(ctx, v, b, fresh, allowedConfig)
 					}
 					return item, nil
 				}

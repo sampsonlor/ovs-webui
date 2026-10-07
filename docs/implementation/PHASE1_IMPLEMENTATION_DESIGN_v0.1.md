@@ -123,7 +123,7 @@ Generation reconciliation 存储数据库 endpoint/name、schema digest、Open_v
 
 ## 字段 Authority 和原生 VLAN
 
-配置值由 OVSDB 对应列提供；OVS Interface.link_state、Linux carrier、NIC speed 是不同字段，各有 provider、observed_at、freshness、confidence、availability。Controller 对 OpenFlow 的 authority 不等于对所有 OVSDB 列的所有权。字段权限和 controller-owned/unknown 策略均由 mgrd 计算，Standard/Expert 不参与授权。
+配置值由 OVSDB 对应列提供；OVS Interface.link_state、Linux carrier、NIC speed 是不同字段，各有 provider、observed_at、freshness、confidence、availability。Interface E7 的独立 Linux ingress tc 规则观察详见 [实现说明](INTERFACE_POLICING_OBSERVE_v0.1.md)：安装规则不等于流量效果、OVS 所有权或 Applied，unknown/partial/withheld 不得折叠为未限速。Controller 对 OpenFlow 的 authority 不等于对所有 OVSDB 列的所有权。字段权限和 controller-owned/unknown 策略均由 mgrd 计算，Standard/Expert 不参与授权。
 
 VLAN intent 用 `port.vlan.set`，明确对象 binding 和 `vlan_mode/tag/trunks/cvlans`；mgrd 构造 typed ChangeSet 的 before/after，不能接收任意 row rewrite。Standard 支持 access、trunk、native-tagged、native-untagged；Advanced 的 dot1q-tunnel/QinQ 由 schema 与 validator 门禁控制。空 trunks 保留原生 all-VLAN 语义，并在 Diff 中明确扩大范围；原生缺省 mode 与不认识的值保留读回，不能静默归一化。普通可编辑 VLAN 范围为 1–4094；观察值保留 schema 允许的 0/4095，未经单独语义证明不提供相应写入。
 
