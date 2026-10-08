@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import type { Page, BrowserContext, Request } from '@playwright/test';
-import type { InterfacePage } from '../../clients/typescript/public-v1.generated';
+import type {
+  InterfacePage,
+  TopologyNode,
+} from '../../clients/typescript/public-v1.generated';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { requestID } from '../../frontend/src/api';
@@ -605,6 +608,279 @@ test('authentication diagnostics distinguish real browser admission from helper 
         ),
     ),
   ).toBe(true);
+});
+
+test('native topology stages immutable creation, compares native images and recovers through shared Safe Apply', async ({
+  page,
+  context,
+}) => {
+  const account = 'browser-topology';
+  await login(page, account);
+  await clean(context);
+  const topology = await get(context, '/inventory/topology');
+  expect(topology.editable).toBe(true);
+  const parent: TopologyNode = topology.nodes.find(
+    (n: TopologyNode) => n.binding.table === 'Bridge' && n.name === 'br-ui-top',
+  );
+  const before = vsctl('get', 'Bridge', parent.name, 'ports');
+  await page.goto(fixture.origin + '/switching/topology');
+  await page
+    .getByLabel('Existing object', { exact: true })
+    .selectOption(parent.binding.management_id);
+  await page
+    .getByLabel('New immutable name', { exact: true })
+    .fill('ti-ui-new');
+  await page.getByRole('checkbox', { name: /I have reviewed/ }).check();
+  await expect(
+    page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+  ).toBeEnabled();
+  await screen(page, 'topology-editor-standard');
+  await nativeTypeDepth(page, 'Expert');
+  await screen(page, 'topology-editor-expert');
+  await nativeTypeDepth(page, 'Standard');
+  await page
+    .getByRole('button', { name: 'Stage in Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+  expect(vsctl('--if-exists', 'get', 'Port', 'ti-ui-new', '_uuid')).toBe('');
+  const c = await get(context, '/candidate');
+  const created: TopologyNode = c.intents[0].topology_change.after.find(
+    (n: TopologyNode) =>
+      n.binding.table === 'Interface' && n.name === 'ti-ui-new',
+  );
+  const diff = page.getByRole('region', {
+    name: 'Native topology Diff',
+    exact: true,
+  });
+  await expect(diff).toContainText('ti-ui-new');
+  await expect(diff).toContainText('Not present');
+  await expect(diff).toContainText('High-risk Safe Apply');
+  await screen(page, 'topology-diff-standard');
+  await nativeTypeDepth(page, 'Expert');
+  await expect(diff).toContainText(created.binding.management_id);
+  await screen(page, 'topology-diff-expert');
+  await nativeTypeDepth(page, 'Standard');
+  for (const [width, height, device] of [
+    [900, 1000, 'tablet'],
+    [390, 844, 'mobile'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(
+      page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+    ).toBeDisabled();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await screen(page, `topology-${device}-review`);
+  }
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await validate(page);
+  await prepareApply(page, account);
+  await page
+    .getByRole('button', { name: 'Start Safe Apply', exact: true })
+    .click();
+  await awaiting(page);
+  expect(vsctl('get', 'Interface', 'ti-ui-new', '_uuid')).toBe(
+    created.binding.ovs_uuid,
+  );
+  await screen(page, 'topology-awaiting');
+  const transaction = page.url().split('/').pop()!;
+  await chooseDecision(page, 'Request rollback', 'rolled-back');
+  expect(vsctl('--if-exists', 'get', 'Port', 'ti-ui-new', '_uuid')).toBe('');
+  expect(vsctl('--if-exists', 'get', 'Interface', 'ti-ui-new', '_uuid')).toBe(
+    '',
+  );
+  expect(vsctl('get', 'Bridge', parent.name, 'ports')).toBe(before);
+  await screen(page, 'topology-rolled-back');
+  const audit = await get(
+    context,
+    `/audit?object_id=${created.binding.management_id}`,
+  );
+  expect(
+    audit.items.some(
+      (r: Record<string, unknown>) =>
+        r.transaction_id === transaction &&
+        r.operation === 'safe-apply-state' &&
+        r.result === 'rolled-back',
+    ),
+  ).toBe(true);
+  await page.goto(
+    fixture.origin + `/interfaces/${created.binding.management_id}`,
+  );
+  await expect(
+    page.getByText('This Interface identity is no longer available.', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole('link', { name: 'Open Interface Audit', exact: true })
+    .focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('region', { name: 'Evidence object scope' }),
+  ).toContainText(created.binding.management_id);
+  await screen(page, 'topology-retired-audit');
+});
+
+test('topology drift requires a fresh review and preserves the external change', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-topology');
+  await clean(context);
+  const topology = await get(context, '/inventory/topology');
+  const port: TopologyNode = topology.nodes.find(
+    (n: TopologyNode) => n.binding.table === 'Port' && n.name === 'ti-ui-a',
+  );
+  const destination: TopologyNode = topology.nodes.find(
+    (n: TopologyNode) =>
+      n.binding.table === 'Bridge' && n.name === 'br-ui-top-dst',
+  );
+  await page.goto(fixture.origin + '/switching/topology');
+  await page.getByLabel('Operation', { exact: true }).selectOption('port.move');
+  await page
+    .getByLabel('Existing object', { exact: true })
+    .selectOption(port.binding.management_id);
+  await page
+    .getByLabel('Destination Bridge', { exact: true })
+    .selectOption(destination.binding.management_id);
+  await page.getByRole('checkbox', { name: /I have reviewed/ }).check();
+  await page
+    .getByRole('button', { name: 'Stage in Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+  vsctl(
+    'set',
+    'Port',
+    port.name,
+    'other_config:synthetic-topology-drift=external',
+  );
+  try {
+    await expect(
+      page.getByRole('heading', {
+        name: 'Review and restage this topology change',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+    ).toBeDisabled();
+    expect(vsctl('port-to-br', port.name)).toBe('br-ui-top');
+    expect(
+      vsctl('get', 'Port', port.name, 'other_config:synthetic-topology-drift'),
+    ).toBe('external');
+    await screen(page, 'topology-drift-restage');
+  } finally {
+    await clean(context);
+    vsctl(
+      'remove',
+      'Port',
+      port.name,
+      'other_config',
+      'synthetic-topology-drift',
+    );
+  }
+});
+
+test('topology reader, withheld configuration and responsive editors cannot stage writes', async ({
+  page,
+  context,
+  browser,
+}) => {
+  await login(page, 'browser-topology-reader');
+  const topology = await get(context, '/inventory/topology');
+  expect(topology.editable).toBe(false);
+  const parent: TopologyNode = topology.nodes.find(
+    (n: TopologyNode) => n.binding.table === 'Bridge' && n.name === 'br-ui-top',
+  );
+  const writes: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() !== 'GET' && r.url().includes('/api/v1/candidate'))
+      writes.push(r.method());
+  });
+  await page.goto(fixture.origin + '/switching/topology');
+  await page
+    .getByLabel('Existing object', { exact: true })
+    .selectOption(parent.binding.management_id);
+  for (const mode of ['Standard', 'Expert'] as const) {
+    await nativeTypeDepth(page, mode);
+    await expect(
+      page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Workspace write permission is required.' }),
+    ).toBeVisible();
+    await screen(page, `topology-reader-${mode.toLowerCase()}`);
+  }
+  expect(writes).toEqual([]);
+  const other = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const observer = await other.newPage();
+    await login(observer, 'browser-topology-observer');
+    expect(
+      (
+        await other.request.get(fixture.origin + '/api/v1/inventory/topology')
+      ).status(),
+    ).toBe(403);
+    await observer.goto(fixture.origin + '/switching/topology');
+    await expect(
+      observer.getByText('Permission denied', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      observer.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toHaveCount(0);
+    await screen(observer, 'topology-configuration-withheld');
+  } finally {
+    await other.close();
+  }
+  await login(page, 'browser-topology');
+  await page.goto(fixture.origin + '/switching/topology');
+  await page
+    .getByLabel('Existing object', { exact: true })
+    .selectOption(parent.binding.management_id);
+  for (const [width, height, device] of [
+    [900, 1000, 'tablet'],
+    [390, 844, 'mobile'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(
+      page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'New topology changes require desktop.' }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await screen(page, `topology-${device}-editor`);
+  }
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  unit('stop', 'mgrd');
+  try {
+    await expect(
+      page.getByRole('button', { name: 'Stage in Candidate', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'Current authorization or connection' }),
+    ).toBeVisible();
+    await screen(page, 'topology-provider-unavailable');
+  } finally {
+    unit('start', 'mgrd');
+  }
 });
 
 test('controlled ingress policing uses Candidate, native units, kernel proof and exact Safe Apply rollback', async ({

@@ -116,6 +116,7 @@ type ObservedIntent struct {
 	DependencyRevision     Revision                   `json:"dependency_revision,omitempty"`
 	SchemaDigest           string                     `json:"schema_digest,omitempty"`
 	QinqContext            QinQContext                `json:"qinq_context,omitempty"`
+	TopologyChange         TopologyChange             `json:"topology_change,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
 	Bond                   NativeBond                 `json:"bond,omitempty"`
@@ -948,6 +949,55 @@ type InterfaceSpec struct {
 	Type    string                     `json:"type"`
 	Options map[string]json.RawMessage `json:"options"`
 }
+type TopologyRequest struct {
+	Name              string          `json:"name,omitempty"`
+	NativeType        string          `json:"native_type,omitempty"`
+	InterfaceNames    []string        `json:"interface_names,omitempty"`
+	SourcePorts       []ObjectBinding `json:"source_ports,omitempty"`
+	DestinationBridge ObjectBinding   `json:"destination_bridge,omitempty"`
+	MemberInterfaces  []ObjectBinding `json:"member_interfaces,omitempty"`
+	Peer              ObjectBinding   `json:"peer,omitempty"`
+	OfportRequest     int64           `json:"ofport_request,omitempty"`
+}
+type TopologyNode struct {
+	Binding              ObjectBinding              `json:"binding"`
+	Name                 string                     `json:"name"`
+	NativeType           string                     `json:"native_type"`
+	Links                []ObjectBinding            `json:"links"`
+	ConfigurationDigest  Revision                   `json:"configuration_digest"`
+	ConfigurationSummary map[string]json.RawMessage `json:"configuration_summary,omitempty"`
+	ExtraFields          map[string]json.RawMessage `json:"-"`
+}
+
+func (v *TopologyNode) UnmarshalJSON(data []byte) error {
+	type plain TopologyNode
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v TopologyNode) MarshalJSON() ([]byte, error) {
+	type plain TopologyNode
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type TopologyChange struct {
+	RootUuid       Id                         `json:"root_uuid"`
+	RootDependency Revision                   `json:"root_dependency"`
+	Before         []TopologyNode             `json:"before"`
+	After          []TopologyNode             `json:"after"`
+	Restored       []TopologyNode             `json:"restored"`
+	Replacements   map[string]json.RawMessage `json:"replacements"`
+	Request        TopologyRequest            `json:"request"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
+}
+
+func (v *TopologyChange) UnmarshalJSON(data []byte) error {
+	type plain TopologyChange
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v TopologyChange) MarshalJSON() ([]byte, error) {
+	type plain TopologyChange
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
 	Operation    string `json:"operation"`
@@ -1106,6 +1156,12 @@ type InterfacePolicingIntent struct {
 	Operation string          `json:"operation"`
 	Object    ObjectBinding   `json:"object"`
 	Policing  PolicingRequest `json:"policing"`
+}
+type TopologyIntent struct {
+	IntentId  Id              `json:"intent_id"`
+	Operation string          `json:"operation"`
+	Object    ObjectBinding   `json:"object"`
+	Topology  TopologyRequest `json:"topology"`
 }
 type InternalPortCreation struct {
 	Name            string                     `json:"name"`

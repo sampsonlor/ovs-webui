@@ -44,7 +44,14 @@ func identityReplacements(r execution.Record, s safety.Record) []map[string]any 
 	out := []map[string]any{}
 	for _, i := range r.Plan.Envelope.Candidate.Intents {
 		var previous, replacement []candidate.Binding
-		if i.Operation == candidate.BridgeDelete && i.Deletion != nil {
+		if i.Topology != nil {
+			for _, n := range i.Topology.Before {
+				if b, ok := i.Topology.Replacements[n.Binding.OVSUUID]; ok {
+					previous = append(previous, n.Binding)
+					replacement = append(replacement, b)
+				}
+			}
+		} else if i.Operation == candidate.BridgeDelete && i.Deletion != nil {
 			previous, replacement = i.Deletion.Source.Bindings(), i.Deletion.Replacement.Bindings()
 		} else if i.Operation == candidate.InternalPortDelete && i.PortDeletion != nil {
 			previous, replacement = i.PortDeletion.Source.Bindings(), i.PortDeletion.Replacement.Bindings()

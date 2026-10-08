@@ -50,14 +50,17 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
-	Name                 string  `json:"name"`
-	Version              string  `json:"version"`
-	Digest               string  `json:"digest"`
-	Tables               []Table `json:"tables"`
-	BridgeCreation       bool    `json:"-"`
-	InternalPortCreation bool    `json:"-"`
+	GraphDefaults        map[string]map[string]any `json:"-"`
+	Name                 string                    `json:"name"`
+	Version              string                    `json:"version"`
+	Digest               string                    `json:"digest"`
+	Tables               []Table                   `json:"tables"`
+	BridgeCreation       bool                      `json:"-"`
+	InternalPortCreation bool                      `json:"-"`
 }
 type Row struct {
+	// Private, complete persistent configuration. Public projections never emit it.
+	Configuration map[string]any `json:"private_configuration,omitempty"`
 	// Provider assertion about the FULL raw options map, not its public subset.
 	InterfaceOptionsEmpty *bool          `json:"interface_options_empty,omitempty"`
 	UUID                  string         `json:"uuid"`
@@ -123,7 +126,7 @@ type Reader interface {
 
 func Operation(id string) bool {
 	switch id {
-	case "readInventory", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond":
+	case "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond":
 		return true
 	}
 	return false

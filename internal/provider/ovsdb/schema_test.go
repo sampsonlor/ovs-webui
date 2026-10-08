@@ -88,9 +88,12 @@ func TestNativeIntegersSetsAndSecretOptions(t *testing.T) {
 	if root.Values["next_cfg"] != "9223372036854775807" || root.Values["cur_cfg"] != "-9223372036854775808" {
 		t.Fatal("64-bit precision lost")
 	}
-	b, _ := json.Marshal(rows)
+	b, _ := json.Marshal(rows["Interface"]["00000000-0000-4000-8000-000000000002"].Values)
 	if bytes.Contains(b, []byte("never-publish")) || !bytes.Contains(b, []byte("synthetic-peer")) {
 		t.Fatal("options allowlist")
+	}
+	if rows["Interface"]["00000000-0000-4000-8000-000000000002"].Configuration["options"].(map[string]any)["psk"] != "never-publish" {
+		t.Fatal("private unknown configuration not retained")
 	}
 	for _, bad := range []string{`["set",[1,1]]`, `["set",[1.5]]`, `9223372036854775808`} {
 		var v any

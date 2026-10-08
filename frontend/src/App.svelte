@@ -14,6 +14,7 @@
   import Evidence from './Evidence.svelte';
   import MTUEditor from './MTUEditor.svelte';
   import PolicingEditor from './PolicingEditor.svelte';
+  import TopologyEditor from './TopologyEditor.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -212,6 +213,7 @@
         </div>
       </header>
       <div class="change-strip">
+        <Link href="/switching/topology">Topology operations</Link>
         <Link
           href={candidate ? `/changes/candidates/${candidate.id}` : '/changes/candidate'}
           >Candidate {candidate
@@ -251,7 +253,9 @@
               >Recover original request</button
             >
           </section>{/if}
-        {#if path === '/ports'}
+        {#if path === '/switching/topology'}
+          <TopologyEditor model={$model} {desktop} {expert}/>
+        {:else if path === '/ports'}
           <header class="page-heading">
             <div>
               <p class="eyebrow">Switching / Ports</p>

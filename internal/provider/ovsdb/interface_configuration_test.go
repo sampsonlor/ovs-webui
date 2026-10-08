@@ -84,7 +84,15 @@ func TestInterfaceConfigurationUnknownSchemasDoNotInventSemantics(t *testing.T) 
 			}
 		}
 	}
-	if err := update(d, inventory.Rows{}, []byte(`{"Interface":{"00000000-0000-4000-8000-000000000001":{"new":{"name":"synthetic-unrequested","ingress_policing_burst":"synthetic-unpublished"}}}}`), true); err == nil {
-		t.Fatal("unrecognized column entered the monitor cache")
+	rows := inventory.Rows{}
+	if err := update(d, rows, []byte(`{"Interface":{"00000000-0000-4000-8000-000000000001":{"new":{"name":"synthetic-unrequested","ingress_policing_burst":"synthetic-unpublished"}}}}`), true); err != nil {
+		t.Fatal(err)
+	}
+	row := rows["Interface"]["00000000-0000-4000-8000-000000000001"]
+	if _, ok := row.Values["ingress_policing_burst"]; ok {
+		t.Fatal("unrecognized shape became a public observation")
+	}
+	if row.Configuration["ingress_policing_burst"] != "synthetic-unpublished" {
+		t.Fatal("private unknown configuration was lost")
 	}
 }

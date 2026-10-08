@@ -9,6 +9,9 @@ import (
 )
 
 func bridgeHostCheck(c candidate.Candidate) error {
+	if err := topologyHostCheck(c); err != nil {
+		return err
+	}
 	if _, _, _, ok := lifecycleHost(c); ok {
 		return apitypes.Fail(503, "BRIDGE_HOST_PROVIDER_UNAVAILABLE")
 	}

@@ -16,6 +16,12 @@ const CreationMarker = candidate.BridgeCreationMarker
 // after failure, rollback or deletion, even if the display name is unchanged.
 func ReserveCreations(ctx context.Context, tx *sql.Tx, transaction, marker string, c candidate.Candidate) error {
 	for _, i := range c.Intents {
+		if i.Topology != nil {
+			if err := reserveTopology(ctx, tx, transaction, marker, candidate.TopologyCreations(i, false)); err != nil {
+				return err
+			}
+			continue
+		}
 		if i.Operation != candidate.BridgeCreate && i.Operation != candidate.InternalPortCreate {
 			continue
 		}
@@ -58,6 +64,12 @@ func RetirePending(ctx context.Context, tx *sql.Tx, transaction string) error {
 // Normal deletion confirmation retires these unused reservations permanently.
 func ReserveRestorations(ctx context.Context, tx *sql.Tx, transaction, marker string, c candidate.Candidate) error {
 	for _, i := range c.Intents {
+		if i.Topology != nil {
+			if err := reserveTopology(ctx, tx, transaction, marker, candidate.TopologyCreations(i, true)); err != nil {
+				return err
+			}
+			continue
+		}
 		if i.Operation == candidate.InternalPortDelete {
 			if i.PortDeletion == nil || i.PortDeletion.Restoring || i.PortDeletion.Observed {
 				return apitypes.Fail(422, "INVALID_RESTORATION_RESERVATION")
@@ -82,6 +94,31 @@ func ReserveRestorations(ctx context.Context, tx *sql.Tx, transaction, marker st
 		creation := candidate.StoredIntent{Operation: candidate.BridgeCreate, Object: g.Bridge,
 			Creation: &candidate.BridgeCreation{Name: g.Name, Root: g.Root, Port: g.Port, Interface: g.Interface, AfterPresent: true}}
 		if err := ReserveCreations(ctx, tx, transaction, marker, candidate.Candidate{Intents: []candidate.StoredIntent{creation}}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func reserveTopology(ctx context.Context, tx *sql.Tx, transaction, marker string, bindings []candidate.Binding) error {
+	var count int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM identities").Scan(&count); err != nil {
+		return err
+	}
+	if count+len(bindings) > domain.MaxIdentities {
+		return apitypes.Fail(503, "IDENTITY_REGISTRY_FULL")
+	}
+	for _, b := range bindings {
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM identities WHERE management_id=? OR (generation=? AND table_name=? AND ovs_uuid=?)", b.ManagementID, b.Generation, b.Table, b.OVSUUID).Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			return apitypes.Fail(409, "CREATION_IDENTITY_CONSUMED")
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO identities VALUES(?,?,?,?,'pending')", b.ManagementID, b.Generation, b.Table, b.OVSUUID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO identity_creations VALUES(?,?,?)", b.ManagementID, transaction, marker); err != nil {
 			return err
 		}
 	}

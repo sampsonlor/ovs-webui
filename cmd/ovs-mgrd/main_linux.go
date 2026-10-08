@@ -55,6 +55,8 @@ func run() int {
 	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
+	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
+	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
 	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
 	localMTUInterfaces := flag.String("local-mtu-interfaces", "", "Reviewed Interface management IDs with explicit internal MTU authority; independent of Port grants")
@@ -227,6 +229,22 @@ func run() int {
 		var vlanIDs []string
 		if *localVLANPorts != "" {
 			vlanIDs = strings.Split(*localVLANPorts, ",")
+		}
+		topologyIDs := []string{}
+		if *localTopology != "" {
+			topologyIDs = strings.Split(*localTopology, ",")
+		}
+		if err = inventoryService.SetLocalTopologyObjects(topologyIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_TOPOLOGY_AUTHORITY")
+			return 2
+		}
+		topologyTargets := []string{}
+		if *localTopologyCreates != "" {
+			topologyTargets = strings.Split(*localTopologyCreates, ",")
+		}
+		if err = inventoryService.SetLocalTopologyCreates(topologyTargets); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_TOPOLOGY_CREATION_AUTHORITY")
+			return 2
 		}
 		if err = inventoryService.SetLocalVLANPorts(vlanIDs); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_VLAN_AUTHORITY")

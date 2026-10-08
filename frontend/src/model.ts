@@ -361,6 +361,8 @@ export class Controller {
               audit: 'audit.read',
             } as Record<string, string>
           )[parts[1]] ?? 'unavailable';
+      } else if (path === '/switching/topology') {
+        resourceURL = '/inventory/topology';capability='configuration.read';
       } else if (parts[0] === 'bridges') {
         resourceURL = path + (parts.length === 1 ? query : '');
         capability = 'inventory.read';
@@ -586,6 +588,10 @@ export class Controller {
         c.revision,
       ),
     );
+  }
+  stageNativeIntent(intent: object) {
+    const c=this.state.workspace.value?.candidate;if(!c)return;
+    return this.mutate(()=>this.api.command<Candidate>('/candidate','PATCH','workspace',{operation:'stage',intents:[intent]},c.revision),(value)=>`/changes/candidates/${(value as Candidate).id}`);
   }
   validate() {
     const c = this.state.workspace.value?.candidate;

@@ -59,6 +59,12 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	if !candidate.Passed(checks) {
 		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 	}
+	if _, ok := topologyIntent(envelope.Candidate); ok {
+		if topologyHostCheck(envelope.Candidate) != nil {
+			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+		}
+		return compileTopologyExecution(original.ID, marker, envelope, view, d, n.TopologyBefore)
+	}
 	if _, ok := internalPortIntent(envelope.Candidate); ok {
 		if bridgeHostCheck(envelope.Candidate) != nil {
 			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
