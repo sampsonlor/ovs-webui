@@ -64,3 +64,6 @@
 [Phase 1 看板](https://github.com/users/sampsonlor/projects/2)以 #29 为正式后端与集成总览，#30–#55 为 26 个工程任务。#30–#41 已完成，#42 与 #29 为 In Progress。#20–#28 已统一加入 Phase 1 milestone，继续保留独立功能验收。#52–#55 跟踪搜索/拓扑、OpenFlow 条件门禁、完整 Svelte/双语迁移和管理员/API 文档。
 
 历史记录：[集成接受 v0.1](reviews/INTEGRATION_v0.1.md)、[核心状态验收 v0.1](reviews/CORE_WORKFLOW_ACCEPTANCE_v0.1.md)、[本地持久化](contracts/LOCAL_PERSISTENCE_v0.1.md)、[本地验证](contracts/LOCAL_VALIDATION_v0.1.md)、[本地 Safe Apply](contracts/LOCAL_SAFE_APPLY_v0.1.md)。
+
+
+2026-10-08：E8 受控 ingress policing 已接受，标签 `phase1-interface-policing-edit-v0.1`；#71 M1 脱敏认证诊断已由 PR #90 合并并独立复验，标签 `phase1-auth-failure-diagnostics-v0.1`，历史根因继续开放。当前 E9 候选补齐 Interface 的 Bridge/type/OVS link 组合筛选、自然排序和范围保持，见[实现说明](implementation/INTERFACE_SELECTION_v0.1.md)与[审阅矩阵](reviews/INTERFACE_SELECTION_v0.1.md)。接受须最终 PR/main 完整报告与视觉证据，不关闭完整 #21/#42。

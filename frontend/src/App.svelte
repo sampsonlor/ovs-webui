@@ -453,7 +453,7 @@
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
         {:else if path.startsWith('/operations/events') || path.startsWith('/operations/audit')}
           <Evidence model={$model} {expert} />
-        {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path.startsWith('/bridges/')}
+        {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path === '/bridges' || path.startsWith('/bridges/')}
           <header class="page-heading">
             <div>
               <p class="eyebrow">Shared resources / authoritative evidence</p>
@@ -467,13 +467,14 @@
                           string
                         >
                       )[path.split('/')[2]]
-                    : path.startsWith('/bridges/')
+                    : path === '/bridges' ? 'Bridges' : path.startsWith('/bridges/')
                       ? 'Bridge'
                       : 'Interface'}
               </h1>
             </div>
             <button onclick={() => controller.refresh()}>Refresh resource</button>
           </header>
+          {#if path === '/bridges'}<p>Select a Bridge to review its Interfaces, or <Link href="/interfaces">review all Interfaces</Link>.</p>{/if}
           <LoadNotice load={$model.resource} />
           {#if $model.resource.value}
             {@const resource = $model.resource.value}
@@ -493,7 +494,7 @@
                     >{#each records as record}<tr
                         ><th scope="row"
                           >{#if itemPath(record)}<Link href={itemPath(record)!}
-                              >{text(record.operation ?? record.kind ?? record.id)}</Link
+                              >{text(record.name ?? record.operation ?? record.kind ?? record.id)}</Link
                             >{:else}{text(record.id)}{/if}</th
                         ><td
                           ><Status
@@ -505,9 +506,9 @@
                             )}
                           /></td
                         ><td
-                          >{text(
+                          >{#if path === '/bridges' && itemPath(record)}<Link href={`/interfaces?bridge_id=${String(record.id)}`}>Review Interfaces</Link>{:else}{text(
                             record.summary ?? record.occurred_at ?? record.correlation_id,
-                          )}</td
+                          )}{/if}</td
                         ></tr
                       >{:else}<tr
                         ><td colspan="3">No authorized records in this result.</td></tr
@@ -515,7 +516,8 @@
                   >
                 </table>
               </div>
-              {#if resource.truncated || resource.next_cursor}<p class="notice warning">
+              {#if path === '/bridges'}<div class="actions"><Link href="/bridges">First Bridges page</Link>{#if typeof resource.next_cursor === 'string'}<Link href={`/bridges?cursor=${encodeURIComponent(resource.next_cursor)}`}>Next Bridges page</Link>{/if}<span>{resource.truncated ? 'More Bridges exist in this server snapshot.' : 'End of this Bridge snapshot.'}</span></div>
+              {:else if resource.truncated || resource.next_cursor}<p class="notice warning">
                   This result is truncated. Additional records are available through the
                   public API; this page does not claim complete history.
                 </p>{/if}
@@ -536,6 +538,7 @@
                     </dt>
                     <dd class:mono={key.endsWith('id')}>{text(value)}</dd>{/each}
                 </dl>
+                {#if path.startsWith('/bridges/') && typeof resource.management_id === 'string' && refPath({kind: 'bridge', id: resource.management_id})}<p><Link href={`/interfaces?bridge_id=${resource.management_id}`}>Review Interfaces on this Bridge →</Link></p>{/if}
                 {#each ['resource_ref', 'job_ref', 'port_ref'] as key}{#if resource[key] && refPath(resource[key] as ResourceRef)}<p
                     >
                       <Link href={refPath(resource[key] as ResourceRef)!}

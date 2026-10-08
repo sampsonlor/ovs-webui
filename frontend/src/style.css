@@ -448,6 +448,9 @@ tr.conflict {
 .inventory-filters .filter-control {
   flex: 1 1 180px;
 }
+.query-summary {
+  overflow-wrap: anywhere;
+}
 .breadcrumbs {
   display: flex;
   flex-wrap: wrap;

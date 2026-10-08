@@ -294,6 +294,9 @@ def main():
             destination.write_text(json.dumps(evidence, indent=2) + '\n')
             print(json.dumps(evidence, indent=2))
             return
+        from interface_selection import verify_interface_selection
+        metrics['interface_selection'] = verify_interface_selection(vsctl, get, call, token['secret'], eventually, ovs_run, ovs)
+        checks.append('Interface natural selection, filtered cursor scope, configuration permissions and same-name Bridge retirement verified')
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
 

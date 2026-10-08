@@ -23,6 +23,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-reader', 'Reader'), ('browser-auth-diagnostics', 'Reader'), ('browser-revoke', 'NetworkAdmin'),
                        ('browser-bridge', 'NetworkAdmin'), ('browser-bridge-delete', 'NetworkAdmin'),
                        ('browser-qinq', 'NetworkAdmin'), ('browser-interfaces', 'Reader'),
+                       ('browser-interface-selection', 'Reader'), ('browser-interface-selection-observer', 'InterfaceObserver'),
                        ('browser-mtu', 'NetworkAdmin'), ('browser-mtu-drift', 'NetworkAdmin'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),

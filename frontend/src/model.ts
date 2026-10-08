@@ -18,6 +18,8 @@ import { ResponseFence } from '../../clients/typescript/recovery.ts';
 import { API, APIError } from './api.ts';
 import type { Pending } from './api';
 import { has } from './policy.ts';
+import { interfaceListPath, readInterfaceQuery } from './interface-query.ts';
+import type { InterfaceScope } from './interface-query';
 
 export type Load<T> = {
   status: 'loading' | 'ready' | 'unavailable' | 'denied';
@@ -47,6 +49,9 @@ export type Model = {
   interface: Load<Interface>;
   interfaceFilter: string;
   interfaceLimit: number;
+  interfaceBridgeID: string;
+  interfaceNativeType: string | null;
+  interfaceLinkState: string;
   workspace: Load<Workspace>;
   validation: Load<Validation>;
   transaction: Load<Transaction>;
@@ -69,8 +74,7 @@ function initial(path: string): Model {
     port: empty(),
     interfaces: empty(),
     interface: empty(),
-    interfaceFilter: '',
-    interfaceLimit: 25,
+    ...readInterfaceQuery(route(path).query),
     workspace: empty(),
     validation: empty(),
     transaction: empty(),
@@ -122,7 +126,6 @@ export class Controller {
     this.context++;
     this.fence.reset();
     this.api.session = session;
-    this.interfaceCursor = '';
     this.state = {
       ...initial(this.state.path + this.state.query),
       session,
@@ -187,8 +190,12 @@ export class Controller {
   }
   go(path: string) {
     this.fence.reset();
+    const target = route(path);
     this.update({
-      ...route(path),
+      ...target,
+      ...(target.path === '/interfaces'
+        ? readInterfaceQuery(target.query)
+        : {}),
       port: empty(),
       interfaces: empty(),
       interface: empty(),
@@ -213,6 +220,7 @@ export class Controller {
     const valid = () => context === this.context && this.fence.accepts(ticket);
     const path = this.state.path;
     const query = this.state.query;
+    const selectedBridge = readInterfaceQuery(query).interfaceBridgeID;
     try {
       const session = await this.api.read<Session>('/session');
       if (!valid()) return;
@@ -304,18 +312,19 @@ export class Controller {
             ),
           );
         else {
-          const query = new URLSearchParams({
-            limit: String(this.state.interfaceLimit),
-          });
-          if (this.state.interfaceFilter)
-            query.set('filter', this.state.interfaceFilter);
-          if (this.interfaceCursor) query.set('cursor', this.interfaceCursor);
+          const query = new URLSearchParams(this.state.query);
+          if (!query.has('limit')) query.set('limit', '25');
           tasks.push(
-            read<InterfacePage>(`/interfaces?${query}`, 'inventory.read').then(
-              (value) => {
-                changes.interfaces = value;
-              },
-            ),
+            read<InterfacePage>(
+              `/interfaces?${query}`,
+              !has(session, 'inventory.read')
+                ? 'inventory.read'
+                : query.has('native_type')
+                  ? 'configuration.read'
+                  : 'inventory.read',
+            ).then((value) => {
+              changes.interfaces = value;
+            }),
           );
         }
       }
@@ -353,7 +362,10 @@ export class Controller {
             } as Record<string, string>
           )[parts[1]] ?? 'unavailable';
       } else if (parts[0] === 'bridges') {
-        resourceURL = path;
+        resourceURL = path + (parts.length === 1 ? query : '');
+        capability = 'inventory.read';
+      } else if (path === '/interfaces' && selectedBridge) {
+        resourceURL = `/bridges/${encodeURIComponent(selectedBridge)}`;
         capability = 'inventory.read';
       } else if (path === '/changes/transactions') {
         resourceURL = '/transactions';
@@ -404,20 +416,19 @@ export class Controller {
     }
   }
   private portCursor = '';
-  private interfaceCursor = '';
   interfacePage(
     filter = this.state.interfaceFilter,
     limit = this.state.interfaceLimit,
     cursor = '',
+    scope: InterfaceScope = {
+      bridgeID: this.state.interfaceBridgeID,
+      nativeType: this.state.interfaceNativeType,
+      linkState: this.state.interfaceLinkState,
+    },
   ) {
-    this.fence.reset();
-    this.interfaceCursor = cursor;
-    this.update({
-      interfaces: empty(),
-      interfaceFilter: filter,
-      interfaceLimit: limit,
-    });
-    void this.refresh();
+    const path = interfaceListPath(filter, limit, cursor, scope);
+    if (typeof window !== 'undefined') history.pushState(null, '', path);
+    this.go(path);
   }
   page(cursor = '') {
     this.portCursor = cursor;

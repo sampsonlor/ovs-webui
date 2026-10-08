@@ -112,6 +112,7 @@ func (s *Service) Observed() bool { s.mu.RLock(); defer s.mu.RUnlock(); return s
 
 type cursor struct {
 	Principal, Permission, Operation, Filter, Generation, Snapshot, After string
+	Selection, Order                                                      string
 	Limit                                                                 int
 	Expires                                                               int64
 }
@@ -265,6 +266,15 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return nil, apitypes.Fail(422, "INVALID_FILTER")
 	}
 	cur := cursor{Principal: c.PrincipalID, Permission: c.Revision, Operation: op, Filter: filter, Generation: v.decision.Generation, Snapshot: v.id, Limit: limit, Expires: now.Add(30 * time.Second).UnixMilli()}
+	selection := interfaceSelection{}
+	if op == "listInterfaces" {
+		var err error
+		selection, err = selectInterfaces(v, q, allowedConfig)
+		if err != nil {
+			return nil, err
+		}
+		cur.Selection, cur.Order = Digest(selection), "name-natural-v1"
+	}
 	if token := q.Get("cursor"); token != "" {
 		if len(token) > 4096 {
 			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
@@ -278,7 +288,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
 		}
 		var old cursor
-		if json.Unmarshal(b, &old) != nil || old.Principal != cur.Principal || old.Permission != cur.Permission || old.Operation != cur.Operation || old.Filter != cur.Filter || old.Generation != cur.Generation || old.Snapshot != cur.Snapshot || old.Limit != cur.Limit || old.Expires <= now.UnixMilli() {
+		if json.Unmarshal(b, &old) != nil || old.Principal != cur.Principal || old.Permission != cur.Permission || old.Operation != cur.Operation || old.Filter != cur.Filter || old.Selection != cur.Selection || old.Order != cur.Order || old.Generation != cur.Generation || old.Snapshot != cur.Snapshot || old.Limit != cur.Limit || old.Expires <= now.UnixMilli() {
 			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
 		}
 		cur = old
@@ -305,17 +315,41 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			if !strings.Contains(strings.ToLower(textValue(row.Values["name"])), strings.ToLower(filter)) {
 				continue
 			}
+			if op == "listInterfaces" {
+				matched, err := selection.matches(v, b, row)
+				if err != nil {
+					return nil, err
+				}
+				if !matched {
+					continue
+				}
+			}
 			ids = append(ids, b.ManagementID)
 			bindings[b.ManagementID] = b
 		}
 	}
 	sort.Strings(ids)
+	if op == "listInterfaces" {
+		slices.SortFunc(ids, func(a, b string) int {
+			nameA := textValue(v.observation.Rows["Interface"][bindings[a].UUID].Values["name"])
+			nameB := textValue(v.observation.Rows["Interface"][bindings[b].UUID].Values["name"])
+			if n := naturalNameCompare(nameA, nameB); n != 0 {
+				return n
+			}
+			return strings.Compare(a, b)
+		})
+	}
+	start := 0
+	if cur.After != "" {
+		position := slices.Index(ids, cur.After)
+		if position < 0 {
+			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
+		}
+		start = position + 1
+	}
 	size := 0
 	more := false
-	for _, id := range ids {
-		if id <= cur.After {
-			continue
-		}
+	for _, id := range ids[start:] {
 		if len(items) >= limit {
 			more = true
 			break
