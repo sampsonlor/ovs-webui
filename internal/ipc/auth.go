@@ -154,9 +154,9 @@ func (h *Handler) authOperation(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var p *apitypes.Problem
 		if errors.As(err, &p) {
-			h.problem(w, r, p.Status, p.Code)
+			h.reject(w, r, p.Status, p.Code, "operation", err)
 		} else {
-			h.problem(w, r, 503, "AUTH_UNAVAILABLE")
+			h.reject(w, r, 503, "AUTH_UNAVAILABLE", "operation", err)
 		}
 		return
 	}

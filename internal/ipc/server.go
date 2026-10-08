@@ -214,18 +214,14 @@ func (h *Handler) decode(w http.ResponseWriter, r *http.Request, target any) boo
 func (h *Handler) queueError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, ErrQueueFull) {
 		w.Header().Set("Retry-After", "1")
-		h.problem(w, r, 429, "IPC_QUEUE_FULL")
+		h.reject(w, r, 429, "IPC_QUEUE_FULL", "queue", err)
 	} else {
-		h.problem(w, r, 504, "IPC_DEADLINE_EXCEEDED")
+		h.reject(w, r, 504, "IPC_DEADLINE_EXCEEDED", "queue", err)
 	}
 }
 
 func (h *Handler) problem(w http.ResponseWriter, r *http.Request, status int, code string) {
-	// Close instead of draining an untrusted/oversized body for another request.
-	r.Close = true
-	w.Header().Set("Connection", "close")
-	h.logger.Warn("ipc_request_rejected", "code", code)
-	h.write(w, status, Problem{Code: code})
+	h.reject(w, r, status, code, "protocol", nil)
 }
 
 func (h *Handler) write(w http.ResponseWriter, status int, value any) {
