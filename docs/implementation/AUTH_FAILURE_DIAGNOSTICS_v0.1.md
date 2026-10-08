@@ -19,7 +19,7 @@ mgrd 的 ipc_request_rejected 保留原公开 code，增加以下字段：
 | error_class | errors.Is/As 派生的固定分类：存储 busy/canceled/unavailable/not-found/commit-unknown，调用取消/期限、IPC 队列满、domain rejection、transport timeout 或 unclassified |
 | request_state | 记录时当前请求为 active、canceled 或 deadline_exceeded；与底层错误类别独立 |
 
-分类识别 wrapped errors，但不输出 Error()、SQL、URI、请求体、账号、grant、Cookie 或 CSRF。公开状态码、响应结构、Connection close 和队列 Retry-After 保持原行为。新增字段不更改授权判断、状态转换、存储降级或未知提交处置；unclassified 表示仍需进一步调查。
+分类识别 wrapped errors，但不输出 Error()、SQL、URI、请求体、账号、grant、Cookie 或 CSRF。生产统一脱敏器只允许这四个字段的编译内固定值，其余字符串、类型和 group 仍被遮蔽；handler 和 Unix 回归均经过生产脱敏器。公开状态码、响应结构、Connection close 和队列 Retry-After 保持原行为。新增字段不更改授权判断、状态转换、存储降级或未知提交处置；unclassified 表示仍需进一步调查。
 
 ## 浏览器与助手摘要
 

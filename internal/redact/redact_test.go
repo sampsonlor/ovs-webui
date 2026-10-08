@@ -26,3 +26,35 @@ func TestOperationalLogsAndDiagnosticDocumentsRedactSecrets(t *testing.T) {
 		t.Fatal("export redaction failed")
 	}
 }
+
+func TestAuthDiagnosticFieldsStayWithinCompiledVocabulary(t *testing.T) {
+	for _, tc := range []struct{ key, value string }{
+		{"operation", "security.read"}, {"phase", "operation"},
+		{"error_class", "storage_busy"}, {"request_state", "canceled"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			var out bytes.Buffer
+			logger := slog.New(New(slog.NewJSONHandler(&out, nil)))
+			logger.With(tc.key, tc.value).Warn("ipc_request_rejected")
+			var record map[string]any
+			if json.Unmarshal(out.Bytes(), &record) != nil || record[tc.key] != tc.value {
+				t.Fatal("compiled diagnostic lost in production redaction")
+			}
+			for _, invalid := range []any{
+				"synthetic-private-label", "ovsg_synthetic", "https://synthetic.invalid/private",
+				"SELECT private FROM synthetic", true, 7, slog.GroupValue(slog.String("service", "synthetic-private-label")),
+			} {
+				out.Reset()
+				logger.Warn("ipc_request_rejected", tc.key, invalid)
+				if json.Unmarshal(out.Bytes(), &record) != nil || record[tc.key] != Marker {
+					t.Fatal("unregistered diagnostic value or shape admitted")
+				}
+				out.Reset()
+				logger.With(tc.key, invalid).Warn("ipc_request_rejected")
+				if json.Unmarshal(out.Bytes(), &record) != nil || record[tc.key] != Marker {
+					t.Fatal("bound diagnostic bypassed redaction")
+				}
+			}
+		})
+	}
+}

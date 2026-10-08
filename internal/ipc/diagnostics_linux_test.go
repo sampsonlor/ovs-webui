@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
@@ -35,7 +36,7 @@ func (l *diagnosticLog) String() string {
 
 func TestUnixAuthFailureDiagnosticPreservesRemoteStatus(t *testing.T) {
 	var logs diagnosticLog
-	h := NewHandler(CurrentProtocol("test"), nil, slog.New(slog.NewJSONHandler(&logs, nil))).WithAuthentication(&diagnosticManager{err: repository.ErrBusy})
+	h := NewHandler(CurrentProtocol("test"), nil, slog.New(redact.New(slog.NewJSONHandler(&logs, nil)))).WithAuthentication(&diagnosticManager{err: repository.ErrBusy})
 	client, _ := testServer(t, h, uint32(os.Geteuid()))
 	credential := authn.Secret("ovsg_")
 	_, err := client.ReadAuth(context.Background(), credential, authn.Query{Method: "GET", URI: "/api/v1/session"})

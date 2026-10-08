@@ -14,6 +14,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
@@ -42,7 +43,7 @@ func TestAuthFailureDiagnosticsPreservePublicRejection(t *testing.T) {
 			const private = "synthetic-password-cookie-csrf-SQL-host-path"
 			var logs bytes.Buffer
 			err := fmt.Errorf("%s: %w", private, tc.err)
-			h := NewHandler(CurrentProtocol("test"), nil, slog.New(slog.NewJSONHandler(&logs, nil))).WithAuthentication(&diagnosticManager{err: err})
+			h := NewHandler(CurrentProtocol("test"), nil, slog.New(redact.New(slog.NewJSONHandler(&logs, nil)))).WithAuthentication(&diagnosticManager{err: err})
 			r := httptest.NewRequest("POST", "/ipc/v1/operations/security.read", strings.NewReader(`{"method":"GET","uri":"/api/v1/session?private=`+private+`"}`))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Authorization", "Bearer "+authn.Secret("ovsg_"))
@@ -87,7 +88,7 @@ func TestAuthDiagnosticClassifiesWrappedCausesWithoutMessages(t *testing.T) {
 
 func TestAuthDiagnosticQueueSeparatesRequestDeadlineAndRepositoryCause(t *testing.T) {
 	var logs bytes.Buffer
-	h := NewHandler(CurrentProtocol("test"), nil, slog.New(slog.NewJSONHandler(&logs, nil)))
+	h := NewHandler(CurrentProtocol("test"), nil, slog.New(redact.New(slog.NewJSONHandler(&logs, nil))))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	r := httptest.NewRequest("POST", "/ipc/v1/operations/auth.inspect", nil).WithContext(ctx)
@@ -111,7 +112,7 @@ func TestAuthDiagnosticNeverLogsUnknownPath(t *testing.T) {
 		t.Fatal("unregistered operation admitted")
 	}
 	var logs bytes.Buffer
-	h := NewHandler(CurrentProtocol("test"), nil, slog.New(slog.NewJSONHandler(&logs, nil)))
+	h := NewHandler(CurrentProtocol("test"), nil, slog.New(redact.New(slog.NewJSONHandler(&logs, nil))))
 	r := httptest.NewRequest("POST", "/ipc/v1/operations/"+private, nil)
 	h.problem(httptest.NewRecorder(), r, 404, "IPC_OPERATION_UNKNOWN")
 	if strings.Contains(logs.String(), private) || !strings.Contains(logs.String(), `"operation":"unknown"`) {
