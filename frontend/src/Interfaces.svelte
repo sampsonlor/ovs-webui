@@ -14,12 +14,15 @@
   let typeChoice = $state('all');
   let customType = $state('');
   let linkState = $state('');
+  let appliedQuery: string | undefined;
   const page = $derived(model.interfaces.value);
   const canReadType = $derived(has(model.session, 'configuration.read'));
   const bridgePath = $derived(refPath({kind: 'bridge', id: model.interfaceBridgeID}));
   $effect(() => {
     // Only a route change replaces draft controls. Background polling does not.
     const query = model.query;
+    if (query === appliedQuery) return;
+    appliedQuery = query;
     untrack(() => {
       const q = new URLSearchParams(query);
       filter = q.get('filter') ?? '';

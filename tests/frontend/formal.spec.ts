@@ -900,10 +900,21 @@ test('Interface selections combine immutable Bridge, native type and OVS state b
       seenBridges.push(bridges.items[0].name);
       expect(bridges.snapshot_id).toBe(bridgeSnapshot);
       if (!bridges.next_cursor) break;
+      // Sealing has a fresh nonce: another GET has an equivalent but different
+      // token. Exercise the cursor actually issued to this browser page.
+      const nextLink = page.getByRole('link', {
+        name: 'Next Bridges page',
+        exact: true,
+      });
+      const browserCursor = new URL(
+        (await nextLink.getAttribute('href'))!,
+        fixture.origin,
+      ).searchParams.get('cursor');
+      expect(browserCursor).toBeTruthy();
       const next = page.waitForResponse(
         (r) =>
           new URL(r.url()).pathname === '/api/v1/bridges' &&
-          new URL(r.url()).searchParams.get('cursor') === bridges.next_cursor,
+          new URL(r.url()).searchParams.get('cursor') === browserCursor,
       );
       await page
         .getByRole('link', { name: 'Next Bridges page', exact: true })
@@ -948,6 +959,28 @@ test('Interface selections combine immutable Bridge, native type and OVS state b
       .selectOption('native:dummy');
     await page.getByLabel('OVS link state', { exact: true }).selectOption('up');
     await page.getByLabel('Page size', { exact: true }).selectOption('10');
+    // Wait for a real background refresh of the applied Bridge-only query.
+    // It must not replace the four unsubmitted controls with applied values.
+    await page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return (
+        url.pathname === '/api/v1/interfaces' &&
+        url.searchParams.get('bridge_id') === bridgeID &&
+        !url.searchParams.has('native_type')
+      );
+    });
+    await expect(
+      page.getByLabel('Interface name', { exact: true }),
+    ).toHaveValue('fs-ui-');
+    await expect(page.getByLabel('Native type', { exact: true })).toHaveValue(
+      'native:dummy',
+    );
+    await expect(
+      page.getByLabel('OVS link state', { exact: true }),
+    ).toHaveValue('up');
+    await expect(page.getByLabel('Page size', { exact: true })).toHaveValue(
+      '10',
+    );
     const firstReply = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === '/api/v1/interfaces' &&
@@ -1624,9 +1657,20 @@ test('Interface configuration withholding, empty filters, stale provider and ret
     await page
       .getByRole('button', { name: 'Apply filter', exact: true })
       .click();
-    await expect(
-      page.getByRole('link', { name: 'if-retire', exact: true }),
-    ).toHaveAttribute('href', '/interfaces/' + replacement.management_id);
+    const replacementLink = page.getByRole('link', {
+      name: 'if-retire',
+      exact: true,
+    });
+    await expect(replacementLink).toBeVisible();
+    const replacementURL = new URL(
+      (await replacementLink.getAttribute('href'))!,
+      fixture.origin,
+    );
+    expect(replacementURL.pathname).toBe(
+      '/interfaces/' + replacement.management_id,
+    );
+    expect(replacementURL.searchParams.get('filter')).toBe('if-retire');
+    expect(replacementURL.searchParams.get('limit')).toBe('25');
   } finally {
     vsctl('--if-exists', 'del-port', 'br-inv', 'if-retire');
   }

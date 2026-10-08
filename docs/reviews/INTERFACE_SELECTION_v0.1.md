@@ -19,6 +19,8 @@
 
 截图存在不等于视觉接受。需要逐张复核最终 PR 的十一类 × 双架构新截图，并核对 main 的代表模式、窄屏及异常。正式结果、同树 main、accepted annotated tag 和分支清理须共同成立后才接受本批。完整 #21/#42 不因本批只读清单改进关闭；Profile/Label 筛选、分类及其他管理范围继续在原责任任务中验收，#71 历史根因未在本批宣称修复。
 
+候选 CI `37731184002` 的原始报告与五组 artifacts 已单独保留。双架构正式浏览器各 29 项通过、两项断言失败和一项等待错误：后台 Model 更新重置尚未提交的表单，Bridge 跨页测试比较了独立请求随机封装的不同 cursor，既有详情链接断言尚未包含保留的筛选参数。修正实际 query 变化门禁、核对页面实际收到的 cursor 和精确新身份/URL 范围，并增加真实后台刷新后四项输入保持检查；现有 timeout、零 retry、全部用例及生产安全门禁保持。该失败执行不计为本批验收，接受仍取决于修正后完整 PR 和独立 main。
+
 ## Review disposition
 
 最终 disposition 与准确 head/run/artifact/视觉证据记录于 `phase1-interface-selection-v0.1` annotated tag 和 #21/#42 的 E9 接受记录；该标签创建前为交付候选。
