@@ -974,11 +974,17 @@ test('Interface selections combine immutable Bridge, native type and OVS state b
     await expect(
       page.getByRole('link', { name: 'fs-ui-1', exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Standard', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
     await screen(page, 'interface-selection-standard');
-    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Expert', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Native type', { exact: true })).toBeEnabled();
     await screen(page, 'interface-selection-expert');
-    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
     await page.getByRole('link', { name: 'fs-ui-1', exact: true }).focus();
     await page.keyboard.press('Enter');
     expect(new URL(page.url()).searchParams.get('bridge_id')).toBe(bridgeID);
