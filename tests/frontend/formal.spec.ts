@@ -883,11 +883,54 @@ test('Interface selections combine immutable Bridge, native type and OVS state b
         return values.items.map((item: { name: string }) => item.name);
       })
       .toEqual(['fs-ui-5']);
-    await page.goto(fixture.origin + '/bridges?filter=br-filter-ui&limit=1');
+    await page.goto(fixture.origin + '/bridges?filter=br-filter-&limit=1');
     await page.reload();
     await expect(
       page.getByRole('heading', { name: 'Bridges', exact: true }),
     ).toBeVisible();
+    let bridges = await get(context, '/bridges?filter=br-filter-&limit=1');
+    const firstBridgeName = bridges.items[0].name;
+    const seenBridges: string[] = [];
+    const bridgeSnapshot = bridges.snapshot_id;
+    for (let n = 0; n < 3; n++) {
+      expect(bridges.items).toHaveLength(1);
+      await expect(
+        page.getByRole('link', { name: bridges.items[0].name, exact: true }),
+      ).toBeVisible();
+      seenBridges.push(bridges.items[0].name);
+      expect(bridges.snapshot_id).toBe(bridgeSnapshot);
+      if (!bridges.next_cursor) break;
+      const next = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname === '/api/v1/bridges' &&
+          new URL(r.url()).searchParams.get('cursor') === bridges.next_cursor,
+      );
+      await page
+        .getByRole('link', { name: 'Next Bridges page', exact: true })
+        .click();
+      const reply = await next;
+      expect(reply.status()).toBe(200);
+      expect(new URL(page.url()).searchParams.get('filter')).toBe('br-filter-');
+      expect(new URL(page.url()).searchParams.get('limit')).toBe('1');
+      bridges = await reply.json();
+    }
+    expect(seenBridges.sort()).toEqual(['br-filter-alt', 'br-filter-ui']);
+    await expect(
+      page.getByRole('link', { name: 'Next Bridges page', exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('link', { name: 'First Bridges page', exact: true })
+      .click();
+    expect(new URL(page.url()).searchParams.get('filter')).toBe('br-filter-');
+    expect(new URL(page.url()).searchParams.get('limit')).toBe('1');
+    expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
+    await expect(
+      page.getByRole('link', { name: firstBridgeName, exact: true }),
+    ).toBeVisible();
+    if (firstBridgeName !== 'br-filter-ui')
+      await page
+        .getByRole('link', { name: 'Next Bridges page', exact: true })
+        .click();
     await expect(
       page.getByRole('link', { name: 'br-filter-ui', exact: true }),
     ).toBeVisible();

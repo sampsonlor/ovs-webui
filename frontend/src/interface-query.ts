@@ -49,3 +49,10 @@ export function interfaceListPath(
   if (cursor) q.set('cursor', cursor);
   return `/interfaces?${q}`;
 }
+
+export function bridgeListPath(query: string, cursor = ''): string {
+  const q = new URLSearchParams(query);
+  q.delete('cursor');
+  if (cursor) q.set('cursor', cursor);
+  return '/bridges' + (q.size ? `?${q}` : '');
+}

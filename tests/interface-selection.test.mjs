@@ -5,6 +5,7 @@ import { Controller } from '../frontend/src/model.ts';
 import {
   interfaceListPath,
   readInterfaceQuery,
+  bridgeListPath,
 } from '../frontend/src/interface-query.ts';
 import { api as contract } from '../contracts/public-v1.mjs';
 
@@ -76,6 +77,15 @@ await test('Interface selection URLs distinguish empty native default and retain
       (p) => p.name === 'native_type',
     ),
   );
+  for (const cursor of ['', 'next+Bridge']) {
+    const bridgeQuery = new URL(
+      bridgeListPath('?filter=br+%26+12&limit=1&cursor=old', cursor),
+      'https://synthetic.invalid',
+    ).searchParams;
+    assert.equal(bridgeQuery.get('filter'), 'br & 12');
+    assert.equal(bridgeQuery.get('limit'), '1');
+    assert.equal(bridgeQuery.get('cursor'), cursor || null);
+  }
 });
 
 await test('Interface route reload and pagination preserve server selection and Bridge identity', async () => {

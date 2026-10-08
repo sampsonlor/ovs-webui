@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { start, refPath } from './model';
   import { editReason, has, vlanText } from './policy';
+  import { bridgeListPath } from './interface-query';
   import type { ResourceRef } from '../../clients/typescript/public-v1.generated';
   import Link from './Link.svelte';
   import Status from './Status.svelte';
@@ -516,7 +517,7 @@
                   >
                 </table>
               </div>
-              {#if path === '/bridges'}<div class="actions"><Link href="/bridges">First Bridges page</Link>{#if typeof resource.next_cursor === 'string'}<Link href={`/bridges?cursor=${encodeURIComponent(resource.next_cursor)}`}>Next Bridges page</Link>{/if}<span>{resource.truncated ? 'More Bridges exist in this server snapshot.' : 'End of this Bridge snapshot.'}</span></div>
+              {#if path === '/bridges'}<div class="actions"><Link href={bridgeListPath($model.query)}>First Bridges page</Link>{#if typeof resource.next_cursor === 'string'}<Link href={bridgeListPath($model.query, resource.next_cursor)}>Next Bridges page</Link>{/if}<span>{resource.truncated ? 'More Bridges exist in this server snapshot.' : 'End of this Bridge snapshot.'}</span></div>
               {:else if resource.truncated || resource.next_cursor}<p class="notice warning">
                   This result is truncated. Additional records are available through the
                   public API; this page does not claim complete history.
