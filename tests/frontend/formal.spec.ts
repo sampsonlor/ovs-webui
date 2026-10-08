@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
-import type { Page, BrowserContext } from '@playwright/test';
+import type { Page, BrowserContext, Request } from '@playwright/test';
 import type { InterfacePage } from '../../clients/typescript/public-v1.generated';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { requestID } from '../../frontend/src/api';
+import { AuthDiagnostics } from './auth-diagnostics';
 
 type Fixture = {
   origin: string;
@@ -29,6 +30,94 @@ const vsctl = (...args: string[]) =>
 const unit = (action: string, name: string) =>
   execFileSync('systemctl', [action, fixture.units[name]], { stdio: 'pipe' });
 const evidence = 'test-results/frontend-evidence';
+const authDiagnostics = new WeakMap<BrowserContext, AuthDiagnostics>();
+const stopAuthDiagnostics = new WeakMap<BrowserContext, () => Promise<void>>();
+const authContexts = new Map<string, Set<BrowserContext>>();
+
+function watchAuthContext(context: BrowserContext): AuthDiagnostics {
+  const existing = authDiagnostics.get(context);
+  if (existing) return existing;
+  const diagnostics = new AuthDiagnostics(fixture.origin);
+  authDiagnostics.set(context, diagnostics);
+  const id = test.info().testId;
+  const contexts = authContexts.get(id) ?? new Set<BrowserContext>();
+  contexts.add(context);
+  authContexts.set(id, contexts);
+  const requests = new Map<Request, number>();
+  const pending = new Set<Promise<void>>();
+  const started = (request: Request) => {
+    const ticket = diagnostics.begin(
+      request.url(),
+      request.method(),
+      'browser',
+    );
+    if (ticket !== null) requests.set(request, ticket);
+  };
+  const failed = (request: Request) => {
+    diagnostics.failed(requests.get(request) ?? null);
+    requests.delete(request);
+  };
+  const responded = (reply: import('@playwright/test').Response) => {
+    const ticket = requests.get(reply.request());
+    if (ticket === undefined) return;
+    requests.delete(reply.request());
+    const task = (async () => {
+      // Successful bodies contain credentials or protected resources: never
+      // read them for diagnostics. Failure parsing never retains its payload.
+      const code = reply.ok()
+        ? undefined
+        : (await reply.json().catch(() => null))?.code;
+      diagnostics.response(ticket, reply.status(), code);
+    })().catch(() => {
+      diagnostics.failed(ticket);
+    });
+    pending.add(task);
+    void task.finally(() => pending.delete(task));
+  };
+  context.on('request', started);
+  context.on('response', responded);
+  context.on('requestfailed', failed);
+  stopAuthDiagnostics.set(context, async () => {
+    context.off('request', started);
+    context.off('response', responded);
+    context.off('requestfailed', failed);
+    await Promise.allSettled(pending);
+  });
+  return diagnostics;
+}
+
+test.beforeEach(async ({ context }) => {
+  watchAuthContext(context);
+});
+
+test.afterEach(async ({ context }, info) => {
+  const contexts = authContexts.get(info.testId) ?? new Set([context]);
+  await Promise.all(
+    [...contexts].map(async (context) => {
+      await stopAuthDiagnostics.get(context)?.();
+    }),
+  );
+  const path = info.outputPath('auth-diagnostics.json');
+  mkdirSync(info.outputDir, { recursive: true });
+  writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        version: 1,
+        contexts: [...contexts].map((context) =>
+          authDiagnostics.get(context)?.snapshot(),
+        ),
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  await info.attach('auth-diagnostics', {
+    path,
+    contentType: 'application/json',
+  });
+  authContexts.delete(info.testId);
+});
 
 async function patchItem(context: BrowserContext, name: string) {
   const values: InterfacePage = await get(
@@ -185,8 +274,29 @@ async function stageAutomaticMTU(page: Page) {
   ).toBeVisible();
 }
 
+async function getReply(context: BrowserContext, path: string) {
+  const url = fixture.origin + '/api/v1' + path;
+  const diagnostics = watchAuthContext(context);
+  const ticket = diagnostics.begin(url, 'GET', 'helper');
+  try {
+    const response = await context.request.get(url);
+    const code =
+      ticket === null || response.ok()
+        ? undefined
+        : (await response.json().catch(() => null))?.code;
+    diagnostics?.response(ticket, response.status(), code);
+    return response;
+  } catch {
+    diagnostics?.failed(ticket);
+    // Playwright transport errors may include request headers in their call
+    // logs. Keep credentials out of JUnit/error-context as well as our summary.
+    throw new Error(
+      'Formal helper transport failed; see bounded auth diagnostics.',
+    );
+  }
+}
 async function get(context: BrowserContext, path: string) {
-  const response = await context.request.get(fixture.origin + '/api/v1' + path);
+  const response = await getReply(context, path);
   expect(response.status(), path).toBe(200);
   return response.json();
 }
@@ -256,6 +366,7 @@ async function command(
   return response.json();
 }
 async function login(page: Page, name = 'browser-admin') {
+  watchAuthContext(page.context());
   await page.goto(fixture.origin + '/ports');
   await page.getByLabel('Username', { exact: true }).fill(name);
   await page
@@ -449,6 +560,52 @@ async function waitInstalledPolicing(
       actions: rate === null && packet === null ? [] : [[rate, packet]],
     });
 }
+
+test('authentication diagnostics distinguish real browser admission from helper reads and signed-out rejection', async ({
+  page,
+  context,
+}) => {
+  const before = await getReply(context, '/session');
+  expect(before.status()).toBe(401);
+  await login(page, 'browser-auth-diagnostics');
+  expect((await getReply(context, '/session')).status()).toBe(200);
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Sign in', exact: true }),
+  ).toBeVisible();
+  expect((await getReply(context, '/session')).status()).toBe(401);
+  const entries = authDiagnostics.get(context)!.snapshot().entries;
+  expect(
+    entries.some(
+      (entry) => entry.operation === 'create_session' && entry.status === 201,
+    ),
+  ).toBe(true);
+  expect(
+    entries.some(
+      (entry) =>
+        entry.operation === 'read_session' &&
+        entry.source === 'browser' &&
+        entry.status === 200,
+    ),
+  ).toBe(true);
+  expect(
+    entries.some(
+      (entry) =>
+        entry.operation === 'read_session' &&
+        entry.source === 'helper' &&
+        entry.status === 401,
+    ),
+  ).toBe(true);
+  expect(
+    entries.every(
+      (entry) =>
+        entry.code === null ||
+        ['UNAUTHENTICATED', 'CREDENTIAL_EXPIRED_OR_REVOKED'].includes(
+          entry.code,
+        ),
+    ),
+  ).toBe(true);
+});
 
 test('controlled ingress policing uses Candidate, native units, kernel proof and exact Safe Apply rollback', async ({
   page,

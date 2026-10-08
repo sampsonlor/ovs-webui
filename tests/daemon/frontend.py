@@ -20,7 +20,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     # The deadline scenario has its own principal so rapid test logins/step-ups
     # respect the production per-account authentication budget.
     for name, role in [('browser-admin', 'Administrator'), ('browser-deadline', 'Administrator'),
-                       ('browser-reader', 'Reader'), ('browser-revoke', 'NetworkAdmin'),
+                       ('browser-reader', 'Reader'), ('browser-auth-diagnostics', 'Reader'), ('browser-revoke', 'NetworkAdmin'),
                        ('browser-bridge', 'NetworkAdmin'), ('browser-bridge-delete', 'NetworkAdmin'),
                        ('browser-qinq', 'NetworkAdmin'), ('browser-interfaces', 'Reader'),
                        ('browser-mtu', 'NetworkAdmin'), ('browser-mtu-drift', 'NetworkAdmin'),

@@ -24,6 +24,25 @@ var messages = map[string]bool{
 	"security_action_failed": true, "security_action_completed": true,
 }
 
+// Diagnostic attributes are fixed vocabularies, not another channel for
+// arbitrary operational strings, user labels, paths or driver errors.
+var diagnosticValues = map[string]map[string]bool{
+	"operation": {
+		"runtime.inspect": true, "auth.authenticate": true, "auth.inspect": true, "auth.check": true,
+		"auth.reauthenticate": true, "auth.revoke": true, "security.read": true, "security.execute": true,
+		"inventory.read": true, "candidate.prepare": true, "candidate.read": true, "candidate.validate": true,
+		"safe.admit": true, "safe.resolve": true, "safe.decide": true, "tls.execute": true, "tls.state": true,
+		"handshake": true, "health": true, "unknown": true,
+	},
+	"phase": {"protocol": true, "queue": true, "operation": true},
+	"error_class": {
+		"none": true, "ipc_queue_full": true, "storage_busy": true, "storage_canceled": true,
+		"storage_commit_unknown": true, "storage_unavailable": true, "storage_not_found": true,
+		"deadline_exceeded": true, "canceled": true, "domain_rejection": true, "transport_timeout": true, "unclassified": true,
+	},
+	"request_state": {"active": true, "canceled": true, "deadline_exceeded": true},
+}
+
 func sensitive(key string) bool {
 	key = strings.ToLower(strings.NewReplacer("_", "", "-", "", ".", "").Replace(key))
 	for _, part := range []string{"password", "privatekey", "sharedsecret", "credential", "authorization", "cookie", "csrf", "grant", "token", "masterkey", "keymaterial", "plaintext"} {
@@ -74,6 +93,13 @@ func (h Handler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 func safe(a slog.Attr) slog.Attr {
 	if sensitive(a.Key) {
+		return slog.String(a.Key, Marker)
+	}
+	if allowed, diagnostic := diagnosticValues[a.Key]; diagnostic {
+		v := a.Value.Resolve()
+		if v.Kind() == slog.KindString && allowed[v.String()] {
+			return slog.String(a.Key, v.String())
+		}
 		return slog.String(a.Key, Marker)
 	}
 	if a.Value.Kind() == slog.KindGroup {
