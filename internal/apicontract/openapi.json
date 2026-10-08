@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.22.0",
+    "version": "1.23.0",
     "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. General graph deletion, physical/member/other Interface mutations and full pages retain separate gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness."
   },
   "servers": [
@@ -6584,6 +6584,36 @@
               "minLength": 1,
               "maxLength": 1024
             }
+          },
+          {
+            "name": "bridge_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "native_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "link_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "up",
+                "down",
+                "unknown"
+              ]
+            }
           }
         ],
         "responses": {
@@ -6747,7 +6777,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Filters apply to the entire confirmed snapshot before pagination. bridge_id is an active immutable Bridge management identity; a retired or absent identity returns BRIDGE_SCOPE_NOT_FOUND. native_type is exact and requires configuration.read, including when empty (native system default); unknown is never inferred as a default. link_state is the OVS observation, with unknown covering empty, missing or unrecognized samples of a monitored column; no Linux carrier inference. Names use case-insensitive ASCII digit-run natural order, then exact name and management identity. Cursors bind every selection, order, principal, permission revision, generation and snapshot; changing selection requires the first page."
       }
     },
     "/interfaces/{interface_id}": {

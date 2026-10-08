@@ -16,7 +16,7 @@
   const deviceFields = [['driver_name', 'Driver'], ['driver_version', 'Driver version'], ['firmware_version', 'Firmware version'], ['bus_info', 'Reported bus'], ['numa_id', 'NUMA node'], ['if_type', 'Reported device type']];
 </script>
 
-<div class="breadcrumbs"><Link href="/interfaces">Interfaces</Link><span>› {item?.name ?? 'Interface'}</span></div>
+<div class="breadcrumbs"><Link href={`/interfaces${model.query}`}>Interfaces</Link><span>› {item?.name ?? 'Interface'}</span></div>
 <header class="page-heading"><div><p class="eyebrow">Switching / Interface detail</p><h1>{item?.name ?? 'Interface'}</h1><p>Native configuration and observations for this exact Interface identity.</p></div><button onclick={() => controller.refresh()}>Refresh resource</button></header>
 <LoadNotice load={model.interface} />
 {#if model.interface.error === 'NOT_FOUND'}<p class="notice warning">This Interface identity is no longer available. A same-name replacement has its own identity.</p>{/if}

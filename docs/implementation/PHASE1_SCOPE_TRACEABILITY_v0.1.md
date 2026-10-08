@@ -316,3 +316,5 @@ Architecture §17 另有 webd 被攻破不能自行扩大 Auth Grant 的硬不�
 #21 / #42 的 E7 子批次为 [Interface ingress policing 观察](INTERFACE_POLICING_OBSERVE_v0.1.md)，补充 Linux 实际规则证据；此增量不完成 P1-SW-01 的所有字段/类型/attachment 管理，也不替代 QoS/Queue 或实际流量验收。完整范围继续由原责任任务承担。
 
 #21 / #42 的 E8 子批次为 [Interface ingress policing 受控编辑](INTERFACE_POLICING_EDIT_v0.1.md)。在独立 root exclusive ingress 声明与字段权限下，通过 Candidate / Safe Apply 修改 standalone internal Interface 的单一 rate 或禁用，保留 burst=0 并要求原生与独立内核证据。自定义 burst、物理/成员及一般图管理继续单独验收。
+
+#21 / #42 的 E9 子批次为 [Interface 清单组合筛选与自然排序](INTERFACE_SELECTION_v0.1.md)。Bridge 稳定身份、精确原生类型与 OVS link state 在全库存快照上选择后分页；类型筛选遵守配置读取权限，URL/游标保留范围。同名 Bridge 重建、未知/陈旧/空结果分别验收，不替代其余原生管理及 Profile/Label 的责任范围。

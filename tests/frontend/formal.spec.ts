@@ -804,6 +804,534 @@ test('policing drift, read-only identities, permissions and responsive direct ed
   }
 });
 
+test('Interface selections combine immutable Bridge, native type and OVS state before natural pagination', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-interface-selection');
+  const mutations: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions|interfaces)/.test(request.url())
+    )
+      mutations.push(request.method());
+  });
+  const names = Array.from({ length: 12 }, (_, index) => `fs-ui-${12 - index}`);
+  vsctl(
+    'add-br',
+    'br-filter-ui',
+    '--',
+    'set',
+    'Bridge',
+    'br-filter-ui',
+    'datapath_type=dummy',
+    ...names.flatMap((name) => [
+      '--',
+      'add-port',
+      'br-filter-ui',
+      name,
+      '--',
+      'set',
+      'Interface',
+      name,
+      'type=dummy',
+    ]),
+  );
+  try {
+    vsctl(
+      'add-br',
+      'br-filter-alt',
+      '--',
+      'set',
+      'Bridge',
+      'br-filter-alt',
+      'datapath_type=dummy',
+      '--',
+      'add-port',
+      'br-filter-alt',
+      'fs-ui-other',
+      '--',
+      'set',
+      'Interface',
+      'fs-ui-other',
+      'type=dummy',
+    );
+    execFileSync(
+      'ovs-appctl',
+      [
+        '-t',
+        `${fixture.ovsDirectory}/switch.ctl`,
+        'netdev-dummy/set-admin-state',
+        'fs-ui-5',
+        'down',
+      ],
+      { stdio: 'pipe' },
+    );
+    let bridgeID = '';
+    await expect
+      .poll(async () => {
+        const bridges = await get(context, '/bridges?filter=br-filter-ui');
+        bridgeID =
+          bridges.items.find((b: { name: string }) => b.name === 'br-filter-ui')
+            ?.management_id ?? '';
+        if (!bridgeID) return [];
+        const values = await get(
+          context,
+          `/interfaces?bridge_id=${bridgeID}&filter=fs-ui-&link_state=down`,
+        );
+        return values.items.map((item: { name: string }) => item.name);
+      })
+      .toEqual(['fs-ui-5']);
+    await page.goto(fixture.origin + '/bridges?filter=br-filter-&limit=1');
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Bridges', exact: true }),
+    ).toBeVisible();
+    let bridges = await get(context, '/bridges?filter=br-filter-&limit=1');
+    const firstBridgeName = bridges.items[0].name;
+    const seenBridges: string[] = [];
+    const bridgeSnapshot = bridges.snapshot_id;
+    for (let n = 0; n < 3; n++) {
+      expect(bridges.items).toHaveLength(1);
+      await expect(
+        page.getByRole('link', { name: bridges.items[0].name, exact: true }),
+      ).toBeVisible();
+      seenBridges.push(bridges.items[0].name);
+      expect(bridges.snapshot_id).toBe(bridgeSnapshot);
+      if (!bridges.next_cursor) break;
+      // Sealing has a fresh nonce: another GET has an equivalent but different
+      // token. Exercise the cursor actually issued to this browser page.
+      const nextLink = page.getByRole('link', {
+        name: 'Next Bridges page',
+        exact: true,
+      });
+      const browserCursor = new URL(
+        (await nextLink.getAttribute('href'))!,
+        fixture.origin,
+      ).searchParams.get('cursor');
+      expect(browserCursor).toBeTruthy();
+      const next = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname === '/api/v1/bridges' &&
+          new URL(r.url()).searchParams.get('cursor') === browserCursor,
+      );
+      await page
+        .getByRole('link', { name: 'Next Bridges page', exact: true })
+        .click();
+      const reply = await next;
+      expect(reply.status()).toBe(200);
+      expect(new URL(page.url()).searchParams.get('filter')).toBe('br-filter-');
+      expect(new URL(page.url()).searchParams.get('limit')).toBe('1');
+      bridges = await reply.json();
+    }
+    expect(seenBridges.sort()).toEqual(['br-filter-alt', 'br-filter-ui']);
+    await expect(
+      page.getByRole('link', { name: 'Next Bridges page', exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('link', { name: 'First Bridges page', exact: true })
+      .click();
+    expect(new URL(page.url()).searchParams.get('filter')).toBe('br-filter-');
+    expect(new URL(page.url()).searchParams.get('limit')).toBe('1');
+    expect(new URL(page.url()).searchParams.has('cursor')).toBe(false);
+    await expect(
+      page.getByRole('link', { name: firstBridgeName, exact: true }),
+    ).toBeVisible();
+    if (firstBridgeName !== 'br-filter-ui')
+      await page
+        .getByRole('link', { name: 'Next Bridges page', exact: true })
+        .click();
+    await expect(
+      page.getByRole('link', { name: 'br-filter-ui', exact: true }),
+    ).toBeVisible();
+    await screen(page, 'interface-selection-bridge-picker');
+    await page
+      .getByRole('link', { name: 'Review Interfaces', exact: true })
+      .click();
+    expect(new URL(page.url()).searchParams.get('bridge_id')).toBe(bridgeID);
+    await expect(page.getByLabel('Interface Bridge scope')).toContainText(
+      'br-filter-ui',
+    );
+    await page.getByLabel('Interface name', { exact: true }).fill('fs-ui-');
+    await page
+      .getByLabel('Native type', { exact: true })
+      .selectOption('native:dummy');
+    await page.getByLabel('OVS link state', { exact: true }).selectOption('up');
+    await page.getByLabel('Page size', { exact: true }).selectOption('10');
+    // Wait for a real background refresh of the applied Bridge-only query.
+    // It must not replace the four unsubmitted controls with applied values.
+    await page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return (
+        url.pathname === '/api/v1/interfaces' &&
+        url.searchParams.get('bridge_id') === bridgeID &&
+        !url.searchParams.has('native_type')
+      );
+    });
+    await expect(
+      page.getByLabel('Interface name', { exact: true }),
+    ).toHaveValue('fs-ui-');
+    await expect(page.getByLabel('Native type', { exact: true })).toHaveValue(
+      'native:dummy',
+    );
+    await expect(
+      page.getByLabel('OVS link state', { exact: true }),
+    ).toHaveValue('up');
+    await expect(page.getByLabel('Page size', { exact: true })).toHaveValue(
+      '10',
+    );
+    const firstReply = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === '/api/v1/interfaces' &&
+        new URL(r.url()).searchParams.get('native_type') === 'dummy',
+    );
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    const reply = await firstReply;
+    expect(reply.status()).toBe(200);
+    let current = await reply.json();
+    const expected = Array.from(
+      { length: 12 },
+      (_, n) => `fs-ui-${n + 1}`,
+    ).filter((name) => name !== 'fs-ui-5');
+    const observed: string[] = [];
+    const identities = new Set<string>();
+    const snapshot = current.snapshot_id;
+    for (let n = 0; n < 12; n++) {
+      const visibleNames = current.items.map(
+        (item: { name: string }) => item.name,
+      );
+      const table = page.getByRole('region', {
+        name: 'Interfaces inventory',
+        exact: true,
+      });
+      await expect(table.getByRole('rowheader').getByRole('link')).toHaveText(
+        visibleNames,
+      );
+      for (const item of current.items) {
+        expect(item.bridge_ref.id).toBe(bridgeID);
+        expect(item.fields.type.value).toBe('dummy');
+        expect(item.fields.link_state.value).toEqual(['up']);
+        expect(identities.has(item.management_id)).toBe(false);
+        identities.add(item.management_id);
+      }
+      observed.push(...visibleNames);
+      expect(current.snapshot_id).toBe(snapshot);
+      if (!current.next_cursor) break;
+      const next = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname === '/api/v1/interfaces' &&
+          new URL(r.url()).searchParams.get('cursor') === current.next_cursor,
+      );
+      await page
+        .getByRole('button', { name: 'Next page', exact: true })
+        .click();
+      const response = await next;
+      expect(response.status()).toBe(200);
+      current = await response.json();
+    }
+    expect(observed).toEqual(expected);
+    await expect(
+      page.getByRole('button', { name: 'Next page', exact: true }),
+    ).toBeDisabled();
+    await page.getByRole('button', { name: 'First page', exact: true }).click();
+    await expect(
+      page.getByRole('link', { name: 'fs-ui-1', exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Native type', { exact: true })).toHaveValue(
+      'native:dummy',
+    );
+    await expect(
+      page.getByLabel('OVS link state', { exact: true }),
+    ).toHaveValue('up');
+    await expect(
+      page.getByRole('link', { name: 'fs-ui-1', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Standard', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    await screen(page, 'interface-selection-standard');
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Expert', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Native type', { exact: true })).toBeEnabled();
+    await screen(page, 'interface-selection-expert');
+    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await page.getByRole('link', { name: 'fs-ui-1', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    expect(new URL(page.url()).searchParams.get('bridge_id')).toBe(bridgeID);
+    await page
+      .getByRole('link', { name: 'Interfaces', exact: true })
+      .last()
+      .click();
+    await expect(page.getByLabel('Native type', { exact: true })).toHaveValue(
+      'native:dummy',
+    );
+    await expect(
+      page.getByRole('link', { name: 'fs-ui-1', exact: true }),
+    ).toBeVisible();
+    for (const [width, height, device] of [
+      [900, 1000, 'tablet'],
+      [390, 844, 'mobile'],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await screen(page, `interface-selection-${device}`);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    vsctl('--no-wait', 'set', 'Interface', 'fs-ui-12', 'type=""');
+    await expect
+      .poll(async () =>
+        (
+          await get(
+            context,
+            `/interfaces?bridge_id=${bridgeID}&filter=fs-ui-&native_type=`,
+          )
+        ).items.map((i: { name: string }) => i.name),
+      )
+      .toEqual(['fs-ui-12']);
+    await page.getByLabel('Native type', { exact: true }).selectOption('empty');
+    await page.getByLabel('OVS link state', { exact: true }).selectOption('');
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Interfaces inventory', exact: true })
+        .getByRole('rowheader')
+        .getByRole('link'),
+    ).toHaveText(['fs-ui-12']);
+    expect(new URL(page.url()).searchParams.has('native_type')).toBe(true);
+    expect(new URL(page.url()).searchParams.get('native_type')).toBe('');
+    await screen(page, 'interface-selection-native-default');
+    const futureType = 'future-native-' + 'x'.repeat(45);
+    vsctl('--no-wait', 'set', 'Interface', 'fs-ui-12', `type=${futureType}`);
+    await expect
+      .poll(async () =>
+        (
+          await get(
+            context,
+            `/interfaces?bridge_id=${bridgeID}&filter=fs-ui-&native_type=${futureType}`,
+          )
+        ).items.map((i: { name: string }) => i.name),
+      )
+      .toEqual(['fs-ui-12']);
+    await page
+      .getByLabel('Native type', { exact: true })
+      .selectOption('custom');
+    await page
+      .getByLabel('Exact native type', { exact: true })
+      .fill(futureType);
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Interfaces inventory', exact: true })
+        .getByRole('rowheader')
+        .getByRole('link'),
+    ).toHaveText(['fs-ui-12']);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await screen(page, 'interface-selection-custom-type');
+    expect(mutations).toEqual([]);
+  } finally {
+    vsctl(
+      '--if-exists',
+      'del-br',
+      'br-filter-ui',
+      '--',
+      '--if-exists',
+      'del-br',
+      'br-filter-alt',
+    );
+  }
+});
+
+test('Interface selection exceptions keep withheld, empty, stale and retired Bridge scopes explicit', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-interface-selection-observer');
+  vsctl(
+    'add-br',
+    'br-scope-retire',
+    '--',
+    'set',
+    'Bridge',
+    'br-scope-retire',
+    'datapath_type=dummy',
+    '--',
+    'add-port',
+    'br-scope-retire',
+    'scope-1',
+    '--',
+    'set',
+    'Interface',
+    'scope-1',
+    'type=dummy',
+  );
+  try {
+    let bridgeID = '';
+    await expect
+      .poll(async () => {
+        const values = await get(context, '/bridges?filter=br-scope-retire');
+        bridgeID =
+          values.items.find(
+            (b: { name: string }) => b.name === 'br-scope-retire',
+          )?.management_id ?? '';
+        return !!bridgeID;
+      })
+      .toBe(true);
+    for (const type of ['dummy', '', 'future-native']) {
+      const response = await getReply(
+        context,
+        `/interfaces?bridge_id=${bridgeID}&native_type=${type}`,
+      );
+      expect(response.status()).toBe(403);
+      expect((await response.json()).code).toBe('CAPABILITY_DENIED');
+    }
+    await page.goto(
+      fixture.origin + `/interfaces?bridge_id=${bridgeID}&native_type=dummy`,
+    );
+    await expect(
+      page.getByLabel('Native type', { exact: true }),
+    ).toBeDisabled();
+    await expect(page.getByRole('status')).toContainText('Permission denied');
+    await expect(
+      page.getByRole('region', { name: 'Interfaces inventory', exact: true }),
+    ).toHaveCount(0);
+    await screen(page, 'interface-selection-withheld');
+    await page
+      .getByRole('button', { name: 'Clear filters', exact: true })
+      .click();
+    expect(new URL(page.url()).searchParams.has('native_type')).toBe(false);
+    await expect(
+      page.getByRole('region', { name: 'Interfaces inventory', exact: true }),
+    ).toBeVisible();
+    await page.goto(
+      fixture.origin +
+        `/interfaces?bridge_id=${bridgeID}&filter=absent-synthetic-interface`,
+    );
+    await expect(
+      page.getByText('No Interfaces match this filter.', { exact: false }),
+    ).toBeVisible();
+    await screen(page, 'interface-selection-empty');
+    await page.getByLabel('Interface name', { exact: true }).fill('scope-1');
+    await page
+      .getByRole('button', { name: 'Apply filter', exact: true })
+      .click();
+    await expect(
+      page.getByRole('link', { name: 'scope-1', exact: true }),
+    ).toBeVisible();
+    execFileSync(
+      'ovs-appctl',
+      ['-t', `${fixture.ovsDirectory}/db.ctl`, 'exit'],
+      { stdio: 'pipe' },
+    );
+    try {
+      await expect(
+        page.getByText('Stale observation.', { exact: false }),
+      ).toBeVisible();
+      expect(new URL(page.url()).searchParams.get('bridge_id')).toBe(bridgeID);
+      await screen(page, 'interface-selection-stale');
+    } finally {
+      execFileSync(
+        'ovsdb-server',
+        [
+          fixture.database,
+          `--remote=punix:${fixture.dbSocket}`,
+          `--pidfile=${fixture.ovsDirectory}/db.pid`,
+          `--unixctl=${fixture.ovsDirectory}/db.ctl`,
+          '--detach',
+          '--no-chdir',
+          '--overwrite-pidfile',
+        ],
+        {
+          env: {
+            ...process.env,
+            OVS_RUNDIR: fixture.ovsDirectory,
+            OVS_LOGDIR: fixture.ovsDirectory,
+            OVS_DBDIR: fixture.ovsDirectory,
+          },
+          stdio: 'pipe',
+        },
+      );
+    }
+    await expect(
+      page.getByText('Stale observation.', { exact: false }),
+    ).toHaveCount(0);
+    vsctl('del-br', 'br-scope-retire');
+    await expect
+      .poll(async () =>
+        (await getReply(context, `/interfaces?bridge_id=${bridgeID}`)).status(),
+      )
+      .toBe(404);
+    vsctl(
+      'add-br',
+      'br-scope-retire',
+      '--',
+      'set',
+      'Bridge',
+      'br-scope-retire',
+      'datapath_type=dummy',
+      '--',
+      'add-port',
+      'br-scope-retire',
+      'scope-1',
+      '--',
+      'set',
+      'Interface',
+      'scope-1',
+      'type=dummy',
+    );
+    let replacementID = '';
+    await expect
+      .poll(async () => {
+        replacementID =
+          (await get(context, '/bridges?filter=br-scope-retire')).items.find(
+            (b: { management_id: string }) => b.management_id !== bridgeID,
+          )?.management_id ?? '';
+        return !!replacementID;
+      })
+      .toBe(true);
+    await expect(
+      page.getByText('The selected Bridge identity is no longer available.', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('bridge_id')).toBe(bridgeID);
+    await expect(
+      page.getByRole('region', { name: 'Interfaces inventory', exact: true }),
+    ).toHaveCount(0);
+    await screen(page, 'interface-selection-retired');
+    await page
+      .getByRole('button', { name: 'All Bridges', exact: true })
+      .click();
+    await expect(
+      page.getByRole('link', { name: 'scope-1', exact: true }),
+    ).toBeVisible();
+    const replacement = (await get(context, '/interfaces?filter=scope-1'))
+      .items[0];
+    expect(replacement.bridge_ref.id).toBe(replacementID);
+    expect(replacement.fields.type.availability).toBe('withheld');
+  } finally {
+    vsctl('--if-exists', 'del-br', 'br-scope-retire');
+  }
+});
+
 test('native Interfaces support snapshot filters, pagination, depth and responsive observation', async ({
   page,
   context,
@@ -919,9 +1447,11 @@ test('native Interfaces support snapshot filters, pagination, depth and responsi
     const iface = filtered.items[0];
     expect(iface.fields.mtu_request.value).toEqual(['1600']);
     await page.getByRole('link', { name: 'inv-p1', exact: true }).click();
-    await expect(page).toHaveURL(
-      fixture.origin + '/interfaces/' + iface.management_id,
+    expect(new URL(page.url()).pathname).toBe(
+      '/interfaces/' + iface.management_id,
     );
+    expect(new URL(page.url()).searchParams.get('filter')).toBe('inv-p1');
+    expect(new URL(page.url()).searchParams.get('limit')).toBe('10');
     await expect(
       page.getByRole('heading', {
         name: 'Native Interface fields',
@@ -1127,9 +1657,20 @@ test('Interface configuration withholding, empty filters, stale provider and ret
     await page
       .getByRole('button', { name: 'Apply filter', exact: true })
       .click();
-    await expect(
-      page.getByRole('link', { name: 'if-retire', exact: true }),
-    ).toHaveAttribute('href', '/interfaces/' + replacement.management_id);
+    const replacementLink = page.getByRole('link', {
+      name: 'if-retire',
+      exact: true,
+    });
+    await expect(replacementLink).toBeVisible();
+    const replacementURL = new URL(
+      (await replacementLink.getAttribute('href'))!,
+      fixture.origin,
+    );
+    expect(replacementURL.pathname).toBe(
+      '/interfaces/' + replacement.management_id,
+    );
+    expect(replacementURL.searchParams.get('filter')).toBe('if-retire');
+    expect(replacementURL.searchParams.get('limit')).toBe('25');
   } finally {
     vsctl('--if-exists', 'del-port', 'br-inv', 'if-retire');
   }
