@@ -28,12 +28,31 @@ type TopologyRequest struct {
 	Ofport         int       `json:"ofport_request,omitempty"`
 }
 type TopologyNode struct {
-	Summary map[string]any `json:"configuration_summary,omitempty"`
-	Binding Binding        `json:"binding"`
-	Name    string         `json:"name"`
-	Type    string         `json:"native_type"`
-	Links   []Binding      `json:"links"`
-	Digest  string         `json:"configuration_digest"`
+	Summary *TopologyConfigurationSummary `json:"configuration_summary,omitempty"`
+	Binding Binding                       `json:"binding"`
+	Name    string                        `json:"name"`
+	Type    string                        `json:"native_type"`
+	Links   []Binding                     `json:"links"`
+	Digest  string                        `json:"configuration_digest"`
+}
+
+// Explicit IPC types retain native empty sets and zero values without allowing
+// arbitrary nested objects through the strict signed-envelope decoder.
+type TopologyConfigurationSummary struct {
+	VLANMode      *[]string `json:"vlan_mode,omitempty"`
+	Tag           *[]string `json:"tag,omitempty"`
+	Trunks        *[]string `json:"trunks,omitempty"`
+	CVLANs        *[]string `json:"cvlans,omitempty"`
+	LACP          *[]string `json:"lacp,omitempty"`
+	BondMode      *[]string `json:"bond_mode,omitempty"`
+	OfportRequest *[]string `json:"ofport_request,omitempty"`
+	MTURequest    *[]string `json:"mtu_request,omitempty"`
+	PolicingRate  *string   `json:"ingress_policing_rate,omitempty"`
+	PolicingBurst *string   `json:"ingress_policing_burst,omitempty"`
+	PacketRate    *string   `json:"ingress_policing_kpkts_rate,omitempty"`
+	PacketBurst   *string   `json:"ingress_policing_kpkts_burst,omitempty"`
+	Fallback      *string   `json:"lacp-fallback-ab,omitempty"`
+	PatchPeer     *string   `json:"patch_peer,omitempty"`
 }
 type TopologyChange struct {
 	Allocations    map[string]string `json:"allocations,omitempty"`
@@ -719,7 +738,7 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	return c, nil
 }
 
-func TopologySummary(table string, cfg map[string]any) map[string]any {
+func TopologySummary(table string, cfg map[string]any) *TopologyConfigurationSummary {
 	out := map[string]any{}
 	columns := []string{"ofport_request", "mtu_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst"}
 	if table == "Port" {
@@ -745,7 +764,12 @@ func TopologySummary(table string, cfg map[string]any) map[string]any {
 			}
 		}
 	}
-	return CloneConfiguration(out)
+	encoded, err := json.Marshal(out)
+	var summary TopologyConfigurationSummary
+	if err != nil || json.Unmarshal(encoded, &summary) != nil {
+		return nil
+	}
+	return &summary
 }
 
 func clearBondFallback(cfg map[string]any) {

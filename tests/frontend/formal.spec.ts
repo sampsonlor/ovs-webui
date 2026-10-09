@@ -841,6 +841,8 @@ test('topology reader, withheld configuration and responsive editors cannot stag
   } finally {
     await other.close();
   }
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
   await login(page, 'browser-topology');
   await page.goto(fixture.origin + '/switching/topology');
   await page

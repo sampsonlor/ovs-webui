@@ -8,6 +8,7 @@
 | Explicit membership and unknown preservation | `TestTopologyRejectsImplicitStealingAndStaleOriginals`, `TestTopologySplitClearsBondOnlySettingsAndPreservesUnknownMap`, actual system device merge/split and unknown-map move/rollback |
 | Atomic native guards and foreign references | `TestTopologyNativePlansPreserveUnknownConfigurationAndGuardForeignReferences`, `TestNativeTopologySafety` late field/membership/foreign weak reference rejection and compensation conflict |
 | Public privacy and typed contracts | `TestTopologyPublicViewsNeverExposePrivateConfiguration`, closed topology command tests; unknown images remain manager-private |
+| Strict IPC transport | `TestStrictTopologyOriginalsRoundTripNativeSummariesAndSeal`: nonempty signed summaries survive read/validate/prepare, preserving empty sets and zero; modified, duplicate, unknown or case-ambiguous summary fields cannot bypass validation |
 | Current capability, ceiling and root admission | `TestTopologyValidationRequiresIndependentCapabilityAndCurrentCeiling`, root object/name and stale dependency tests |
 | Recovery and actual forwarding | Kernel system devices retained after Bond rollback, deleted rows GC and fresh identities, ofport runtime proof, Patch type recovery, lost reply without replay; real management-path Port move loses reachability and guarded rollback restores forwarding |
 | System device identity | Same-name Linux device replacement blocks unsent creation, Applied proof and compensation; private original ifindex bindings are never adopted from a replacement |
