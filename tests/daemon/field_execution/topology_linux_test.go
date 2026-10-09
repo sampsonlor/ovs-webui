@@ -9,6 +9,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
+	"github.com/sampsonlor/ovs-webui/internal/safety"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 	"net"
 	"os"
@@ -28,6 +29,7 @@ func topologyFixture(t *testing.T, kernel bool) (*fixture, string, string) {
 	for _, suffix := range []string{"a", "b"} {
 		p := "gt" + suffix + repository.NewID()[:7]
 		f.vs("add-port", name, p, "--", "set", "Interface", p, "type=internal")
+		f.topologyNode("Interface", p)
 	}
 	f.grantTopology(name, []string{"new-one", "new-bond"})
 	return f, name, other
@@ -72,18 +74,44 @@ func (f *fixture) topologyPorts(bridge string) []candidate.TopologyNode {
 }
 func (f *fixture) grantTopology(bridge string, names []string) {
 	f.t.Helper()
+	b := f.topologyNode("Bridge", bridge)
 	s := f.topologySnapshot()
 	ids := []string{}
 	for id := range s.Topology.Nodes {
 		ids = append(ids, id)
 	}
 	must(f.t, f.inventory.SetLocalTopologyObjects(ids))
-	b := f.topologyNode("Bridge", bridge)
 	targets := []string{}
 	for _, name := range names {
 		targets = append(targets, b.Binding.ManagementID+":"+name)
 	}
 	must(f.t, f.inventory.SetLocalTopologyCreates(targets))
+}
+func (f *fixture) waitTopology(id, state string) safety.Record {
+	f.t.Helper()
+	defer func() {
+		if !f.t.Failed() {
+			return
+		}
+		s := f.safeState(id)
+		r, err := f.engine.Read(f.ctx, id)
+		if err != nil {
+			return
+		}
+		f.t.Logf("topology state=%s reason=%s commit=%s applied=%s outcome=%s", s.State, s.Reason, r.Outcome.Commit, r.Outcome.Applied, r.Outcome.Reason)
+		observed := r.Plan.Envelope.Candidate
+		observed.Intents = append([]candidate.StoredIntent{}, observed.Intents...)
+		for k := range observed.Intents {
+			candidate.AfterImage(&observed.Intents[k])
+		}
+		checks, _ := candidate.Checks(observed, f.topologySnapshot())
+		for _, c := range checks {
+			if c.State != "allowed" {
+				f.t.Logf("topology gate=%s", c.Code)
+			}
+		}
+	}()
+	return f.waitSafety(id, state)
 }
 func (f *fixture) prepareTopology(object candidate.Binding, op string, r candidate.TopologyRequest) execution.Request {
 	f.t.Helper()
@@ -126,10 +154,10 @@ func TestNativeTopologyCore(t *testing.T) {
 			t.Fatal("stage wrote OVS")
 		}
 		id := f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		f.graphStates(in.Envelope.Candidate.Intents[0], "active")
 		f.decide(id, "confirm")
-		f.waitSafety(id, "confirmed")
+		f.waitTopology(id, "confirmed")
 		must(t, f.engine.Recover(f.ctx))
 		if f.proxy.sent.Load() != 1 {
 			t.Fatal("replayed creation")
@@ -151,12 +179,12 @@ func TestNativeTopologyCore(t *testing.T) {
 		f.configureSafety(&offset)
 		in := f.prepareTopology(f.topologyNode("Bridge", bridge).Binding, "bond.create", candidate.TopologyRequest{Name: "new-bond", NativeType: "system", InterfaceNames: devices})
 		id := f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		if f.vs("get", "Port", "new-bond", "bond_mode") != "active-backup" {
 			t.Fatal("wrong Bond mode")
 		}
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		f.graphAbsent(in.Envelope.Candidate.Intents[0])
 		for _, name := range devices {
 			if _, err := net.InterfaceByName(name); err != nil {
@@ -176,12 +204,12 @@ func TestNativeTopologyCore(t *testing.T) {
 		to := f.topologyNode("Bridge", other).Binding
 		in := f.prepareTopology(p.Binding, "port.move", candidate.TopologyRequest{Destination: &to})
 		id := f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		if f.vs("port-to-br", p.Name) != other {
 			t.Fatal("Port not moved")
 		}
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		if f.vs("port-to-br", p.Name) != bridge || f.vs("get", "Port", p.Name, "_uuid") != p.Binding.OVSUUID || f.vs("get", "Port", p.Name, "other_config:synthetic-unknown") != "keep-me" {
 			t.Fatal("identity or unknown configuration lost")
 		}
@@ -194,9 +222,9 @@ func TestNativeTopologyCore(t *testing.T) {
 		members := append(append([]candidate.Binding{}, ports[0].Links...), ports[1].Links...)
 		in := f.prepareTopology(ports[0].Binding, "bond.members.set", candidate.TopologyRequest{Sources: []candidate.Binding{ports[1].Binding}, Members: members})
 		id := f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		f.decide(id, "confirm")
-		f.waitSafety(id, "confirmed")
+		f.waitTopology(id, "confirmed")
 		if f.vs("--if-exists", "get", "Port", ports[1].Binding.OVSUUID, "_uuid") != "" {
 			t.Fatal("source Port not collected")
 		}
@@ -204,13 +232,13 @@ func TestNativeTopologyCore(t *testing.T) {
 		f.grantTopology(bridge, []string{ports[1].Name})
 		in = f.prepareTopology(ports[0].Binding, "bond.members.set", candidate.TopologyRequest{Members: ports[0].Links})
 		id = f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		split := f.topologyNode("Port", ports[1].Name)
 		if split.Binding == ports[1].Binding || !slices.Equal(split.Links, ports[1].Links) {
 			t.Fatal("split stole or recreated Interface")
 		}
 		f.decide(id, "confirm")
-		f.waitSafety(id, "confirmed")
+		f.waitTopology(id, "confirmed")
 	})
 	for _, op := range []string{"port.delete", "bridge.delete-tree"} {
 		t.Run(op+"_rollback_fresh_ids", func(t *testing.T) {
@@ -224,9 +252,9 @@ func TestNativeTopologyCore(t *testing.T) {
 			in := f.prepareTopology(object, op, candidate.TopologyRequest{})
 			i := in.Envelope.Candidate.Intents[0]
 			id := f.safeApply(in)
-			f.waitSafety(id, "awaiting-confirmation")
+			f.waitTopology(id, "awaiting-confirmation")
 			f.decide(id, "rollback")
-			f.waitSafety(id, "rolled-back")
+			f.waitTopology(id, "rolled-back")
 			for old, replacement := range i.Topology.Replacements {
 				if f.vs("--if-exists", "get", replacement.Table, old, "_uuid") != "" || f.vs("get", replacement.Table, replacement.OVSUUID, "_uuid") != replacement.OVSUUID {
 					t.Fatal("deleted identity reused or restoration missing")
@@ -242,12 +270,12 @@ func TestNativeTopologyCore(t *testing.T) {
 		f.configureSafety(&offset)
 		in := f.prepareTopology(iface.Binding, "interface.ofport.set", candidate.TopologyRequest{Ofport: 23})
 		id := f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		if f.vs("get", "Interface", iface.Name, "ofport") != "23" {
 			t.Fatal("only request was checked")
 		}
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		if f.vs("get", "Interface", iface.Name, "ofport_request") != "[]" {
 			t.Fatal("native empty request not restored")
 		}
@@ -260,12 +288,12 @@ func TestNativeTopologyCore(t *testing.T) {
 		f.configureSafety(&offset)
 		in := f.prepareTopology(a, "interface.patch.connect", candidate.TopologyRequest{Peer: &b})
 		id := f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		if f.vs("get", "Interface", a.OVSUUID, "type") != "patch" || f.vs("get", "Interface", b.OVSUUID, "options:peer") != ports[0].Name {
 			t.Fatal("nonreciprocal Patch type")
 		}
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		if f.vs("get", "Interface", a.OVSUUID, "type") != "internal" || f.vs("get", "Interface", a.OVSUUID, "options") != "{}" {
 			t.Fatal("type not restored")
 		}
@@ -324,10 +352,10 @@ func TestNativeTopologySafety(t *testing.T) {
 		var offset atomic.Int64
 		f.configureSafety(&offset)
 		id := f.safeApply(f.prepareTopology(p.Binding, "port.move", candidate.TopologyRequest{Destination: &to}))
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		f.vs("set", "Port", p.Name, "other_config:external=preserve")
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rollback-conflict")
+		f.waitTopology(id, "rollback-conflict")
 		if f.vs("port-to-br", p.Name) != other {
 			t.Fatal("external change overwritten")
 		}
@@ -380,7 +408,7 @@ func TestNativeTopologySafety(t *testing.T) {
 		to := f.topologyNode("Bridge", other).Binding
 		in := f.prepareTopology(f.topologyNode("Port", host).Binding, "port.move", candidate.TopologyRequest{Destination: &to})
 		id := f.safeApply(in)
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		if f.vs("port-to-br", host) != bridge || probe.Check(f.ctx) != nil {
 			t.Fatal("management forwarding not restored")
 		}
@@ -400,12 +428,12 @@ func TestNativeTopologyFields(t *testing.T) {
 		var offset atomic.Int64
 		f.configureSafety(&offset)
 		id := f.safeApply(f.prepareTopology(a, "interface.ofport.clear", candidate.TopologyRequest{}))
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		if f.vs("get", "Interface", a.OVSUUID, "ofport_request") != "[]" {
 			t.Fatal("clear became zero or missing")
 		}
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		if f.vs("get", "Interface", a.OVSUUID, "ofport_request") != "23" {
 			t.Fatal("explicit request not restored")
 		}
@@ -419,12 +447,12 @@ func TestNativeTopologyFields(t *testing.T) {
 		var offset atomic.Int64
 		f.configureSafety(&offset)
 		id := f.safeApply(f.prepareTopology(a, "interface.patch.disconnect", candidate.TopologyRequest{Peer: &b}))
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		if f.vs("get", "Interface", a.OVSUUID, "type") != "internal" {
 			t.Fatal("type not disconnected")
 		}
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rolled-back")
+		f.waitTopology(id, "rolled-back")
 		if f.vs("get", "Interface", a.OVSUUID, "type") != "patch" || f.vs("get", "Interface", b.OVSUUID, "options:peer") != p[0].Name {
 			t.Fatal("Patch pair not restored")
 		}
@@ -435,20 +463,20 @@ func TestNativeTopologyFields(t *testing.T) {
 		var offset atomic.Int64
 		f.configureSafety(&offset)
 		id := f.safeApply(f.prepareTopology(p.Binding, "port.delete", candidate.TopologyRequest{}))
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		f.decide(id, "confirm")
-		f.waitSafety(id, "confirmed")
+		f.waitTopology(id, "confirmed")
 		f.discardPortDraft()
 		f.grantTopology(bridge, []string{p.Name})
 		in := f.prepareTopology(f.topologyNode("Bridge", bridge).Binding, "port.create", candidate.TopologyRequest{Name: p.Name, NativeType: "internal"})
 		id = f.safeApply(in)
-		f.waitSafety(id, "awaiting-confirmation")
+		f.waitTopology(id, "awaiting-confirmation")
 		again := f.topologyNode("Port", p.Name)
 		if again.Binding == p.Binding || slices.Equal(again.Links, p.Links) {
 			t.Fatal("same-name object adopted old identity")
 		}
 		f.decide(id, "confirm")
-		f.waitSafety(id, "confirmed")
+		f.waitTopology(id, "confirmed")
 	})
 }
 

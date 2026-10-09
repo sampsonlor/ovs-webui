@@ -12,6 +12,9 @@ func TestTopologyNativePlansPreserveUnknownConfigurationAndGuardForeignReference
 	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			d, v, e := executionFixture(t, version)
+			if graphConfigurationColumn("Port", "bond_active_slave", d.native.Tables["Port"].Columns["bond_active_slave"]) || d.public.GraphDefaults["Port"]["bond_active_slave"] != nil {
+				t.Fatal("daemon active-member status became desired Bond configuration")
+			}
 			root := v.Observation.Rows["Open_vSwitch"][v.Observation.Evidence.Root]
 			root.Configuration = map[string]any{"bridges": root.Values["bridges"], "external_ids": root.Values["external_ids"]}
 			v.Observation.Rows["Open_vSwitch"][root.UUID] = root

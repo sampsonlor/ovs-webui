@@ -708,8 +708,10 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 		return slices.IndexFunc(g.Before, func(n TopologyNode) bool { return n.Name == a.Name && n.Binding.Table == a.Binding.Table }) - slices.IndexFunc(g.Before, func(n TopologyNode) bool { return n.Name == b.Name && n.Binding.Table == b.Binding.Table })
 	})
 	i := StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Schema: s.Schema, Dependency: t.RootDependency, Value: normalize(VLAN{}), Before: normalize(VLAN{}), Topology: g}
-	if !Passed(topologyChecks(i, s)) {
-		return fail("TOPOLOGY_POLICY_BLOCKED")
+	for _, check := range topologyChecks(i, s) {
+		if check.State != "allowed" {
+			return fail(check.Code)
+		}
 	}
 	c.Intents = []StoredIntent{i}
 	c.Generation = &s.Generation
