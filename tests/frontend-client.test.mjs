@@ -10,7 +10,7 @@ import {
   vlanNumbers,
 } from '../frontend/src/policy.ts';
 
-test('topology Safe Apply requires independent capability and complete current evidence', () => {
+void test('topology Safe Apply requires independent capability and complete current evidence', () => {
   const c = {
     id: 'synthetic-candidate',
     revision: 'synthetic-revision',
