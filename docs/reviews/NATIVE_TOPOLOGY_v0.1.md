@@ -10,6 +10,7 @@
 | Public privacy and typed contracts | `TestTopologyPublicViewsNeverExposePrivateConfiguration`, closed topology command tests; unknown images remain manager-private |
 | Current capability, ceiling and root admission | `TestTopologyValidationRequiresIndependentCapabilityAndCurrentCeiling`, root object/name and stale dependency tests |
 | Recovery and actual forwarding | Kernel system devices retained after Bond rollback, deleted rows GC and fresh identities, ofport runtime proof, Patch type recovery, lost reply without replay; real management-path Port move loses reachability and guarded rollback restores forwarding |
+| System device identity | Same-name Linux device replacement blocks unsent creation, Applied proof and compensation; private original ifindex bindings are never adopted from a replacement |
 | Formal browser normal flow | `native topology stages…`: actual Go/OVS Candidate, readable Diff, native apply, rollback/GC, retired Interface Audit and keyboard navigation |
 | Browser exceptions | `topology drift…`, `topology reader…`: external map preserved, restage required, Reader/withheld configuration, provider stop/recovery, no unauthorized mutations |
 | Depth and responsive responsibilities | Standard/Expert editor and Diff screenshots; tablet/mobile review with validation disabled and direct editor staging disabled, no page overflow |

@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
@@ -12,6 +13,77 @@ import (
 	"strconv"
 	"time"
 )
+
+func topologySystemNames(c candidate.Candidate) []string {
+	i, ok := topologyIntent(c)
+	if !ok {
+		return nil
+	}
+	names := []string{}
+	for _, nodes := range [][]candidate.TopologyNode{i.Topology.Before, i.Topology.After, i.Topology.Restored} {
+		for _, n := range nodes {
+			if n.Binding.Table == "Interface" && (n.Type == "system" || n.Type == "") && !slices.Contains(names, n.Name) {
+				names = append(names, n.Name)
+			}
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// Host identities are private execution evidence, never caller-supplied values.
+// Compensation retains the original host devices rather than adopting names.
+func prepareTopologyHost(p execution.Plan, view inventory.ExecutionView, original *nativePlan) (execution.Plan, error) {
+	i, ok := topologyIntent(p.Envelope.Candidate)
+	if !ok {
+		return p, nil
+	}
+	devices, err := topologyHostIdentities(p.Envelope.Candidate)
+	if err != nil {
+		return execution.Plan{}, err
+	}
+	if original != nil && candidate.Digest(devices) != candidate.Digest(original.TopologyDevices) {
+		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+	}
+	before := i.Topology.Before
+	if i.Topology.Compensating {
+		before = i.Topology.After
+	}
+	for _, n := range before {
+		if n.Binding.Table != "Interface" || n.Type != "system" && n.Type != "" {
+			continue
+		}
+		row := view.Observation.Rows["Interface"][n.Binding.OVSUUID]
+		if candidate.Digest(row.Values["ifindex"]) != candidate.Digest([]any{devices[n.Name]}) {
+			return execution.Plan{}, apitypes.Fail(409, "HOST_DEVICE_BINDING_UNPROVEN")
+		}
+	}
+	var n nativePlan
+	decoder := json.NewDecoder(bytes.NewReader(p.Native))
+	decoder.UseNumber()
+	if decoder.Decode(&n) != nil {
+		return execution.Plan{}, apitypes.Fail(503, "EXECUTION_PLAN_INVALID")
+	}
+	if len(devices) > 0 {
+		n.TopologyDevices = devices
+	}
+	p.Native, err = json.Marshal(n)
+	if err == nil && len(p.Native) > execution.MaxPlanBytes {
+		return execution.Plan{}, apitypes.Fail(429, "EXECUTION_PLAN_BUDGET")
+	}
+	return p, err
+}
+
+func topologyHostIdentityCheck(c candidate.Candidate, plan nativePlan) error {
+	if _, ok := topologyIntent(c); !ok {
+		return nil
+	}
+	devices, err := topologyHostIdentities(c)
+	if err != nil || candidate.Digest(devices) != candidate.Digest(plan.TopologyDevices) {
+		return apitypes.Fail(409, "HOST_DEVICE_IDENTITY_CHANGED")
+	}
+	return nil
+}
 
 func topologyIntent(c candidate.Candidate) (candidate.StoredIntent, bool) {
 	if len(c.Intents) == 1 && candidate.IsTopologyOperation(c.Intents[0].Operation) && c.Intents[0].Topology != nil {
@@ -124,6 +196,16 @@ func compileTopologyExecution(id, marker string, envelope candidate.Envelope, vi
 		return out, err
 	}
 	n := nativePlan{Operations: append([]map[string]any{rg}, guards...), Evidence: view.Observation.Evidence, CreationMarker: marker, InsertUUIDs: map[int]string{}, TopologyBefore: images, TopologyAfter: desired}
+	for _, node := range before {
+		if node.Binding.Table == "Interface" && (node.Type == "system" || node.Type == "") {
+			row := view.Observation.Rows["Interface"][node.Binding.OVSUUID]
+			binding, err := guard(d, "Interface", row, []string{"ifindex"}, []any{uuidCondition(row.UUID)})
+			if err != nil {
+				return out, err
+			}
+			n.Operations = append(n.Operations, binding)
+		}
+	}
 	n.Operations = append(n.Operations, topologyReferences(d, before, view.Candidate.Topology.Nodes)...)
 	for id := range g.Allocations {
 		binding := view.Candidate.Topology.Nodes[id].Binding
@@ -285,7 +367,15 @@ func topologyProof(p execution.Plan, view inventory.ExecutionView, d discovered)
 				return nil, errors.New("OFPORT_ALLOCATION_UNPROVEN")
 			}
 		}
-		guard, err := guard(d, "Interface", row, []string{"error", "ofport"}, []any{uuidCondition(row.UUID)})
+		columns := []string{"error", "ofport"}
+		if a.Type == "system" || a.Type == "" {
+			index := n.TopologyDevices[a.Name]
+			if index == "" || candidate.Digest(row.Values["ifindex"]) != candidate.Digest([]any{index}) {
+				return nil, errors.New("HOST_DEVICE_BINDING_UNPROVEN")
+			}
+			columns = append(columns, "ifindex")
+		}
+		guard, err := guard(d, "Interface", row, columns, []any{uuidCondition(row.UUID)})
 		if err != nil {
 			return nil, err
 		}

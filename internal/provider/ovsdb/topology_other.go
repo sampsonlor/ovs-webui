@@ -14,3 +14,7 @@ func topologyHostCheck(c candidate.Candidate) error {
 	return nil
 }
 func topologyHostApplied(c candidate.Candidate) error { return topologyHostCheck(c) }
+
+func topologyHostIdentities(c candidate.Candidate) (map[string]string, error) {
+	return nil, topologyHostCheck(c)
+}

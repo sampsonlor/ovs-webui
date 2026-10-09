@@ -310,6 +310,53 @@ func TestNativeTopologySafety(t *testing.T) {
 	if os.Getenv("OVS_EXECUTION_NATIVE_TEST") != "1" {
 		t.Skip("explicit native topology safety matrix")
 	}
+	t.Run("same_name_host_replacement_blocks_unsent_creation", func(t *testing.T) {
+		f, bridge, _ := topologyFixture(t, true)
+		name, peer := "hi"+repository.NewID()[:8], "hp"+repository.NewID()[:8]
+		f.run("ip", "link", "add", name, "type", "veth", "peer", "name", peer)
+		t.Cleanup(func() { _ = exec.Command("ip", "link", "del", name).Run() })
+		original, err := net.InterfaceByName(name)
+		must(t, err)
+		f.grantTopology(bridge, []string{name})
+		in := f.prepareTopology(f.topologyNode("Bridge", bridge).Binding, "port.create", candidate.TopologyRequest{Name: name, NativeType: "system"})
+		plan, err := f.executor.Prepare(f.ctx, repository.NewID(), candidate.Digest("synthetic-host-identity"), in.Envelope)
+		must(t, err)
+		f.run("ip", "link", "del", name)
+		f.run("ip", "link", "add", name, "type", "veth", "peer", "name", peer)
+		replacement, err := net.InterfaceByName(name)
+		must(t, err)
+		if original.Index == replacement.Index {
+			t.Fatal("fixture did not replace the host identity")
+		}
+		out := f.executor.Commit(f.ctx, plan, func() error { return nil })
+		if out.Commit != "rejected" || out.Reason != "topology-host-identity-changed" || f.proxy.sent.Load() != 0 || f.vs("--if-exists", "get", "Interface", name, "_uuid") != "" {
+			t.Fatal("same-name host replacement inherited creation authority", out)
+		}
+	})
+	t.Run("same_name_host_replacement_blocks_applied_and_compensation", func(t *testing.T) {
+		f, bridge, other := topologyFixture(t, true)
+		p := f.topologyDevices(bridge, 1)[0]
+		to := f.topologyNode("Bridge", other).Binding
+		in := f.prepareTopology(p.Binding, "port.move", candidate.TopologyRequest{Destination: &to})
+		plan, err := f.executor.Prepare(f.ctx, repository.NewID(), candidate.Digest("synthetic-host-recovery"), in.Envelope)
+		must(t, err)
+		out := f.executor.Commit(f.ctx, plan, func() error { return nil })
+		if out.Commit != "committed" {
+			t.Fatal("fixture move failed", out)
+		}
+		waitFor(t, func() bool { out = f.executor.Observe(f.ctx, plan, out); return out.Applied == "applied" })
+		f.run("ip", "link", "del", p.Name)
+		peer := "hr" + repository.NewID()[:8]
+		f.run("ip", "link", "add", p.Name, "type", "veth", "peer", "name", peer)
+		t.Cleanup(func() { _ = exec.Command("ip", "link", "del", p.Name).Run() })
+		observed := f.executor.Observe(f.ctx, plan, out)
+		if observed.Applied == "applied" {
+			t.Fatal("replacement inherited an Applied proof")
+		}
+		if _, err = f.executor.PrepareRollback(f.ctx, plan, candidate.Digest("synthetic-host-compensation")); err == nil || f.proxy.sent.Load() != 1 || f.vs("port-to-br", p.Name) != other {
+			t.Fatal("replacement inherited compensation authority", err)
+		}
+	})
 	t.Run("revoked_root_topology_grant_blocks_dispatch", func(t *testing.T) {
 		f, bridge, other := topologyFixture(t, true)
 		p := f.topologyPorts(bridge)[0]

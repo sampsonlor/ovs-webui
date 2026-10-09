@@ -106,6 +106,9 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 	if json.Unmarshal(p.Native, &original) != nil || identity != original.Evidence.Peer || d.public.Digest != p.Schema || !sameExecutionFile(e.provider.options, pid, original.Evidence) {
 		return errors.New("APPLIED_IDENTITY_CHANGED")
 	}
+	if err = topologyHostIdentityCheck(p.Envelope.Candidate, original); err != nil {
+		return err
+	}
 	ops, err := appliedProofOperations(p, view, d)
 	if err != nil {
 		return err
@@ -155,6 +158,9 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 			return errors.New("APPLIED_IDENTITY_CHANGED")
 		}
 		if err = bridgeHostApplied(p.Envelope.Candidate); err != nil {
+			return err
+		}
+		if err = topologyHostIdentityCheck(p.Envelope.Candidate, original); err != nil {
 			return err
 		}
 		if kernelBefore != nil {

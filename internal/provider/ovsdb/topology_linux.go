@@ -9,8 +9,24 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
+
+func topologyHostIdentities(c candidate.Candidate) (map[string]string, error) {
+	var devices map[string]string
+	for _, name := range topologySystemNames(c) {
+		link, err := net.InterfaceByName(name)
+		if err != nil || link.Index <= 0 {
+			return nil, apitypes.Fail(409, "HOST_DEVICE_UNPROVEN")
+		}
+		if devices == nil {
+			devices = map[string]string{}
+		}
+		devices[name] = strconv.Itoa(link.Index)
+	}
+	return devices, nil
+}
 
 func topologyHostCheck(c candidate.Candidate) error {
 	i, ok := topologyIntent(c)

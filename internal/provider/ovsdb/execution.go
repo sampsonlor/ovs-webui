@@ -27,6 +27,7 @@ type Executor struct {
 func (p *Provider) Executor(s *inventory.Service) *Executor { return &Executor{p, s} }
 
 type nativePlan struct {
+	TopologyDevices      map[string]string         `json:"topology_devices,omitempty"`
 	TopologyBefore       map[string]map[string]any `json:"topology_before,omitempty"`
 	TopologyAfter        map[string]map[string]any `json:"topology_after,omitempty"`
 	PolicingKernelBefore string                    `json:"policing_kernel_before,omitempty"`
@@ -255,6 +256,10 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if err != nil {
 		return compiled, err
 	}
+	compiled, err = prepareTopologyHost(compiled, view, nil)
+	if err != nil {
+		return execution.Plan{}, err
+	}
 	return e.preparePolicingKernel(ctx, compiled, view, nil)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
@@ -472,6 +477,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		return notSent
 	}
 	if ctx.Err() != nil || time.Since(p.Prepared) > execution.PreflightFor {
+		return notSent
+	}
+	if topologyHostIdentityCheck(p.Envelope.Candidate, n) != nil {
+		notSent.Reason = "topology-host-identity-changed"
 		return notSent
 	}
 	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
