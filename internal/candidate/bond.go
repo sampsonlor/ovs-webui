@@ -20,6 +20,9 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if IsTopologyOperation(i.Operation) {
+			cap = "ovs.topology.write"
+		}
 		if i.Operation == InterfacePolicingSet {
 			cap = "ovs.interface.policing.write"
 		}
@@ -198,6 +201,12 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.Topology != nil {
+		c := *i.Topology
+		c.Observed = true
+		i.Topology = &c
+		return
+	}
 	if i.Policing != nil {
 		m := *i.Policing
 		m.Before = m.After
@@ -237,6 +246,13 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.Topology != nil {
+		c := *i.Topology
+		c.Compensating = true
+		c.Observed = false
+		i.Topology = &c
+		return
+	}
 	if i.Policing != nil {
 		m := *i.Policing
 		m.Before, m.After = m.After, m.Before

@@ -371,6 +371,11 @@ func (r *Repository) ValidateCandidate(ctx context.Context, credential string, i
 		}
 		id, changeset, jobID := repository.NewID(), repository.NewID(), repository.NewID()
 		v := plan.Validation{ID: id, CandidateID: request.CandidateID, CandidateRevision: request.Revision, Generation: generation, ConfigRevision: revision, PolicyRevision: c.Revision, Expires: r.now().Add(plan.ValidFor).UTC(), Job: &apitypes.Ref{Kind: "job", ID: jobID}, State: state, Checks: checks, Diff: diff, ChangeSetID: changeset, Usable: state == "passed", Invalidations: []plan.Gate{}, Risk: "connectivity-unknown-safe-apply-required", ExecutionReady: false}
+		for _, intent := range in.Envelope.Candidate.Intents {
+			if plan.IsTopologyOperation(intent.Operation) {
+				v.Risk = "high-topology-safe-apply-required"
+			}
+		}
 		if c.ExpiresAt.Before(v.Expires) {
 			v.Expires = c.ExpiresAt
 		}

@@ -16,6 +16,9 @@ import (
 // Compile only zero-timeout guards and a counter select. No update, mutate or
 // commit operation is allowed into this private, read-only proof transaction.
 func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d discovered) ([]any, error) {
+	if _, ok := topologyIntent(p.Envelope.Candidate); ok {
+		return topologyProof(p, view, d)
+	}
 	if _, ok := internalPortIntent(p.Envelope.Candidate); ok {
 		return internalPortProof(p, view, d)
 	}
@@ -103,6 +106,9 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 	if json.Unmarshal(p.Native, &original) != nil || identity != original.Evidence.Peer || d.public.Digest != p.Schema || !sameExecutionFile(e.provider.options, pid, original.Evidence) {
 		return errors.New("APPLIED_IDENTITY_CHANGED")
 	}
+	if err = topologyHostIdentityCheck(p.Envelope.Candidate, original); err != nil {
+		return err
+	}
 	ops, err := appliedProofOperations(p, view, d)
 	if err != nil {
 		return err
@@ -152,6 +158,9 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 			return errors.New("APPLIED_IDENTITY_CHANGED")
 		}
 		if err = bridgeHostApplied(p.Envelope.Candidate); err != nil {
+			return err
+		}
+		if err = topologyHostIdentityCheck(p.Envelope.Candidate, original); err != nil {
 			return err
 		}
 		if kernelBefore != nil {

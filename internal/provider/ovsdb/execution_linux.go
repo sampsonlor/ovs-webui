@@ -13,6 +13,9 @@ import (
 )
 
 func bridgeHostCheck(c candidate.Candidate) error {
+	if err := topologyHostCheck(c); err != nil {
+		return err
+	}
 	name, before, _, ok := lifecycleHost(c)
 	if !ok {
 		return nil
@@ -54,6 +57,9 @@ func bridgeHostCheck(c candidate.Candidate) error {
 }
 
 func bridgeHostApplied(c candidate.Candidate) error {
+	if err := topologyHostApplied(c); err != nil {
+		return err
+	}
 	name, _, after, ok := lifecycleHost(c)
 	if !ok || after {
 		return nil

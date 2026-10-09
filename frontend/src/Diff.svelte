@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DiffField } from '../../clients/typescript/public-v1.generated';
   import Link from './Link.svelte';
+  import TopologyDiff from './TopologyDiff.svelte';
   let { fields, expert = false }: { fields: DiffField[]; expert?: boolean } = $props();
   const internalPorts = $derived(fields.filter((field) => field.operation === 'port.create-internal'));
   const portDeletions = $derived(fields.filter((field) => field.operation === 'port.delete-internal'));
@@ -98,6 +99,8 @@
   {/if}
 {/if}
 
+{#each fields.filter(field => field.field === 'native_topology') as field}<TopologyDiff {field} {expert}/>{/each}
+{#if fields.some(field => field.field !== 'native_topology') || fields.length === 0}
 <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users must be able to scroll a wide Diff.) -->
 <div class="table-scroll" tabindex="0" role="region" aria-label="Configuration Diff">
   <table>
@@ -105,7 +108,7 @@
       ><tr><th>Object / field</th><th>Original</th><th>Current</th><th>Yours</th></tr
       ></thead
     ><tbody>
-      {#each fields as field}
+      {#each fields.filter(field => field.field !== 'native_topology') as field}
         <tr class:conflict={field.conflict}
           ><th scope="row"
             >{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
@@ -120,3 +123,4 @@
     </tbody>
   </table>
 </div>
+{/if}

@@ -92,6 +92,14 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if IsTopologyOperation(i.Operation) {
+			if problem := topologyProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, topologyDiff(i, s))
+			continue
+		}
 		if i.Operation == InterfacePolicingSet {
 			if problem := policingProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -224,9 +232,20 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
+			if in.Topology != nil && !IsTopologyOperation(in.Operation) {
+				return e, apitypes.Fail(422, "INVALID_TOPOLOGY_INTENT")
+			}
 			if in.Policing != nil && in.Operation != InterfacePolicingSet {
 				return e, apitypes.Fail(422, "INVALID_INTERFACE_POLICING")
 			}
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsTopologyOperation(i.Operation) }) || IsTopologyOperation(cmd.Intents[0].Operation) {
+			var err error
+			c, err = stageTopology(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if hasPolicing(c.Intents) || cmd.Intents[0].Operation == InterfacePolicingSet {
 			var err error
@@ -384,6 +403,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if IsTopologyOperation(i.Operation) {
+				return e, apitypes.Fail(409, "TOPOLOGY_RESTAGE_REQUIRED")
+			}
 			if i.Operation == InterfacePolicingSet {
 				return e, apitypes.Fail(409, "POLICING_RESTAGE_REQUIRED")
 			}
@@ -442,6 +464,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if IsTopologyOperation(i.Operation) {
+			checks = append(checks, topologyChecks(i, s)...)
+			continue
+		}
 		if i.Operation == InterfacePolicingSet {
 			checks = append(checks, policingChecks(i, s)...)
 			continue

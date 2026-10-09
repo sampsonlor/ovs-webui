@@ -27,13 +27,16 @@ type Executor struct {
 func (p *Provider) Executor(s *inventory.Service) *Executor { return &Executor{p, s} }
 
 type nativePlan struct {
-	PolicingKernelBefore string             `json:"policing_kernel_before,omitempty"`
-	Operations           []map[string]any   `json:"operations"`
-	CountIndexes         []int              `json:"count_indexes"`
-	TargetIndex          int                `json:"target_index"`
-	Evidence             inventory.Evidence `json:"evidence"`
-	CreationMarker       string             `json:"creation_marker,omitempty"`
-	InsertUUIDs          map[int]string     `json:"insert_uuids,omitempty"`
+	TopologyDevices      map[string]string         `json:"topology_devices,omitempty"`
+	TopologyBefore       map[string]map[string]any `json:"topology_before,omitempty"`
+	TopologyAfter        map[string]map[string]any `json:"topology_after,omitempty"`
+	PolicingKernelBefore string                    `json:"policing_kernel_before,omitempty"`
+	Operations           []map[string]any          `json:"operations"`
+	CountIndexes         []int                     `json:"count_indexes"`
+	TargetIndex          int                       `json:"target_index"`
+	Evidence             inventory.Evidence        `json:"evidence"`
+	CreationMarker       string                    `json:"creation_marker,omitempty"`
+	InsertUUIDs          map[int]string            `json:"insert_uuids,omitempty"`
 }
 
 func uuidValue(id string) []any     { return []any{"uuid", id} }
@@ -50,6 +53,15 @@ func waitRows(table string, where []any, columns []string, rows []any) map[strin
 }
 func nativeAtom(value any, kind string) (any, error) {
 	switch kind {
+	case native.TypeReal:
+		s, ok := value.(string)
+		if !ok {
+			return nil, errors.New("NATIVE_REAL_UNKNOWN")
+		}
+		if _, err := strconv.ParseFloat(s, 64); err != nil {
+			return nil, err
+		}
+		return json.Number(s), nil
 	case native.TypeInteger:
 		s, ok := value.(string)
 		if !ok {
@@ -244,9 +256,16 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if err != nil {
 		return compiled, err
 	}
+	compiled, err = prepareTopologyHost(compiled, view, nil)
+	if err != nil {
+		return execution.Plan{}, err
+	}
 	return e.preparePolicingKernel(ctx, compiled, view, nil)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if _, ok := topologyIntent(envelope.Candidate); ok {
+		return compileTopologyExecution(id, marker, envelope, view, d, nil)
+	}
 	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.InterfacePolicingSet {
 		return compilePolicingExecution(id, marker, envelope, view, d)
 	}
@@ -458,6 +477,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		return notSent
 	}
 	if ctx.Err() != nil || time.Since(p.Prepared) > execution.PreflightFor {
+		return notSent
+	}
+	if topologyHostIdentityCheck(p.Envelope.Candidate, n) != nil {
+		notSent.Reason = "topology-host-identity-changed"
 		return notSent
 	}
 	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))

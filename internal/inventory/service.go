@@ -27,6 +27,8 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	localTopology                  map[string]bool
+	localTopologyCreates           map[string]bool
 	registry                       Registry
 	mu                             sync.RWMutex
 	current                        *view
@@ -126,6 +128,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
+	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
 	s.mu.RUnlock()
 	now := s.now()
 	fresh := "unknown"
@@ -157,6 +160,65 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return nil, apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
 	}
 	allowedConfig := slices.Contains(c.Capabilities, "configuration.read")
+	if op == "readInventoryTopology" {
+		if !allowedConfig {
+			return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
+		}
+		snapshot := candidate.Snapshot{Generation: v.decision.Generation}
+		projectTopology(v, localTopology, localTopologyCreates, &snapshot)
+		nodes := []candidate.TopologyNode{}
+		authority := map[string]bool{}
+		for id, n := range snapshot.Topology.Nodes {
+			nodes = append(nodes, n)
+			authority[id] = snapshot.Topology.Authority[id]
+		}
+		slices.SortFunc(nodes, func(a, b candidate.TopologyNode) int {
+			if a.Name < b.Name {
+				return -1
+			}
+			if a.Name > b.Name {
+				return 1
+			}
+			if a.Binding.ManagementID < b.Binding.ManagementID {
+				return -1
+			}
+			return 1
+		})
+		truncated := len(nodes) > 64
+		if truncated {
+			nodes = nodes[:64]
+		}
+		authority = map[string]bool{}
+		for _, node := range nodes {
+			authority[node.Binding.ManagementID] = snapshot.Topology.Authority[node.Binding.ManagementID]
+		}
+		can := fresh == "fresh" && !truncated && snapshot.Topology.Supported && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, "ovs.topology.write")
+		out := base(v.id, "inventory-topology", fresh, v)
+		out["nodes"] = nodes
+		out["authority"] = authority
+		out["truncated"] = truncated
+		out["availability"] = availability
+		out["reason"] = reason
+		out["editable"] = can
+		out["creation_targets"] = localTopologyCreates
+		out["bridge_create_names"] = localBridgeNames
+		out["review_policy"] = "High risk: review management connectivity and sole uplinks. New changes require desktop, current root object/name grants, native schema and Safe Apply. Foreign references, unsupported domains and host network dependencies block execution."
+		for {
+			body, err := json.Marshal(out)
+			if err == nil && len(body) <= 56<<10 {
+				break
+			}
+			if len(nodes) == 0 {
+				return nil, apitypes.Fail(429, "TOPOLOGY_VIEW_BUDGET_EXCEEDED")
+			}
+			delete(authority, nodes[len(nodes)-1].Binding.ManagementID)
+			nodes = nodes[:len(nodes)-1]
+			out["nodes"] = nodes
+			out["truncated"] = true
+			out["editable"] = false
+		}
+		return out, nil
+	}
 	// SetLocalVLANPorts replaces the map; published observations are immutable.
 	project := func(b Binding, kind string) (map[string]any, error) {
 		item, err := resource(v, b, fresh, allowedConfig, kind)

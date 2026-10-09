@@ -16,12 +16,15 @@ import (
 )
 
 func TestInterfaceMTUValidationRequiresIndependentCapabilityAndCurrentCeiling(t *testing.T) {
-	testInterfaceFieldCapability(t, false)
+	testInterfaceFieldCapability(t, "mtu")
 }
 func TestInterfacePolicingValidationRequiresIndependentCapabilityAndCurrentCeiling(t *testing.T) {
-	testInterfaceFieldCapability(t, true)
+	testInterfaceFieldCapability(t, "policing")
 }
-func testInterfaceFieldCapability(t *testing.T, policing bool) {
+func TestTopologyValidationRequiresIndependentCapabilityAndCurrentCeiling(t *testing.T) {
+	testInterfaceFieldCapability(t, "topology")
+}
+func testInterfaceFieldCapability(t *testing.T, field string) {
 	r, _ := fixture(t)
 	g := login(t, r, "admin", false)
 	e, p, _ := planSetup(t, r, g)
@@ -33,10 +36,36 @@ func testInterfaceFieldCapability(t *testing.T, policing bool) {
 	id := planRequestID()
 	capability := "ovs.interface.mtu.write"
 	intent := map[string]any{"intent_id": repository.NewID(), "operation": plan.InterfaceMTUSet, "object": i.Binding, "mtu_request": 2000}
-	if policing {
+	if field == "policing" {
 		capability = "ovs.interface.policing.write"
 		p.snapshot.Policings = map[string]plan.InterfacePolicing{i.Binding.ManagementID: {Binding: i.Binding, Port: i.Port, Bridge: i.Bridge, Name: "synthetic-pi", Type: "internal", IfIndex: 7, Known: true, Supported: true, Eligible: true, Authority: "local-exclusive", Dependency: "captured"}}
 		intent = map[string]any{"intent_id": repository.NewID(), "operation": plan.InterfacePolicingSet, "object": i.Binding, "policing": map[string]any{"mode": "bandwidth", "rate": 1000}}
+	}
+	if field == "topology" {
+		capability = "ovs.topology.write"
+		configs := map[string]map[string]any{
+			i.Bridge.ManagementID:  {"name": "synthetic-br", "ports": []any{i.Port.OVSUUID}, "datapath_type": "system", "controller": []any{}, "stp_enable": false, "rstp_enable": false},
+			i.Port.ManagementID:    {"name": "synthetic-pi", "interfaces": []any{i.Binding.OVSUUID}},
+			i.Binding.ManagementID: {"name": "synthetic-pi", "type": "internal"},
+		}
+		nodes := map[string]plan.TopologyNode{}
+		for _, b := range []plan.Binding{i.Bridge, i.Port, i.Binding} {
+			links := []plan.Binding{}
+			typ := ""
+			if b.Table == "Bridge" {
+				links = []plan.Binding{i.Port}
+				typ = "system"
+			}
+			if b.Table == "Port" {
+				links = []plan.Binding{i.Binding}
+			}
+			if b.Table == "Interface" {
+				typ = "internal"
+			}
+			nodes[b.ManagementID] = plan.TopologyNode{Binding: b, Name: configs[b.ManagementID]["name"].(string), Type: typ, Links: links, Digest: plan.ConfigurationDigest(configs[b.ManagementID])}
+		}
+		p.snapshot.Topology = plan.TopologySnapshot{Root: repository.NewID(), RootDependency: "captured", Supported: true, Capacity: true, Nodes: nodes, Configurations: configs, Authority: map[string]bool{i.Bridge.ManagementID: true, i.Port.ManagementID: true, i.Binding.ManagementID: true}}
+		intent = map[string]any{"intent_id": repository.NewID(), "operation": "port.delete", "object": i.Port, "topology": map[string]any{}}
 	}
 	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{intent}})
 	e, err := r.PrepareCandidate(testContext, g.Grant, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}})

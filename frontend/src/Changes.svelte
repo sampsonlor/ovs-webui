@@ -15,6 +15,7 @@
   }: { model: Model; expert: boolean; desktop: boolean; mobile: boolean; tick: number } =
     $props();
   const c = $derived(model.workspace.value?.candidate ?? null);
+  const topology = $derived(c?.intents.some(i => ['port.create','bond.create','port.delete','bridge.delete-tree','port.move','bond.members.set','interface.ofport.set','interface.ofport.clear','interface.patch.connect','interface.patch.disconnect'].includes(i.operation)) ?? false);
   const v = $derived(model.validation.value);
   const t = $derived(model.transaction.value);
   const blocked = $derived(model.busy || !!model.pending || !model.sessionReady);
@@ -97,6 +98,7 @@
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
+    {#if topology && c.state === 'reconciliation-required'}<section class="panel"><h2>Review and restage this topology change</h2><p>Native configuration, references or ownership changed. Discard this intent, review the current topology and stage a new request. Rebase cannot replace captured identities or the original recovery image.</p></section>{/if}
     {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set')}
       <section class="panel">
         <h2>{c.intents.some((i) => i.operation === 'interface.policing.set') ? 'Review and restage this policing request' : 'Review and restage this MTU request'}</h2>
@@ -122,7 +124,7 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
-            c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
+            topology || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||

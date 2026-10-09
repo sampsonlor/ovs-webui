@@ -123,6 +123,14 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-mtu-interfaces=' + mtu_interface['management_id'])
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-internal-port-targets=' + parent['management_id'] + ':pi-ui-create,' + parent['management_id'] + ':pi-ui-delete --local-internal-port-delete-targets=' + parent['management_id'] + ':pi-ui-delete')
             text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-bridge-create-names=br-ui-create,br-ui-delete --local-bridge-delete-names=br-ui-delete')
+            vsctl('add-br','br-ui-top','--','set','Bridge','br-ui-top','datapath_type=system','--','add-br','br-ui-top-dst','--','set','Bridge','br-ui-top-dst','datapath_type=system')
+            for topology_name in ('ti-ui-a','ti-ui-b'):
+                vsctl('add-port','br-ui-top',topology_name,'--','set','Interface',topology_name,'type=internal')
+            topology_names={'br-ui-top','br-ui-top-dst','ti-ui-a','ti-ui-b'}
+            topology_nodes=eventually(lambda: (v if len(v:=[n for n in get('/inventory/topology')['nodes'] if n['name'] in topology_names])==10 else None))
+            topology_ids=','.join(n['binding']['management_id'] for n in topology_nodes)
+            topology_bridge=next(n['binding']['management_id'] for n in topology_nodes if n['binding']['table']=='Bridge' and n['name']=='br-ui-top')
+            text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE} --local-topology-objects='+topology_ids+' --local-topology-create-targets='+topology_bridge+':ti-ui-new')
         unit_path.write_text(text)
         runtime_config.write_text(original_config.replace(f'HTTPS_LISTEN=127.0.0.1:{https_port}', f'HTTPS_LISTEN=0.0.0.0:{https_port}'))
         run('systemctl', 'daemon-reload')
@@ -231,6 +239,8 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
             if exercise is not None:
                 vsctl('--if-exists', 'del-br', 'br-ui-parent')
                 vsctl('--if-exists', 'del-br', 'br-ui-police')
+                vsctl('--if-exists', 'del-br', 'br-ui-top')
+                vsctl('--if-exists', 'del-br', 'br-ui-top-dst')
             vsctl('--if-exists', 'del-br', bridge)
         finally:
             (Path('/etc/systemd/system') / units['mgrd']).write_text(original_unit)

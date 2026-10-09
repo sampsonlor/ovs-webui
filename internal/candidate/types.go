@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "interface-policing-v1"
+const ValidatorVersion = "native-topology-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -32,6 +32,7 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
+	Topology   *TopologyRequest `json:"topology,omitempty"`
 	Policing   *PolicingRequest `json:"policing,omitempty"`
 	ID         string           `json:"intent_id"`
 	Operation  string           `json:"operation"`
@@ -46,6 +47,7 @@ type Intent struct {
 	MTURequest int              `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
+	Topology *TopologyChange `json:"topology_change,omitempty"`
 	Policing *PolicingChange `json:"policing_change,omitempty"`
 	QinQ     *QinQContext    `json:"qinq_context,omitempty"`
 	MTU      *MTUChange      `json:"mtu_change,omitempty"`
@@ -146,6 +148,7 @@ type Port struct {
 	STP, RSTP                       bool
 }
 type Snapshot struct {
+	Topology                             TopologySnapshot
 	Generation, Revision, Schema, Policy string
 	Ports                                map[string]Port
 	Interfaces                           map[string]InterfaceMTU
@@ -225,6 +228,10 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if i.Topology != nil {
+			out = append(out, TopologyBindings(i)...)
+			continue
+		}
 		if i.Policing != nil {
 			out = append(out, i.Policing.Port, i.Policing.Bridge)
 		}

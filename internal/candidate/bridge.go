@@ -36,6 +36,9 @@ var bridgeName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$`)
 func ValidBridgeName(name string) bool { return bridgeName.MatchString(name) }
 
 func CreationBindings(i StoredIntent) []Binding {
+	if i.Topology != nil {
+		return TopologyCreations(i, false)
+	}
 	if i.PortCreation != nil {
 		return []Binding{i.Object, i.PortCreation.Interface}
 	}

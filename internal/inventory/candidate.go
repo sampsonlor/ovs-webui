@@ -133,7 +133,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	if ctx.Err() != nil {
 		return out, ctx.Err()
 	}
-	if len(bindings) > candidate.MaxIntents*2 {
+	if len(bindings) > candidate.MaxTopologyNodes*3 {
 		return out, apitypes.Fail(429, "CANDIDATE_INTENT_LIMIT")
 	}
 	s.mu.RLock()
@@ -148,6 +148,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
 	projectMTU(v, s.localMTU, &out, bindings)
 	projectPolicing(v, s.localPolicing, &out, bindings)
+	projectTopology(v, s.localTopology, s.localTopologyCreates, &out)
 	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" }) {
 		projectCreation(v, s.localBridgeNames, &out)
 		projectDeletion(v, s.localBridgeDeleteNames, &out)

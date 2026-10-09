@@ -102,7 +102,7 @@ func discover(data []byte) (discovered, error) {
 			}
 			sort.Slice(c.References, func(i, j int) bool { return c.References[i].Position < c.References[j].Position })
 			tt.Columns = append(tt.Columns, c)
-			if c.Monitored {
+			if c.Monitored || graphConfigurationColumn(t, name, col) {
 				names = append(names, name)
 			}
 		}
@@ -116,6 +116,7 @@ func discover(data []byte) (discovered, error) {
 	sort.Slice(d.public.Tables, func(i, j int) bool { return d.public.Tables[i].Name < d.public.Tables[j].Name })
 	d.public.BridgeCreation = bridgeSchemaSupported(d)
 	d.public.InternalPortCreation = internalPortSchemaSupported(d)
+	d.public.GraphDefaults = graphDefaults(d)
 	return d, nil
 }
 
@@ -262,14 +263,20 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					return errors.New("OVSDB_ROW_INVALID")
 				}
 				for name, value := range old {
-					if !monitoredColumn(d, table, name) {
+					if !monitoredColumn(d, table, name) && !graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
 						return errors.New("OVSDB_UNREQUESTED_COLUMN")
 					}
 					n, err := normalize(value, d.native.Tables[table].Columns[name])
 					if err != nil {
 						return err
 					}
-					if inventory.Digest(sanitize(table, name, n)) != inventory.Digest(prior.Values[name]) {
+					previous := prior.Values[name]
+					if graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
+						previous = prior.Configuration[name]
+					} else {
+						n = sanitize(table, name, n)
+					}
+					if inventory.Digest(n) != inventory.Digest(previous) {
 						return errors.New("OVSDB_MONITOR_INCONSISTENT")
 					}
 				}
@@ -286,21 +293,26 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 				return errors.New("OVSDB_ROW_INVALID")
 			}
 			if !exists {
-				prior = inventory.Row{UUID: id, Values: map[string]any{}}
+				prior = inventory.Row{UUID: id, Values: map[string]any{}, Configuration: map[string]any{}}
 				count++
 				if count > inventory.MaxRows {
 					return errors.New("OVSDB_INVENTORY_BUDGET")
 				}
 			}
 			for name, v := range values {
-				if !monitoredColumn(d, table, name) {
+				if !monitoredColumn(d, table, name) && !graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
 					return errors.New("OVSDB_UNREQUESTED_COLUMN")
 				}
 				n, err := normalize(v, d.native.Tables[table].Columns[name])
 				if err != nil {
 					return err
 				}
-				prior.Values[name] = sanitize(table, name, n)
+				if graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
+					prior.Configuration[name] = n
+				}
+				if monitoredColumn(d, table, name) {
+					prior.Values[name] = sanitize(table, name, n)
+				}
 				if table == "Interface" && name == "options" {
 					m, ok := n.(map[string]any)
 					empty := ok && len(m) == 0
