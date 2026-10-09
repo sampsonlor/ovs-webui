@@ -185,6 +185,16 @@ export function applyReady(
           'interface.mtu.set': 'ovs.interface.mtu.write',
           'interface.mtu.clear': 'ovs.interface.mtu.write',
           'interface.policing.set': 'ovs.interface.policing.write',
+          'port.create': 'ovs.topology.write',
+          'bond.create': 'ovs.topology.write',
+          'port.delete': 'ovs.topology.write',
+          'bridge.delete-tree': 'ovs.topology.write',
+          'port.move': 'ovs.topology.write',
+          'bond.members.set': 'ovs.topology.write',
+          'interface.ofport.set': 'ovs.topology.write',
+          'interface.ofport.clear': 'ovs.topology.write',
+          'interface.patch.connect': 'ovs.topology.write',
+          'interface.patch.disconnect': 'ovs.topology.write',
         } as Record<string, string>
       )[i.operation];
       return !!capability && has(session, capability);

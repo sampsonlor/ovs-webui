@@ -10,6 +10,7 @@
 | Public privacy and typed contracts | `TestTopologyPublicViewsNeverExposePrivateConfiguration`, closed topology command tests; unknown images remain manager-private |
 | Strict IPC transport | `TestStrictTopologyOriginalsRoundTripNativeSummariesAndSeal`: nonempty signed summaries survive read/validate/prepare, preserving empty sets and zero; modified, duplicate, unknown or case-ambiguous summary fields cannot bypass validation |
 | Current capability, ceiling and root admission | `TestTopologyValidationRequiresIndependentCapabilityAndCurrentCeiling`, root object/name and stale dependency tests |
+| Frontend execution gate | Shared topology Safe Apply permission regression plus the formal normal flow; independent topology authority, server availability, current usable execution validation and desktop responsibility remain required |
 | Recovery and actual forwarding | Kernel system devices retained after Bond rollback, deleted rows GC and fresh identities, ofport runtime proof, Patch type recovery, lost reply without replay; real management-path Port move loses reachability and guarded rollback restores forwarding |
 | System device identity | Same-name Linux device replacement blocks unsent creation, Applied proof and compensation; private original ifindex bindings are never adopted from a replacement |
 | Formal browser normal flow | `native topology stages…`: actual Go/OVS Candidate, readable Diff, native apply, rollback/GC, retired Interface Audit and keyboard navigation |

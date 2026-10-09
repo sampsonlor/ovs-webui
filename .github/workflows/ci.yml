@@ -184,6 +184,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch
+      # Fail early on formal transport/permission/UI regressions, retaining the
+      # same complete browser suite and every later native/recovery/race gate.
+      - name: Embedded Svelte browser against real Go services and kernel OVS safety
+        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
       - name: Linux ingress policing protocol and early kernel gate
         run: |
           set -o pipefail
@@ -274,8 +278,6 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeIsolatedBridge$' -test.v -test.timeout=180s \
               | go tool test2json -p "native-isolated-bridge-$schema" | tee "test-results/go-isolated-bridge-$schema.json"
           done
-      - name: Embedded Svelte browser against real Go services and kernel OVS safety
-        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
       - name: Vet and native race tests
         env:
           CGO_ENABLED: '1'

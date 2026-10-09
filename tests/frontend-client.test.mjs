@@ -10,6 +10,83 @@ import {
   vlanNumbers,
 } from '../frontend/src/policy.ts';
 
+test('topology Safe Apply requires independent capability and complete current evidence', () => {
+  const c = {
+    id: 'synthetic-candidate',
+    revision: 'synthetic-revision',
+    state: 'dirty',
+    safe_apply_available: true,
+    intents: [],
+  };
+  const v = {
+    candidate_id: c.id,
+    candidate_revision: c.revision,
+    state: 'passed',
+    usable: true,
+    execution_ready: true,
+  };
+  const permitted = {
+    effective_capabilities: ['configuration.apply', 'ovs.topology.write'],
+  };
+  const fieldOnly = {
+    effective_capabilities: [
+      'configuration.apply',
+      'ovs.port.vlan.write',
+      'ovs.interface.mtu.write',
+    ],
+  };
+  for (const operation of [
+    'port.create',
+    'bond.create',
+    'port.delete',
+    'bridge.delete-tree',
+    'port.move',
+    'bond.members.set',
+    'interface.ofport.set',
+    'interface.ofport.clear',
+    'interface.patch.connect',
+    'interface.patch.disconnect',
+  ]) {
+    const draft = { ...c, intents: [{ operation }] };
+    assert.equal(applyReady(draft, v, permitted, true), true, operation);
+    assert.equal(applyReady(draft, v, fieldOnly, true), false, operation);
+    assert.equal(applyReady(draft, v, permitted, false), false, operation);
+    assert.equal(
+      applyReady(draft, { ...v, usable: false }, permitted, true),
+      false,
+      operation,
+    );
+    assert.equal(
+      applyReady(draft, { ...v, execution_ready: false }, permitted, true),
+      false,
+      operation,
+    );
+    assert.equal(
+      applyReady({ ...draft, safe_apply_available: false }, v, permitted, true),
+      false,
+      operation,
+    );
+  }
+  assert.equal(
+    applyReady(
+      { ...c, intents: [{ operation: 'port.vlan.set' }] },
+      v,
+      permitted,
+      true,
+    ),
+    false,
+  );
+  assert.equal(
+    applyReady(
+      { ...c, intents: [{ operation: 'future.topology.write' }] },
+      v,
+      permitted,
+      true,
+    ),
+    false,
+  );
+});
+
 const principal = '11111111-1111-4111-8111-111111111111';
 const epoch = '22222222-2222-4222-8222-222222222222';
 const resource = '33333333-3333-4333-8333-333333333333';
