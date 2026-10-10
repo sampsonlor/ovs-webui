@@ -633,7 +633,9 @@ test('spanning tree observes native intent and daemon status with shared identit
       )
       .toBe('known');
     await page.getByRole('link', { name: 'STP / RSTP', exact: true }).click();
-    await page.getByRole('button', { name: 'Filter Bridges', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Filter Bridges', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/switching\/spanning-tree\?limit=25$/);
     await page.getByLabel('Bridge name', { exact: true }).fill('br-tree-ui');
     await page
@@ -641,7 +643,7 @@ test('spanning tree observes native intent and daemon status with shared identit
       .click();
     await page.getByRole('link', { name: 'br-tree-ui', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'br-tree-ui', exact: true }),
+      page.getByRole('heading', { name: 'br-tree-ui', level: 2, exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText('excluded bond', { exact: false }).first(),
@@ -656,7 +658,7 @@ test('spanning tree observes native intent and daemon status with shared identit
     await screen(page, 'spanning-tree-standard');
     await nativeTypeDepth(page, 'Expert');
     await page
-      .getByText('Native identity and delivery gates', { exact: true })
+      .getByText('Native identity and configuration availability', { exact: true })
       .click();
     await expect(
       page.getByText(row.management_id, { exact: true }),
@@ -745,7 +747,7 @@ test('spanning tree observer withholds intent and participation while native run
       fixture.origin + '/switching/spanning-tree/' + row.management_id,
     );
     await expect(
-      page.getByRole('heading', { name: 'br-tree-ro', exact: true }),
+      page.getByRole('heading', { name: 'br-tree-ro', level: 2, exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText('Withheld', { exact: true }).first(),
@@ -882,7 +884,7 @@ test('spanning tree retains stale observations and clears protected state during
     fixture.origin + '/switching/spanning-tree/' + bridge.management_id,
   );
   await expect(
-    page.getByRole('heading', { name: 'br-inv', exact: true }),
+    page.getByRole('heading', { name: 'br-inv', level: 2, exact: true }),
   ).toBeVisible();
   execFileSync('ovs-appctl', ['-t', `${fixture.ovsDirectory}/db.ctl`, 'exit']);
   try {
@@ -947,14 +949,14 @@ test('spanning tree retains stale observations and clears protected state during
         .filter({ hasText: 'Current authorization or connection' }),
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'br-inv', exact: true }),
+      page.getByRole('heading', { name: 'br-inv', level: 2, exact: true }),
     ).toHaveCount(0);
     await screen(page, 'spanning-tree-manager-unavailable');
   } finally {
     unit('start', 'mgrd');
   }
   await expect(
-    page.getByRole('heading', { name: 'br-inv', exact: true }),
+    page.getByRole('heading', { name: 'br-inv', level: 2, exact: true }),
   ).toBeVisible();
 });
 
