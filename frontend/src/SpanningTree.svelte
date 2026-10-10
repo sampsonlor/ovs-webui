@@ -7,6 +7,7 @@
   import LoadNotice from './LoadNotice.svelte';
   import Status from './Status.svelte';
   import SpanningTreeFields from './SpanningTreeFields.svelte';
+  import SpanningTreeValidation from './SpanningTreeValidation.svelte';
 
   let { model, expert }: { model: Model; expert: boolean } = $props();
   const detail = $derived(model.path.startsWith('/switching/spanning-tree/'));
@@ -65,6 +66,7 @@
     <SpanningTreeFields fields={subset(item.spanning_tree.configuration, ['stp_enable','rstp_enable'])} {expert} />
   </section>
   <div class="columns"><section class="panel"><h2>Bridge basic parameters</h2><SpanningTreeFields fields={expert ? item.spanning_tree.configuration : subset(item.spanning_tree.configuration, ['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'])} {expert} /><p class="muted">Unset parameters retain the native default. A configured value is not evidence that it was applied.</p></section><section class="panel"><h2>Bridge runtime observations</h2><SpanningTreeFields fields={expert ? item.spanning_tree.runtime : subset(item.spanning_tree.runtime, ['stp_bridge_id','stp_designated_root','rstp_bridge_id','rstp_root_id'])} {expert} runtime /></section></div>
+  <SpanningTreeValidation validation={item.spanning_tree.parameter_validation} {expert} />
   <section aria-label="Spanning tree Ports"><h2>Port participation and runtime</h2><p>Participation describes Port configuration and native exclusions. An enabled Port participates only when its Bridge protocol is enabled.</p>
     {#each item.ports as port}
       <article class="panel"><h3><Link href={`/ports/${port.port_ref.id}`}>{port.name}</Link></h3><dl><dt>STP participation</dt><dd>{participation(port.spanning_tree.stp_participation)} · {port.spanning_tree.stp_participation.reason}</dd><dt>RSTP participation</dt><dd>{participation(port.spanning_tree.rstp_participation)} · {port.spanning_tree.rstp_participation.reason}</dd></dl><SpanningTreeFields fields={expert ? port.spanning_tree.runtime : subset(port.spanning_tree.runtime, ['stp_state','stp_role','rstp_port_state','rstp_port_role'])} {expert} runtime />{#if expert}<details><summary>Port native configuration</summary><SpanningTreeFields fields={port.spanning_tree.configuration} {expert} /></details>{/if}</article>
