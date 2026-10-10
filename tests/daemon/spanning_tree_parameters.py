@@ -13,9 +13,10 @@ def verify_spanning_tree_parameters(vsctl, get, call, observer, eventually, ovs_
     checks, cases = [], []
     matrix = [
         ('stp-minimum', 'stp', {'stp-priority': '0', 'stp-hello-time': '1', 'stp-max-age': '6', 'stp-forward-delay': '4'}, 'valid', '', (0, 1, 6, 4)),
-        ('stp-maximum', 'stp', {'stp-priority': '65535', 'stp-hello-time': '10', 'stp-max-age': '40', 'stp-forward-delay': '30'}, 'valid', '', (65535, 10, 40, 30)),
-        ('stp-clamped-max-age', 'stp', {'stp-hello-time': '10', 'stp-max-age': '20'}, 'invalid', 'STP_MAX_AGE_HELLO_RELATION', (32768, 10, 22, 15)),
+        ('stp-maximum', 'stp', {'stp-priority': '65535', 'stp-max-age': '40', 'stp-forward-delay': '30'}, 'valid', '', (65535, 2, 40, 30)),
+        ('stp-clamped-max-age', 'stp', {'stp-max-age': '5'}, 'invalid', 'SPANNING_TREE_PARAMETER_RANGE', (32768, 2, 6, 15)),
         ('stp-clamped-forward-delay', 'stp', {'stp-forward-delay': '4'}, 'invalid', 'STP_FORWARD_DELAY_MAX_AGE_RELATION', (32768, 2, 20, 11)),
+        ('stp-hello-time-unit-caveat', 'stp', {'stp-hello-time': '10', 'stp-max-age': '22', 'stp-forward-delay': '12'}, 'runtime-unverified', 'STP_HELLO_TIME_NATIVE_UNIT_CAVEAT', (32768, 1, 22, 12)),
         ('rstp-minimum', 'rstp', {'rstp-priority': '0', 'rstp-max-age': '6', 'rstp-forward-delay': '4'}, 'valid', '', (0, 2, 6, 4)),
         ('rstp-maximum-priority', 'rstp', {'rstp-priority': '61440'}, 'valid', '', (61440, 2, 20, 15)),
         ('rstp-rounded-priority', 'rstp', {'rstp-priority': '4097'}, 'invalid', 'RSTP_PRIORITY_MULTIPLE_4096', (4096, 2, 20, 15)),
@@ -71,7 +72,7 @@ def verify_spanning_tree_parameters(vsctl, get, call, observer, eventually, ovs_
             assert hidden['spanning_tree']['parameter_validation']['checks'] == []
             cases.append({'name': label, 'protocol': protocol, 'configured': values, 'validation': validation,
                           'installed': dict(zip(('priority', 'hello_time', 'max_age', 'forward_delay'), actual))})
-        checks += ['eight native boundary and normalization cases compared with ovs-vswitchd, not only OVSDB configuration',
+        checks += ['nine native boundary and normalization cases compared with ovs-vswitchd, not only OVSDB configuration',
                    'STP clamping, RSTP rounding and retained timer values remain distinct from raw configuration',
                    'same Bridge projection, raw unset defaults, immutable replacement identity and withheld validity checks',
                    'parameter validation never grants Candidate or native write authority']

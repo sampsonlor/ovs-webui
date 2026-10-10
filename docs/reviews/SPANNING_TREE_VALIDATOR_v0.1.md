@@ -7,7 +7,7 @@ Scope: [seven native basic Bridge parameters and protocol mutual exclusion](../i
 | Review path | Required result |
 | --- | --- |
 | Normal configuration | Both protocol defaults and native range boundaries pass basic checks; observed unset values remain unset. |
-| Native caveats | Real OVS demonstrates STP timer clamping, RSTP priority rounding and previous-timer retention; the original configuration is visible and flagged for review. |
+| Native caveats | Real OVS demonstrates STP timer clamping and explicit hello-time units, RSTP priority rounding and previous-timer retention; the original configuration is visible and flagged for review. |
 | Inactive settings | Invalid inactive STP timers remain visible while RSTP is enabled. The check scope is explicit. |
 | Unknown / schema | Missing, malformed-presence and unsupported source fields cannot produce a passing assessment. |
 | Permission denial | Withheld configuration has no validity/check oracle. State/inventory denial remains enforced by the service. |

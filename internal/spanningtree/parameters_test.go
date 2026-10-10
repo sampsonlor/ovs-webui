@@ -14,8 +14,7 @@ func TestBasicBridgeNativeParameterBoundaries(t *testing.T) {
 	}{
 		{"defaults", "", map[string]any{}},
 		{"minimum STP timers", "", map[string]any{"stp-priority": "0", "stp-hello-time": "1", "stp-max-age": "6", "stp-forward-delay": "4"}},
-		{"maximum STP timers", "", map[string]any{"stp-priority": "65535", "stp-hello-time": "10", "stp-max-age": "40", "stp-forward-delay": "30"}},
-		{"STP age relation boundary", "", map[string]any{"stp-hello-time": "10", "stp-max-age": "22", "stp-forward-delay": "12"}},
+		{"maximum STP timers with native hello default", "", map[string]any{"stp-priority": "65535", "stp-max-age": "40", "stp-forward-delay": "30"}},
 		{"minimum RSTP timers", "", map[string]any{"rstp-priority": "0", "rstp-max-age": "6", "rstp-forward-delay": "4"}},
 		{"maximum RSTP timers", "", map[string]any{"rstp-priority": "61440", "rstp-max-age": "40", "rstp-forward-delay": "30"}},
 		{"STP priority overflow", "SPANNING_TREE_PARAMETER_RANGE", map[string]any{"stp-priority": "65536"}},
@@ -86,5 +85,19 @@ func TestMissingNativeConfigurationAndMutualExclusion(t *testing.T) {
 	}
 	if v = Validate(&f, &f, map[string]any{}); v.State != "valid" {
 		t.Fatal("disabled is a known native configuration", v)
+	}
+}
+
+func TestExplicitSTPHelloTimeCannotInferInstalledUnits(t *testing.T) {
+	stp, rstp := true, false
+	for _, hello := range []string{"2", "10"} {
+		v := Validate(&stp, &rstp, map[string]any{"stp-hello-time": hello, "stp-max-age": "22", "stp-forward-delay": "12"})
+		if v.State != "runtime-unverified" || len(v.Checks) != 1 || v.Checks[0].Code != "STP_HELLO_TIME_NATIVE_UNIT_CAVEAT" {
+			t.Fatal("documented seconds confused with installed timer support", v)
+		}
+	}
+	stp, rstp = false, true
+	if v := Validate(&stp, &rstp, map[string]any{"stp-hello-time": "2"}); v.State != "runtime-unverified" {
+		t.Fatal("inactive hello time bypassed runtime gate", v)
 	}
 }

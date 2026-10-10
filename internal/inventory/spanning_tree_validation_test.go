@@ -66,7 +66,11 @@ func TestSpanningTreeParameterValidationPermissionFreshnessAndSchema(t *testing.
 				t.Fatal(v)
 			}
 			if tc.code != "" {
-				if len(v.Checks) != 1 || v.Checks[0].Code != tc.code {
+				expectedCount := 1
+				if tc.scenario == "inactive-timers" {
+					expectedCount = 2
+				}
+				if len(v.Checks) != expectedCount || v.Checks[0].Code != tc.code {
 					t.Fatal(v)
 				}
 			} else if len(v.Checks) != 0 {

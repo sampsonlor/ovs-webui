@@ -9,6 +9,7 @@
     STP_FORWARD_DELAY_MAX_AGE_RELATION: 'STP max age must not exceed twice forward delay minus two seconds.',
     RSTP_PRIORITY_MULTIPLE_4096: 'RSTP priority must be a multiple of 4096. OVS rounds other values down.',
     RSTP_FORWARD_DELAY_MAX_AGE_RELATION: 'RSTP max age must not exceed twice forward delay minus two seconds.',
+    STP_HELLO_TIME_NATIVE_UNIT_CAVEAT: 'Explicit STP hello time needs runtime verification. Tested OVS installs 1 second for configured values from 2 to 10 seconds.',
   };
   const states: Record<string, string> = {
     valid: 'Basic parameter checks passed.',
@@ -17,13 +18,14 @@
     stale: 'Parameter checks are unavailable for stale observations.',
     unsupported: 'Parameter checks are unavailable for this native schema.',
     unknown: 'Parameter checks need complete native configuration.',
+    'runtime-unverified': 'Basic values need runtime verification.',
   };
 </script>
 
 <section class="panel" aria-label="Spanning tree parameter checks">
   <h2>Basic parameter checks</h2>
-  <p class:warning={validation?.state === 'invalid'} role="status">{states[validation?.state ?? 'unknown'] ?? 'Parameter checks are unavailable.'}</p>
-  {#if validation?.state === 'valid' || validation?.state === 'invalid'}
+  <p class:warning={validation?.state === 'invalid' || validation?.state === 'runtime-unverified'} role="status">{states[validation?.state ?? 'unknown'] ?? 'Parameter checks are unavailable.'}</p>
+  {#if validation?.state === 'valid' || validation?.state === 'invalid' || validation?.state === 'runtime-unverified'}
     <p>Checks cover both protocols, including inactive basic settings. Advanced Bridge and Port parameters need separate review. Unset keys use native defaults for these checks; their observed values remain unset.</p>
     {#if validation.checks.length}
       <ul>{#each validation.checks as check}<li>{messages[check.code] ?? 'This parameter needs review.'} <span class="muted">{check.fields.join(', ')}</span>{#if expert}<code>{check.code}</code>{/if}</li>{/each}</ul>

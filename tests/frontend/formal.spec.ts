@@ -788,7 +788,10 @@ test('spanning tree basic parameter checks expose native caveats without grantin
           (c: { code: string }) => c.code,
         ),
       )
-      .toEqual(['STP_MAX_AGE_HELLO_RELATION']);
+      .toEqual([
+        'STP_MAX_AGE_HELLO_RELATION',
+        'STP_HELLO_TIME_NATIVE_UNIT_CAVEAT',
+      ]);
     await page
       .getByRole('button', { name: 'Refresh spanning tree', exact: true })
       .click();
@@ -796,6 +799,9 @@ test('spanning tree basic parameter checks expose native caveats without grantin
       'STP max age must be at least twice hello time plus two seconds.',
     );
     await expect(panel).toContainText('including inactive basic settings');
+    await expect(panel).toContainText(
+      'Explicit STP hello time needs runtime verification.',
+    );
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(panel).toBeVisible();
     expect(
@@ -805,11 +811,43 @@ test('spanning tree basic parameter checks expose native caveats without grantin
     ).toBe(true);
     await screen(page, 'spanning-tree-parameters-mobile');
     vsctl(
+      'set',
+      'Bridge',
+      'br-tree-rules',
+      'other_config:stp-max-age=22',
+      'other_config:stp-forward-delay=12',
+    );
+    await expect
+      .poll(
+        async () =>
+          (await get(context, path)).spanning_tree.parameter_validation.state,
+      )
+      .toBe('runtime-unverified');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await nativeTypeDepth(page, 'Standard');
+    await page
+      .getByRole('button', { name: 'Refresh spanning tree', exact: true })
+      .click();
+    await expect(panel).toContainText(
+      'Basic values need runtime verification.',
+    );
+    await expect(panel).toContainText(
+      'Explicit STP hello time needs runtime verification.',
+    );
+    await expect(panel.locator('code')).toHaveCount(0);
+    await screen(page, 'spanning-tree-parameters-unit-caveat');
+    await nativeTypeDepth(page, 'Expert');
+    await expect(panel.locator('code')).toHaveText(
+      'STP_HELLO_TIME_NATIVE_UNIT_CAVEAT',
+    );
+    vsctl(
       'remove',
       'Bridge',
       'br-tree-rules',
       'other_config',
       'stp-hello-time',
+      'stp-max-age',
+      'stp-forward-delay',
     );
     await expect
       .poll(

@@ -79,6 +79,18 @@ func Validate(stp, rstp *bool, other map[string]any) Validation {
 	if aOK && dOK && age > 2*(delay-1) {
 		add("STP_FORWARD_DELAY_MAX_AGE_RELATION", "stp-forward-delay", "stp-max-age")
 	}
+	if _, explicit := other["stp-hello-time"]; explicit && hOK && hello != 1 {
+		// Upstream bridge.c passes an explicit seconds value directly to the
+		// millisecond setter, whereas the absent-key default is 2000 ms. Real
+		// OVS 3.3.9 therefore installs 1 second for explicit values 2..10. A
+		// future schema/version label cannot prove that this has been corrected.
+		// Keep valid syntax distinct from installed-value support, even when STP
+		// is inactive. Runtime proof is a separate gate, not normalization here.
+		v.Checks = append(v.Checks, Check{Code: "STP_HELLO_TIME_NATIVE_UNIT_CAVEAT", Fields: []string{"stp-hello-time"}})
+		if v.State == "valid" {
+			v.State = "runtime-unverified"
+		}
+	}
 	priority, pOK := read("rstp-priority", 32768, 0, 61440)
 	if pOK && priority%4096 != 0 {
 		add("RSTP_PRIORITY_MULTIPLE_4096", "rstp-priority")
