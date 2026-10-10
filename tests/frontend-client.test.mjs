@@ -120,6 +120,61 @@ const response = (value, status = 200) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+await test('spanning tree routes use typed observation endpoints, preserve page scope and fence revoked inventory', async () => {
+  let current = session;
+  const seen = [];
+  const c = new Controller(
+    new API(async (url, options) => {
+      seen.push({ url, method: options.method });
+      if (url.endsWith('/session')) return response(current);
+      if (url.endsWith('/workspace')) return response({ candidate: null });
+      return response({ id: resource, items: [] });
+    }, storage()),
+    `/switching/spanning-tree?filter=synthetic&limit=1&cursor=sealed`,
+  );
+  await c.refresh();
+  assert.ok(
+    seen.some((x) =>
+      x.url.endsWith(
+        '/inventory/spanning-tree?filter=synthetic&limit=1&cursor=sealed',
+      ),
+    ),
+  );
+  c.go(`/switching/spanning-tree/${resource}`);
+  await c.refresh();
+  for (let i = 0; i < 20 && c.state.resource.status === 'loading'; i++)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(
+    seen.some((x) => x.url.endsWith(`/bridges/${resource}/spanning-tree`)),
+  );
+  current = { ...session, effective_capabilities: [] };
+  await c.refresh();
+  for (let i = 0; i < 20 && c.state.resource.status === 'loading'; i++)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(c.state.resource.status, 'denied');
+  assert.equal(c.state.resource.value, null);
+  assert.ok(seen.every((x) => x.method === 'GET'));
+});
+
+void test('spanning tree cannot bypass the shared Apply operation gate in any depth or viewport', () => {
+  const c = {
+    id: resource,
+    revision: resource,
+    state: 'dirty',
+    safe_apply_available: true,
+    intents: [{ operation: 'spanning_tree.configure' }],
+  };
+  const v = {
+    candidate_id: resource,
+    candidate_revision: resource,
+    state: 'passed',
+    usable: true,
+    execution_ready: true,
+  };
+  for (const desktop of [true, false])
+    assert.equal(applyReady(c, v, session, desktop), false);
+});
+
 await test('formal client persists original identity before dispatch and recovers dropped replies with GET only', async () => {
   const disk = storage();
   const calls = [];

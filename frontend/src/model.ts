@@ -363,6 +363,9 @@ export class Controller {
           )[parts[1]] ?? 'unavailable';
       } else if (path === '/switching/topology') {
         resourceURL = '/inventory/topology';capability='configuration.read';
+      } else if (path === '/switching/spanning-tree' || path.startsWith('/switching/spanning-tree/')) {
+        resourceURL = parts.length === 2 ? '/inventory/spanning-tree' + query : `/bridges/${encodeURIComponent(parts[2])}/spanning-tree`;
+        capability = 'inventory.read';
       } else if (parts[0] === 'bridges') {
         resourceURL = path + (parts.length === 1 ? query : '');
         capability = 'inventory.read';

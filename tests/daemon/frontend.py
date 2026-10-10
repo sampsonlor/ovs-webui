@@ -16,6 +16,9 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                                       'capabilities': ['state.read', 'inventory.read']})
     assert code == 202
     roles = {role['name']: role['id'] for role in get('/roles')['items']}
+    code, _, _ = call('/roles', 'POST', {'request_id': request_id(), 'name': 'SpanningTreeDenied', 'capabilities': ['state.read']})
+    assert code == 202
+    roles.update({role['name']: role['id'] for role in get('/roles')['items']})
     accounts = {}
     # The deadline scenario has its own principal so rapid test logins/step-ups
     # respect the production per-account authentication budget.
@@ -25,6 +28,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-qinq', 'NetworkAdmin'), ('browser-interfaces', 'Reader'),
                        ('browser-interface-selection', 'Reader'), ('browser-interface-selection-observer', 'InterfaceObserver'),
                        ('browser-topology', 'NetworkAdmin'), ('browser-topology-reader', 'Reader'), ('browser-topology-observer', 'InterfaceObserver'), ('browser-mtu', 'NetworkAdmin'), ('browser-mtu-drift', 'NetworkAdmin'),
+                       ('browser-tree', 'NetworkAdmin'), ('browser-tree-observer', 'InterfaceObserver'), ('browser-tree-exceptions', 'Reader'), ('browser-tree-outage', 'Reader'),
+                       ('browser-tree-denied', 'SpanningTreeDenied'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),

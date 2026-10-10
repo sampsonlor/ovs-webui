@@ -42,6 +42,7 @@ type Column struct {
 	PolicingCompatible        bool            `json:"-"`
 	InterfaceConfigCompatible bool            `json:"-"`
 	PatchCompatible           bool            `json:"-"`
+	SpanningTreeCompatible    bool            `json:"-"`
 }
 type Table struct {
 	Name    string     `json:"name"`
@@ -126,7 +127,7 @@ type Reader interface {
 
 func Operation(id string) bool {
 	switch id {
-	case "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond":
+	case "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
 		return true
 	}
 	return false

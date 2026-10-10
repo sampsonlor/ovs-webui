@@ -11,7 +11,7 @@ from authentication import request_id, run
 
 def verify_candidate(call, get, vsctl, units, manager_db, web_db,
                      stop_db, start_db, eventually, credentials):
-    target = next(p for p in get('/ports')['items'] if p['name'] == 'inv-p1')
+    target = next(p for p in get('/ports?filter=inv-p1')['items'] if p['name'] == 'inv-p1')
     binding = {key: target[key] for key in ('management_id', 'ovs_uuid', 'instance_generation')}
     binding['table'] = 'Port'
     epochs = get('/session')['request_epochs']

@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import time
 import uuid
+import urllib.parse
 
 from authentication import request_id, run
 
@@ -54,7 +55,7 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
                               extra_headers={'If-Match': '"' + draft['revision'] + '"', 'X-OVS-Request-Epoch': epochs['workspace']})
             assert code == 200
             draft = get('/candidate')
-        target = next(p for p in get('/ports')['items'] if p['name'] == name)
+        target = next(p for p in get('/ports?' + urllib.parse.urlencode({'filter': name}))['items'] if p['name'] == name)
         binding = {k: target[k] for k in ('management_id', 'ovs_uuid', 'instance_generation')}
         binding['table'] = 'Port'
         body = {'request_id': request_id(), 'operation': 'stage', 'intents': [{
@@ -102,18 +103,19 @@ def verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
         listener = subprocess.Popen(['ip', 'netns', 'exec', namespace, 'python3', '-u', '-c', server, client_ip],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         def has_management_port():
-            page = get('/ports')
+            page = get('/ports?' + urllib.parse.urlencode({'filter': port}))
             return page if any(p['name'] == port for p in page['items']) else None
         page = eventually(has_management_port)
         by_name = {p['name']: p for p in page['items']}
-        ids = ','.join(by_name[n]['management_id'] for n in ('inv-p1', port))
+        original = next(p for p in get('/ports?filter=inv-p1')['items'] if p['name'] == 'inv-p1')
+        ids = ','.join((original['management_id'], by_name[port]['management_id']))
         unit_path = Path('/etc/systemd/system') / units['mgrd']
         text = re.sub(r'--local-vlan-ports=\S+', '--local-vlan-ports=' + ids, original_unit)
         text = text.replace('--database=${MANAGER_DATABASE}', '--database=${MANAGER_DATABASE}' +
                             f' --safe-apply-probe-address={client_ip}:18080 --safe-apply-probe-interface={bridge}')
         if exercise is not None:
             vsctl('add-br', 'br-ui-parent', '--', 'set', 'Bridge', 'br-ui-parent', 'datapath_type=system')
-            parent = eventually(lambda: next((b for b in get('/bridges')['items'] if b['name'] == 'br-ui-parent'), None))
+            parent = eventually(lambda: next((b for b in get('/bridges?filter=br-ui-parent')['items'] if b['name'] == 'br-ui-parent'), None))
             vsctl('add-port', 'br-ui-parent', 'pi-ui-mtu', '--', 'set', 'Interface', 'pi-ui-mtu', 'type=internal', 'mtu_request=1500', 'external_ids:synthetic-mtu=keep')
             vsctl('add-port', 'br-ui-parent', 'pi-ui-mtu-peer', '--', 'set', 'Interface', 'pi-ui-mtu-peer', 'type=internal', 'mtu_request=1800')
             vsctl('add-br', 'br-ui-police', '--', 'set', 'Bridge', 'br-ui-police', 'datapath_type=system', '--', 'add-port', 'br-ui-police', 'pi-ui-police', '--', 'set', 'Interface', 'pi-ui-police', 'type=internal')
