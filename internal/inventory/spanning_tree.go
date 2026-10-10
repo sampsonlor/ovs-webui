@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/spanningtree"
 )
 
 var SpanningTreeBridgeKeys = []string{
@@ -160,7 +161,39 @@ func spanningTreeBridge(v *view, row Row, fresh string, config bool) map[string]
 	}
 	return map[string]any{"protocol": protocol, "availability": availability, "reason": reason,
 		"configuration": configuration, "runtime": runtime, "source": source(v, fresh, "ovsdb-configuration"),
-		"ownership": ownership, "editable": false, "write_reason": "SPANNING_TREE_WRITE_GATE_PENDING"}
+		"parameter_validation": spanningTreeValidation(configuration, fresh, config),
+		"ownership":            ownership, "editable": false, "write_reason": "SPANNING_TREE_WRITE_GATE_PENDING"}
+}
+
+// Parameter assessment has the same configuration permission boundary as its
+// inputs. Never turn withheld, stale or unsupported input into a validity oracle.
+func spanningTreeValidation(fields map[string]any, fresh string, config bool) spanningtree.Validation {
+	if !config {
+		return spanningtree.Unavailable("withheld")
+	}
+	if fresh != "fresh" {
+		return spanningtree.Unavailable("stale")
+	}
+	other := map[string]any{}
+	for _, name := range []string{"stp_enable", "rstp_enable", "stp-priority", "stp-hello-time", "stp-max-age", "stp-forward-delay", "rstp-priority", "rstp-max-age", "rstp-forward-delay"} {
+		f := fields[name].(map[string]any)
+		availability := f["availability"]
+		if availability == "unsupported" {
+			return spanningtree.Unavailable("unsupported")
+		}
+		if availability != "known" && availability != "unset" {
+			return spanningtree.Unavailable("unknown")
+		}
+		if availability == "known" {
+			other[name] = f["value"]
+		}
+	}
+	stp, sOK := other["stp_enable"].(bool)
+	rstp, rOK := other["rstp_enable"].(bool)
+	if !sOK || !rOK {
+		return spanningtree.Unavailable("unknown")
+	}
+	return spanningtree.Validate(&stp, &rstp, other)
 }
 
 // Participation is a configuration assessment. Reported state/role is kept

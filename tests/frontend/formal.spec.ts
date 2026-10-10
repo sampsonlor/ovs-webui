@@ -655,10 +655,15 @@ test('spanning tree observes native intent and daemon status with shared identit
       page.getByText('Native default (unset)', { exact: true }).first(),
     ).toBeVisible();
     await expect(page.getByText('4096', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Spanning tree parameter checks' }),
+    ).toContainText('Basic parameter checks passed.');
     await screen(page, 'spanning-tree-standard');
     await nativeTypeDepth(page, 'Expert');
     await page
-      .getByText('Native identity and configuration availability', { exact: true })
+      .getByText('Native identity and configuration availability', {
+        exact: true,
+      })
       .click();
     await expect(
       page.getByText(row.management_id, { exact: true }),
@@ -703,6 +708,117 @@ test('spanning tree observes native intent and daemon status with shared identit
     expect((await get(context, path)).allowed_operations).toEqual([]);
   } finally {
     vsctl('--if-exists', 'del-br', 'br-tree-ui');
+  }
+});
+
+test('spanning tree basic parameter checks expose native caveats without granting configuration actions', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree-parameters');
+  const writes: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions)/.test(r.url())
+    )
+      writes.push(r.method());
+  });
+  vsctl(
+    'add-br',
+    'br-tree-rules',
+    '--',
+    'set',
+    'Bridge',
+    'br-tree-rules',
+    'datapath_type=dummy',
+    'rstp_enable=true',
+    'other_config:rstp-priority=4097',
+  );
+  try {
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/inventory/spanning-tree?filter=br-tree-rules'))
+            .items.length,
+      )
+      .toBe(1);
+    const row = (
+      await get(context, '/inventory/spanning-tree?filter=br-tree-rules')
+    ).items[0];
+    const path = '/bridges/' + row.management_id + '/spanning-tree';
+    await page.goto(
+      fixture.origin + '/switching/spanning-tree/' + row.management_id,
+    );
+    const panel = page.getByRole('region', {
+      name: 'Spanning tree parameter checks',
+    });
+    for (const mode of ['Standard', 'Expert'] as const) {
+      await nativeTypeDepth(page, mode);
+      await expect(panel).toContainText('Basic parameters need review.');
+      await expect(panel).toContainText(
+        'RSTP priority must be a multiple of 4096. OVS rounds other values down.',
+      );
+      await expect(panel).toContainText(
+        'Configuration editing remains unavailable.',
+      );
+      const v = (await get(context, path)).spanning_tree.parameter_validation;
+      expect(v.state).toBe('invalid');
+      expect(v.checks.map((c: { code: string }) => c.code)).toEqual([
+        'RSTP_PRIORITY_MULTIPLE_4096',
+      ]);
+      await expect(panel.locator('code')).toHaveCount(
+        mode === 'Expert' ? 1 : 0,
+      );
+      await screen(page, `spanning-tree-parameters-${mode.toLowerCase()}`);
+    }
+    // The inactive protocol is assessed as well; no native default is stored.
+    vsctl(
+      'set',
+      'Bridge',
+      'br-tree-rules',
+      'other_config:rstp-priority=4096',
+      'other_config:stp-hello-time=10',
+    );
+    await page
+      .getByRole('button', { name: 'Refresh spanning tree', exact: true })
+      .click();
+    await expect(panel).toContainText(
+      'STP max age must be at least twice hello time plus two seconds.',
+    );
+    await expect(panel).toContainText('including inactive basic settings');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(panel).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+      ),
+    ).toBe(true);
+    await screen(page, 'spanning-tree-parameters-mobile');
+    vsctl(
+      'remove',
+      'Bridge',
+      'br-tree-rules',
+      'other_config',
+      'stp-hello-time',
+    );
+    await page.reload();
+    await expect(panel).toContainText('Basic parameter checks passed.');
+    const current = await get(context, path);
+    expect(
+      current.spanning_tree.configuration['stp-hello-time'].availability,
+    ).toBe('unset');
+    expect(
+      current.spanning_tree.configuration['stp-hello-time'].value,
+    ).toBeNull();
+    expect(current.editable).toBe(false);
+    expect(current.allowed_operations).toEqual([]);
+    expect(current.spanning_tree.write_reason).toBe(
+      'SPANNING_TREE_WRITE_GATE_PENDING',
+    );
+    expect(writes).toEqual([]);
+  } finally {
+    vsctl('--if-exists', 'del-br', 'br-tree-rules');
   }
 });
 
@@ -758,6 +874,11 @@ test('spanning tree observer withholds intent and participation while native run
     );
     expect(detail.spanning_tree.protocol).toBe('unknown');
     expect(detail.spanning_tree.ownership).toBe('withheld');
+    expect(detail.spanning_tree.parameter_validation.state).toBe('withheld');
+    expect(detail.spanning_tree.parameter_validation.checks).toEqual([]);
+    await expect(
+      page.getByRole('region', { name: 'Spanning tree parameter checks' }),
+    ).toContainText('Parameter checks are withheld with current permissions.');
     expect(
       detail.ports.every(
         (p: {
@@ -899,6 +1020,11 @@ test('spanning tree retains stale observations and clears protected state during
       '/bridges/' + bridge.management_id + '/spanning-tree',
     );
     expect(stale.source.freshness).toBe('stale');
+    expect(stale.spanning_tree.parameter_validation.state).toBe('stale');
+    expect(stale.spanning_tree.parameter_validation.checks).toEqual([]);
+    await expect(
+      page.getByRole('region', { name: 'Spanning tree parameter checks' }),
+    ).toContainText('Parameter checks are unavailable for stale observations.');
     expect(
       stale.ports.every(
         (p: {

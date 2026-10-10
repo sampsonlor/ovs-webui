@@ -696,16 +696,17 @@ func (v InventoryField) MarshalJSON() ([]byte, error) {
 }
 
 type SpanningTreeBridgeObservation struct {
-	Protocol      string                     `json:"protocol"`
-	Availability  string                     `json:"availability"`
-	Reason        string                     `json:"reason"`
-	Configuration map[string]json.RawMessage `json:"configuration"`
-	Runtime       map[string]json.RawMessage `json:"runtime"`
-	Source        Source                     `json:"source"`
-	Ownership     string                     `json:"ownership"`
-	Editable      bool                       `json:"editable"`
-	WriteReason   string                     `json:"write_reason"`
-	ExtraFields   map[string]json.RawMessage `json:"-"`
+	Protocol            string                          `json:"protocol"`
+	Availability        string                          `json:"availability"`
+	Reason              string                          `json:"reason"`
+	Configuration       map[string]json.RawMessage      `json:"configuration"`
+	Runtime             map[string]json.RawMessage      `json:"runtime"`
+	Source              Source                          `json:"source"`
+	Ownership           string                          `json:"ownership"`
+	Editable            bool                            `json:"editable"`
+	WriteReason         string                          `json:"write_reason"`
+	ParameterValidation SpanningTreeParameterValidation `json:"parameter_validation,omitempty"`
+	ExtraFields         map[string]json.RawMessage      `json:"-"`
 }
 
 func (v *SpanningTreeBridgeObservation) UnmarshalJSON(data []byte) error {
@@ -717,6 +718,16 @@ func (v SpanningTreeBridgeObservation) MarshalJSON() ([]byte, error) {
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
+type SpanningTreeParameterCheck struct {
+	Code   string   `json:"code"`
+	Fields []string `json:"fields"`
+}
+type SpanningTreeParameterValidation struct {
+	Version string                       `json:"version"`
+	Scope   string                       `json:"scope"`
+	State   string                       `json:"state"`
+	Checks  []SpanningTreeParameterCheck `json:"checks"`
+}
 type SpanningTreePortObservation struct {
 	Configuration     map[string]json.RawMessage `json:"configuration"`
 	Runtime           map[string]json.RawMessage `json:"runtime"`
