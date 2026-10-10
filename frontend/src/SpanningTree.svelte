@@ -23,7 +23,9 @@
   });
   function filterPage(event: SubmitEvent) {
     event.preventDefault();
-    navigate('/switching/spanning-tree?' + new URLSearchParams({filter,limit:'25'}));
+    const query = new URLSearchParams({limit:'25'});
+    if (filter) query.set('filter', filter);
+    navigate('/switching/spanning-tree?' + query);
   }
   function pagePath(cursor = '') {
     const q = new URLSearchParams(model.query); q.set('limit', q.get('limit') ?? '100');

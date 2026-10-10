@@ -85,6 +85,15 @@ func TestSpanningTreeCoherentNativeResourceAndContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	portList, path, _ := contract.Match("GET", "/api/v1/ports")
+	query := url.Values{"filter": {"synthetic-absent-port"}}
+	if err = portList.ValidateParameters(path, query, func(string) []string { return nil }); err != nil {
+		t.Fatal("named Port lookup rejected by the HTTP contract", err)
+	}
+	filtered, err := s.Read(context.Background(), portList.ID, path, query, c)
+	if err != nil || len(filtered.(map[string]any)["items"].([]map[string]any)) != 0 {
+		t.Fatal("Port name filter did not constrain the result", err)
+	}
 	for _, path := range []string{"/inventory/spanning-tree", "/bridges/" + bridge.ManagementID + "/spanning-tree"} {
 		op, p, _ := contract.Match("GET", "/api/v1"+path)
 		if op == nil {

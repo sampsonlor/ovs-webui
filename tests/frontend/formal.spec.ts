@@ -633,6 +633,8 @@ test('spanning tree observes native intent and daemon status with shared identit
       )
       .toBe('known');
     await page.getByRole('link', { name: 'STP / RSTP', exact: true }).click();
+    await page.getByRole('button', { name: 'Filter Bridges', exact: true }).click();
+    await expect(page).toHaveURL(/\/switching\/spanning-tree\?limit=25$/);
     await page.getByLabel('Bridge name', { exact: true }).fill('br-tree-ui');
     await page
       .getByRole('button', { name: 'Filter Bridges', exact: true })

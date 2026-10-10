@@ -962,6 +962,16 @@
               "minimum": 1,
               "maximum": 500
             }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
           }
         ],
         "x-capability": "state.read",

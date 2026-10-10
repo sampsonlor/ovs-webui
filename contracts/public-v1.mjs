@@ -268,6 +268,7 @@ Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability:
 s.SpanningTreeObservationPage = open({ ...s.ResourcePage.properties, items: array(ref('SpanningTree'),500), source: ref('Source'), availability: string(), reason: nullable({type:'string'}), coverage: {type:'object',additionalProperties:true} });
 s.Port.properties.spanning_tree = ref('SpanningTreePortObservation');
 s.Bond.properties.spanning_tree = ref('SpanningTreePortObservation');
+api.paths['/ports'].get.parameters.push(param('filter', 'query', string(1024)));
 add('/inventory/spanning-tree', 'get', 'listSpanningTreeObservations', 'SpanningTreeObservationPage', 'state.read', 43, {page:true, kind:'bridge'});
 add('/bridges/{bridge_id}/spanning-tree', 'get', 'readSpanningTreeObservation', 'SpanningTree', 'state.read', 43, {kind:'bridge'});
 api.paths['/inventory/spanning-tree'].get['x-service-state'] = 'implemented';
