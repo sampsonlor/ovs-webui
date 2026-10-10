@@ -780,6 +780,15 @@ test('spanning tree basic parameter checks expose native caveats without grantin
       'other_config:rstp-priority=4096',
       'other_config:stp-hello-time=10',
     );
+    await expect
+      .poll(async () =>
+        (
+          await get(context, path)
+        ).spanning_tree.parameter_validation.checks.map(
+          (c: { code: string }) => c.code,
+        ),
+      )
+      .toEqual(['STP_MAX_AGE_HELLO_RELATION']);
     await page
       .getByRole('button', { name: 'Refresh spanning tree', exact: true })
       .click();
@@ -802,6 +811,14 @@ test('spanning tree basic parameter checks expose native caveats without grantin
       'other_config',
       'stp-hello-time',
     );
+    await expect
+      .poll(
+        async () =>
+          (await get(context, path)).spanning_tree.configuration[
+            'stp-hello-time'
+          ].availability,
+      )
+      .toBe('unset');
     await page.reload();
     await expect(panel).toContainText('Basic parameter checks passed.');
     const current = await get(context, path);
