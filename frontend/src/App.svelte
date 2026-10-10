@@ -15,6 +15,7 @@
   import MTUEditor from './MTUEditor.svelte';
   import PolicingEditor from './PolicingEditor.svelte';
   import TopologyEditor from './TopologyEditor.svelte';
+  import SpanningTree from './SpanningTree.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -157,7 +158,7 @@
             href={domain.href}
             current={path === domain.href ||
               (domain.name === 'Switching' &&
-                (path.startsWith('/ports/') ||
+                (path.startsWith('/switching/') || path.startsWith('/ports/') ||
                   path.startsWith('/bridges/') ||
                   path.startsWith('/interfaces/')))}
             ><span aria-hidden="true">{domain.icon}</span> {domain.name}</Link
@@ -166,6 +167,7 @@
       <div class="nav-section">
         <p class="eyebrow">Switching</p>
         <Link href="/ports" current={path.startsWith('/ports')}>Ports</Link>
+        <Link href="/switching/spanning-tree" current={path.startsWith('/switching/spanning-tree')}>STP / RSTP</Link>
         {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
       <nav aria-label="Change Control" class="nav-section">
@@ -394,6 +396,7 @@
                       </p>{/each}
                   </div>
                 </div>
+                <p><Link href={`/switching/spanning-tree/${port.bridge_ref.id}`}>Review Bridge STP / RSTP</Link></p>
               </section>
               <div class="columns">
                 <section class="panel">
@@ -446,6 +449,8 @@
                 </details>{/if}
             {/if}
           {/if}
+        {:else if path === '/switching/spanning-tree' || path.startsWith('/switching/spanning-tree/')}
+          <SpanningTree model={$model} {expert} />
         {:else if path === '/interfaces'}
           <Interfaces model={$model} {expert} />
         {:else if path.startsWith('/interfaces/')}
@@ -480,6 +485,7 @@
             <button onclick={() => controller.refresh()}>Refresh resource</button>
           </header>
           {#if path === '/bridges'}<p>Select a Bridge to review its Interfaces, or <Link href="/interfaces">review all Interfaces</Link>.</p>{/if}
+          {#if path.startsWith('/bridges/') && $model.resource.value}<p><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link></p>{/if}
           <LoadNotice load={$model.resource} />
           {#if $model.resource.value}
             {@const resource = $model.resource.value}

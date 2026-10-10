@@ -296,6 +296,8 @@ def main():
             return
         from interface_selection import verify_interface_selection
         metrics['interface_selection'] = verify_interface_selection(vsctl, get, call, token['secret'], eventually, ovs_run, ovs)
+        from spanning_tree import verify_spanning_tree
+        metrics['spanning_tree_observation'] = verify_spanning_tree(vsctl, get, call, token['secret'], eventually)
         checks.append('Interface natural selection, filtered cursor scope, configuration permissions and same-name Bridge retirement verified')
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')

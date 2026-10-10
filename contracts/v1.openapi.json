@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.24.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness."
+    "version": "1.25.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Spanning-tree authority, validator, Applied and compensation gates are pending; these reads never enable switching writes."
   },
   "servers": [
     {
@@ -21958,6 +21958,393 @@
         }
       }
     },
+    "/inventory/spanning-tree": {
+      "get": {
+        "operationId": "listSpanningTreeObservations",
+        "summary": "listSpanningTreeObservations",
+        "x-capability": "state.read",
+        "x-service-issue": 43,
+        "x-service-state": "implemented",
+        "x-resource-kind": "bridge",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpanningTreeObservationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bridges/{bridge_id}/spanning-tree": {
+      "get": {
+        "operationId": "readSpanningTreeObservation",
+        "summary": "readSpanningTreeObservation",
+        "x-capability": "state.read",
+        "x-service-issue": 43,
+        "x-service-state": "implemented",
+        "x-resource-kind": "bridge",
+        "parameters": [
+          {
+            "name": "bridge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpanningTree"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "operationId": "readHealth",
@@ -28628,6 +29015,9 @@
                 "type": "null"
               }
             ]
+          },
+          "spanning_tree": {
+            "$ref": "#/components/schemas/SpanningTreePortObservation"
           }
         },
         "required": [
@@ -30137,6 +30527,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "spanning_tree": {
+            "$ref": "#/components/schemas/SpanningTreeBridgeObservation"
           }
         },
         "required": [
@@ -30418,6 +30811,269 @@
         ],
         "additionalProperties": true,
         "description": "Native field with independent authority and observation provenance. Selected Interface configuration requests distinguish known native empty/zero, unsupported schema shapes, unknown observations and configuration withheld. Schema mutability grants no write authority; configuration values do not prove runtime enforcement."
+      },
+      "SpanningTreeBridgeObservation": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-known-values": [
+              "unknown",
+              "disabled",
+              "stp",
+              "rstp",
+              "invalid-both-enabled"
+            ]
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "configuration": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InventoryField"
+            }
+          },
+          "runtime": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InventoryField"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "ownership": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "write_reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "protocol",
+          "availability",
+          "reason",
+          "configuration",
+          "runtime",
+          "source",
+          "ownership",
+          "editable",
+          "write_reason"
+        ],
+        "additionalProperties": true
+      },
+      "SpanningTreePortObservation": {
+        "type": "object",
+        "properties": {
+          "configuration": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InventoryField"
+            }
+          },
+          "runtime": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InventoryField"
+            }
+          },
+          "stp_participation": {
+            "$ref": "#/components/schemas/InventoryField"
+          },
+          "rstp_participation": {
+            "$ref": "#/components/schemas/InventoryField"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "ownership": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "editable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configuration",
+          "runtime",
+          "stp_participation",
+          "rstp_participation",
+          "source",
+          "ownership",
+          "editable"
+        ],
+        "additionalProperties": true
+      },
+      "SpanningTreePort": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "port_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "spanning_tree": {
+            "$ref": "#/components/schemas/SpanningTreePortObservation"
+          }
+        },
+        "required": [
+          "name",
+          "port_ref",
+          "spanning_tree"
+        ],
+        "additionalProperties": true
+      },
+      "SpanningTree": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/Sequence"
+          },
+          "resource_kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 64
+          },
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "config_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "snapshot_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "bridge_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "spanning_tree": {
+            "$ref": "#/components/schemas/SpanningTreeBridgeObservation"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpanningTreePort"
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "ports_truncated": {
+            "type": "boolean"
+          },
+          "port_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "mode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-known-values": [
+              "observe"
+            ]
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "allowed_operations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 64
+          },
+          "write_reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "sequence",
+          "resource_kind",
+          "source",
+          "allowed_actions",
+          "management_id",
+          "ovs_uuid",
+          "instance_generation",
+          "config_revision",
+          "snapshot_id",
+          "name",
+          "bridge_ref",
+          "spanning_tree",
+          "ports",
+          "ports_truncated",
+          "port_count",
+          "mode",
+          "editable",
+          "allowed_operations",
+          "write_reason"
+        ],
+        "additionalProperties": true,
+        "description": "One Bridge management identity, never a separate native STP object. Detail Ports come from this same immutable snapshot, ordered by natural name and bounded by 128 rows / 52 KiB; ports_truncated signals partial detail and Port/Interface links retain access to remaining inventory. List resources omit Port detail. Empty optional native parameters are unset, never fabricated defaults; absent runtime keys are unknown. Runtime provenance/freshness is independent from configured enablement and does not establish forwarding or convergence. Read requires inventory.read and state.read; configuration/type/participation/authority additionally require configuration.read. A native-enabled port assessment applies only when its Bridge protocol is enabled. All writes retain independent #23/#43 gates."
       },
       "LinuxDeviceField": {
         "type": "object",
@@ -30739,6 +31395,9 @@
             },
             "minItems": 0,
             "maxItems": 128
+          },
+          "spanning_tree": {
+            "$ref": "#/components/schemas/SpanningTreePortObservation"
           }
         },
         "required": [
@@ -35074,6 +35733,81 @@
           "items",
           "next_cursor",
           "truncated"
+        ],
+        "additionalProperties": true
+      },
+      "SpanningTreeObservationPage": {
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpanningTree"
+            },
+            "minItems": 0,
+            "maxItems": 500
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "instance_generation",
+          "items",
+          "next_cursor",
+          "truncated",
+          "source",
+          "availability",
+          "reason",
+          "coverage"
         ],
         "additionalProperties": true
       }

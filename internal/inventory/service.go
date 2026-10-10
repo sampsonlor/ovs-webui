@@ -221,6 +221,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	// SetLocalVLANPorts replaces the map; published observations are immutable.
 	project := func(b Binding, kind string) (map[string]any, error) {
+		if kind == "spanning_tree" {
+			return spanningTreeResource(v, b, fresh, allowedConfig, op == "readSpanningTreeObservation")
+		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
 		if err == nil && b.Table == "Interface" && allowedConfig {
 			binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Interface", Generation: v.decision.Generation}
@@ -297,7 +300,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return item, nil
 	}
 	if len(path) > 0 {
-		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond"}[op]
+		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree"}[op]
 		for _, b := range v.decision.Bindings {
 			for _, id := range path {
 				if b.ManagementID == id && kindFor(b.Table) == tableKind(kind) {
@@ -356,7 +359,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		cur = old
 	}
 	items := []map[string]any{}
-	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond"}[op]
+	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree"}[op]
 	ids := []string{}
 	bindings := map[string]Binding{}
 	if op == "readInventorySchema" {
@@ -514,6 +517,9 @@ func kindFor(t string) string {
 	return map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface"}[t]
 }
 func tableKind(k string) string {
+	if k == "spanning_tree" {
+		return "bridge"
+	}
 	if k == "bond" {
 		return "port"
 	}
@@ -575,6 +581,9 @@ func parent(v *view, table, column, uuid string) (Row, bool) {
 }
 
 func operational(table, column string) bool {
+	if (table == "Bridge" || table == "Port") && (column == "status" || column == "rstp_status") {
+		return true
+	}
 	return table == "Interface" && slices.Contains([]string{"link_state", "admin_state", "ofport", "ifindex", "mtu", "link_speed", "duplex", "status", "error"}, column)
 }
 func resource(v *view, b Binding, fresh string, config bool, kind string) (map[string]any, error) {
@@ -637,12 +646,14 @@ func resource(v *view, b Binding, fresh string, config bool, kind string) (map[s
 		}
 		out["port_refs"] = ports
 		out["datapath_type"] = nativeType(row, "datapath_type", config)
+		out["spanning_tree"] = spanningTreeBridge(v, row, fresh, config)
 	case "Port":
 		bridge, ok := parent(v, "Bridge", "ports", b.UUID)
 		if !ok {
 			return nil, apitypes.Fail(503, "INVENTORY_RELATION_UNKNOWN")
 		}
 		out["bridge_ref"] = ref(v, "Bridge", bridge.UUID)
+		out["spanning_tree"] = spanningTreePortSummary(v, row, bridge, fresh, config)
 		members := []any{}
 		for _, id := range refs(row.Values["interfaces"]) {
 			members = append(members, ref(v, "Interface", id))

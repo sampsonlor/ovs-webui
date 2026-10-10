@@ -21,8 +21,8 @@ import (
 var selected = map[string][]string{
 	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths"},
 	"Datapath":     {"capabilities"},
-	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "flood_vlans", "external_ids"},
-	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "external_ids"},
+	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
+	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
 	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
@@ -76,6 +76,10 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			if spanningTreeColumn(t, name) {
+				c.SpanningTreeCompatible = spanningTreeConstraint(name, col)
+				c.Monitored = c.Monitored && c.SpanningTreeCompatible
+			}
 			c.PatchCompatible = patchColumnConstraint(t, name, col)
 			if t == "Interface" && name == "mtu_request" {
 				c.MTUCompatible = mtuConstraint(col)
@@ -331,6 +335,21 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 	return nil
 }
 func sanitize(table, name string, n any) any {
+	if keys := spanningTreeMapKeys(table, name); keys != nil {
+		safe := map[string]any{}
+		m, _ := n.(map[string]any)
+		for _, key := range keys {
+			if raw, present := m[key]; present {
+				if value, ok := raw.(string); ok && len(value) <= 128 {
+					safe[key] = value
+				} else {
+					// Invalid presence must not become an unset native default.
+					safe[key] = nil
+				}
+			}
+		}
+		return safe
+	}
 	if table != "Interface" {
 		return n
 	}

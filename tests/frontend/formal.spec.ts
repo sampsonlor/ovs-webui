@@ -368,7 +368,7 @@ async function command(
   );
   return response.json();
 }
-async function login(page: Page, name = 'browser-admin') {
+async function login(page: Page, name = 'browser-admin', inventory = true) {
   watchAuthContext(page.context());
   await page.goto(fixture.origin + '/ports');
   await page.getByLabel('Username', { exact: true }).fill(name);
@@ -411,7 +411,7 @@ async function login(page: Page, name = 'browser-admin') {
   await expect(
     page.getByRole('heading', { name: 'Ports', exact: true }),
   ).toBeVisible();
-  await portPage(page, 'inv-p1');
+  if (inventory) await portPage(page, 'inv-p1');
 }
 async function clean(context: BrowserContext) {
   const c = await get(context, '/candidate');
@@ -563,6 +563,420 @@ async function waitInstalledPolicing(
       actions: rate === null && packet === null ? [] : [[rate, packet]],
     });
 }
+
+test('spanning tree observes native intent and daemon status with shared identity and responsive depth', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree');
+  const writes: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() !== 'GET' &&
+      /\/api\/v1\/(candidate|transactions)/.test(r.url())
+    )
+      writes.push(r.method());
+  });
+  vsctl(
+    'add-br',
+    'br-tree-ui',
+    '--',
+    'set',
+    'Bridge',
+    'br-tree-ui',
+    'datapath_type=dummy',
+    'rstp_enable=true',
+    'other_config:rstp-priority=4096',
+    '--',
+    'add-port',
+    'br-tree-ui',
+    'tree-ui-p',
+    '--',
+    'set',
+    'Interface',
+    'tree-ui-p',
+    'type=dummy',
+    '--',
+    'add-bond',
+    'br-tree-ui',
+    'tree-ui-bond',
+    'tree-ui-b1',
+    'tree-ui-b2',
+    '--',
+    'set',
+    'Interface',
+    'tree-ui-b1',
+    'type=dummy',
+    '--',
+    'set',
+    'Interface',
+    'tree-ui-b2',
+    'type=dummy',
+  );
+  try {
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/inventory/spanning-tree?filter=br-tree-ui'))
+            .items.length,
+      )
+      .toBe(1);
+    const row = (
+      await get(context, '/inventory/spanning-tree?filter=br-tree-ui')
+    ).items[0];
+    const path = '/bridges/' + row.management_id + '/spanning-tree';
+    await expect
+      .poll(
+        async () =>
+          (await get(context, path)).spanning_tree.runtime.rstp_bridge_id
+            .availability,
+      )
+      .toBe('known');
+    await page.getByRole('link', { name: 'STP / RSTP', exact: true }).click();
+    await page.getByLabel('Bridge name', { exact: true }).fill('br-tree-ui');
+    await page
+      .getByRole('button', { name: 'Filter Bridges', exact: true })
+      .click();
+    await page.getByRole('link', { name: 'br-tree-ui', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'br-tree-ui', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('excluded bond', { exact: false }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('excluded internal', { exact: false }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Native default (unset)', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByText('4096', { exact: true })).toBeVisible();
+    await screen(page, 'spanning-tree-standard');
+    await nativeTypeDepth(page, 'Expert');
+    await page
+      .getByText('Native identity and delivery gates', { exact: true })
+      .click();
+    await expect(
+      page.getByText(row.management_id, { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole('link', { name: 'Review Bridge', exact: true })
+      .focus();
+    expect(await page.evaluate(() => document.activeElement?.textContent)).toBe(
+      'Review Bridge',
+    );
+    await screen(page, 'spanning-tree-expert');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await screen(page, 'spanning-tree-dark');
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
+    await page
+      .getByRole('link', { name: 'Review Bridge', exact: true })
+      .click();
+    await page
+      .getByRole('link', { name: 'Review STP / RSTP', exact: true })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp('/switching/spanning-tree/' + row.management_id + '$'),
+    );
+    await nativeTypeDepth(page, 'Standard');
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await screen(page, 'spanning-tree-tablet');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.getByRole('heading', { name: 'STP / RSTP', exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await screen(page, 'spanning-tree-mobile');
+    expect(writes).toEqual([]);
+    expect((await get(context, path)).allowed_operations).toEqual([]);
+  } finally {
+    vsctl('--if-exists', 'del-br', 'br-tree-ui');
+  }
+});
+
+test('spanning tree observer withholds intent and participation while native runtime remains readable', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree-observer');
+  vsctl(
+    'add-br',
+    'br-tree-ro',
+    '--',
+    'set',
+    'Bridge',
+    'br-tree-ro',
+    'datapath_type=dummy',
+    'rstp_enable=true',
+  );
+  try {
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/inventory/spanning-tree?filter=br-tree-ro'))
+            .items.length,
+      )
+      .toBe(1);
+    const row = (
+      await get(context, '/inventory/spanning-tree?filter=br-tree-ro')
+    ).items[0];
+    await expect
+      .poll(
+        async () =>
+          (
+            await get(
+              context,
+              '/bridges/' + row.management_id + '/spanning-tree',
+            )
+          ).spanning_tree.runtime.rstp_bridge_id.availability,
+      )
+      .toBe('known');
+    await page.goto(
+      fixture.origin + '/switching/spanning-tree/' + row.management_id,
+    );
+    await expect(
+      page.getByRole('heading', { name: 'br-tree-ro', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Withheld', { exact: true }).first(),
+    ).toBeVisible();
+    const detail = await get(
+      context,
+      '/bridges/' + row.management_id + '/spanning-tree',
+    );
+    expect(detail.spanning_tree.protocol).toBe('unknown');
+    expect(detail.spanning_tree.ownership).toBe('withheld');
+    expect(
+      detail.ports.every(
+        (p: {
+          spanning_tree: { rstp_participation: { availability: string } };
+        }) => p.spanning_tree.rstp_participation.availability === 'withheld',
+      ),
+    ).toBe(true);
+    await nativeTypeDepth(page, 'Expert');
+    await expect(
+      page.getByText('ovs-vswitchd-observation', { exact: false }).first(),
+    ).toBeVisible();
+    await screen(page, 'spanning-tree-withheld');
+    expect(detail.editable).toBe(false);
+  } finally {
+    vsctl('--if-exists', 'del-br', 'br-tree-ro');
+  }
+});
+
+test('spanning tree native conflict, unknown, external control, empty and retired identity remain explicit', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree-exceptions');
+  vsctl(
+    'add-br',
+    'br-tree-ex',
+    '--',
+    'set',
+    'Bridge',
+    'br-tree-ex',
+    'datapath_type=dummy',
+    'stp_enable=true',
+    'rstp_enable=true',
+    'external_ids:ovn-owner=synthetic',
+  );
+  try {
+    await expect
+      .poll(
+        async () =>
+          (await get(context, '/inventory/spanning-tree?filter=br-tree-ex'))
+            .items.length,
+      )
+      .toBe(1);
+    const row = (
+      await get(context, '/inventory/spanning-tree?filter=br-tree-ex')
+    ).items[0];
+    await page.goto(
+      fixture.origin + '/switching/spanning-tree/' + row.management_id,
+    );
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'STP and RSTP are both configured' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('externally-controlled', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Unknown', { exact: true }).first(),
+    ).toBeVisible();
+    await screen(page, 'spanning-tree-conflict');
+    vsctl(
+      'set',
+      'Bridge',
+      'br-tree-ex',
+      'stp_enable=false',
+      'rstp_enable=false',
+    );
+    await expect
+      .poll(
+        async () =>
+          (
+            await get(
+              context,
+              '/bridges/' + row.management_id + '/spanning-tree',
+            )
+          ).spanning_tree.protocol,
+      )
+      .toBe('disabled');
+    await page
+      .getByRole('button', { name: 'Refresh spanning tree', exact: true })
+      .click();
+    await expect(page.getByText('disabled', { exact: true })).toBeVisible();
+    await screen(page, 'spanning-tree-disabled');
+    vsctl('del-br', 'br-tree-ex');
+    await expect
+      .poll(async () =>
+        (
+          await getReply(
+            context,
+            '/bridges/' + row.management_id + '/spanning-tree',
+          )
+        ).status(),
+      )
+      .toBe(404);
+    await page
+      .getByRole('button', { name: 'Refresh spanning tree', exact: true })
+      .click();
+    await expect(page.getByText('NOT_FOUND', { exact: false })).toBeVisible();
+    await screen(page, 'spanning-tree-retired');
+    await page.goto(
+      fixture.origin +
+        '/switching/spanning-tree?filter=tree-result-does-not-exist',
+    );
+    await expect(
+      page.getByText('No Bridges in this authorized result.', { exact: true }),
+    ).toBeVisible();
+    await screen(page, 'spanning-tree-empty');
+  } finally {
+    vsctl('--if-exists', 'del-br', 'br-tree-ex');
+  }
+});
+
+test('spanning tree retains stale observations and clears protected state during manager outage', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree-outage');
+  const bridge = (
+    await get(context, '/inventory/spanning-tree?filter=br-inv')
+  ).items.find((b: { name: string }) => b.name === 'br-inv');
+  expect(bridge).toBeTruthy();
+  await page.goto(
+    fixture.origin + '/switching/spanning-tree/' + bridge.management_id,
+  );
+  await expect(
+    page.getByRole('heading', { name: 'br-inv', exact: true }),
+  ).toBeVisible();
+  execFileSync('ovs-appctl', ['-t', `${fixture.ovsDirectory}/db.ctl`, 'exit']);
+  try {
+    await expect(
+      page.getByText(
+        'Stale observation. Reported values are retained for review; current participation is Unknown.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const stale = await get(
+      context,
+      '/bridges/' + bridge.management_id + '/spanning-tree',
+    );
+    expect(stale.source.freshness).toBe('stale');
+    expect(
+      stale.ports.every(
+        (p: {
+          spanning_tree: { rstp_participation: { availability: string } };
+        }) => p.spanning_tree.rstp_participation.availability === 'unknown',
+      ),
+    ).toBe(true);
+    await screen(page, 'spanning-tree-provider-stale');
+  } finally {
+    execFileSync(
+      'ovsdb-server',
+      [
+        fixture.database,
+        `--remote=punix:${fixture.dbSocket}`,
+        `--pidfile=${fixture.ovsDirectory}/db.pid`,
+        `--unixctl=${fixture.ovsDirectory}/db.ctl`,
+        '--detach',
+        '--no-chdir',
+        '--overwrite-pidfile',
+      ],
+      {
+        env: {
+          ...process.env,
+          OVS_RUNDIR: fixture.ovsDirectory,
+          OVS_LOGDIR: fixture.ovsDirectory,
+          OVS_DBDIR: fixture.ovsDirectory,
+        },
+        stdio: 'pipe',
+      },
+    );
+  }
+  await expect
+    .poll(
+      async () =>
+        (
+          await get(
+            context,
+            '/bridges/' + bridge.management_id + '/spanning-tree',
+          )
+        ).source.freshness,
+    )
+    .toBe('fresh');
+  unit('stop', 'mgrd');
+  try {
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: 'Current authorization or connection' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'br-inv', exact: true }),
+    ).toHaveCount(0);
+    await screen(page, 'spanning-tree-manager-unavailable');
+  } finally {
+    unit('start', 'mgrd');
+  }
+  await expect(
+    page.getByRole('heading', { name: 'br-inv', exact: true }),
+  ).toBeVisible();
+});
+
+test('spanning tree inventory denial is enforced by the formal service and visible in both depths', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree-denied', false);
+  expect((await getReply(context, '/inventory/spanning-tree')).status()).toBe(
+    403,
+  );
+  await page.getByRole('link', { name: 'STP / RSTP', exact: true }).click();
+  await expect(
+    page.getByText('Permission denied', { exact: true }),
+  ).toBeVisible();
+  await nativeTypeDepth(page, 'Expert');
+  await expect(
+    page.getByText('Permission denied', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Spanning tree Bridges', exact: true }),
+  ).toHaveCount(0);
+  await screen(page, 'spanning-tree-denied');
+});
 
 test('authentication diagnostics distinguish real browser admission from helper reads and signed-out rejection', async ({
   page,

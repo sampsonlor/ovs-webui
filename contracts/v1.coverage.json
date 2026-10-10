@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.24.0",
+  "contract_version": "1.25.0",
   "scope": [
     {
       "id": "P1-PLAT-01",
@@ -205,12 +205,16 @@
       "name": "STP / RSTP",
       "paths": [
         "/spanning-tree",
-        "/candidate"
+        "/candidate",
+        "/inventory/spanning-tree",
+        "/bridges/{bridge_id}/spanning-tree"
       ],
       "operations": [
         "listSpanningTree",
         "readCandidate",
-        "changeCandidate"
+        "changeCandidate",
+        "listSpanningTreeObservations",
+        "readSpanningTreeObservation"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -904,12 +908,16 @@
       "name": "STP / RSTP",
       "paths": [
         "/spanning-tree",
-        "/candidate"
+        "/candidate",
+        "/inventory/spanning-tree",
+        "/bridges/{bridge_id}/spanning-tree"
       ],
       "operations": [
         "listSpanningTree",
         "readCandidate",
-        "changeCandidate"
+        "changeCandidate",
+        "listSpanningTreeObservations",
+        "readSpanningTreeObservation"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },

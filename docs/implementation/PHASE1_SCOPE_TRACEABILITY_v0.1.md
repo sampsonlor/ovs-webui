@@ -18,6 +18,8 @@ main 基线 `176bca1` 包含已接受 P0/P1 六批及 PR #18 整合；原型覆�
 
 ## 验收 Gate
 
+2026-10-10：#43 M1 建立 [STP/RSTP 正式观察](SPANNING_TREE_OBSERVATION_v0.1.md)，SW-10 独立页面读取同一 Bridge/Port 原生快照。Basic Manage 的字段授权、执行验证、Applied 与恢复保持 M2 门禁；#23/#43 不因本观察批次完成而关闭。其余原生域及 Profile/Drift 的逐域映射见该文档。
+
 G1 = Domain/unit/lint/static/fuzz；G2 = 公共 API/兼容与客户端契约；G3 = 真实 OVS/provider integration；G4 = amd64/原生 arm64 和发行版 userspace；G5 = VM/systemd/kernel/reboot/升级与恢复；G6 = security/dependency/redaction。这些对应 Scope §14 的六组 release Gate。UX 是本映射额外使用的页面验收标记，包含模式、设备职责、键盘/焦点、深浅色/缩放和异常反馈，不是新造的 Scope 编号。
 
 所有正式条目当前都待实现/待证据。某硬件/provider 缺失时，依照批准能力级别验收 Unsupported/Unavailable/Unknown 的表现；不能据此免除核心软件行为，也不能让 DPDK/Offload 硬件成为 Core GA 前置条件。

@@ -139,21 +139,22 @@ func (v ObservedIntent) MarshalJSON() ([]byte, error) {
 }
 
 type Port struct {
-	ManagementId       Id                         `json:"management_id"`
-	OvsUuid            string                     `json:"ovs_uuid"`
-	InstanceGeneration Id                         `json:"instance_generation"`
-	ConfigRevision     Revision                   `json:"config_revision"`
-	Name               string                     `json:"name"`
-	BridgeRef          ResourceRef                `json:"bridge_ref"`
-	InterfaceRefs      []ResourceRef              `json:"interface_refs"`
-	Kind               string                     `json:"kind"`
-	Vlan               VlanObservation            `json:"vlan"`
-	OvsLinkState       map[string]json.RawMessage `json:"ovs_link_state"`
-	LinuxCarrier       map[string]json.RawMessage `json:"linux_carrier"`
-	AllowedOperations  []string                   `json:"allowed_operations"`
-	QinqEditable       bool                       `json:"qinq_editable,omitempty"`
-	QinqEthertype      json.RawMessage            `json:"qinq_ethertype,omitempty"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	ManagementId       Id                          `json:"management_id"`
+	OvsUuid            string                      `json:"ovs_uuid"`
+	InstanceGeneration Id                          `json:"instance_generation"`
+	ConfigRevision     Revision                    `json:"config_revision"`
+	Name               string                      `json:"name"`
+	BridgeRef          ResourceRef                 `json:"bridge_ref"`
+	InterfaceRefs      []ResourceRef               `json:"interface_refs"`
+	Kind               string                      `json:"kind"`
+	Vlan               VlanObservation             `json:"vlan"`
+	OvsLinkState       map[string]json.RawMessage  `json:"ovs_link_state"`
+	LinuxCarrier       map[string]json.RawMessage  `json:"linux_carrier"`
+	AllowedOperations  []string                    `json:"allowed_operations"`
+	QinqEditable       bool                        `json:"qinq_editable,omitempty"`
+	QinqEthertype      json.RawMessage             `json:"qinq_ethertype,omitempty"`
+	SpanningTree       SpanningTreePortObservation `json:"spanning_tree,omitempty"`
+	ExtraFields        map[string]json.RawMessage  `json:"-"`
 }
 
 func (v *Port) UnmarshalJSON(data []byte) error {
@@ -585,20 +586,21 @@ func (v ResourcePage) MarshalJSON() ([]byte, error) {
 }
 
 type Bridge struct {
-	Id                 Id                         `json:"id"`
-	State              string                     `json:"state"`
-	Sequence           Sequence                   `json:"sequence"`
-	ResourceKind       string                     `json:"resource_kind"`
-	Source             Source                     `json:"source"`
-	AllowedActions     []string                   `json:"allowed_actions"`
-	ManagementId       Id                         `json:"management_id"`
-	OvsUuid            Id                         `json:"ovs_uuid"`
-	InstanceGeneration Id                         `json:"instance_generation"`
-	ConfigRevision     Revision                   `json:"config_revision"`
-	Name               string                     `json:"name"`
-	PortRefs           []ResourceRef              `json:"port_refs"`
-	DatapathType       string                     `json:"datapath_type"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	Id                 Id                            `json:"id"`
+	State              string                        `json:"state"`
+	Sequence           Sequence                      `json:"sequence"`
+	ResourceKind       string                        `json:"resource_kind"`
+	Source             Source                        `json:"source"`
+	AllowedActions     []string                      `json:"allowed_actions"`
+	ManagementId       Id                            `json:"management_id"`
+	OvsUuid            Id                            `json:"ovs_uuid"`
+	InstanceGeneration Id                            `json:"instance_generation"`
+	ConfigRevision     Revision                      `json:"config_revision"`
+	Name               string                        `json:"name"`
+	PortRefs           []ResourceRef                 `json:"port_refs"`
+	DatapathType       string                        `json:"datapath_type"`
+	SpanningTree       SpanningTreeBridgeObservation `json:"spanning_tree,omitempty"`
+	ExtraFields        map[string]json.RawMessage    `json:"-"`
 }
 
 func (v *Bridge) UnmarshalJSON(data []byte) error {
@@ -693,6 +695,98 @@ func (v InventoryField) MarshalJSON() ([]byte, error) {
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
+type SpanningTreeBridgeObservation struct {
+	Protocol      string                     `json:"protocol"`
+	Availability  string                     `json:"availability"`
+	Reason        string                     `json:"reason"`
+	Configuration map[string]json.RawMessage `json:"configuration"`
+	Runtime       map[string]json.RawMessage `json:"runtime"`
+	Source        Source                     `json:"source"`
+	Ownership     string                     `json:"ownership"`
+	Editable      bool                       `json:"editable"`
+	WriteReason   string                     `json:"write_reason"`
+	ExtraFields   map[string]json.RawMessage `json:"-"`
+}
+
+func (v *SpanningTreeBridgeObservation) UnmarshalJSON(data []byte) error {
+	type plain SpanningTreeBridgeObservation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v SpanningTreeBridgeObservation) MarshalJSON() ([]byte, error) {
+	type plain SpanningTreeBridgeObservation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type SpanningTreePortObservation struct {
+	Configuration     map[string]json.RawMessage `json:"configuration"`
+	Runtime           map[string]json.RawMessage `json:"runtime"`
+	StpParticipation  InventoryField             `json:"stp_participation"`
+	RstpParticipation InventoryField             `json:"rstp_participation"`
+	Source            Source                     `json:"source"`
+	Ownership         string                     `json:"ownership"`
+	Editable          bool                       `json:"editable"`
+	ExtraFields       map[string]json.RawMessage `json:"-"`
+}
+
+func (v *SpanningTreePortObservation) UnmarshalJSON(data []byte) error {
+	type plain SpanningTreePortObservation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v SpanningTreePortObservation) MarshalJSON() ([]byte, error) {
+	type plain SpanningTreePortObservation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type SpanningTreePort struct {
+	Name         string                      `json:"name"`
+	PortRef      ResourceRef                 `json:"port_ref"`
+	SpanningTree SpanningTreePortObservation `json:"spanning_tree"`
+	ExtraFields  map[string]json.RawMessage  `json:"-"`
+}
+
+func (v *SpanningTreePort) UnmarshalJSON(data []byte) error {
+	type plain SpanningTreePort
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v SpanningTreePort) MarshalJSON() ([]byte, error) {
+	type plain SpanningTreePort
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type SpanningTree struct {
+	Id                 Id                            `json:"id"`
+	State              string                        `json:"state"`
+	Sequence           Sequence                      `json:"sequence"`
+	ResourceKind       string                        `json:"resource_kind"`
+	Source             Source                        `json:"source"`
+	AllowedActions     []string                      `json:"allowed_actions"`
+	ManagementId       Id                            `json:"management_id"`
+	OvsUuid            Id                            `json:"ovs_uuid"`
+	InstanceGeneration Id                            `json:"instance_generation"`
+	ConfigRevision     Revision                      `json:"config_revision"`
+	SnapshotId         Id                            `json:"snapshot_id"`
+	Name               string                        `json:"name"`
+	BridgeRef          ResourceRef                   `json:"bridge_ref"`
+	SpanningTree       SpanningTreeBridgeObservation `json:"spanning_tree"`
+	Ports              []SpanningTreePort            `json:"ports"`
+	PortsTruncated     bool                          `json:"ports_truncated"`
+	PortCount          int64                         `json:"port_count"`
+	Mode               string                        `json:"mode"`
+	Editable           bool                          `json:"editable"`
+	AllowedOperations  []string                      `json:"allowed_operations"`
+	WriteReason        string                        `json:"write_reason"`
+	ExtraFields        map[string]json.RawMessage    `json:"-"`
+}
+
+func (v *SpanningTree) UnmarshalJSON(data []byte) error {
+	type plain SpanningTree
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v SpanningTree) MarshalJSON() ([]byte, error) {
+	type plain SpanningTree
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type LinuxDeviceField struct {
 	Value        json.RawMessage            `json:"value"`
 	Availability string                     `json:"availability"`
@@ -769,22 +863,23 @@ func (v LinuxIngressPolicing) MarshalJSON() ([]byte, error) {
 }
 
 type Bond struct {
-	ManagementId       Id                         `json:"management_id"`
-	OvsUuid            string                     `json:"ovs_uuid"`
-	InstanceGeneration Id                         `json:"instance_generation"`
-	ConfigRevision     Revision                   `json:"config_revision"`
-	Name               string                     `json:"name"`
-	BridgeRef          ResourceRef                `json:"bridge_ref"`
-	InterfaceRefs      []ResourceRef              `json:"interface_refs"`
-	Kind               string                     `json:"kind"`
-	Vlan               VlanObservation            `json:"vlan"`
-	OvsLinkState       map[string]json.RawMessage `json:"ovs_link_state"`
-	LinuxCarrier       map[string]json.RawMessage `json:"linux_carrier"`
-	AllowedOperations  []string                   `json:"allowed_operations"`
-	Lacp               string                     `json:"lacp"`
-	BondMode           string                     `json:"bond_mode"`
-	MemberRefs         []ResourceRef              `json:"member_refs"`
-	ExtraFields        map[string]json.RawMessage `json:"-"`
+	ManagementId       Id                          `json:"management_id"`
+	OvsUuid            string                      `json:"ovs_uuid"`
+	InstanceGeneration Id                          `json:"instance_generation"`
+	ConfigRevision     Revision                    `json:"config_revision"`
+	Name               string                      `json:"name"`
+	BridgeRef          ResourceRef                 `json:"bridge_ref"`
+	InterfaceRefs      []ResourceRef               `json:"interface_refs"`
+	Kind               string                      `json:"kind"`
+	Vlan               VlanObservation             `json:"vlan"`
+	OvsLinkState       map[string]json.RawMessage  `json:"ovs_link_state"`
+	LinuxCarrier       map[string]json.RawMessage  `json:"linux_carrier"`
+	AllowedOperations  []string                    `json:"allowed_operations"`
+	Lacp               string                      `json:"lacp"`
+	BondMode           string                      `json:"bond_mode"`
+	MemberRefs         []ResourceRef               `json:"member_refs"`
+	SpanningTree       SpanningTreePortObservation `json:"spanning_tree,omitempty"`
+	ExtraFields        map[string]json.RawMessage  `json:"-"`
 }
 
 func (v *Bond) UnmarshalJSON(data []byte) error {
@@ -2121,5 +2216,27 @@ func (v *TokenPage) UnmarshalJSON(data []byte) error {
 }
 func (v TokenPage) MarshalJSON() ([]byte, error) {
 	type plain TokenPage
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type SpanningTreeObservationPage struct {
+	SnapshotId         Id                         `json:"snapshot_id"`
+	InstanceGeneration json.RawMessage            `json:"instance_generation"`
+	Items              []SpanningTree             `json:"items"`
+	NextCursor         json.RawMessage            `json:"next_cursor"`
+	Truncated          bool                       `json:"truncated"`
+	Source             Source                     `json:"source"`
+	Availability       string                     `json:"availability"`
+	Reason             json.RawMessage            `json:"reason"`
+	Coverage           map[string]json.RawMessage `json:"coverage"`
+	ExtraFields        map[string]json.RawMessage `json:"-"`
+}
+
+func (v *SpanningTreeObservationPage) UnmarshalJSON(data []byte) error {
+	type plain SpanningTreeObservationPage
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v SpanningTreeObservationPage) MarshalJSON() ([]byte, error) {
+	type plain SpanningTreeObservationPage
 	return encodeOpen(plain(v), v.ExtraFields)
 }
