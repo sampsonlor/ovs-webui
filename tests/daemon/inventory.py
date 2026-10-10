@@ -414,7 +414,7 @@ def main():
         vsctl('del-port', 'br-inv', 'inv-p1')
         eventually(lambda: call('/ports/' + original['management_id'])[0] == 404)
         vsctl('add-port', 'br-inv', 'inv-p1', '--', 'set', 'Interface', 'inv-p1', 'type=dummy')
-        recreated = eventually(lambda: next((p for p in get('/ports')['items'] if p['name'] == 'inv-p1'), None))
+        recreated = eventually(lambda: next((p for p in get('/ports?filter=inv-p1')['items'] if p['name'] == 'inv-p1'), None))
         assert recreated['management_id'] != original['management_id'] and recreated['ovs_uuid'] != original['ovs_uuid']
         assert recreated['instance_generation'] == generation
 

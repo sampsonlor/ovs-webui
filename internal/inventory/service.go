@@ -225,6 +225,11 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			return spanningTreeResource(v, b, fresh, allowedConfig, op == "readSpanningTreeObservation")
 		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err == nil && (op == "listPorts" || op == "listBridges" || op == "listBonds") {
+			// Detail carries the shared projection. Avoid repeating it alongside
+			// native fields in ordinary bounded inventory pages.
+			delete(item, "spanning_tree")
+		}
 		if err == nil && b.Table == "Interface" && allowedConfig {
 			binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Interface", Generation: v.decision.Generation}
 			snapshot := candidate.Snapshot{Generation: v.decision.Generation}

@@ -29,7 +29,7 @@ Bridge and Port detail reuse the same projection helpers as SW-10. A selected Br
 
 ## Remaining #43 domain gates
 
-Shared Port inventory carries a compact spanning-tree summary (enable overrides, state/role, participation and ownership). Advanced parameters stay in the dedicated spanning-tree detail so ordinary Port lists retain their bounded pagination capacity. Common fields use the same projection and native provenance in both views.
+Shared Port detail carries a compact spanning-tree summary (enable overrides, state/role, participation and ownership). Advanced parameters stay in the dedicated spanning-tree detail. Ordinary Bridge/Port/Bond lists omit this duplicate projection and retain their native fields and bounded pagination; callers locate a specific named resource with the existing filter rather than assuming it appears on the first page. Common detail fields use the same projection and native provenance in both views.
 
 These mappings identify the next evidence requirements; they do not grant new capabilities or reduce approved scope.
 
