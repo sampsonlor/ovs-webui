@@ -606,12 +606,36 @@ test('spanning tree prepares a sealed draft and reviews blocked native checks wi
   await page.getByLabel('RSTP priority', { exact: true }).fill('4096');
   await expect(panel).toContainText('has no editable Bridge parameter');
   await screen(page, 'spanning-tree-draft-standard');
+  async function reviewOpenDraft() {
+    if ((await panel.locator('details').getAttribute('open')) === null)
+      await panel.locator('summary').click();
+    await expect(
+      page.getByLabel('Spanning tree protocol', { exact: true }),
+    ).toHaveValue('rstp');
+    await expect(page.getByLabel('RSTP priority', { exact: true })).toHaveValue(
+      '4096',
+    );
+    await expect(
+      page.getByLabel('RSTP priority', { exact: true }),
+    ).toBeEnabled();
+    await expect(
+      page.getByLabel('RSTP priority', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole('button', {
+        name: 'Stage spanning tree draft',
+        exact: true,
+      }),
+    ).toBeEnabled();
+  }
   await nativeTypeDepth(page, 'Expert');
   await expect(panel).toContainText('local-managed');
+  await reviewOpenDraft();
   await screen(page, 'spanning-tree-draft-expert');
   await page
     .getByRole('button', { name: 'Toggle color theme', exact: true })
     .click();
+  await reviewOpenDraft();
   await screen(page, 'spanning-tree-draft-dark');
   await page
     .getByRole('button', { name: 'Toggle color theme', exact: true })
