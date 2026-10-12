@@ -42,9 +42,12 @@ def verify_spanning_tree_prepare(vsctl, get, call, observer, eventually, units):
 
     def stage(protocol='rstp', parameters=None, expected=200):
         current = get('/candidate')
-        return patch({'request_id': request_id(), 'operation': 'stage', 'intents': [{
+        result = patch({'request_id': request_id(), 'operation': 'stage', 'intents': [{
             'intent_id': intent_id, 'operation': 'bridge.spanning-tree.prepare', 'object': binding,
             'spanning_tree': {'protocol': protocol, 'parameters': parameters if parameters is not None else {'rstp-priority': '4096'}}}]}, current['revision'], expected)
+        # PATCH returns the stored Candidate. Diff and current guard checks are
+        # deliberately computed by the authoritative GET, not the write reply.
+        return get('/candidate') if expected == 200 else result
 
     def validate(draft):
         code, ack, _ = call('/validations', 'POST', {'request_id': request_id(), 'candidate_id': draft['id'], 'candidate_revision': draft['revision']})
