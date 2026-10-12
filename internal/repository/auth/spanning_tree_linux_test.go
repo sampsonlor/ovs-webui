@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	plan "github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -29,6 +30,23 @@ func treePlan(t *testing.T, r *Repository, g authn.LoginResult) (plan.Envelope, 
 	return e, p, i
 }
 
+func treeStageRequest(e plan.Envelope, i plan.Intent) plan.PrepareRequest {
+	id := planRequestID()
+	// Exercise the closed public union. plan.Intent is a private IPC superset
+	// whose zero VLAN value must not be sent as part of this operation.
+	body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []any{map[string]any{"intent_id": i.ID, "operation": i.Operation, "object": i.Object, "spanning_tree": i.SpanningTree}}})
+	return plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}}
+}
+
+func prepareTreePlan(t *testing.T, r *Repository, credential string, e plan.Envelope, i plan.Intent) plan.Envelope {
+	t.Helper()
+	out, err := r.PrepareCandidate(testContext, credential, treeStageRequest(e, i))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 func TestSpanningTreeFormalDraftNeverBecomesExecutableWithSafetyEnabled(t *testing.T) {
 	r, _ := fixture(t)
 	g := login(t, r, "admin", true)
@@ -39,7 +57,7 @@ func TestSpanningTreeFormalDraftNeverBecomesExecutableWithSafetyEnabled(t *testi
 		t.Fatal("test requires the actual configured safety admission service")
 	}
 	e, p, i := treePlan(t, r, g)
-	e = preparePlan(t, r, g.Grant, e, i)
+	e = prepareTreePlan(t, r, g.Grant, e, i)
 	if e.Verify(r.key, g.Claims.PrincipalID) != nil || e.Candidate.Intents[0].SpanningTree.Before.Parameters["rstp-priority"] != nil {
 		t.Fatal("manager did not seal a distinct native original")
 	}
@@ -75,7 +93,7 @@ func TestSpanningTreeFormalDraftNeverBecomesExecutableWithSafetyEnabled(t *testi
 func TestSpanningTreePreparationRequiresCurrentCapabilityAndCredentialCeiling(t *testing.T) {
 	r, _ := fixture(t)
 	g := login(t, r, "admin", false)
-	e, _, i := treePlan(t, r, g)
+	e, provider, i := treePlan(t, r, g)
 	setCaps := func(caps []string) {
 		t.Helper()
 		body, _ := json.Marshal(caps)
@@ -87,11 +105,15 @@ func TestSpanningTreePreparationRequiresCurrentCapabilityAndCredentialCeiling(t 
 		}
 	}
 	prepare := func(credential string) error {
-		id := planRequestID()
-		body, _ := json.Marshal(map[string]any{"request_id": id, "operation": "stage", "intents": []plan.Intent{i}})
-		_, err := r.PrepareCandidate(testContext, credential, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: body}})
+		_, err := r.PrepareCandidate(testContext, credential, treeStageRequest(e, i))
 		return err
 	}
+	// Even a holder of prepare/write permissions must not use this operation
+	// as an oracle for configuration or root grants withheld by its read scope.
+	setCaps(slices.DeleteFunc(slices.Clone(g.Claims.Capabilities), func(c string) bool { return c == "configuration.read" }))
+	provider.failure = apitypes.Fail(503, "PROVIDER_UNAVAILABLE")
+	wantCode(t, prepare(g.Grant), "CAPABILITY_DENIED")
+	provider.failure = nil
 	setCaps(slices.DeleteFunc(slices.Clone(g.Claims.Capabilities), func(c string) bool { return c == plan.SpanningTreePrepareCapability }))
 	wantCode(t, prepare(g.Grant), "CAPABILITY_DENIED")
 	limited := login(t, r, "admin", false)
@@ -99,5 +121,31 @@ func TestSpanningTreePreparationRequiresCurrentCapabilityAndCredentialCeiling(t 
 	wantCode(t, prepare(limited.Grant), "CAPABILITY_DENIED")
 	if err := prepare(g.Grant); err != nil {
 		t.Fatal("current independent permission denied", err)
+	}
+	e = prepareTreePlan(t, r, g.Grant, e, i)
+	ack, err := r.ValidateCandidate(testContext, g.Grant, validationRequest(e, g.Claims.RequestEpoch))
+	if err != nil {
+		t.Fatal(err)
+	}
+	setCaps(slices.DeleteFunc(slices.Clone(g.Claims.Capabilities), func(c string) bool { return c == "configuration.read" }))
+	provider.failure = apitypes.Fail(503, "PROVIDER_UNAVAILABLE")
+	_, err = r.ReadCandidate(testContext, g.Grant, plan.ReadRequest{Envelope: e})
+	wantCode(t, err, "CAPABILITY_DENIED")
+	_, err = r.ReadCandidate(testContext, g.Grant, plan.ReadRequest{Envelope: e, ValidationID: ack.Receipt.Resource.ID})
+	wantCode(t, err, "CAPABILITY_DENIED")
+	_, err = r.ValidateCandidate(testContext, g.Grant, validationRequest(e, g.Claims.RequestEpoch))
+	wantCode(t, err, "CAPABILITY_DENIED")
+	wantCode(t, prepare(g.Grant), "CAPABILITY_DENIED")
+	id := planRequestID()
+	rebase, _ := json.Marshal(map[string]any{"request_id": id, "operation": "rebase", "instance_generation": provider.snapshot.Generation, "current_config_revision": provider.snapshot.Revision, "conflict_snapshot_id": nil, "resolutions": []any{}})
+	_, err = r.PrepareCandidate(testContext, g.Grant, plan.PrepareRequest{Envelope: e, Command: authn.Command{Method: "PATCH", URI: "/api/v1/candidate", Epoch: e.Epoch, RequestID: id, Precondition: `"` + e.Candidate.Revision + `"`, Payload: rebase}})
+	wantCode(t, err, "CAPABILITY_DENIED")
+	limitedRead := login(t, r, "admin", false)
+	setCaps(g.Claims.Capabilities)
+	provider.failure = nil
+	_, err = r.ReadCandidate(testContext, limitedRead.Grant, plan.ReadRequest{Envelope: e})
+	wantCode(t, err, "CAPABILITY_DENIED")
+	if _, err = r.ReadCandidate(testContext, g.Grant, plan.ReadRequest{Envelope: e, ValidationID: ack.Receipt.Resource.ID}); err != nil {
+		t.Fatal("restored current reader cannot inspect its blocked historical review", err)
 	}
 }

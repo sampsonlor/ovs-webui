@@ -14,7 +14,7 @@ All validations of this operation contain the unconditional blocking check `SPAN
 
 The manager accepts a root-owned `--local-spanning-tree-bridges=<management-id,...>` grant, limited to 128 valid immutable Bridge management IDs. Name, observed external metadata, schema mutability and existing topology/VLAN/Bond/Interface grants do not substitute it. A recreated same-name Bridge has a new identity and no inherited grant.
 
-The current credential must have `workspace.write` and the dedicated `ovs.bridge.spanning-tree.prepare` capability. The latter is included in the builtin Administrator and NetworkAdmin templates. Existing credentials retain their original capability ceiling. Manager preparation rechecks current claims inside its serialized store transaction before signing. Configuration withholding also withholds preparation authority; an observer cannot infer a hidden grant or parameter validity.
+The current credential must have `configuration.read`, `workspace.write` and the dedicated `ovs.bridge.spanning-tree.prepare` capability. The latter is included in the builtin Administrator and NetworkAdmin templates. Existing credentials retain their original capability ceiling. Manager preparation checks these permissions before accessing the provider and rechecks current claims inside its serialized store transaction before signing. Configuration withholding also withholds preparation authority; an observer cannot infer a hidden grant or parameter validity. Current read permission is enforced for the draft Diff and historical Validation as well; revocation cannot expose originals, fresh current values or parameter findings through workspace/review endpoints.
 
 Preparation is deliberately restricted to:
 

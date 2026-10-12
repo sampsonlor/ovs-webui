@@ -9,7 +9,7 @@ Scope: [M2b preparation → sealed Candidate → Diff / Validation](../implement
 | Strict scope and payload | Unsupported graph types, advanced parameters, foreign operation fields, inactive edits and RSTP hello time are rejected or unavailable; private graph data is withheld. |
 | Native validation | Range/relations, inactive settings, RSTP rounding and STP hello-time caveats remain blocked where required; no default, correction or runtime proof is fabricated. |
 | Drift and replacement | Field/dependency/schema/generation/identity changes require discard and fresh review. Restage/Rebase cannot replace the original or transfer a grant to a same-name replacement. |
-| Revocation and permissions | Root/capability revocation invalidates the draft and review; old credential ceilings cannot expand. Withheld configuration exposes no preparation-authority oracle. |
+| Revocation and permissions | Root/capability revocation invalidates the draft and review; old credential ceilings cannot expand. Withheld configuration exposes no preparation-authority oracle through stage, current Diff or historical Validation, even with separate prepare/write permissions. |
 | Unknown / stale / provider degradation | Preparation is unavailable; previously observed values do not become current authorization or installed proof. |
 | Standard / Expert | Same preparation and blocking behavior; Expert adds identifiers. Findings in Standard are readable explanations. |
 | Responsive / keyboard | Only desktop prepares new drafts. Tablet/mobile review with no staging form. Labels, focus, theme and the existing responsive evidence remain usable. |

@@ -32953,7 +32953,7 @@
           "spanning_tree"
         ],
         "additionalProperties": false,
-        "description": "Draft preparation only, requiring ovs.bridge.spanning-tree.prepare and independent root-owned immutable Bridge authority. Missing parameter keys preserve the captured original; null removes an active protocol map key. Disabled changes preserve every parameter. Inactive settings are preserved and validated. Strict native/basic scope, full private graph digests and sealed originals guard review. Rebase cannot replace originals. Validation always retains SPANNING_TREE_EXECUTION_PENDING; no Apply or Safe Apply execution adapter accepts this intent. The legacy spanning_tree.configure intent remains unsupported."
+        "description": "Draft preparation only, requiring configuration.read, workspace.write, ovs.bridge.spanning-tree.prepare and independent root-owned immutable Bridge authority. Current configuration read permission is required for current and historical review. Missing parameter keys preserve the captured original; null removes an active protocol map key. Disabled changes preserve every parameter. Inactive settings are preserved and validated. Strict native/basic scope, full private graph digests and sealed originals guard review. Rebase cannot replace originals. Validation always retains SPANNING_TREE_EXECUTION_PENDING; no Apply or Safe Apply execution adapter accepts this intent. The legacy spanning_tree.configure intent remains unsupported."
       },
       "SpanningTreePrepareRequest": {
         "type": "object",

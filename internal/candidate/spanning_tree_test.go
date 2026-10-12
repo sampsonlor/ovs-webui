@@ -110,7 +110,7 @@ func TestSpanningTreeValidationKeepsNativeRulesAndExecutionClosed(t *testing.T) 
 				t.Fatal(checks)
 			}
 			caps := Capabilities(out.Candidate)
-			if len(caps) != 1 || caps[0] != SpanningTreePrepareCapability {
+			if len(caps) != 2 || caps[0] != "configuration.read" || caps[1] != SpanningTreePrepareCapability {
 				t.Fatal(caps)
 			}
 		})

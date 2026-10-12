@@ -46,7 +46,11 @@
   <div><p class="eyebrow">Switching / Spanning tree</p><h1>STP / RSTP</h1><p>Review configured STP/RSTP settings and the latest reported state.</p></div>
   <button onclick={() => controller.refresh()}>Refresh spanning tree</button>
 </header>
-<p class="notice">Observe only · Configuration editing is not available. Configuration changes will use Candidate → Diff / Validation → Safe Apply → Event / Audit.</p>
+{#if item?.preparation?.available}
+  <p class="notice">Draft review only · Prepare a Candidate → Diff / Validation. STP/RSTP execution remains unavailable.</p>
+{:else}
+  <p class="notice">Observe only · Configuration editing is not available. Configuration changes will use Candidate → Diff / Validation → Safe Apply → Event / Audit.</p>
+{/if}
 <LoadNotice load={model.resource} />
 {#if page}
   <form class="filter-bar" onsubmit={filterPage}><label for="tree-filter">Bridge name</label><input id="tree-filter" type="search" bind:value={filter} maxlength="1024" /><button type="submit">Filter Bridges</button></form>
@@ -75,7 +79,7 @@
     {:else}<p class="notice">No Port details in this snapshot.</p>{/each}
     {#if item.ports_truncated}<p class="notice warning" role="status">Partial Port detail. The response budget was reached; review the remaining Ports through Bridge inventory.</p>{/if}
   </section>
-  {#if expert}<details><summary>Native identity and configuration availability</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Snapshot</dt><dd class="mono">{item.snapshot_id}</dd><dt>Configuration availability</dt><dd>{item.write_reason}</dd></dl><p>Configuration editing is unavailable. Standard and Expert have the same permissions and safeguards.</p></details>{/if}
+  {#if expert}<details><summary>Native identity and configuration availability</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Snapshot</dt><dd class="mono">{item.snapshot_id}</dd><dt>Configuration availability</dt><dd>{item.write_reason}</dd></dl><p>{item.preparation?.available ? 'STP/RSTP execution is unavailable.' : 'Configuration editing is unavailable.'} Standard and Expert have the same permissions and safeguards.</p></details>{/if}
   <p class="muted">Native behavior reference: <a href="https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html" target="_blank" rel="noreferrer">Open vSwitch database manual</a>. Observation does not establish loop prevention across the network.</p>
 {/if}
 

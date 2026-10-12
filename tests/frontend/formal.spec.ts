@@ -587,6 +587,12 @@ test('spanning tree prepares a sealed draft and reviews blocked native checks wi
     'other_config',
   );
   await page.goto(href);
+  await expect(
+    page.getByText(
+      'Draft review only · Prepare a Candidate → Diff / Validation. STP/RSTP execution remains unavailable.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   const panel = page.getByRole('region', {
     name: 'Spanning tree draft preparation',
   });
