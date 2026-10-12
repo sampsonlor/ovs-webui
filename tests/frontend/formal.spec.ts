@@ -609,6 +609,7 @@ test('spanning tree prepares a sealed draft and reviews blocked native checks wi
   async function reviewOpenDraft() {
     if ((await panel.locator('details').getAttribute('open')) === null)
       await panel.locator('summary').click();
+    await panel.scrollIntoViewIfNeeded();
     await expect(
       page.getByLabel('Spanning tree protocol', { exact: true }),
     ).toHaveValue('rstp');
@@ -622,21 +623,38 @@ test('spanning tree prepares a sealed draft and reviews blocked native checks wi
       page.getByLabel('RSTP priority', { exact: true }),
     ).toBeVisible();
     await expect(
+      page.getByLabel('RSTP priority', { exact: true }),
+    ).toBeInViewport();
+    await expect(
       panel.getByRole('button', {
         name: 'Stage spanning tree draft',
         exact: true,
       }),
     ).toBeEnabled();
+    await expect(
+      panel.getByRole('button', {
+        name: 'Stage spanning tree draft',
+        exact: true,
+      }),
+    ).toBeInViewport();
   }
   await nativeTypeDepth(page, 'Expert');
   await expect(panel).toContainText('local-managed');
   await reviewOpenDraft();
   await screen(page, 'spanning-tree-draft-expert');
+  await expect(panel.locator('details')).toHaveAttribute('open');
+  await expect(page.getByLabel('RSTP priority', { exact: true })).toHaveValue(
+    '4096',
+  );
   await page
     .getByRole('button', { name: 'Toggle color theme', exact: true })
     .click();
   await reviewOpenDraft();
   await screen(page, 'spanning-tree-draft-dark');
+  await expect(panel.locator('details')).toHaveAttribute('open');
+  await expect(page.getByLabel('RSTP priority', { exact: true })).toHaveValue(
+    '4096',
+  );
   await page
     .getByRole('button', { name: 'Toggle color theme', exact: true })
     .click();
