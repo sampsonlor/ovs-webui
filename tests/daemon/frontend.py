@@ -5,7 +5,8 @@ from pathlib import Path
 import secrets
 import subprocess
 
-from authentication import request_id, run
+from authentication import request_id
+from spanning_tree_prepare import reconfigure_draft_fixture
 
 
 def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, units,
@@ -58,9 +59,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
     assert needle in unit_original and '--local-spanning-tree-bridges' not in unit_original
-    unit_path.write_text(unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']))
-    run('systemctl', 'daemon-reload')
-    run('systemctl', 'restart', units['mgrd'])
+    reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']))
     eventually(lambda: call('/inventory')[0] == 200)
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
                 'ovsDirectory': str(ovs), 'database': str(conf)}
@@ -80,7 +79,5 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                 'credentials_persisted_in_artifacts': False}
     finally:
         path.unlink(missing_ok=True)
-        unit_path.write_text(unit_original)
-        run('systemctl', 'daemon-reload')
-        run('systemctl', 'restart', units['mgrd'])
+        reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original)
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tree-plan')

@@ -9,6 +9,21 @@ import uuid
 from authentication import request_id, run
 
 
+def reconfigure_draft_fixture(unit_path, unit, text):
+    # These explicit, manual authority transitions belong only to a disposable
+    # inventory fixture. Verify it is healthy BEFORE stopping/resetting the
+    # manual start counter, so a genuine crash/start-limit failure is not hidden.
+    # The production unit template, crash restart limit and auth budgets remain
+    # intact. Subsequent crash/recovery tests retain their own original gates.
+    assert unit.startswith('ovs-mgrd-inventory-') and unit.endswith('.service') and unit_path.name == unit
+    run('systemctl', 'is-active', '--quiet', unit)
+    run('systemctl', 'stop', unit)
+    unit_path.write_text(text)
+    run('systemctl', 'daemon-reload')
+    run('systemctl', 'reset-failed', unit)
+    run('systemctl', 'start', unit)
+
+
 def verify_spanning_tree_prepare(vsctl, get, call, observer, eventually, units):
     name = 'br-tree-draft'
     unit_path = Path('/etc/systemd/system') / units['mgrd']
@@ -23,9 +38,8 @@ def verify_spanning_tree_prepare(vsctl, get, call, observer, eventually, units):
         return code == 200 and value['availability'] == 'complete'
 
     def authority(ids):
-        unit_path.write_text(original.replace(needle, needle + ' --local-spanning-tree-bridges=' + ids) if ids else original)
-        run('systemctl', 'daemon-reload')
-        run('systemctl', 'restart', units['mgrd'])
+        text = original.replace(needle, needle + ' --local-spanning-tree-bridges=' + ids) if ids else original
+        reconfigure_draft_fixture(unit_path, units['mgrd'], text)
         eventually(ready)
 
     def patch(body, revision, expected=200):
@@ -144,8 +158,6 @@ def verify_spanning_tree_prepare(vsctl, get, call, observer, eventually, units):
                 'native_write_observed_from_draft': False}
     finally:
         discard()
-        unit_path.write_text(original)
-        run('systemctl', 'daemon-reload')
-        run('systemctl', 'restart', units['mgrd'])
+        reconfigure_draft_fixture(unit_path, units['mgrd'], original)
         eventually(ready)
         vsctl('--no-wait', '--if-exists', 'del-br', name)
