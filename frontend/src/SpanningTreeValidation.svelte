@@ -1,16 +1,7 @@
 <script lang="ts">
+  import { treeParameterMessages as messages } from './spanning-tree';
   import type { SpanningTreeParameterValidation } from '../../clients/typescript/public-v1.generated';
-  let { validation, expert }: { validation?: SpanningTreeParameterValidation; expert: boolean } = $props();
-  const messages: Record<string, string> = {
-    STP_RSTP_MUTUALLY_EXCLUSIVE: 'STP and RSTP must not be enabled together.',
-    SPANNING_TREE_INTEGER_REQUIRED: 'Use a decimal whole number for this parameter.',
-    SPANNING_TREE_PARAMETER_RANGE: 'This parameter is outside its native range.',
-    STP_MAX_AGE_HELLO_RELATION: 'STP max age must be at least twice hello time plus two seconds.',
-    STP_FORWARD_DELAY_MAX_AGE_RELATION: 'STP max age must not exceed twice forward delay minus two seconds.',
-    RSTP_PRIORITY_MULTIPLE_4096: 'RSTP priority must be a multiple of 4096. OVS rounds other values down.',
-    RSTP_FORWARD_DELAY_MAX_AGE_RELATION: 'RSTP max age must not exceed twice forward delay minus two seconds.',
-    STP_HELLO_TIME_NATIVE_UNIT_CAVEAT: 'Explicit STP hello time needs runtime verification. Tested OVS installs 1 second for configured values from 2 to 10 seconds.',
-  };
+  let { validation, expert, draftAvailable = false }: { validation?: SpanningTreeParameterValidation; expert: boolean; draftAvailable?: boolean } = $props();
   const states: Record<string, string> = {
     valid: 'Basic parameter checks passed.',
     invalid: 'Basic parameters need review.',
@@ -31,7 +22,7 @@
       <ul>{#each validation.checks as check}<li>{messages[check.code] ?? 'This parameter needs review.'} <span class="muted">{check.fields.join(', ')}</span>{#if expert}<code>{check.code}</code>{/if}</li>{/each}</ul>
     {/if}
   {/if}
-  <p>Passing these checks does not prove installed timers, forwarding or convergence. Configuration editing remains unavailable.</p>
+  <p>Passing these checks does not prove installed timers, forwarding or convergence. {draftAvailable ? 'Prepare a separate draft below. Execution remains unavailable.' : 'Configuration editing remains unavailable.'}</p>
   {#if expert && validation}<p class="muted">Rule set: {validation.version} · Scope: {validation.scope}</p>{/if}
 </section>
 

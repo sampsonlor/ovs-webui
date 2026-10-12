@@ -564,6 +564,209 @@ async function waitInstalledPolicing(
     });
 }
 
+test('spanning tree prepares a sealed draft and reviews blocked native checks without changing live OVS', async ({
+  page,
+  context,
+}) => {
+  await login(page, 'browser-tree-draft');
+  const row = (
+    await get(context, '/inventory/spanning-tree?filter=br-tree-plan')
+  ).items.find((b: { name: string }) => b.name === 'br-tree-plan');
+  expect(row).toBeTruthy();
+  const resource = '/bridges/' + row.management_id + '/spanning-tree';
+  await expect
+    .poll(async () => (await get(context, resource)).preparation.available)
+    .toBe(true);
+  const href = fixture.origin + '/switching/spanning-tree/' + row.management_id;
+  const native = vsctl(
+    'get',
+    'Bridge',
+    'br-tree-plan',
+    'stp_enable',
+    'rstp_enable',
+    'other_config',
+  );
+  await page.goto(href);
+  const panel = page.getByRole('region', {
+    name: 'Spanning tree draft preparation',
+  });
+  await expect(panel).toContainText(
+    'execution and safe timer recovery need further verification',
+  );
+  await panel.locator('summary').click();
+  await page
+    .getByLabel('Spanning tree protocol', { exact: true })
+    .selectOption('rstp');
+  await page.getByLabel('RSTP priority', { exact: true }).fill('4096');
+  await expect(panel).toContainText('has no editable Bridge parameter');
+  await screen(page, 'spanning-tree-draft-standard');
+  await nativeTypeDepth(page, 'Expert');
+  await expect(panel).toContainText('local-managed');
+  await screen(page, 'spanning-tree-draft-expert');
+  await page
+    .getByRole('button', { name: 'Toggle color theme', exact: true })
+    .click();
+  await screen(page, 'spanning-tree-draft-dark');
+  await page
+    .getByRole('button', { name: 'Toggle color theme', exact: true })
+    .click();
+  await nativeTypeDepth(page, 'Standard');
+  for (const [width, height, label] of [
+    [900, 1100, 'tablet'],
+    [390, 844, 'mobile'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(panel).toContainText(
+      'Use a desktop to prepare a new spanning tree draft.',
+    );
+    await expect(
+      page.getByRole('button', {
+        name: 'Stage spanning tree draft',
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await screen(page, 'spanning-tree-draft-' + label);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await panel.locator('summary').click();
+  // Responsive review must not discard the locally entered draft fields.
+  await expect(page.getByLabel('RSTP priority', { exact: true })).toHaveValue(
+    '4096',
+  );
+  await page
+    .getByRole('button', { name: 'Stage spanning tree draft', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+  const draft = await get(context, '/candidate');
+  expect(draft.intents[0].operation).toBe('bridge.spanning-tree.prepare');
+  expect(
+    draft.intents[0].spanning_tree_change.before.parameters['rstp-priority'],
+  ).toBeNull();
+  expect(draft.diff).toHaveLength(9);
+  await expect(
+    page.getByRole('region', { name: 'Spanning tree draft boundary' }),
+  ).toContainText('Apply remains blocked.');
+  await expect(
+    page.getByRole('region', { name: 'Configuration Diff', exact: true }),
+  ).toContainText('Native default (unset)');
+  await screen(page, 'spanning-tree-draft-candidate');
+  await page
+    .getByRole('button', { name: 'Validate Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Diff & Validation', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Not usable for execution', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Draft review is available. Execution and safe timer recovery have not been verified, so Apply remains blocked.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page
+    .getByLabel('Change reason', { exact: true })
+    .fill('Synthetic spanning tree draft review');
+  await page.getByRole('checkbox').check();
+  await expect(
+    page.getByRole('button', { name: 'Start Safe Apply', exact: true }),
+  ).toBeDisabled();
+  const validation = await get(
+    context,
+    new URL(page.url()).pathname.replace('/changes', ''),
+  );
+  expect(validation.state).toBe('blocked');
+  expect(validation.usable).toBe(false);
+  expect(validation.execution_ready).toBe(false);
+  expect(
+    (await get(context, '/jobs/' + validation.job_ref.id)).applied_outcome,
+  ).toBe('not-applicable');
+  await screen(page, 'spanning-tree-draft-validation');
+  expect(
+    vsctl(
+      'get',
+      'Bridge',
+      'br-tree-plan',
+      'stp_enable',
+      'rstp_enable',
+      'other_config',
+    ),
+  ).toBe(native);
+
+  await page.goto(href);
+  await panel.locator('summary').click();
+  await page
+    .getByLabel('Spanning tree protocol', { exact: true })
+    .selectOption('rstp');
+  await page.getByLabel('RSTP priority', { exact: true }).fill('4097');
+  await page
+    .getByRole('button', { name: 'Stage spanning tree draft', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace', exact: true }),
+  ).toBeVisible();
+  expect(
+    (await get(context, '/candidate')).intents[0].spanning_tree_change.before
+      .parameters['rstp-priority'],
+  ).toBeNull();
+  await page
+    .getByRole('button', { name: 'Validate Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Diff & Validation', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'RSTP priority must be a multiple of 4096. OVS rounds other values down.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Start Safe Apply', exact: true }),
+  ).toBeDisabled();
+  await screen(page, 'spanning-tree-draft-invalid');
+  expect(
+    vsctl(
+      'get',
+      'Bridge',
+      'br-tree-plan',
+      'stp_enable',
+      'rstp_enable',
+      'other_config',
+    ),
+  ).toBe(native);
+  vsctl(
+    '--no-wait',
+    'set',
+    'Bridge',
+    'br-tree-plan',
+    'other_config:rstp-priority=8192',
+  );
+  await expect
+    .poll(async () => (await get(context, '/candidate')).state)
+    .toBe('reconciliation-required');
+  await page.goto(fixture.origin + '/changes/candidates/' + draft.id);
+  await expect(
+    page.getByRole('region', { name: 'Spanning tree draft boundary' }),
+  ).toContainText('Rebase cannot replace its captured original.');
+  await expect(
+    page.getByRole('button', { name: 'Validate Candidate', exact: true }),
+  ).toBeDisabled();
+  await screen(page, 'spanning-tree-draft-drift');
+  await page
+    .getByRole('button', { name: 'Discard intents…', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Confirm discard', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get(context, '/candidate')).state)
+    .toBe('empty');
+});
+
 test('spanning tree observes native intent and daemon status with shared identity and responsive depth', async ({
   page,
   context,

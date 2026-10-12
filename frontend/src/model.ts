@@ -362,9 +362,16 @@ export class Controller {
             } as Record<string, string>
           )[parts[1]] ?? 'unavailable';
       } else if (path === '/switching/topology') {
-        resourceURL = '/inventory/topology';capability='configuration.read';
-      } else if (path === '/switching/spanning-tree' || path.startsWith('/switching/spanning-tree/')) {
-        resourceURL = parts.length === 2 ? '/inventory/spanning-tree' + query : `/bridges/${encodeURIComponent(parts[2])}/spanning-tree`;
+        resourceURL = '/inventory/topology';
+        capability = 'configuration.read';
+      } else if (
+        path === '/switching/spanning-tree' ||
+        path.startsWith('/switching/spanning-tree/')
+      ) {
+        resourceURL =
+          parts.length === 2
+            ? '/inventory/spanning-tree' + query
+            : `/bridges/${encodeURIComponent(parts[2])}/spanning-tree`;
         capability = 'inventory.read';
       } else if (parts[0] === 'bridges') {
         resourceURL = path + (parts.length === 1 ? query : '');
@@ -579,6 +586,51 @@ export class Controller {
       (v) => `/changes/candidates/${(v as Candidate).id}`,
     );
   }
+  stageSpanningTree(
+    item: {
+      management_id: string;
+      ovs_uuid: string;
+      instance_generation: string;
+    },
+    spanning_tree: {
+      protocol: 'disabled' | 'stp' | 'rstp';
+      parameters: Record<string, string | null>;
+    },
+  ) {
+    const c = this.state.workspace.value?.candidate;
+    if (!c) return;
+    const existing = c.intents.find(
+      (i) =>
+        i.operation === 'bridge.spanning-tree.prepare' &&
+        i.object.management_id === item.management_id,
+    );
+    return this.mutate(
+      () =>
+        this.api.command<Candidate>(
+          '/candidate',
+          'PATCH',
+          'workspace',
+          {
+            operation: 'stage',
+            intents: [
+              {
+                intent_id: existing?.intent_id ?? crypto.randomUUID(),
+                operation: 'bridge.spanning-tree.prepare',
+                object: {
+                  management_id: item.management_id,
+                  ovs_uuid: item.ovs_uuid,
+                  instance_generation: item.instance_generation,
+                  table: 'Bridge',
+                },
+                spanning_tree,
+              },
+            ],
+          },
+          c.revision,
+        ),
+      (v) => `/changes/candidates/${(v as Candidate).id}`,
+    );
+  }
   candidateCommand(body: object) {
     const c = this.state.workspace.value?.candidate;
     if (!c) return;
@@ -593,8 +645,19 @@ export class Controller {
     );
   }
   stageNativeIntent(intent: object) {
-    const c=this.state.workspace.value?.candidate;if(!c)return;
-    return this.mutate(()=>this.api.command<Candidate>('/candidate','PATCH','workspace',{operation:'stage',intents:[intent]},c.revision),(value)=>`/changes/candidates/${(value as Candidate).id}`);
+    const c = this.state.workspace.value?.candidate;
+    if (!c) return;
+    return this.mutate(
+      () =>
+        this.api.command<Candidate>(
+          '/candidate',
+          'PATCH',
+          'workspace',
+          { operation: 'stage', intents: [intent] },
+          c.revision,
+        ),
+      (value) => `/changes/candidates/${(value as Candidate).id}`,
+    );
   }
   validate() {
     const c = this.state.workspace.value?.candidate;

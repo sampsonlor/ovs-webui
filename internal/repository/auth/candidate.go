@@ -110,16 +110,19 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		}
 	}
 	err = r.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		if _, err := r.candidateClaims(ctx, tx, credential, "config.stage"); err != nil {
+		currentClaims, err := r.candidateClaims(ctx, tx, credential, "config.stage")
+		if err != nil {
 			return err
 		}
 		if err := candidateFence(ctx, tx, in.Envelope, false); err != nil {
 			return err
 		}
-		var err error
 		out, err = plan.Prepare(in.Envelope, cmd, snapshot)
 		if err != nil {
 			return err
+		}
+		if cmd.Operation == "stage" && slices.Contains(plan.Capabilities(out.Candidate), plan.SpanningTreePrepareCapability) && !intentCapabilities(currentClaims.Capabilities, out.Candidate) {
+			return apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		out.Sign(r.key)
 		if err = plan.Budget(out); err != nil {

@@ -27,6 +27,7 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	localSpanningTree              map[string]bool
 	localTopology                  map[string]bool
 	localTopologyCreates           map[string]bool
 	registry                       Registry
@@ -128,6 +129,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
+	localSpanningTree := s.localSpanningTree
 	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
 	s.mu.RUnlock()
 	now := s.now()
@@ -222,7 +224,11 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	// SetLocalVLANPorts replaces the map; published observations are immutable.
 	project := func(b Binding, kind string) (map[string]any, error) {
 		if kind == "spanning_tree" {
-			return spanningTreeResource(v, b, fresh, allowedConfig, op == "readSpanningTreeObservation")
+			item, err := spanningTreeResource(v, b, fresh, allowedConfig, op == "readSpanningTreeObservation")
+			if err == nil && op == "readSpanningTreeObservation" {
+				item["preparation"] = spanningTreePreparation(v, b, fresh, allowedConfig, localSpanningTree, c)
+			}
+			return item, err
 		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
 		if err == nil && (op == "listPorts" || op == "listBridges" || op == "listBonds") {

@@ -63,6 +63,8 @@ Primary evidence was checked against upstream tags v3.3.0, v3.3.9 and v3.6.0:
 
 ## Next M2 slice
 
+The subsequent [M2b draft preparation slice](SPANNING_TREE_DRAFT_v0.1.md) implements independent preparation authority, sealed originals and Candidate/Diff/Validation under an unconditional execution blocker. The remaining native execution and recovery gates below stay open.
+
 Before opening Basic Manage, complete the following independently reviewable gates:
 
 - Root-owned Bridge field authority and a dedicated capability, independent of topology/VLAN/Bond/Interface grants; native schema mutability is insufficient.

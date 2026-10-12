@@ -92,6 +92,14 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == SpanningTreePrepare {
+			if problem := spanningTreeProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, spanningTreeDiff(i, s)...)
+			continue
+		}
 		if IsTopologyOperation(i.Operation) {
 			if problem := topologyProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -232,12 +240,23 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
+			if in.SpanningTree != nil && in.Operation != SpanningTreePrepare {
+				return e, apitypes.Fail(422, "INVALID_SPANNING_TREE_DRAFT")
+			}
 			if in.Topology != nil && !IsTopologyOperation(in.Operation) {
 				return e, apitypes.Fail(422, "INVALID_TOPOLOGY_INTENT")
 			}
 			if in.Policing != nil && in.Operation != InterfacePolicingSet {
 				return e, apitypes.Fail(422, "INVALID_INTERFACE_POLICING")
 			}
+		}
+		if hasSpanningTree(c.Intents) || cmd.Intents[0].Operation == SpanningTreePrepare {
+			var err error
+			c, err = stageSpanningTree(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsTopologyOperation(i.Operation) }) || IsTopologyOperation(cmd.Intents[0].Operation) {
 			var err error
@@ -403,6 +422,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if i.Operation == SpanningTreePrepare {
+				return e, apitypes.Fail(409, "SPANNING_TREE_RESTAGE_REQUIRED")
+			}
 			if IsTopologyOperation(i.Operation) {
 				return e, apitypes.Fail(409, "TOPOLOGY_RESTAGE_REQUIRED")
 			}
@@ -464,6 +486,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == SpanningTreePrepare {
+			checks = append(checks, spanningTreeChecks(i, s)...)
+			continue
+		}
 		if IsTopologyOperation(i.Operation) {
 			checks = append(checks, topologyChecks(i, s)...)
 			continue

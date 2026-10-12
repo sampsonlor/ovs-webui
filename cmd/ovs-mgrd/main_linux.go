@@ -55,6 +55,7 @@ func run() int {
 	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
+	localSpanningTree := flag.String("local-spanning-tree-bridges", "", "Reviewed immutable Bridge IDs permitted to prepare STP/RSTP drafts; no execution grant, independent of topology and Port authority")
 	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
 	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
@@ -229,6 +230,14 @@ func run() int {
 		var vlanIDs []string
 		if *localVLANPorts != "" {
 			vlanIDs = strings.Split(*localVLANPorts, ",")
+		}
+		spanningTreeIDs := []string{}
+		if *localSpanningTree != "" {
+			spanningTreeIDs = strings.Split(*localSpanningTree, ",")
+		}
+		if err = inventoryService.SetLocalSpanningTreeBridges(spanningTreeIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_SPANNING_TREE_AUTHORITY")
+			return 2
 		}
 		topologyIDs := []string{}
 		if *localTopology != "" {
