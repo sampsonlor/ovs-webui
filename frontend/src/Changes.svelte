@@ -6,6 +6,7 @@
   import Status from './Status.svelte';
   import LoadNotice from './LoadNotice.svelte';
   import Link from './Link.svelte';
+  import { treeGateMessage } from './spanning-tree';
   let {
     model,
     expert,
@@ -16,7 +17,10 @@
     $props();
   const c = $derived(model.workspace.value?.candidate ?? null);
   const topology = $derived(c?.intents.some(i => ['port.create','bond.create','port.delete','bridge.delete-tree','port.move','bond.members.set','interface.ofport.set','interface.ofport.clear','interface.patch.connect','interface.patch.disconnect'].includes(i.operation)) ?? false);
+  const spanningTree = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.prepare')??false);
   const v = $derived(model.validation.value);
+  const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare') ?? false);
+  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !treeValidation || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);
   const blocked = $derived(model.busy || !!model.pending || !model.sessionReady);
   const page = $derived(model.path.split('/')[2]);
@@ -91,13 +95,14 @@
         Revision {c.revision} · generation {c.instance_generation ?? 'Unknown'}
       </p>{/if}
     {#each c.checks ?? [] as gate}<div class="notice warning">
-        <strong>{gate.code}</strong>
-        <p>{gate.reason}</p>
+        <strong>{spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if spanningTree}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     {#if c.diff_truncated}<p class="notice warning">
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
+    {#if spanningTree}<section class="notice warning" aria-label="Spanning tree draft boundary"><strong>Spanning tree draft only</strong><p>Review the captured configuration and native parameter checks. Execution and safe timer recovery are not available yet. Apply remains blocked.</p>{#if c.state === 'reconciliation-required'}<p>Configuration, attachment or authority changed. Discard this intent, review the Bridge and prepare a new draft. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if topology && c.state === 'reconciliation-required'}<section class="panel"><h2>Review and restage this topology change</h2><p>Native configuration, references or ownership changed. Discard this intent, review the current topology and stage a new request. Rebase cannot replace captured identities or the original recovery image.</p></section>{/if}
     {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set')}
       <section class="panel">
@@ -124,7 +129,7 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
-            topology || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
+            topology || spanningTree || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||
@@ -200,12 +205,12 @@
       Expires at {v.expires_at}. Validation success and Job completion do not mean that
       configuration has been applied.
     </p>
-    {#each [...v.checks, ...(v.invalidations ?? [])] as gate}<div
+    {#each validationGates as gate}<div
         class="notice"
         class:warning={gate.state !== 'allowed'}
       >
-        <Status value={gate.state} /> <strong>{gate.code}</strong>
-        <p>{gate.reason}</p>
+        <Status value={gate.state} /> <strong>{treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if treeValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     <Diff fields={v.diff} {expert} />
     {#if expert}<details>

@@ -171,8 +171,26 @@ void test('spanning tree cannot bypass the shared Apply operation gate in any de
     usable: true,
     execution_ready: true,
   };
-  for (const desktop of [true, false])
-    assert.equal(applyReady(c, v, session, desktop), false);
+  for (const operation of [
+    'spanning_tree.configure',
+    'bridge.spanning-tree.prepare',
+  ])
+    for (const desktop of [true, false])
+      assert.equal(
+        applyReady(
+          { ...c, intents: [{ operation }] },
+          v,
+          {
+            ...session,
+            effective_capabilities: [
+              ...session.effective_capabilities,
+              'ovs.bridge.spanning-tree.prepare',
+            ],
+          },
+          desktop,
+        ),
+        false,
+      );
 });
 
 await test('formal client persists original identity before dispatch and recovers dropped replies with GET only', async () => {

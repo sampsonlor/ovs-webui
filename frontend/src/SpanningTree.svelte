@@ -8,8 +8,9 @@
   import Status from './Status.svelte';
   import SpanningTreeFields from './SpanningTreeFields.svelte';
   import SpanningTreeValidation from './SpanningTreeValidation.svelte';
+  import SpanningTreeEditor from './SpanningTreeEditor.svelte';
 
-  let { model, expert }: { model: Model; expert: boolean } = $props();
+  let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const detail = $derived(model.path.startsWith('/switching/spanning-tree/'));
   const item = $derived(detail && model.resource.value ? model.resource.value as unknown as SpanningTree : null);
   const page = $derived(!detail && model.resource.value ? model.resource.value as unknown as SpanningTreeObservationPage : null);
@@ -45,7 +46,11 @@
   <div><p class="eyebrow">Switching / Spanning tree</p><h1>STP / RSTP</h1><p>Review configured STP/RSTP settings and the latest reported state.</p></div>
   <button onclick={() => controller.refresh()}>Refresh spanning tree</button>
 </header>
-<p class="notice">Observe only · Configuration editing is not available. Configuration changes will use Candidate → Diff / Validation → Safe Apply → Event / Audit.</p>
+{#if item?.preparation?.available}
+  <p class="notice">Draft review only · Prepare a Candidate → Diff / Validation. STP/RSTP execution remains unavailable.</p>
+{:else}
+  <p class="notice">Observe only · Configuration editing is not available. Configuration changes will use Candidate → Diff / Validation → Safe Apply → Event / Audit.</p>
+{/if}
 <LoadNotice load={model.resource} />
 {#if page}
   <form class="filter-bar" onsubmit={filterPage}><label for="tree-filter">Bridge name</label><input id="tree-filter" type="search" bind:value={filter} maxlength="1024" /><button type="submit">Filter Bridges</button></form>
@@ -66,14 +71,15 @@
     <SpanningTreeFields fields={subset(item.spanning_tree.configuration, ['stp_enable','rstp_enable'])} {expert} />
   </section>
   <div class="columns"><section class="panel"><h2>Bridge basic parameters</h2><SpanningTreeFields fields={expert ? item.spanning_tree.configuration : subset(item.spanning_tree.configuration, ['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'])} {expert} /><p class="muted">Unset parameters retain the native default. A configured value is not evidence that it was applied.</p></section><section class="panel"><h2>Bridge runtime observations</h2><SpanningTreeFields fields={expert ? item.spanning_tree.runtime : subset(item.spanning_tree.runtime, ['stp_bridge_id','stp_designated_root','rstp_bridge_id','rstp_root_id'])} {expert} runtime /></section></div>
-  <SpanningTreeValidation validation={item.spanning_tree.parameter_validation} {expert} />
+  <SpanningTreeValidation draftAvailable={item.preparation?.available} validation={item.spanning_tree.parameter_validation} {expert} />
+  <SpanningTreeEditor {model} {item} {desktop} {expert} />
   <section aria-label="Spanning tree Ports"><h2>Port participation and runtime</h2><p>Participation describes Port configuration and native exclusions. An enabled Port participates only when its Bridge protocol is enabled.</p>
     {#each item.ports as port}
       <article class="panel"><h3><Link href={`/ports/${port.port_ref.id}`}>{port.name}</Link></h3><dl><dt>STP participation</dt><dd>{participation(port.spanning_tree.stp_participation)} · {port.spanning_tree.stp_participation.reason}</dd><dt>RSTP participation</dt><dd>{participation(port.spanning_tree.rstp_participation)} · {port.spanning_tree.rstp_participation.reason}</dd></dl><SpanningTreeFields fields={expert ? port.spanning_tree.runtime : subset(port.spanning_tree.runtime, ['stp_state','stp_role','rstp_port_state','rstp_port_role'])} {expert} runtime />{#if expert}<details><summary>Port native configuration</summary><SpanningTreeFields fields={port.spanning_tree.configuration} {expert} /></details>{/if}</article>
     {:else}<p class="notice">No Port details in this snapshot.</p>{/each}
     {#if item.ports_truncated}<p class="notice warning" role="status">Partial Port detail. The response budget was reached; review the remaining Ports through Bridge inventory.</p>{/if}
   </section>
-  {#if expert}<details><summary>Native identity and configuration availability</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Snapshot</dt><dd class="mono">{item.snapshot_id}</dd><dt>Configuration availability</dt><dd>{item.write_reason}</dd></dl><p>Configuration editing is unavailable. Standard and Expert have the same permissions and safeguards.</p></details>{/if}
+  {#if expert}<details><summary>Native identity and configuration availability</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Snapshot</dt><dd class="mono">{item.snapshot_id}</dd><dt>Configuration availability</dt><dd>{item.write_reason}</dd></dl><p>{item.preparation?.available ? 'STP/RSTP execution is unavailable.' : 'Configuration editing is unavailable.'} Standard and Expert have the same permissions and safeguards.</p></details>{/if}
   <p class="muted">Native behavior reference: <a href="https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html" target="_blank" rel="noreferrer">Open vSwitch database manual</a>. Observation does not establish loop prevention across the network.</p>
 {/if}
 

@@ -20,6 +20,12 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if i.Operation == SpanningTreePrepare {
+			cap = SpanningTreePrepareCapability
+			if !slices.Contains(out, "configuration.read") {
+				out = append(out, "configuration.read")
+			}
+		}
 		if IsTopologyOperation(i.Operation) {
 			cap = "ovs.topology.write"
 		}
