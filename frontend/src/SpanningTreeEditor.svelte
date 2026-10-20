@@ -8,6 +8,7 @@
   let values=$state<Record<string,string>>({});
   let scope='';
   let error=$state('');
+  let expanded=$state(false);
   const names:Record<string,string>={'stp-priority':'STP priority','stp-hello-time':'STP hello time (seconds)','stp-max-age':'STP max age (seconds)','stp-forward-delay':'STP forward delay (seconds)','rstp-priority':'RSTP priority','rstp-max-age':'RSTP max age (seconds)','rstp-forward-delay':'RSTP forward delay (seconds)'};
   const preparation=$derived(item.preparation);
   const c=$derived(model.workspace.value?.candidate);
@@ -17,6 +18,7 @@
     const id=item.management_id+'/'+item.instance_generation;
     if(scope!==id){
       scope=id;
+      expanded=false;
       untrack(()=>{
         const p=item.spanning_tree.protocol;
         protocol=p==='disabled'||p==='stp'||p==='rstp'?p:'';
@@ -51,7 +53,7 @@
   {#if !preparation?.available}<p class="notice" role="status">{reason(preparation?.reason)}</p>
   {:else if !desktop}<p class="notice" role="status">Review this Bridge here. Use a desktop to prepare a new spanning tree draft.</p>
   {:else}
-    <details><summary>Prepare spanning tree draft</summary>
+    <details bind:open={expanded}><summary>Prepare spanning tree draft</summary>
       {#if workspaceConflict}<p class="notice warning">Review or remove the existing Candidate intent before preparing a draft for this Bridge.</p>{/if}
       <form onsubmit={save}>
         <fieldset disabled={unavailable}>

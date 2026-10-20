@@ -606,9 +606,44 @@ test('spanning tree prepares a sealed draft and reviews blocked native checks wi
   await page.getByLabel('RSTP priority', { exact: true }).fill('4096');
   await expect(panel).toContainText('has no editable Bridge parameter');
   await screen(page, 'spanning-tree-draft-standard');
+  // A genuine graph eligibility change removes the form. When the same
+  // immutable Bridge becomes eligible again, its local draft and disclosure
+  // state survive; retaining them never bypasses the current authority gate.
+  try {
+    vsctl(
+      'set',
+      'Bridge',
+      'br-tree-plan',
+      'other_config:stp-system-id=02:00:00:00:00:01',
+    );
+    await expect
+      .poll(async () => (await get(context, resource)).preparation.available)
+      .toBe(false);
+    await page
+      .getByRole('button', { name: 'Refresh spanning tree', exact: true })
+      .click();
+    await expect(panel.locator('details')).toHaveCount(0);
+    await expect(
+      panel.getByRole('button', {
+        name: 'Stage spanning tree draft',
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  } finally {
+    vsctl('remove', 'Bridge', 'br-tree-plan', 'other_config', 'stp-system-id');
+  }
+  await expect
+    .poll(async () => (await get(context, resource)).preparation.available)
+    .toBe(true);
+  await page
+    .getByRole('button', { name: 'Refresh spanning tree', exact: true })
+    .click();
+  await expect(panel.locator('details')).toHaveAttribute('open');
+  await expect(page.getByLabel('RSTP priority', { exact: true })).toHaveValue(
+    '4096',
+  );
   async function reviewOpenDraft() {
-    if ((await panel.locator('details').getAttribute('open')) === null)
-      await panel.locator('summary').click();
+    await expect(panel.locator('details')).toHaveAttribute('open');
     await panel.scrollIntoViewIfNeeded();
     await expect(
       page.getByLabel('Spanning tree protocol', { exact: true }),
@@ -676,7 +711,7 @@ test('spanning tree prepares a sealed draft and reviews blocked native checks wi
     await screen(page, 'spanning-tree-draft-' + label);
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await panel.locator('summary').click();
+  await expect(panel.locator('details')).toHaveAttribute('open');
   // Responsive review must not discard the locally entered draft fields.
   await expect(page.getByLabel('RSTP priority', { exact: true })).toHaveValue(
     '4096',

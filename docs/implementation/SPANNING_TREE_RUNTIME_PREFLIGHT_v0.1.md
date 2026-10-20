@@ -1,6 +1,6 @@
 # STP/RSTP M2c1 · native runtime reads and transition analysis
 
-This batch completes the private read/analysis prerequisite for M2c. It does not enable configuration dispatch, change the public API, or add UI controls. `bridge.spanning-tree.prepare` still always emits `SPANNING_TREE_EXECUTION_PENDING`; preparation authority is not execution authority.
+This batch completes the private read/analysis prerequisite for M2c and repairs the existing draft disclosure state. It does not enable configuration dispatch, change the public API, or add UI controls. `bridge.spanning-tree.prepare` still always emits `SPANNING_TREE_EXECUTION_PENDING`; preparation authority is not execution authority.
 
 ## Fixed-purpose native reader
 
@@ -36,9 +36,15 @@ Both are required for a `compatible` result. The 6/4 to 40/30 transition is reje
 
 No automatic disable/re-enable, synthetic intermediate, normalization or implicit protocol selection is produced. Enable, disable, protocol switching, unsafe single-step pairs and recovery from partial multi-step state remain blocked or outside this analysis. `compatible` is a basic parameter/setter-order result, **not** an execution grant, a plan, an Applied result or a rollback authorization.
 
+## Draft disclosure regression found during acceptance
+
+The first CI (39393526797, source `8630f32`) failed an existing amd64 post-screenshot `open` assertion in the draft form; its exact dark screenshot and failure log are retained. An independent real-Svelte-component reproduction established that eligibility or desktop branch removal/recreation loses an unbound native details open state while preserving the entered fields. That is a confirmed state-management defect; the initial screenshot failure alone does not establish that branch removal was its only trigger.
+
+The editor now binds disclosure state to component state and resets it when immutable Bridge/generation changes. Same-object eligibility restoration or a return to desktop retains the expanded draft and typed values. Current unavailable/tablet/mobile branches still remove the form and staging action; preserving local state never grants authority. The formal real-OVS browser case now withdraws preparation eligibility through an advanced native Bridge key, verifies the form/action disappear, restores the exact original native map, and requires expansion and values to survive. Expert/theme/screenshots and responsive return now assert expansion without reopening the form in the helper. No existing assertions, retries, authentication rules, timeouts or recovery gates were weakened.
+
 ## Acceptance and remaining M2c work
 
-Seven new top-level Go regressions cover source mapping, malformed output, forward/rollback admission, fixed methods, malformed RPC, UID/incarnation checks and deadlines/cancellation. An explicit native CI group runs 13 cases on amd64 and arm64 against each of the 3.3.9, 3.7.1 and 4.0.0 schema fixtures, retaining the actual installed OVS binary version separately through the existing inventory reports. The existing draft-only admission/auth tests, browser suite, native writes/recovery matrices and diagnostic redaction remain mandatory. This batch has no product layout change.
+Seven new top-level Go regressions cover source mapping, malformed output, forward/rollback admission, fixed methods, malformed RPC, UID/incarnation checks and deadlines/cancellation. An explicit native CI group runs 13 cases on amd64 and arm64 against each of the 3.3.9, 3.7.1 and 4.0.0 schema fixtures, retaining the actual installed OVS binary version separately through the existing inventory reports. The existing draft-only admission/auth tests, browser suite, native writes/recovery matrices and diagnostic redaction remain mandatory. The state fix has no new product controls or intended layout change; retained desktop/depth/theme/responsive screenshots still require review.
 
 Remaining M2c gates are dedicated execution capability/root authority, same-daemon/database/immutable-Bridge qualification, strict sealed execution DTO and graph reservations, guarded native writes preserving unrelated keys/unset originals, installed/exclusive-protocol proof at dispatch and Applied, High-risk Safe Apply, guarded compensation, and crash/restart/lost-reply/OutcomeUnknown/provider-degradation/conflict acceptance. #23/#43 and Basic Manage remain open; #71 remains deferred.
 
