@@ -44,6 +44,12 @@ func (r *Repository) candidateSnapshot(ctx context.Context, bindings []plan.Bind
 	}
 	return p.CandidateSnapshot(ctx, bindings)
 }
+
+// Captured originals and fresh Diff/checks are configuration evidence. A draft
+// preparation grant never substitutes the independent current read permission.
+func treeReadDenied(c plan.Candidate, caps []string) bool {
+	return slices.Contains(plan.Capabilities(c), plan.SpanningTreePrepareCapability) && !slices.Contains(caps, "configuration.read")
+}
 func (r *Repository) candidateCommand(input authn.Command, id string) (*apicontract.Operation, json.RawMessage, error) {
 	op, path, query, err := r.operation(input.Method, input.URI)
 	if err != nil {
@@ -95,6 +101,14 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 	if in.Command.Epoch != in.Envelope.Epoch {
 		return out, apitypes.Fail(410, "REQUEST_EPOCH_CHANGED")
 	}
+	treeDraft := slices.Contains(plan.Capabilities(in.Envelope.Candidate), plan.SpanningTreePrepareCapability) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool { return i.Operation == plan.SpanningTreePrepare })
+	if treeDraft && !slices.Contains(c.Capabilities, "configuration.read") {
+		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
+	}
+	treeStage := cmd.Operation == "stage" && treeDraft
+	if treeStage && (!slices.Contains(c.Capabilities, "configuration.read") || !slices.Contains(c.Capabilities, plan.SpanningTreePrepareCapability)) {
+		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
+	}
 	var snapshot plan.Snapshot
 	if cmd.Operation == "stage" || cmd.Operation == "rebase" {
 		bindings := plan.Bindings(in.Envelope.Candidate)
@@ -110,16 +124,22 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		}
 	}
 	err = r.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		if _, err := r.candidateClaims(ctx, tx, credential, "config.stage"); err != nil {
+		currentClaims, err := r.candidateClaims(ctx, tx, credential, "config.stage")
+		if err != nil {
 			return err
+		}
+		if treeStage && (!slices.Contains(currentClaims.Capabilities, "configuration.read") || !slices.Contains(currentClaims.Capabilities, plan.SpanningTreePrepareCapability)) {
+			return apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		if err := candidateFence(ctx, tx, in.Envelope, false); err != nil {
 			return err
 		}
-		var err error
 		out, err = plan.Prepare(in.Envelope, cmd, snapshot)
 		if err != nil {
 			return err
+		}
+		if cmd.Operation == "stage" && slices.Contains(plan.Capabilities(out.Candidate), plan.SpanningTreePrepareCapability) && !intentCapabilities(currentClaims.Capabilities, out.Candidate) {
+			return apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		out.Sign(r.key)
 		if err = plan.Budget(out); err != nil {
@@ -216,11 +236,21 @@ func (r *Repository) ReadCandidate(ctx context.Context, credential string, in pl
 		}
 		bindings = plan.Bindings(original.Candidate)
 	}
+	reviewed := in.Envelope.Candidate
+	if in.ValidationID != "" {
+		reviewed = original.Candidate
+	}
+	if treeReadDenied(reviewed, c.Capabilities) {
+		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
+	}
 	snapshot, snapshotErr := r.candidateSnapshot(ctx, bindings)
 	err = r.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		c, err := r.candidateClaims(ctx, tx, credential, cap)
 		if err != nil {
 			return err
+		}
+		if treeReadDenied(reviewed, c.Capabilities) {
+			return apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		if err = candidateFence(ctx, tx, in.Envelope, true); err != nil {
 			return err
@@ -310,6 +340,9 @@ func (r *Repository) ValidateCandidate(ctx context.Context, credential string, i
 		return r.store.Read(ctx, func(ctx context.Context, q *sql.Conn) error {
 			var err error
 			c, err = r.candidateClaims(ctx, q, credential, op.Capability)
+			if err == nil && treeReadDenied(in.Envelope.Candidate, c.Capabilities) {
+				return apitypes.Fail(403, "CAPABILITY_DENIED")
+			}
 			return err
 		})
 	}
@@ -332,6 +365,9 @@ func (r *Repository) ValidateCandidate(ctx context.Context, credential string, i
 		c, err := r.candidateClaims(ctx, tx, credential, op.Capability)
 		if err != nil {
 			return result, err
+		}
+		if treeReadDenied(in.Envelope.Candidate, c.Capabilities) {
+			return result, apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		if err = candidateFence(ctx, tx, in.Envelope, true); err != nil {
 			return result, err

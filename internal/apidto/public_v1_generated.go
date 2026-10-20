@@ -117,6 +117,7 @@ type ObservedIntent struct {
 	SchemaDigest           string                     `json:"schema_digest,omitempty"`
 	QinqContext            QinQContext                `json:"qinq_context,omitempty"`
 	TopologyChange         TopologyChange             `json:"topology_change,omitempty"`
+	SpanningTreeChange     SpanningTreeDraft          `json:"spanning_tree_change,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
 	Bond                   NativeBond                 `json:"bond,omitempty"`
@@ -786,6 +787,7 @@ type SpanningTree struct {
 	Editable           bool                          `json:"editable"`
 	AllowedOperations  []string                      `json:"allowed_operations"`
 	WriteReason        string                        `json:"write_reason"`
+	Preparation        SpanningTreePreparation       `json:"preparation,omitempty"`
 	ExtraFields        map[string]json.RawMessage    `json:"-"`
 }
 
@@ -1268,6 +1270,32 @@ type TopologyIntent struct {
 	Operation string          `json:"operation"`
 	Object    ObjectBinding   `json:"object"`
 	Topology  TopologyRequest `json:"topology"`
+}
+type SpanningTreePrepareIntent struct {
+	IntentId     Id                         `json:"intent_id"`
+	Operation    string                     `json:"operation"`
+	Object       ObjectBinding              `json:"object"`
+	SpanningTree SpanningTreePrepareRequest `json:"spanning_tree"`
+}
+type SpanningTreePrepareRequest struct {
+	Protocol   string                     `json:"protocol"`
+	Parameters map[string]json.RawMessage `json:"parameters"`
+}
+type SpanningTreeNativeConfig struct {
+	StpEnable  bool                       `json:"stp_enable"`
+	RstpEnable bool                       `json:"rstp_enable"`
+	Parameters map[string]json.RawMessage `json:"parameters"`
+}
+type SpanningTreeDraft struct {
+	Before SpanningTreeNativeConfig `json:"before"`
+	After  SpanningTreeNativeConfig `json:"after"`
+}
+type SpanningTreePreparation struct {
+	Available  bool   `json:"available"`
+	Reason     string `json:"reason"`
+	Authority  string `json:"authority"`
+	Mode       string `json:"mode"`
+	Capability string `json:"capability"`
 }
 type InternalPortCreation struct {
 	Name            string                     `json:"name"`

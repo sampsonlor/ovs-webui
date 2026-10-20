@@ -6,10 +6,11 @@ import secrets
 import subprocess
 
 from authentication import request_id
+from spanning_tree_prepare import reconfigure_draft_fixture
 
 
 def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, units,
-                    db_socket, ovs, conf, credentials, network_metrics):
+                    db_socket, ovs, conf, credentials, network_metrics, eventually):
     assert node and Path(node).is_file(), 'an explicit CI Node build/test tool is required'
     assert call('/session/reauthentication', 'POST', {'password': password})[0] == 200
     code, _, _ = call('/roles', 'POST', {'request_id': request_id(), 'name': 'InterfaceObserver',
@@ -30,6 +31,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-topology', 'NetworkAdmin'), ('browser-topology-reader', 'Reader'), ('browser-topology-observer', 'InterfaceObserver'), ('browser-mtu', 'NetworkAdmin'), ('browser-mtu-drift', 'NetworkAdmin'),
                        ('browser-tree', 'NetworkAdmin'), ('browser-tree-observer', 'InterfaceObserver'), ('browser-tree-exceptions', 'Reader'), ('browser-tree-outage', 'Reader'),
                        ('browser-tree-denied', 'SpanningTreeDenied'), ('browser-tree-parameters', 'NetworkAdmin'),
+                       ('browser-tree-draft', 'NetworkAdmin'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -49,6 +51,16 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     vsctl('--', '--id=@dp', 'create', 'Datapath', 'external_ids:synthetic-qinq=fixture', '--', 'set', 'Open_vSwitch', '.', 'datapaths:dummy=@dp', 'other_config:vlan-limit=2')
     vsctl('set', 'Port', 'inv-p1', 'vlan_mode=access', 'tag=10', 'trunks=[]', 'cvlans=[]')
     vsctl('set', 'Port', 'inv-p2', 'vlan_mode=dot1q-tunnel', 'tag=200', 'cvlans=300,301', 'other_config:qinq-ethtype=unproven')
+    # A separate root grant permits preparation only. Other native execution
+    # grants and all production authentication/recovery budgets are preserved.
+    vsctl('--no-wait', 'add-br', 'br-tree-plan', '--', 'set', 'Bridge', 'br-tree-plan', 'datapath_type=system')
+    tree = eventually(lambda: next((b for b in get('/inventory/spanning-tree?filter=br-tree-plan')['items'] if b['name'] == 'br-tree-plan'), None))
+    unit_path = Path('/etc/systemd/system') / units['mgrd']
+    unit_original = unit_path.read_text()
+    needle = '--database=${MANAGER_DATABASE}'
+    assert needle in unit_original and '--local-spanning-tree-bridges' not in unit_original
+    reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']))
+    eventually(lambda: call('/inventory')[0] == 200)
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
                 'ovsDirectory': str(ovs), 'database': str(conf)}
     path = fixture / 'browser-private.json'
@@ -67,3 +79,5 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                 'credentials_persisted_in_artifacts': False}
     finally:
         path.unlink(missing_ok=True)
+        reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original)
+        vsctl('--no-wait', '--if-exists', 'del-br', 'br-tree-plan')

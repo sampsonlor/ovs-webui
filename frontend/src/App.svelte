@@ -450,7 +450,7 @@
             {/if}
           {/if}
         {:else if path === '/switching/spanning-tree' || path.startsWith('/switching/spanning-tree/')}
-          <SpanningTree model={$model} {expert} />
+          <SpanningTree model={$model} {expert} {desktop} />
         {:else if path === '/interfaces'}
           <Interfaces model={$model} {expert} />
         {:else if path.startsWith('/interfaces/')}

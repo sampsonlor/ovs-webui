@@ -300,6 +300,8 @@ def main():
         metrics['spanning_tree_observation'] = verify_spanning_tree(vsctl, get, call, token['secret'], eventually)
         from spanning_tree_parameters import verify_spanning_tree_parameters
         metrics['spanning_tree_parameters'] = verify_spanning_tree_parameters(vsctl, get, call, token['secret'], eventually, ovs_run, ovs)
+        from spanning_tree_prepare import verify_spanning_tree_prepare
+        metrics['spanning_tree_preparation'] = verify_spanning_tree_prepare(vsctl, get, call, token['secret'], eventually, units)
         checks.append('Interface natural selection, filtered cursor scope, configuration permissions and same-name Bridge retirement verified')
         assert call('/interfaces?limit=1&cursor=' + urllib.parse.quote(first['next_cursor']), bearer=token['secret'])[0] == 410
         checks.append('snapshot-bound pagination rejects changed snapshot/scope; current token permissions withhold configuration fields')
@@ -400,7 +402,7 @@ def main():
                 from frontend import verify_frontend
                 def exercise(network_metrics):
                     return verify_frontend(repo, fixture, args.browser_node, origin, password, call, get,
-                                           vsctl, units, db_socket, ovs, conf, credentials, network_metrics)
+                                           vsctl, units, db_socket, ovs, conf, credentials, network_metrics, eventually)
             result = verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
                                        eventually, fixture, config, cert, port, exercise=exercise)
             result.update({'platform': os.uname().machine, 'schema_fixture': args.schema_version,
