@@ -156,6 +156,7 @@ class Fixture:
         self.attest()
         nonce = os.urandom(32).hex()
         outer = control(self.root / "vsd.ctl", "ovs-webui/stp-witness-v1", [bridge or self.bridge_uuid, nonce])
+        self.attest()
         assert outer.get("error") is None, outer
         value = json.loads(outer["result"])
         assert value["nonce"] == nonce and value["schema_version"] == "ovs-webui.stp-witness.v1"
@@ -375,6 +376,22 @@ def extended(f, report):
         f.vsctl("set", "Bridge", "br-witness", "stp_enable=true")
         known()
     case("both_disabled_are_observed_without_default_local_values", disabled)
+
+    def paused():
+        os.kill(f.vswitchd.pid, signal.SIGSTOP)
+        start = time.monotonic()
+        try:
+            f.witness()
+        except socket.timeout:
+            pass
+        else:
+            raise AssertionError("paused daemon unexpectedly returned a witness")
+        finally:
+            os.kill(f.vswitchd.pid, signal.SIGCONT)
+        report["paused_control_elapsed_seconds"] = time.monotonic() - start
+        f.vsctl("sync")
+        known()
+    case("paused_daemon_times_out_without_cached_evidence", paused)
 
     def native_non_root():
         f.network("link", "add", "witness-a", "type", "veth", "peer", "name", "witness-b")

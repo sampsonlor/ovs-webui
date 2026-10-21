@@ -10,9 +10,16 @@ go test ./internal/ovswitness -run '^$' -fuzz '^FuzzWitnessDecode$' -fuzztime=3s
 commit=1a3fefbcd0b0f70ced621b92e286fef3dffaac09
 curl --fail --location --retry 0 --max-time 90 \
   "https://api.github.com/repos/openvswitch/ovs/tarball/$commit" -o "$out/upstream.tar.gz"
+python3 - "$out/upstream.tar.gz" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+expected = json.loads(Path('extensions/ovs-witness/3.3.9/upstream.json').read_text())['archive_sha256']
+assert hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest() == expected, 'Untrusted archive'
+PY
 mkdir "$out/source"
 tar -xzf "$out/upstream.tar.gz" --strip-components=1 -C "$out/source"
 python3 extensions/ovs-witness/3.3.9/apply.py "$out/source" "$out/upstream.tar.gz"
+python3 tests/ovs_witness/check_registry.py "$out/source"
 cd "$out/source"
 ./boot.sh > "$repo/test-results/ovs-witness/bootstrap.log" 2>&1
 for mode in enabled sanitized default; do
@@ -28,7 +35,7 @@ for mode in enabled sanitized default; do
   fi
   "$out/source/configure" --enable-ssl --disable-libcapng --disable-shared --enable-static \
     --prefix="$out/install-$mode" "${flags[@]}" \
-    CFLAGS="$cflags" LDFLAGS="$ldflags" > "$repo/test-results/ovs-witness/configure-$mode.log" 2>&1
+    CFLAGS="$cflags" LDFLAGS="$ldflags" LIBS='-lm' > "$repo/test-results/ovs-witness/configure-$mode.log" 2>&1
   make -j4 > "$repo/test-results/ovs-witness/build-$mode.log" 2>&1
   if [ "$mode" != default ]; then
     ./libtool --mode=link gcc $cflags $ldflags -I. -I./include -I./lib \

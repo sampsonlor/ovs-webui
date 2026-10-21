@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
+	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/ovswitness"
 )
 
@@ -24,10 +24,27 @@ func main() {
 	}
 	wire, err := io.ReadAll(io.LimitReader(os.Stdin, int64(limit)+1))
 	if err == nil && *input && len(wire) <= limit {
-		var rows map[string][]map[string]any
-		d := json.NewDecoder(strings.NewReader(string(wire)))
-		d.UseNumber()
-		err = d.Decode(&rows)
+		var raw map[string]any
+		raw, err = ipc.ParseObject(wire)
+		rows := map[string][]map[string]any{}
+		for table, value := range raw {
+			list, ok := value.([]any)
+			if !ok {
+				err = ovswitness.ErrInvalid
+				break
+			}
+			for _, value := range list {
+				row, ok := value.(map[string]any)
+				if !ok {
+					err = ovswitness.ErrInvalid
+					break
+				}
+				rows[table] = append(rows[table], row)
+			}
+			if len(list) == 0 {
+				rows[table] = nil
+			}
+		}
 		if err == nil {
 			var hash string
 			hash, err = ovswitness.Digest(rows)

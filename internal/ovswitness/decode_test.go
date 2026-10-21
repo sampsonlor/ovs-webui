@@ -174,6 +174,63 @@ func TestWitnessTypedAtomsAndInputBudgets(t *testing.T) {
 			t.Fatal(n)
 		}
 	}
+	load := func() map[string][]map[string]any {
+		t.Helper()
+		data, err := os.ReadFile("testdata/input.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rows map[string][]map[string]any
+		d := json.NewDecoder(bytes.NewReader(data))
+		d.UseNumber()
+		if d.Decode(&rows) != nil {
+			t.Fatal("input fixture")
+		}
+		return rows
+	}
+	want, err := os.ReadFile("testdata/input.sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := load()
+	got, err := Digest(rows)
+	if err != nil || got != strings.TrimSpace(string(want)) {
+		t.Fatal("independent canonical golden", got, err)
+	}
+	rows["Open_vSwitch"][0]["bridges"] = []any{"set", []any{rows["Open_vSwitch"][0]["bridges"]}}
+	if normalized, err := Digest(rows); err != nil || normalized != got {
+		t.Fatal("native singleton set equivalence", normalized, err)
+	}
+	for name, change := range map[string]func(map[string][]map[string]any){
+		"missing_column":    func(r map[string][]map[string]any) { delete(r["Bridge"][0], "ports") },
+		"unknown_column":    func(r map[string][]map[string]any) { r["Bridge"][0]["unmodelled"] = false },
+		"foreign_root_link": func(r map[string][]map[string]any) { r["Open_vSwitch"][0]["bridges"] = []any{"set", []any{}} },
+		"foreign_port_link": func(r map[string][]map[string]any) { r["Bridge"][0]["ports"] = []any{"set", []any{}} },
+		"foreign_interface_link": func(r map[string][]map[string]any) {
+			r["Port"][0]["interfaces"] = []any{"uuid", "77777777-7777-4777-8777-777777777777"}
+		},
+		"duplicate_rows":     func(r map[string][]map[string]any) { r["Interface"] = append(r["Interface"], r["Interface"][0]) },
+		"unsupported_type":   func(r map[string][]map[string]any) { r["Interface"][0]["type"] = "patch" },
+		"unavailable_ofport": func(r map[string][]map[string]any) { r["Interface"][0]["ofport"] = json.Number("-1") },
+		"unmodelled_qos": func(r map[string][]map[string]any) {
+			r["Port"][0]["qos"] = []any{"uuid", "77777777-7777-4777-8777-777777777777"}
+		},
+		"input_budget": func(r map[string][]map[string]any) {
+			pairs := []any{}
+			for i := 0; i < 128; i++ {
+				pairs = append(pairs, []any{strings.Repeat("k", i+1), strings.Repeat("x", 4096)})
+			}
+			r["Bridge"][0]["other_config"] = []any{"map", pairs}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := load()
+			change(r)
+			if out, err := Digest(r); err == nil || out != "" {
+				t.Fatal("unproven input digest escaped", out, err)
+			}
+		})
+	}
 	if _, err := Digest(map[string][]map[string]any{}); err == nil {
 		t.Fatal("incomplete input")
 	}

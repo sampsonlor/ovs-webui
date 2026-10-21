@@ -468,6 +468,7 @@ jobs:
       - name: Build default and opted-in actual OVS 3.3.9 and test disposable kernel namespaces
         env:
           EXPECTED_MACHINE: ${{ matrix.machine }}
+          WITNESS_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash tests/ovs_witness/build.sh
       - name: Retain exact source build and witness evidence
         if: always()

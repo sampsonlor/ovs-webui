@@ -7,6 +7,8 @@
 #include "ovsdb-data.h"
 #include "ovsdb-idl-provider.h"
 
+static uint64_t webui_configuration_epoch;
+static uint64_t webui_binding_epoch;
 static const char *webui_keys[] = {
     "stp-priority", "stp-hello-time", "stp-max-age", "stp-forward-delay",
     "rstp-priority", "rstp-max-age", "rstp-forward-delay"
@@ -232,7 +234,8 @@ webui_begin(struct bridge *br)
     br->webui.valid = false;
     br->webui.setter_error = false;
     br->webui.failure = NULL;
-    webui_epoch_advance(&br->webui.configuration_epoch);
+    webui_epoch_advance(&webui_configuration_epoch);
+    br->webui.configuration_epoch = webui_configuration_epoch;
 }
 
 static void
@@ -253,7 +256,8 @@ webui_finish(struct bridge *br, const struct ovsrec_open_vswitch *root)
     }
     if (!uuid_equals(&w->configured_uuid, &br->cfg->header_.uuid) ||
         !uuid_equals(&w->runtime_instance, &native.instance)) {
-        webui_epoch_advance(&w->binding_epoch);
+        webui_epoch_advance(&webui_binding_epoch);
+        w->binding_epoch = webui_binding_epoch;
     }
     w->configured_uuid = br->cfg->header_.uuid;
     w->runtime_instance = native.instance;
@@ -322,7 +326,8 @@ webui_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct bridge *br = NULL, *b;
     const struct ovsrec_open_vswitch *root = ovsrec_open_vswitch_first(idl);
     uint64_t authority = ovsdb_idl_webui_epoch(idl);
-    if (authority == UINT64_MAX) {
+    if (authority == UINT64_MAX || webui_configuration_epoch == UINT64_MAX ||
+        webui_binding_epoch == UINT64_MAX) {
         reason = "EPOCH_EXHAUSTED";
     } else if (!ovsdb_idl_is_connected(idl)) {
         reason = "IDL_NOT_CONNECTED";

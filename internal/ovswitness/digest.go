@@ -123,6 +123,75 @@ func datum(v any, t columnType) (string, error) {
 	return strings.Join(entries, ","), nil
 }
 
+func references(v any) (map[string]bool, error) {
+	items := []any{v}
+	if a, ok := v.([]any); ok && len(a) == 2 && a[0] == "set" {
+		var valid bool
+		items, valid = a[1].([]any)
+		if !valid {
+			return nil, ErrInvalid
+		}
+	}
+	if len(items) > 128 {
+		return nil, ErrInvalid
+	}
+	result := map[string]bool{}
+	for _, value := range items {
+		id, err := atom(value, "uuid")
+		if err != nil || result[id] {
+			return nil, ErrInvalid
+		}
+		result[id] = true
+	}
+	return result, nil
+}
+
+func inputGraph(rows map[string][]map[string]any, registry map[string]map[string]columnType) bool {
+	root, bridge := rows["Open_vSwitch"][0], rows["Bridge"][0]
+	bridgeID, err := atom(bridge["_uuid"], "uuid")
+	rootRefs, re := references(root["bridges"])
+	ports, pe := references(bridge["ports"])
+	if err != nil || re != nil || pe != nil || !rootRefs[bridgeID] || len(ports) != len(rows["Port"]) {
+		return false
+	}
+	for table, fields := range map[string][]string{"Open_vSwitch": {"datapaths", "manager_options", "ssl"}, "Bridge": {"auto_attach", "controller", "flow_tables", "ipfix", "mirrors", "netflow", "sflow"}, "Port": {"qos"}} {
+		for _, row := range rows[table] {
+			for _, field := range fields {
+				empty, err := datum(row[field], registry[table][field])
+				if err != nil || empty != "" {
+					return false
+				}
+			}
+		}
+	}
+	interfaces := map[string]bool{}
+	for _, row := range rows["Port"] {
+		id, err := atom(row["_uuid"], "uuid")
+		refs, re := references(row["interfaces"])
+		if err != nil || re != nil || !ports[id] || len(refs) != 1 {
+			return false
+		}
+		delete(ports, id)
+		for ref := range refs {
+			if interfaces[ref] {
+				return false
+			}
+			interfaces[ref] = true
+		}
+	}
+	if len(interfaces) != len(rows["Interface"]) {
+		return false
+	}
+	for _, row := range rows["Interface"] {
+		id, err := atom(row["_uuid"], "uuid")
+		if err != nil || !interfaces[id] || row["type"] != "" && row["type"] != "system" && row["type"] != "internal" {
+			return false
+		}
+		delete(interfaces, id)
+	}
+	return len(ports) == 0 && len(interfaces) == 0
+}
+
 // Digest reproduces the C snapshot's bounded, explicitly enumerated IDL input
 // image. It is not the inventory dependency hash or a full-database witness.
 // Rows must come from an independent exact 3.3.9 read; no I/O or fallback occurs.
@@ -132,6 +201,9 @@ func Digest(rows map[string][]map[string]any) (string, error) {
 	}
 	var registry map[string]map[string]columnType
 	if json.Unmarshal(inputTypes, &registry) != nil {
+		return "", ErrInvalid
+	}
+	if !inputGraph(rows, registry) {
 		return "", ErrInvalid
 	}
 	var image strings.Builder

@@ -1,6 +1,6 @@
 # STP/RSTP 可选运行态只读扩展：实现与测试方案 v0.1
 
-日期：2026-10-21。状态：**方案草案，尚未实现或部署**。用户已选择先评估可选只读扩展，部署时使用对应 OVS 构建。决策记录见 [ADR 0002](../adr/0002-optional-spanning-tree-runtime-witness.md)。关联 #23 / #43；M2c3 基础为 PR #98 / `09d1347876b356d51e1011e15e2c63c650201014`。
+日期：2026-10-21。状态：**方案已认可，已授权 P1 隔离实现与测试，未部署**。用户已选择可选只读扩展，部署时使用对应 OVS 构建。P1 的具体清单、编码和验收边界见[原型说明](SPANNING_TREE_WITNESS_PROTOTYPE_v0.1.md)；本文件保留完整阶段计划。决策记录见 [ADR 0002](../adr/0002-optional-spanning-tree-runtime-witness.md)。关联 #23 / #43；M2c3 基础为 PR #98 / `09d1347876b356d51e1011e15e2c63c650201014`。
 
 ## 1. 目标与边界
 
@@ -8,7 +8,7 @@
 
 继续保留[受保护预检](SPANNING_TREE_FENCED_PREFLIGHT_v0.1.md)的当前专用权限、原凭证权限上限、两份独立 root 策略、不可变管理 ID/UUID/generation、保守 system Bridge 图、完整配置围栏、进程及数据库连接验证、两秒总期限和全量失败清空。不能用新接口替代这些检查。
 
-本次不增加生产 caller、执行操作或配置写入。`bridge.spanning-tree.prepare` 的无条件阻断保持不变。`known` 仅表示扩展给出了符合其契约的采样，不表示 Authorized、Reserved、Applied 或 Safe Apply 成功。
+P1 不增加生产 caller、执行操作或配置写入。`bridge.spanning-tree.prepare` 的无条件阻断保持不变。`known` 仅表示扩展给出了符合其契约的采样，不表示 Authorized、Reserved、Applied 或 Safe Apply 成功。
 
 ## 2. 源码证据与补丁位置
 
@@ -115,7 +115,7 @@ OVSDB-server 3.3.9 已检查的 [unixctl 注册表](https://github.com/openvswit
 | `idl_seqno` | 保留现有 unsigned sequence 供关联；允许其原生回绕，不能独立作为防 ABA 标识。配置捕获与当前 seqno 不匹配时保守 withheld |
 | epoch 与 cfg 计数 | 使用规范十进制字符串，避免 JSON number 精度丢失；epoch 范围 0..2^64−1，cfg 范围 0..2^63−1；禁止符号/前导零/溢出，epoch 耗尽后永久 withheld 至新进程实例 |
 | `source` | 配置 pass 实际读取的两个标志和完整七键原始字符串/null；null 表示缺键，不填默认，不改写 inactive 键 |
-| `runtime_input_digest` | 拟议 runtime 消费输入摘要，**尚未定义完毕**；必须覆盖实际 Bridge/Port/Interface UUID 关联、相关输入及存在性，不能只哈希名称、七键或当前配置指针；见第 4 节 |
+| `runtime_input_digest` | P1 已固定 52 字段、实际 Interface 关联和跨语言规范编码，见[原型说明](SPANNING_TREE_WITNESS_PROTOTYPE_v0.1.md)；不等于库存依赖 hash，不能只哈希名称、七键或当前配置指针 |
 | `native` | 两 engine 的真实存在状态；禁用时 local 必须 null；启用时所有 local 字段必须完整。未知 provider/getter 使整份 withheld；known 仍可报告不独占状态，由 Go 拒绝执行 |
 | 本地 timers | STP 在库内复制 local `bridge_*` 并转换为毫秒；RSTP 从秒做检查溢出的 ×1000。Go 若不能无损转换到现有秒语义则拒绝，不舍入、不采用 learned 值、不放宽已有 STP 单位 caveat / RSTP 双向 setter-order 检查 |
 | `withheld` | 仅保留版本、nonce、state、固定 reason；不得夹带部分 Bridge、配置或 native 数据 |
@@ -142,7 +142,7 @@ OVSDB-server 3.3.9 已检查的 [unixctl 注册表](https://github.com/openvswit
 | IDL 可能尚未处理 server 的 stolen/断连通知 | 契约明确为“最近已处理状态”，不能称实时 server 权威；测试延迟通知和排队消息，不在 handler 偷跑 IDL。若后续执行要求原子锁归属保证，这个只读接口不足，另行设计；在此之前不开放写入 |
 | witness 返回后，锁、运行对象或配置仍可能变化 | 后续单独设计 dispatch recheck、持久图预约、原生事务 CAS、安装确认和 OutcomeUnknown；应用图锁不能锁住外部 OVS 客户端，预检通过不能直接标记 Applied |
 | native setter 可保留/裁剪输入且无错误返回 | 必须比较真实 local 原值和预期值并保持既有双向参数限制；`completion` 和 `setters_reported_error=false` 都不是安装成功证明 |
-| runtime 输入清单、C/Go 规范摘要、IDL omit/alert 差异尚未完成 | 原型先产出字段清单和共同 vectors；无法证明完整时保持 withheld，不发布“绑定已证明”结论 |
+| runtime 输入范围仅限固定 3.3.9 保守子图 | P1 已列出字段/排除项和共同编码；扩展范围或更换版本需重新审查并资格测试，无法证明完整时保持 withheld |
 | 新锁顺序、摘要计算、两次 witness 可能超过预算 | 双架构压力/取消/无死锁测试；保守失败可接受，不放宽正式截止时间；需要新预算必须另提具体证据和变更 |
 | 原版 OVS 和不匹配发行版构建 | 不进入该执行资格；既有观察/草案独立保留，不将方法存在、版本字符串或三个 schema fixture 当作实际版本测试 |
 
@@ -150,7 +150,7 @@ OVSDB-server 3.3.9 已检查的 [unixctl 注册表](https://github.com/openvswit
 
 | 阶段 | 可交付结果 | 通过后允许的下一步 |
 | --- | --- | --- |
-| P0：本次方案 | ADR、补丁位置、接口草案、来源、测试与部署条件 | 审查方案；没有运行态扩展测试结论 |
+| P0：已认可方案 | ADR、补丁位置、接口草案、来源、测试与部署条件 | 已进入 P1；P0 本身没有扩展测试结论 |
 | P1：3.3.9 只读原型 | 默认关闭的源码 patch、完整输入规范、构建 manifest、隔离 C/Go 测试、amd64/arm64 实际 kernel system Bridge 证据；无生产 caller | 评审并固定证据契约，决定是否接入私有预检；不能开放写入 |
 | P2：组合预检与版本移植 | 将 witness 与既有 source/fence/权限组合；分别完成 3.7.1 和 4.0.0 移植及实际版本双架构资格测试 | 确定可支持的实际构建集合；未通过组合不宣称支持 |
 | P3：执行与恢复设计/实现 | 独立密封执行 op、当前专用权限与 root grant、持久图预约、dispatch 复核、固定原生 CAS、精确原始值/unset 补偿、durable journal | 仅对同一 active protocol 的基本参数开展 High-risk Safe Apply 验收；prepare 仍不可执行 |
@@ -160,7 +160,7 @@ OVSDB-server 3.3.9 已检查的 [unixctl 注册表](https://github.com/openvswit
 
 ## 7. 测试矩阵与预期结果
 
-以下是**待实现的测试要求**，不是本次已通过项。P1 实现时把每一行展开为稳定场景名和报告条目；故障注入仅在可销毁 CI 环境使用。
+以下是完整阶段的**测试要求**，不能整体算作 P1 已通过项。P1 的实际场景、覆盖层次与限制见原型说明及对应 CI 报告；P2/P3/P4 项目仍需分别实现。故障注入仅在可销毁 CI 环境使用。
 
 | ID | 覆盖场景 | 必须观察到的结果 |
 | --- | --- | --- |
@@ -184,11 +184,11 @@ OVSDB-server 3.3.9 已检查的 [unixctl 注册表](https://github.com/openvswit
 | W18 | P3/P4：与 VLAN/Bond/MTU/policing/topology 图预约冲突、过期/取消/崩溃重启、dispatch 瞬间撤权 | 复用现有 durable 安全权威；不能把 prepare 或过期预检变成可执行计划 |
 | W19 | P3/P4：事务丢回复、安装未完成、实际管理链路中断、补偿前原图改变、确认/截止竞态 | 未证明安装不得 Applied；持久 OutcomeUnknown/恢复，原始 raw/unset 精确补偿；不盲目重放 |
 
-P1 要求实际 OVS 3.3.9 × amd64/arm64；P2 的目标矩阵如下，每格必须有独立源码/build manifest、native 报告和失败历史。目前各格均未运行扩展测试。
+P1 要求实际 OVS 3.3.9 × amd64/arm64；P2 的目标矩阵如下，每格必须有独立源码/build manifest、native 报告和失败历史。3.3.9 以本次独立源码构建 CI 的完整结果为准，其余版本尚未移植或测试扩展。
 
 | 实际 runtime 源码 | amd64 | arm64 |
 | --- | --- | --- |
-| 3.3.9 / `1a3fefbcd0b0f70ced621b92e286fef3dffaac09` | 待 P1 | 待 P1 |
+| 3.3.9 / `1a3fefbcd0b0f70ced621b92e286fef3dffaac09` | P1 独立 CI 报告 | P1 独立 CI 报告 |
 | 3.7.1 / `7921d9c6924b8934ea1de9481891ac1172649280` | 待 P2 移植 | 待 P2 移植 |
 | 4.0.0 / `b89dc80f0143f5bf3f58c48d54e82cc7f8d29da8` | 待 P2 移植 | 待 P2 移植 |
 
@@ -206,4 +206,4 @@ Go 必须核实实际 peer 进程的 executable，而非只哈希同名路径。
 
 生产安装前需要具体主机/包版本、隔离验收、维护窗口、现有服务/配置/数据库备份以及关闭执行的回退步骤。未完成 Safe Apply、预约或恢复任务时不得直接替换/重启 OVS；先按既有 durable journal 处理。回退原版或不匹配构建后立即失去新执行资格，保留审计和恢复记录，不重放旧计划。
 
-每次 OVS 安全更新或发行版 patch 都需重建、重验对应矩阵；源码不匹配时默认拒绝。用户当前授权是方案评估，尚未批准任何具体生产安装。本次结束后可审查 P0，再开展 P1 隔离只读原型。
+每次 OVS 安全更新或发行版 patch 都需重建、重验对应矩阵；源码不匹配时默认拒绝。用户当前已授权 P1 隔离实现与双架构测试，尚未批准任何具体生产安装。P1 完整通过后再开展 P2 组合预检与版本移植。

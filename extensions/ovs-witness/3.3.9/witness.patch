@@ -61,7 +61,27 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
      /* Resync data DB table conditions to avoid missing updates due to
       * conditions that were in flight or changed locally while the connection
       * was down.
-@@ -1296,6 +1306,9 @@
+@@ -1084,6 +1094,9 @@
+ static void
+ ovsdb_cs_db_sync_condition(struct ovsdb_cs_db *db)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&db->cs->webui_epoch);
++#endif
+     bool ack_all = uuid_is_zero(&db->last_id);
+     if (ack_all) {
+         db->cond_changed = false;
+@@ -1159,6 +1172,9 @@
+
+     struct jsonrpc_msg *msg = ovsdb_cs_db_compose_cond_change(&cs->data);
+     if (msg) {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++        webui_epoch_advance(&cs->webui_epoch);
++#endif
+         cs->request_id = json_clone(msg->id);
+         jsonrpc_session_send(cs->session, msg);
+     }
+@@ -1296,6 +1312,9 @@
  static void
  ovsdb_cs_db_update_has_lock(struct ovsdb_cs_db *db, bool new_has_lock)
  {
@@ -71,7 +91,17 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
      if (new_has_lock && !db->has_lock) {
          ovsdb_cs_db_add_event(db, OVSDB_CS_EVENT_TYPE_LOCKED);
          db->is_lock_contended = false;
-@@ -2386,3 +2399,11 @@
+@@ -1505,6 +1524,9 @@
+ ovsdb_cs_send_monitor_request(struct ovsdb_cs *cs, struct ovsdb_cs_db *db,
+                               int version)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     struct json *mrs = db->ops->compose_monitor_requests(
+         db->schema, db->ops_aux);
+     /* XXX handle failure */
+@@ -2386,3 +2408,11 @@
      return NULL;
  }
 
