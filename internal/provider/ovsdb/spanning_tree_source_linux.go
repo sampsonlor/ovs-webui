@@ -4,6 +4,7 @@ package ovsdb
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -100,13 +101,7 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 	}
 	// Fixed read-only select verifies the single current root, independently of
 	// configured paths or process arguments. No mutation/lock/reconnect RPC.
-	body, err := call(db, r, 2, "transact", []any{"Open_vSwitch", map[string]any{"op": "select", "table": "Open_vSwitch", "where": []any{}, "columns": []string{"_uuid"}}})
-	var roots []struct {
-		Rows []struct {
-			UUID []string `json:"_uuid"`
-		} `json:"rows"`
-	}
-	if err != nil || json.Unmarshal(body, &roots) != nil || len(roots) != 1 || len(roots[0].Rows) != 1 || len(roots[0].Rows[0].UUID) != 2 || roots[0].Rows[0].UUID[0] != "uuid" || roots[0].Rows[0].UUID[1] != expected.Root {
+	if spanningTreeRoot(db, r, expected.Root) != nil {
 		return "", errors.New("SPANNING_TREE_SOURCE_ROOT_UNPROVEN")
 	}
 	w := witness(database.DatabaseFile, dbPID, expected.File)
@@ -148,6 +143,49 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 		return "", sourceUnproven
 	}
 	return fmt.Sprintf("%s/%s/%d:%d/%d:%d/%s", daemon, dbPeer, trusted.Dev, trusted.Ino, w.Device, w.Inode, connection), nil
+}
+
+// A single purpose-built read transaction. The discovery request/call helper
+// intentionally continues to deny transact, lock, steal and every write method.
+// No caller supplies operations, predicates, columns or a method name here.
+func spanningTreeRoot(conn net.Conn, r *bufio.Reader, expected string) error {
+	if !apitypes.UUID(expected) {
+		return sourceUnproven
+	}
+	params := []any{"Open_vSwitch", map[string]any{"op": "select", "table": "Open_vSwitch", "where": []any{}, "columns": []string{"_uuid"}}}
+	if send(conn, map[string]any{"method": "transact", "params": params, "id": 2}) != nil {
+		return sourceUnproven
+	}
+	if conn.SetReadDeadline(time.Now().Add(2*time.Second)) != nil {
+		return sourceUnproven
+	}
+	for count := 0; count < 32; count++ {
+		m, err := readMessage(r)
+		if err != nil {
+			return sourceUnproven
+		}
+		if m.Method == "echo" {
+			if replyEcho(conn, m) != nil {
+				return sourceUnproven
+			}
+			continue
+		}
+		if m.Method != "" || string(m.ID) != "2" || len(m.Error) > 0 && string(m.Error) != "null" {
+			return sourceUnproven
+		}
+		var roots []struct {
+			Rows []struct {
+				UUID []string `json:"_uuid"`
+			} `json:"rows"`
+		}
+		d := json.NewDecoder(bytes.NewReader(m.Result))
+		d.DisallowUnknownFields()
+		if d.Decode(&roots) != nil || len(roots) != 1 || len(roots[0].Rows) != 1 || len(roots[0].Rows[0].UUID) != 2 || roots[0].Rows[0].UUID[0] != "uuid" || roots[0].Rows[0].UUID[1] != expected {
+			return sourceUnproven
+		}
+		return nil
+	}
+	return sourceUnproven
 }
 
 func processSocketInodes(pid int) (map[uint32]bool, error) {

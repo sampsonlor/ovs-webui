@@ -3,8 +3,10 @@
 package ovsdb
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -16,6 +18,48 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"golang.org/x/sys/unix"
 )
+
+func TestSpanningTreeRootProbeIsFixedReadOnlyAndKeepsDiscoveryClosed(t *testing.T) {
+	const root = "11111111-1111-4111-8111-111111111111"
+	for _, tc := range []struct {
+		name, reply string
+		valid       bool
+	}{
+		{"valid", `{"id":2,"error":null,"result":[{"rows":[{"_uuid":["uuid","` + root + `"]}]}]}`, true},
+		{"missing", `{"id":2,"error":null,"result":[{"rows":[]}]}`, false},
+		{"error", `{"id":2,"error":null,"result":[{"rows":[{"_uuid":["uuid","` + root + `"]}],"error":"rejected"}]}`, false},
+		{"wrong-id", `{"id":3,"error":null,"result":[{"rows":[{"_uuid":["uuid","` + root + `"]}]}]}`, false},
+		{"wrong-root", `{"id":2,"error":null,"result":[{"rows":[{"_uuid":["uuid","22222222-2222-4222-8222-222222222222"]}]}]}`, false},
+		{"extra-root", `{"id":2,"error":null,"result":[{"rows":[{"_uuid":["uuid","` + root + `"]},{"_uuid":["uuid","` + root + `"]}]}]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, server := net.Pipe()
+			defer client.Close()
+			requests := make(chan map[string]any, 1)
+			go func() {
+				defer server.Close()
+				_ = server.SetDeadline(time.Now().Add(time.Second))
+				var q map[string]any
+				if json.NewDecoder(server).Decode(&q) == nil {
+					requests <- q
+					_, _ = server.Write([]byte(tc.reply + "\n"))
+				}
+			}()
+			err := spanningTreeRoot(client, bufio.NewReader(client), root)
+			if (err == nil) != tc.valid {
+				t.Fatal("root result misclassified", err)
+			}
+			q := <-requests
+			want := map[string]any{"id": float64(2), "method": "transact", "params": []any{"Open_vSwitch", map[string]any{"op": "select", "table": "Open_vSwitch", "where": []any{}, "columns": []any{"_uuid"}}}}
+			if !reflect.DeepEqual(q, want) {
+				t.Fatal("root probe accepted a general transaction", q)
+			}
+			if request(client, 4, "transact", nil) == nil {
+				t.Fatal("discovery method allowlist broadened")
+			}
+		})
+	}
+}
 
 func diagPacket(kind uint16, body []byte) []byte {
 	b := make([]byte, 16+len(body))

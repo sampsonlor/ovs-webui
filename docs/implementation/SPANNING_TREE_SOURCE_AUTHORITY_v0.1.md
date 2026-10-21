@@ -97,10 +97,10 @@ blocker. Basic Manage and Phase 1 remain incomplete. #71 stays deferred.
 
 ## Acceptance
 
-Six new Go regression entry points cover independent root authority, immutable
+Seven new Go regression entry points cover independent root authority, immutable
 binding/graph/provider failures, explicit current capability and credential
 ceiling, strict diagnostic parsing, real kernel socket peer relations and
-authorization before provider access. A separate native CI group exercises 13
+authorization before provider access and the fixed read-only root probe. A separate native CI group exercises 13
 cases against each of the three schema fixtures on amd64 and arm64, including two
 real OVS instances with the same Bridge name, a same-UID relay, changed root,
 schema, process, file and timestamps, explicit roles/old credentials, wrong
