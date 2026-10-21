@@ -4,7 +4,7 @@
 #define OVS_WEBUI_WITNESS_H 1
 #include <stdbool.h>
 #include <stdint.h>
-#include "openvswitch/uuid.h"
+#include "uuid.h"
 
 /* Saturates, never wraps. UINT64_MAX is terminal, not a valid witness epoch. */
 static inline void
@@ -34,6 +34,7 @@ int ofproto_webui_snapshot(struct ofproto *, struct webui_native *);
 
 struct webui_bridge {
     bool valid, setter_error;
+    const char *failure;
     struct uuid configured_uuid, runtime_instance, root;
     uint64_t binding_epoch, configuration_epoch, authority_epoch;
     unsigned int seqno;

@@ -54,7 +54,9 @@ webui_atom(const union ovsdb_atom *a, enum ovsdb_atomic_type type)
     case OVSDB_TYPE_UUID:
         ds_put_format(&raw, "u"UUID_FMT, UUID_ARGS(&a->uuid));
         break;
-    default:
+    case OVSDB_TYPE_VOID:
+    case OVSDB_TYPE_REAL:
+    case OVSDB_N_TYPES:
         return NULL;
     }
     struct ds hex = DS_EMPTY_INITIALIZER;
@@ -168,7 +170,7 @@ webui_digest(struct bridge *br, const struct ovsrec_open_vswitch *root,
     size_t n_ifaces = 0;
     for (size_t p = 0; p < br->cfg->n_ports; p++) {
         const struct ovsrec_port *port = br->cfg->ports[p];
-        if (port->n_interfaces != 1) {
+        if (port->n_interfaces != 1 || port->qos) {
             return false;
         }
         ports[p] = &port->header_;
@@ -227,6 +229,7 @@ webui_begin(struct bridge *br)
 {
     br->webui.valid = false;
     br->webui.setter_error = false;
+    br->webui.failure = NULL;
     webui_epoch_advance(&br->webui.configuration_epoch);
 }
 
@@ -235,8 +238,15 @@ webui_finish(struct bridge *br, const struct ovsrec_open_vswitch *root)
 {
     struct webui_bridge *w = &br->webui;
     struct webui_native native;
-    if (w->setter_error || !webui_digest(br, root, w->digest) ||
-        ofproto_webui_snapshot(br->ofproto, &native)) {
+    if (w->setter_error) {
+        return;
+    }
+    if (!webui_digest(br, root, w->digest)) {
+        w->failure = "BINDING_UNPROVEN";
+        return;
+    }
+    if (ofproto_webui_snapshot(br->ofproto, &native)) {
+        w->failure = "PROVIDER_SNAPSHOT_UNSUPPORTED";
         return;
     }
     if (!uuid_equals(&w->configured_uuid, &br->cfg->header_.uuid) ||
@@ -258,6 +268,7 @@ webui_finish(struct bridge *br, const struct ovsrec_open_vswitch *root)
     for (size_t i = 0; i < ARRAY_SIZE(webui_keys); i++) {
         const char *v = smap_get(&br->cfg->other_config, webui_keys[i]);
         if (v && strlen(v) > 128) {
+            w->failure = "WITNESS_BUDGET";
             return;
         }
         json_object_put(parameters, webui_keys[i],
@@ -337,6 +348,9 @@ webui_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
     if (!reason && br->webui.setter_error) {
         reason = "SETTER_REPORTED_ERROR";
+    }
+    if (!reason && br->webui.failure) {
+        reason = br->webui.failure;
     }
     if (!reason && (!br->webui.valid || !root ||
         !uuid_equals(&br->webui.configured_uuid, &br->cfg->header_.uuid) ||
