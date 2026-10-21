@@ -54,7 +54,7 @@ func TestSpanningTreeRootProbeIsFixedReadOnlyAndKeepsDiscoveryClosed(t *testing.
 			if !reflect.DeepEqual(q, want) {
 				t.Fatal("root probe accepted a general transaction", q)
 			}
-			if request(client, 4, "transact", nil) == nil {
+			if denied := request(client, 4, "transact", nil); denied == nil || denied.Error() != "OVSDB_METHOD_DENIED" {
 				t.Fatal("discovery method allowlist broadened")
 			}
 		})

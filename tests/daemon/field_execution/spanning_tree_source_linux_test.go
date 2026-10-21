@@ -126,7 +126,11 @@ func TestNativeSpanningTreeSource(t *testing.T) {
 		go func() { defer close(finished); p.Run(otherCtx, otherSink) }()
 		defer func() { stop(); <-finished }()
 		waitFor(t, func() bool { return !otherSink.get().ObservedAt.IsZero() })
-		noSample(read(control, options, otherSink.get(), executable, allow))
+		sample, err := read(control, options, otherSink.get(), executable, allow)
+		noSample(sample, err)
+		if err.Error() != "SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN" {
+			t.Fatal("unrelated instance was not rejected by the actual connection gate", err)
+		}
 	})
 	for _, scenario := range []string{"root", "schema", "peer", "file", "stale", "future"} {
 		t.Run("changed_"+scenario+"_rejects_source", func(t *testing.T) {
@@ -145,7 +149,12 @@ func TestNativeSpanningTreeSource(t *testing.T) {
 			case "future":
 				e.ObservedAt = time.Now().Add(inventory.FreshFor)
 			}
-			noSample(read(control, db, e, executable, allow))
+			sample, err := read(control, db, e, executable, allow)
+			noSample(sample, err)
+			codes := map[string]string{"root": "ROOT", "schema": "SCHEMA", "peer": "DATABASE_PEER", "file": "FILE", "stale": "EVIDENCE", "future": "EVIDENCE"}
+			if err.Error() != "SPANNING_TREE_SOURCE_"+codes[scenario]+"_UNPROVEN" {
+				t.Fatal("source rejected at the wrong boundary", scenario, err)
+			}
 		})
 	}
 	t.Run("unrelated_executable_and_replaced_daemon_denied", func(t *testing.T) {
