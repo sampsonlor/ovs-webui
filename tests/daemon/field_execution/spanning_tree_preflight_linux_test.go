@@ -82,6 +82,10 @@ func TestNativeSpanningTreePreflight(t *testing.T) {
 	authorize := f.auth.SpanningTreeExecutionAuthorizer(fresh.Grant)
 	draft := func() candidate.StoredIntent {
 		var view inventory.ExecutionView
+		// ovs-vsctl completion does not mean our independent monitor has
+		// delivered the new configuration yet. Await that exact native counter,
+		// never retry a failed preflight or accept an earlier settled snapshot.
+		target := f.vs("get", "Open_vSwitch", ".", "next_cfg")
 		waitFor(t, func() bool {
 			v, err := inv.SpanningTreeExecutionView(ctx, binding)
 			if err != nil {
@@ -89,7 +93,7 @@ func TestNativeSpanningTreePreflight(t *testing.T) {
 			}
 			root := v.Observation.Rows["Open_vSwitch"][v.Observation.Evidence.Root]
 			view = v
-			return root.Values["cur_cfg"] == root.Values["next_cfg"]
+			return root.Values["cur_cfg"] == target && root.Values["next_cfg"] == target
 		})
 		tr := view.Candidate.SpanningTrees[binding.ManagementID]
 		var after candidate.SpanningTreeConfig
