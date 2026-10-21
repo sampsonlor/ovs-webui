@@ -387,7 +387,7 @@ diff --git a/vswitchd/bridge.c b/vswitchd/bridge.c
 
          if (bitmap_scan(port_num_bitmap, 1, 0, STP_MAX_PORTS) != STP_MAX_PORTS
                      && port_num_counter) {
-+            WEBUI_CHECK(br, EINVAL);
++            (void) WEBUI_CHECK(br, EINVAL);
              VLOG_ERR("bridge %s: must manually configure all STP port "
                       "IDs or none, disabling", br->name);
 -            ofproto_set_stp(br->ofproto, NULL);

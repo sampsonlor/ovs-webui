@@ -12,12 +12,12 @@ tar -xzf "$out/upstream.tar.gz" --strip-components=1 -C "$out/source"
 python3 extensions/ovs-witness/3.3.9/apply.py "$out/source"
 cd "$out/source"
 ./boot.sh > "$repo/test-results/ovs-witness/bootstrap.log" 2>&1
-for mode in default enabled; do
+for mode in enabled default; do
   mkdir "$out/$mode"
   cd "$out/$mode"
   flags=()
   if [ "$mode" = enabled ]; then flags+=(--enable-ovs-webui-witness); fi
-  "$out/source/configure" --enable-ssl --disable-libcapng \
+  "$out/source/configure" --enable-ssl --disable-libcapng --disable-shared --enable-static \
     --prefix="$out/install-$mode" "${flags[@]}" \
     CFLAGS='-O1 -g -Werror' > "$repo/test-results/ovs-witness/configure-$mode.log" 2>&1
   make -j4 > "$repo/test-results/ovs-witness/build-$mode.log" 2>&1
