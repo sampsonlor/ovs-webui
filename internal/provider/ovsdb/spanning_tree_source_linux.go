@@ -45,7 +45,10 @@ func ReadBoundSpanningTreeRuntime(ctx context.Context, control SpanningTreeContr
 			return err
 		}
 		identity, err := spanningTreeSource(ctx, conn, control.PeerUID, database, expected, executable)
-		if err != nil || original != "" && identity != original {
+		if err != nil {
+			return err
+		}
+		if original != "" && identity != original {
 			return sourceUnproven
 		}
 		original = identity
@@ -63,20 +66,20 @@ func ReadBoundSpanningTreeRuntime(ctx context.Context, control SpanningTreeContr
 
 func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, database Options, expected inventory.Evidence, executable string) (string, error) {
 	if expected.Endpoint != filepath.Clean(database.Socket) || expected.Database != "Open_vSwitch" || expected.Schema == "" || !apitypes.UUID(expected.Root) || !apitypes.UUID(expected.Boot) || time.Since(expected.ObservedAt) < 0 || time.Since(expected.ObservedAt) > inventory.FreshFor {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_EVIDENCE_UNPROVEN")
 	}
 	daemon, pid, err := peer(control, uid)
 	if err != nil {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_CONTROL_UNPROVEN")
 	}
 	var trusted unix.Stat_t
 	var actual unix.Stat_t
 	if unix.Stat(executable, &trusted) != nil || trusted.Uid != 0 || trusted.Mode&unix.S_IFMT != unix.S_IFREG || trusted.Mode&0022 != 0 || trusted.Mode&0111 == 0 || unix.Stat(fmt.Sprintf("/proc/%d/exe", pid), &actual) != nil || trusted.Dev != actual.Dev || trusted.Ino != actual.Ino {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_EXECUTABLE_UNPROVEN")
 	}
 	db, err := (&net.Dialer{}).DialContext(ctx, "unix", database.Socket)
 	if err != nil {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_DATABASE_UNAVAILABLE")
 	}
 	defer db.Close()
 	closeOnCancel := context.AfterFunc(ctx, func() { _ = db.Close() })
@@ -84,16 +87,16 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 	dbPeer, dbPID, err := peer(db, database.PeerUID)
 	boot, bootErr := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	if err != nil || bootErr != nil || strings.TrimSpace(string(boot)) != expected.Boot || dbPeer != expected.Peer || dbPID == pid {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_DATABASE_PEER_UNPROVEN")
 	}
 	r := bufio.NewReader(db)
 	schema, err := call(db, r, 1, "get_schema", []any{"Open_vSwitch"})
 	if err != nil {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_SCHEMA_UNPROVEN")
 	}
 	d, err := discover(schema)
 	if err != nil || d.public.Digest != expected.Schema {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_SCHEMA_UNPROVEN")
 	}
 	// Fixed read-only select verifies the single current root, independently of
 	// configured paths or process arguments. No mutation/lock/reconnect RPC.
@@ -104,13 +107,13 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 		} `json:"rows"`
 	}
 	if err != nil || json.Unmarshal(body, &roots) != nil || len(roots) != 1 || len(roots[0].Rows) != 1 || len(roots[0].Rows[0].UUID) != 2 || roots[0].Rows[0].UUID[0] != "uuid" || roots[0].Rows[0].UUID[1] != expected.Root {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_ROOT_UNPROVEN")
 	}
 	w := witness(database.DatabaseFile, dbPID, expected.File)
 	// This gate requires a real open file handle. The broader inventory's argv
 	// fallback is intentionally insufficient for this source qualification.
 	if !w.Available || !w.ServerHasFile || w.ServerBinding != "observed-file-handle" || !expected.File.Available || !w.PriorMatches || w.Device != expected.File.Device || w.Inode != expected.File.Inode {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_FILE_UNPROVEN")
 	}
 	a, err := processSocketInodes(pid)
 	if err != nil {
@@ -122,7 +125,7 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 	}
 	links, err := unixSocketPeers(ctx)
 	if err != nil {
-		return "", err
+		return "", errors.New("SPANNING_TREE_SOURCE_DIAG_UNPROVEN")
 	}
 	var connection string
 	for inode := range a {
@@ -135,7 +138,7 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 		}
 	}
 	if connection == "" || ctx.Err() != nil {
-		return "", sourceUnproven
+		return "", errors.New("SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN")
 	}
 	// Recheck process incarnations after proc/diag collection. Socket replacement
 	// or a daemon/DB restart cannot inherit the sampled connection identity.
@@ -149,16 +152,21 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 
 func processSocketInodes(pid int) (map[uint32]bool, error) {
 	base := fmt.Sprintf("/proc/%d/fd", pid)
-	entries, err := os.ReadDir(base)
+	directory, err := os.Open(base)
+	if err != nil {
+		return nil, errors.New("SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN")
+	}
+	defer directory.Close()
+	entries, err := directory.ReadDir(1025)
 	if err != nil || len(entries) > 1024 {
-		return nil, sourceUnproven
+		return nil, errors.New("SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN")
 	}
 	out := map[uint32]bool{}
 	for _, entry := range entries {
 		target, err := os.Readlink(filepath.Join(base, entry.Name()))
 		if err != nil {
 			// A concurrent close makes the collected view unproven.
-			return nil, sourceUnproven
+			return nil, errors.New("SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN")
 		}
 		if !strings.HasPrefix(target, "socket:[") || !strings.HasSuffix(target, "]") {
 			continue
