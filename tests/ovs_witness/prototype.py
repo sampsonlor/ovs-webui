@@ -120,6 +120,31 @@ class Fixture:
     def vsctl(self, *args):
         return self.run("ovs-vsctl", "--timeout=5", "--db=unix:" + str(self.root / "db.sock"), *args)
 
+    def sync(self):
+        # Explicit disposable-fixture counter barrier. OVS 3.3.9 has no
+        # ovs-vsctl "sync" command. This is never used by a provider read.
+        roots = self.transaction([{"op": "select", "table": "Open_vSwitch", "where": [],
+                                   "columns": ["_uuid", "next_cfg"]}])[0]["rows"]
+        assert len(roots) == 1
+        root = roots[0]
+        self.transaction([
+            {"op": "wait", "table": "Open_vSwitch", "where": [["_uuid", "==", root["_uuid"]]],
+             "columns": ["next_cfg"], "until": "==", "rows": [{"next_cfg": root["next_cfg"]}], "timeout": 0},
+            {"op": "update", "table": "Open_vSwitch", "where": [["_uuid", "==", root["_uuid"]]],
+             "row": {"next_cfg": root["next_cfg"] + 1}}])
+        self.vsctl("wait-until", "Open_vSwitch", ".", "cur_cfg=" + str(root["next_cfg"] + 1))
+
+    def database_ready(self):
+        import struct
+        try:
+            with socket.socket(socket.AF_UNIX) as sock:
+                sock.settimeout(1)
+                sock.connect(str(self.root / "db.sock"))
+                pid, uid, _ = struct.unpack("3i", sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+                return uid == 0 and pid == self.server.pid
+        except OSError:
+            return False
+
     def start(self, name, *args):
         log = open(self.root / (name + ".log"), "ab")
         self.logs.append(log)
@@ -352,7 +377,7 @@ def extended(f, report):
             assert int(after["configuration"]["epoch"]) > int(before["configuration"]["epoch"])
             assert after["configuration"]["runtime_input_digest"] != before["configuration"]["runtime_input_digest"]
         f.transaction([{"op": "update", "table": "Port", "where": [["_uuid", "==", row["_uuid"]]], "row": {"trunks": ["set", []]}}])
-        f.vsctl("sync")
+        f.sync()
         known()
     case("omit_alert_input_change_cannot_reuse_old_configuration_evidence", non_alert_input)
 
@@ -389,7 +414,7 @@ def extended(f, report):
         finally:
             os.kill(f.vswitchd.pid, signal.SIGCONT)
         report["paused_control_elapsed_seconds"] = time.monotonic() - start
-        f.vsctl("sync")
+        f.sync()
         known()
     case("paused_daemon_times_out_without_cached_evidence", paused)
 
@@ -448,7 +473,7 @@ def extended(f, report):
         # Native IDL re-acquisition recreates the bridge; wait on its standard
         # status surface before making a single acceptance witness call.
         wait_fixture(lambda: "br-witness" in control(f.root / "vsd.ctl", "dpif/show", [])["result"])
-        f.vsctl("sync")
+        f.sync()
         after = known()
         assert after["daemon_instance_id"] == before["daemon_instance_id"]
         assert int(after["database"]["authority_epoch"]) > int(before["database"]["authority_epoch"])
@@ -461,7 +486,7 @@ def extended(f, report):
         f.vswitchd.wait(5)
         f.vswitchd = f.start("ovs-vswitchd", "--no-chdir", "--unixctl=" + str(f.root / "vsd.ctl"),
                              "unix:" + str(f.root / "db.sock"))
-        f.vsctl("sync")
+        f.sync()
         after = known()
         assert after["daemon_instance_id"] != before["daemon_instance_id"]
         assert after["bridge"]["runtime_instance_id"] != before["bridge"]["runtime_instance_id"]
@@ -480,7 +505,8 @@ def extended(f, report):
         withheld("IDL_NOT_CONNECTED")
         f.server = f.start("ovsdb-server", "--no-chdir", "--unixctl=" + str(f.root / "db.ctl"),
                            "--remote=punix:" + str(f.root / "db.sock"), str(f.root / "conf.db"))
-        f.vsctl("sync")
+        wait_fixture(f.database_ready)
+        f.sync()
         after = known()
         assert after["daemon_instance_id"] == before["daemon_instance_id"]
         assert int(after["database"]["authority_epoch"]) > int(before["database"]["authority_epoch"])
