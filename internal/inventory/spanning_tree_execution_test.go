@@ -82,3 +82,32 @@ func TestSpanningTreeExecutionViewRejectsIdentityGraphAndProviderChanges(t *test
 		})
 	}
 }
+
+func TestSpanningTreeExecutionPolicyDetectsRevokeAndRegrant(t *testing.T) {
+	s, _, _, _, b := treePreparationFixture(t)
+	ctx := context.Background()
+	for _, grant := range []func([]string) error{s.SetLocalSpanningTreeBridges, s.SetLocalSpanningTreeExecutionBridges} {
+		if err := grant([]string{b.ManagementID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, grant := range []func([]string) error{s.SetLocalSpanningTreeBridges, s.SetLocalSpanningTreeExecutionBridges} {
+		before, err := s.SpanningTreeExecutionView(ctx, b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := grant(nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SpanningTreeExecutionView(ctx, b); err == nil {
+			t.Fatal("revocation was not enforced")
+		}
+		if err := grant([]string{b.ManagementID}); err != nil {
+			t.Fatal(err)
+		}
+		after, err := s.SpanningTreeExecutionView(ctx, b)
+		if err != nil || before.Candidate.Policy == after.Candidate.Policy {
+			t.Fatal("regrant resurrected an in-flight scope", err)
+		}
+	}
+}

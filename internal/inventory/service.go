@@ -27,6 +27,7 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	spanningTreeAuthorityRevision  string
 	localSpanningTreeExecution     map[string]bool
 	localSpanningTree              map[string]bool
 	localTopology                  map[string]bool

@@ -7,6 +7,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 // An explicit root-owned identity grant permits draft preparation only. No
@@ -25,6 +26,7 @@ func (s *Service) SetLocalSpanningTreeBridges(ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.localSpanningTree = allow
+	s.spanningTreeAuthorityRevision = repository.NewID()
 	return nil
 }
 
