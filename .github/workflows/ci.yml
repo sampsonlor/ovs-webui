@@ -192,6 +192,16 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeSpanningTreeSource$' -test.v -test.timeout=120s \
               | go tool test2json -p "native-spanning-tree-source-$schema" | tee "test-results/go-spanning-tree-source-$schema.json"
           done
+      - name: Native spanning-tree fenced immutable configuration preflight
+        run: |
+          set -o pipefail
+          go test -json -count=1 -run '^TestSpanningTree(NativeFence|Preflight|ExecutionPolicyDetects)' ./internal/inventory ./internal/provider/ovsdb \
+            | tee test-results/go-spanning-tree-preflight-protocol.json
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeSpanningTreePreflight$' -test.v -test.timeout=120s \
+              | go tool test2json -p "native-spanning-tree-preflight-$schema" | tee "test-results/go-spanning-tree-preflight-$schema.json"
+          done
       # Fail early on formal transport/permission/UI regressions, retaining the
       # same complete browser suite and every later native/recovery/race gate.
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
@@ -363,6 +373,7 @@ jobs:
             test-results/go-interface-policing-*.json
             test-results/go-spanning-tree-runtime-*.json
               test-results/go-spanning-tree-source-*.json
+              test-results/go-spanning-tree-preflight-*.json
             test-results/go-isolated-bridge-*.json
             test-results/go-internal-port-*.json
             test-results/go-safe-apply-*.json

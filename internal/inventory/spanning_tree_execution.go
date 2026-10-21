@@ -5,6 +5,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 // This private root policy is independent of the preparation grant. There is
@@ -23,6 +24,7 @@ func (s *Service) SetLocalSpanningTreeExecutionBridges(ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.localSpanningTreeExecution = allow
+	s.spanningTreeAuthorityRevision = repository.NewID()
 	return nil
 }
 
@@ -37,6 +39,7 @@ func (s *Service) SpanningTreeExecutionView(ctx context.Context, b candidate.Bin
 	// the lock. The independent policy is included in the returned fingerprint.
 	s.mu.RLock()
 	allowed := s.localSpanningTreeExecution[b.ManagementID]
+	revision := s.spanningTreeAuthorityRevision
 	s.mu.RUnlock()
 	if !allowed {
 		return ExecutionView{}, apitypes.Fail(403, "SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED")
@@ -50,6 +53,9 @@ func (s *Service) SpanningTreeExecutionView(ctx context.Context, b candidate.Bin
 	if !s.localSpanningTreeExecution[b.ManagementID] {
 		return ExecutionView{}, apitypes.Fail(403, "SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED")
 	}
+	if revision != s.spanningTreeAuthorityRevision {
+		return ExecutionView{}, apitypes.Fail(409, "SPANNING_TREE_AUTHORITY_CHANGED")
+	}
 	p, ok := v.Candidate.SpanningTrees[b.ManagementID]
 	if !ok || p.Binding != b || v.Candidate.Generation != b.Generation {
 		return ExecutionView{}, apitypes.Fail(409, "OBJECT_BINDING_CHANGED")
@@ -57,6 +63,6 @@ func (s *Service) SpanningTreeExecutionView(ctx context.Context, b candidate.Bin
 	if code := candidate.TreePreparationProblem(p); code != "" {
 		return ExecutionView{}, apitypes.Fail(409, code)
 	}
-	v.Candidate.Policy = Digest([]any{v.Candidate.Policy, s.localSpanningTreeExecution})
+	v.Candidate.Policy = Digest([]any{v.Candidate.Policy, s.localSpanningTreeExecution, revision})
 	return v, nil
 }
