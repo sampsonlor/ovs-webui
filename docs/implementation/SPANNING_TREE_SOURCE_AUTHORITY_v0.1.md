@@ -42,6 +42,8 @@ executable, endpoint or evidence is accepted through HTTP/IPC.
 Before provider access, before source collection, after the runtime response and
 before returning a sample, its required authorization callback resolves current
 permission. A denied or unavailable check returns an entirely empty sample.
+The sample timestamp is captured when the native wire reply is received; later
+source/authorization checks cannot refresh the age of that runtime observation.
 The reader's two-second context bounds control/source I/O and cancellation closes
 both control and database connections. No shell, appctl process, discovery,
 write/lock/reconnect operation, automatic retry or cached replacement is added.

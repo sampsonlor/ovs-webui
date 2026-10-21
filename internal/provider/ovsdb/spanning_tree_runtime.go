@@ -87,6 +87,7 @@ func readSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protoco
 	// pathological nesting. The text has an independent, smaller byte budget.
 	r := bufio.NewReader(io.LimitReader(conn, 2*spanningtree.MaxRuntimeBytes+1))
 	data, err := frame(r)
+	receivedAt := time.Now().UTC()
 	if err != nil || len(data) > 2*spanningtree.MaxRuntimeBytes || validateJSON(data) != nil {
 		return SpanningTreeRuntimeSample{}, errors.New("SPANNING_TREE_CONTROL_REPLY_INVALID")
 	}
@@ -113,5 +114,5 @@ func readSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protoco
 			return SpanningTreeRuntimeSample{}, err
 		}
 	}
-	return SpanningTreeRuntimeSample{Daemon: daemon, ObservedAt: time.Now().UTC(), Runtime: runtime}, nil
+	return SpanningTreeRuntimeSample{Daemon: daemon, ObservedAt: receivedAt, Runtime: runtime}, nil
 }

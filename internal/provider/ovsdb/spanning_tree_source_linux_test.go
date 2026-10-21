@@ -179,4 +179,23 @@ func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *test
 	if _, err := processSocketInodes(-1); err == nil {
 		t.Fatal("unknown process accepted")
 	}
+	// Source verification after the native reply must never refresh its age.
+	o := controlServer(t, func(c net.Conn) {
+		var request map[string]any
+		if json.NewDecoder(c).Decode(&request) == nil {
+			_ = json.NewEncoder(c).Encode(map[string]any{"id": 1, "error": nil, "result": controlRuntimeText})
+		}
+	})
+	var afterRead time.Time
+	checks := 0
+	sample, err := readSpanningTreeRuntime(context.Background(), o, "stp", "br-tree", func(context.Context, net.Conn) error {
+		checks++
+		if checks == 2 {
+			afterRead = time.Now().UTC()
+		}
+		return nil
+	})
+	if err != nil || checks != 2 || sample.ObservedAt.IsZero() || sample.ObservedAt.After(afterRead) {
+		t.Fatal("post-read attestation refreshed the runtime sample timestamp", checks, sample, err)
+	}
 }
