@@ -38,13 +38,15 @@ webui_atom(const union ovsdb_atom *a, enum ovsdb_atomic_type type)
 {
     struct ds raw = DS_EMPTY_INITIALIZER;
     switch (type) {
-    case OVSDB_TYPE_STRING:
-        if (strlen(a->string) > 4096) {
+    case OVSDB_TYPE_STRING: {
+        const char *text = json_string(a->s);
+        if (strlen(text) > 4096) {
             return NULL;
         }
         ds_put_char(&raw, 's');
-        ds_put_cstr(&raw, a->string);
+        ds_put_cstr(&raw, text);
         break;
+    }
     case OVSDB_TYPE_INTEGER:
         ds_put_format(&raw, "i%"PRId64, a->integer);
         break;

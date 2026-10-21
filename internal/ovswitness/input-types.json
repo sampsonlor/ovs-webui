@@ -1,0 +1,322 @@
+{
+  "Open_vSwitch": {
+    "bridges": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "datapaths": {
+      "key": "string",
+      "value": "uuid",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "manager_options": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "other_config": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "ssl": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    }
+  },
+  "Bridge": {
+    "auto_attach": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "controller": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "datapath_type": {
+      "key": "string",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "fail_mode": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "flood_vlans": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 4096
+    },
+    "flow_tables": {
+      "key": "integer",
+      "value": "uuid",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "ipfix": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "mcast_snooping_enable": {
+      "key": "boolean",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "mirrors": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "name": {
+      "key": "string",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "netflow": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "other_config": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "ports": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "protocols": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "rstp_enable": {
+      "key": "boolean",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "sflow": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "stp_enable": {
+      "key": "boolean",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    }
+  },
+  "Port": {
+    "bond_downdelay": {
+      "key": "integer",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "bond_fake_iface": {
+      "key": "boolean",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "bond_mode": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "bond_updelay": {
+      "key": "integer",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "cvlans": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 4096
+    },
+    "fake_bridge": {
+      "key": "boolean",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "interfaces": {
+      "key": "uuid",
+      "value": "void",
+      "min": 1,
+      "max": "unlimited"
+    },
+    "lacp": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "mac": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "name": {
+      "key": "string",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "other_config": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "protected": {
+      "key": "boolean",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "qos": {
+      "key": "uuid",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "tag": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "trunks": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 4096
+    },
+    "vlan_mode": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    }
+  },
+  "Interface": {
+    "bfd": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "cfm_mpid": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "ingress_policing_burst": {
+      "key": "integer",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "ingress_policing_kpkts_burst": {
+      "key": "integer",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "ingress_policing_kpkts_rate": {
+      "key": "integer",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "ingress_policing_rate": {
+      "key": "integer",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "lldp": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "mac": {
+      "key": "string",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "mtu_request": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "name": {
+      "key": "string",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    },
+    "ofport_request": {
+      "key": "integer",
+      "value": "void",
+      "min": 0,
+      "max": 1
+    },
+    "options": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "other_config": {
+      "key": "string",
+      "value": "string",
+      "min": 0,
+      "max": "unlimited"
+    },
+    "type": {
+      "key": "string",
+      "value": "void",
+      "min": 1,
+      "max": 1
+    }
+  }
+}

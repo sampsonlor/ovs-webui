@@ -11,6 +11,10 @@ import sys
 here = Path(__file__).resolve().parent
 target = Path(sys.argv[1]).resolve(strict=True)
 pin = json.loads((here / "upstream.json").read_text(encoding="utf-8"))
+if len(sys.argv) > 2:
+    archive = Path(sys.argv[2]).read_bytes()
+    if hashlib.sha256(archive).hexdigest() != pin["archive_sha256"]:
+        raise SystemExit("Upstream archive digest mismatch")
 for name, expected in pin["inputs"].items():
     path = target / name
     if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:

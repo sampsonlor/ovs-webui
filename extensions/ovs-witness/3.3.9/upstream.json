@@ -15,5 +15,6 @@
     "vswitchd/bridge.c": "5a4d09c02cd4622d2d9f18c9e788d7c886f0c36a5a9037d69d5988ffffb21ebb",
     "ofproto/ofproto-provider.h": "ebd9d8858f271e434431d090bf9bec49735b75b4b38585b292a4e32222588fa1",
     "vswitchd/vswitch.ovsschema": "c18c754664bdb880c73d7ba49553fc898c43b1b8fbc80b6c0e53162b3cd36fba"
-  }
+  },
+  "archive_sha256": "64e2d425eb34cafc405b641ca6ecacf2453ee37b9aa50b4b17dfb88aa9e7a52e"
 }
