@@ -58,11 +58,17 @@ func validateCapabilities(values []string) error {
 		return apitypes.Fail(422, "INVALID_CAPABILITIES")
 	}
 	for _, c := range values {
-		if !slices.Contains(allCapabilities(), c) {
+		if !knownCapability(c) {
 			return apitypes.Fail(422, "UNKNOWN_CAPABILITY")
 		}
 	}
 	return nil
+}
+
+// The reserved execution capability can be explicitly assigned to a role, but
+// is not added to builtin templates during this read-only prerequisite.
+func knownCapability(c string) bool {
+	return c == SpanningTreeExecutionCapability || slices.Contains(allCapabilities(), c)
 }
 func subset(values, ceiling []string) bool {
 	for _, c := range values {
@@ -122,7 +128,7 @@ func require(c authn.Claims, capability string, elevated bool, now int64) error 
 	canonical, ok := aliases[capability]
 	if !ok {
 		canonical = capability
-		ok = slices.Contains(allCapabilities(), capability)
+		ok = knownCapability(capability)
 	}
 	if !ok {
 		return apitypes.Fail(403, "CAPABILITY_UNKNOWN")

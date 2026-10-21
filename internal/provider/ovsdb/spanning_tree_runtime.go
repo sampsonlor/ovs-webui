@@ -49,6 +49,10 @@ func spanningTreeDaemon(conn net.Conn, uid uint32) (string, error) {
 // verbs, echo handling or socket discovery are available. Failure returns an
 // empty sample, never a configured/default/previously cached installed value.
 func ReadSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protocol, bridge string) (SpanningTreeRuntimeSample, error) {
+	return readSpanningTreeRuntime(ctx, o, protocol, bridge, nil)
+}
+
+func readSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protocol, bridge string, source func(context.Context, net.Conn) error) (SpanningTreeRuntimeSample, error) {
 	bad := errors.New("SPANNING_TREE_CONTROL_INVALID")
 	if protocol != "stp" && protocol != "rstp" || !spanningtree.RuntimeName(bridge) || !filepath.IsAbs(o.Socket) || len(o.Socket) > 100 || strings.ContainsAny(o.Socket, "\x00\r\n") || o.PeerUID == ^uint32(0) {
 		return SpanningTreeRuntimeSample{}, bad
@@ -70,6 +74,11 @@ func ReadSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protoco
 	if err != nil || o.ExpectedDaemon != "" && daemon != o.ExpectedDaemon {
 		return SpanningTreeRuntimeSample{}, errors.New("SPANNING_TREE_CONTROL_PEER_UNPROVEN")
 	}
+	if source != nil {
+		if err = source(bounded, conn); err != nil {
+			return SpanningTreeRuntimeSample{}, err
+		}
+	}
 	if err = json.NewEncoder(conn).Encode(map[string]any{"method": protocol + "/show", "params": []string{bridge}, "id": 1}); err != nil {
 		return SpanningTreeRuntimeSample{}, errors.New("SPANNING_TREE_CONTROL_UNAVAILABLE")
 	}
@@ -78,6 +87,7 @@ func ReadSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protoco
 	// pathological nesting. The text has an independent, smaller byte budget.
 	r := bufio.NewReader(io.LimitReader(conn, 2*spanningtree.MaxRuntimeBytes+1))
 	data, err := frame(r)
+	receivedAt := time.Now().UTC()
 	if err != nil || len(data) > 2*spanningtree.MaxRuntimeBytes || validateJSON(data) != nil {
 		return SpanningTreeRuntimeSample{}, errors.New("SPANNING_TREE_CONTROL_REPLY_INVALID")
 	}
@@ -99,5 +109,10 @@ func ReadSpanningTreeRuntime(ctx context.Context, o SpanningTreeControl, protoco
 	if bounded.Err() != nil || err != nil || currentDaemon != daemon {
 		return SpanningTreeRuntimeSample{}, errors.New("SPANNING_TREE_CONTROL_PEER_UNPROVEN")
 	}
-	return SpanningTreeRuntimeSample{Daemon: daemon, ObservedAt: time.Now().UTC(), Runtime: runtime}, nil
+	if source != nil {
+		if err = source(bounded, conn); err != nil {
+			return SpanningTreeRuntimeSample{}, err
+		}
+	}
+	return SpanningTreeRuntimeSample{Daemon: daemon, ObservedAt: receivedAt, Runtime: runtime}, nil
 }
