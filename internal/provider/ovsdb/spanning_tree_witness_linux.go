@@ -64,6 +64,10 @@ func witnessHex(s string) bool {
 	return len(s) == 64 && strings.Trim(s, "0123456789abcdef") == ""
 }
 
+func witnessArchitecture(build, host string) bool {
+	return (host == "amd64" || host == "arm64") && build == host
+}
+
 // Hash the opened file, never a pathname cache. Both work and bytes are bounded;
 // an over-budget file or expired whole preflight fails rather than relaxing the
 // two-second deadline. No content trust survives a call.
@@ -131,7 +135,7 @@ func attestWitnessBuild(ctx context.Context, conn net.Conn, uid uint32, pin Span
 	data, err := io.ReadAll(io.LimitReader(f, 4097))
 	actualHash := sha256.Sum256(data)
 	var manifest witnessBuildManifest
-	if err != nil || len(data) > 4096 || hex.EncodeToString(actualHash[:]) != pin.ManifestDigest || ipc.DecodeStrict(data, &manifest) != nil || manifest.Format != "ovs-webui.stp-build.v1" || manifest.Profile != ovswitness.BuildProfileDigest() || manifest.Arch != runtime.GOARCH || manifest.Variant != "enabled" && manifest.Variant != "sanitized" || !witnessHex(manifest.Executable) {
+	if err != nil || len(data) > 4096 || hex.EncodeToString(actualHash[:]) != pin.ManifestDigest || ipc.DecodeStrict(data, &manifest) != nil || manifest.Format != "ovs-webui.stp-build.v1" || manifest.Profile != ovswitness.BuildProfileDigest() || !witnessArchitecture(manifest.Arch, runtime.GOARCH) || manifest.Variant != "enabled" && manifest.Variant != "sanitized" || !witnessHex(manifest.Executable) {
 		return "", witnessUnproven
 	}
 	var after, named unix.Stat_t

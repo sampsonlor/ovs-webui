@@ -242,6 +242,14 @@ func TestSpanningTreeWitnessFenceKeepsAtomicGuardsAndClosedRegistry(t *testing.T
 }
 
 func TestSpanningTreeWitnessAdmissionAndFileBoundsFailClosed(t *testing.T) {
+	for _, host := range []string{"amd64", "arm64", "386", "riscv64", "s390x", ""} {
+		for _, build := range []string{"amd64", "arm64", "386", "riscv64", "s390x", ""} {
+			want := host == build && (host == "amd64" || host == "arm64")
+			if witnessArchitecture(build, host) != want {
+				t.Fatal("unqualified architecture accepted", build, host)
+			}
+		}
+	}
 	for _, authorize := range []func(context.Context) error{nil, func(context.Context) error { return io.EOF }} {
 		out, err := ReadBoundSpanningTreeWitness(context.Background(), SpanningTreeControl{}, Options{}, inventory.Evidence{}, SpanningTreeWitnessBuild{}, "", authorize)
 		if err == nil || !reflect.DeepEqual(out, SpanningTreeWitnessSample{}) {
