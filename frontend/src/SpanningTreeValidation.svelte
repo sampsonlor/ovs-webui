@@ -1,7 +1,7 @@
 <script lang="ts">
   import { treeParameterMessages as messages } from './spanning-tree';
   import type { SpanningTreeParameterValidation } from '../../clients/typescript/public-v1.generated';
-  let { validation, expert, draftAvailable = false }: { validation?: SpanningTreeParameterValidation; expert: boolean; draftAvailable?: boolean } = $props();
+  let { validation, expert, draftAvailable = false, executionAvailable = false }: { validation?: SpanningTreeParameterValidation; expert: boolean; draftAvailable?: boolean; executionAvailable?:boolean } = $props();
   const states: Record<string, string> = {
     valid: 'Basic parameter checks passed.',
     invalid: 'Basic parameters need review.',
@@ -22,7 +22,7 @@
       <ul>{#each validation.checks as check}<li>{messages[check.code] ?? 'This parameter needs review.'} <span class="muted">{check.fields.join(', ')}</span>{#if expert}<code>{check.code}</code>{/if}</li>{/each}</ul>
     {/if}
   {/if}
-  <p>Passing these checks does not prove installed timers, forwarding or convergence. {draftAvailable ? 'Prepare a separate draft below. Execution remains unavailable.' : 'Configuration editing remains unavailable.'}</p>
+  <p>Passing these checks does not prove installed timers, forwarding or convergence. {executionAvailable?'Prepare a separate change below. Execution requires verified native state and Safe Apply.':draftAvailable ? 'Prepare a separate draft below. Execution remains unavailable.' : 'Configuration editing remains unavailable.'}</p>
   {#if expert && validation}<p class="muted">Rule set: {validation.version} · Scope: {validation.scope}</p>{/if}
 </section>
 

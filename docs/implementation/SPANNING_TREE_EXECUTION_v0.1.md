@@ -39,6 +39,15 @@ unchanged: it exposes no write command or lock acquisition method. Deployment
 still needs a concrete host/version, maintenance plan, backup and explicit
 approval; these flags are not installed or activated by this implementation.
 
+The default systemd unit deliberately omits `CAP_SYS_PTRACE`. The strict source
+reader requires real process file/socket evidence and does not accept its older
+configured-argument fallback. A deployment whose proc access is restricted must
+remain unavailable. `packaging/examples/ovs-mgrd-witness.conf.example` documents
+an optional, uninstalled capability profile; it also grants process access
+beyond OVS and needs an explicit deployment security decision. No code enables
+it automatically. Linux's process access checks are described in the
+[kernel capability implementation](https://github.com/torvalds/linux/blob/v6.8/security/commoncap.c).
+
 ## Execution and recovery
 
 Candidate captures the two flags, seven raw basic keys (including unset values),
@@ -101,7 +110,13 @@ credential ceiling, sealed operation, durable member reservations, confirmation
 authority, management-loss compensation and no compensation replay. Existing
 Safe Apply outage/restart/unknown-outcome matrices remain required. The existing
 formal readonly/draft browser cases remain required; new execution UI still needs
-its own browser acceptance evidence before #23 is closed.
+its own browser acceptance evidence before #23 is closed. Additional OVS 3.3.9
+amd64/arm64 UI qualification uses the actual optional build and production
+hardened services, first proving default source denial, then explicitly enabling
+the temporary process-read profile to test responsive review, installed RSTP
+confirmation and real management-path-loss compensation. The normal service
+template is unchanged. Its three cases use the existing browser deadlines and
+zero retry policy.
 
 The wider #43 also includes Multicast, Tunnel, Mirror, QoS/Queue, exporters,
 Isolation and Profile/Drift. This STP implementation does not complete those

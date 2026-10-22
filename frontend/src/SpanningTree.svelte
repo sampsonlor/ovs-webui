@@ -46,7 +46,9 @@
   <div><p class="eyebrow">Switching / Spanning tree</p><h1>STP / RSTP</h1><p>Review configured STP/RSTP settings and the latest reported state.</p></div>
   <button onclick={() => controller.refresh()}>Refresh spanning tree</button>
 </header>
-{#if item?.preparation?.available}
+{#if item?.execution?.available}
+  <p class="notice">Guarded change · Prepare a Candidate → Diff / Validation → Safe Apply → Event / Audit. Native installation and management reachability are checked separately.</p>
+{:else if item?.preparation?.available}
   <p class="notice">Draft review only · Prepare a Candidate → Diff / Validation. STP/RSTP execution remains unavailable.</p>
 {:else}
   <p class="notice">Observe only · Configuration editing is not available. Configuration changes will use Candidate → Diff / Validation → Safe Apply → Event / Audit.</p>
@@ -71,7 +73,7 @@
     <SpanningTreeFields fields={subset(item.spanning_tree.configuration, ['stp_enable','rstp_enable'])} {expert} />
   </section>
   <div class="columns"><section class="panel"><h2>Bridge basic parameters</h2><SpanningTreeFields fields={expert ? item.spanning_tree.configuration : subset(item.spanning_tree.configuration, ['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'])} {expert} /><p class="muted">Unset parameters retain the native default. A configured value is not evidence that it was applied.</p></section><section class="panel"><h2>Bridge runtime observations</h2><SpanningTreeFields fields={expert ? item.spanning_tree.runtime : subset(item.spanning_tree.runtime, ['stp_bridge_id','stp_designated_root','rstp_bridge_id','rstp_root_id'])} {expert} runtime /></section></div>
-  <SpanningTreeValidation draftAvailable={item.preparation?.available} validation={item.spanning_tree.parameter_validation} {expert} />
+  <SpanningTreeValidation draftAvailable={item.preparation?.available} executionAvailable={item.execution?.available} validation={item.spanning_tree.parameter_validation} {expert} />
   <SpanningTreeEditor {model} {item} {desktop} {expert} />
   <section aria-label="Spanning tree Ports"><h2>Port participation and runtime</h2><p>Participation describes Port configuration and native exclusions. An enabled Port participates only when its Bridge protocol is enabled.</p>
     {#each item.ports as port}
@@ -79,7 +81,7 @@
     {:else}<p class="notice">No Port details in this snapshot.</p>{/each}
     {#if item.ports_truncated}<p class="notice warning" role="status">Partial Port detail. The response budget was reached; review the remaining Ports through Bridge inventory.</p>{/if}
   </section>
-  {#if expert}<details><summary>Native identity and configuration availability</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Snapshot</dt><dd class="mono">{item.snapshot_id}</dd><dt>Configuration availability</dt><dd>{item.write_reason}</dd></dl><p>{item.preparation?.available ? 'STP/RSTP execution is unavailable.' : 'Configuration editing is unavailable.'} Standard and Expert have the same permissions and safeguards.</p></details>{/if}
+  {#if expert}<details><summary>Native identity and configuration availability</summary><dl><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>OVS UUID</dt><dd class="mono">{item.ovs_uuid}</dd><dt>Generation</dt><dd class="mono">{item.instance_generation}</dd><dt>Snapshot</dt><dd class="mono">{item.snapshot_id}</dd><dt>Configuration availability</dt><dd>{item.execution?.available?'Separate guarded change authorization':item.write_reason}</dd></dl><p>{item.execution?.available?'Native verification and Safe Apply are required for execution.':item.preparation?.available ? 'STP/RSTP execution is unavailable.' : 'Configuration editing is unavailable.'} Standard and Expert have the same permissions and safeguards.</p></details>{/if}
   <p class="muted">Native behavior reference: <a href="https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.conf.db.5.html" target="_blank" rel="noreferrer">Open vSwitch database manual</a>. Observation does not establish loop prevention across the network.</p>
 {/if}
 

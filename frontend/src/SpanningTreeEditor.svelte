@@ -49,9 +49,9 @@
   }
 </script>
 
-<section class="panel" aria-label="Spanning tree draft preparation">
+<section class="panel" aria-label={executable?'Spanning tree change preparation':'Spanning tree draft preparation'}>
   <h2>{executable?'Prepare a spanning tree change':'Prepare a configuration draft'}</h2>
-  <p>Spanning tree changes can interrupt traffic and management connectivity. {executable?'Review the captured configuration and Validation before Safe Apply. A separate management reachability check and confirmation window protect each change. Protocol switches can interrupt traffic; installation does not prove network convergence.':'This Bridge supports preparing and reviewing a draft. Execution needs separate authorization and a verified native runtime source.'}</p>
+  <p>Spanning tree changes can interrupt traffic and management connectivity. {executable?'Review the captured configuration and Validation before Safe Apply. A separate management reachability check and confirmation window protect each change. Protocol switches can interrupt traffic; installation does not prove network convergence.':'This Bridge supports preparing and reviewing a draft; execution and safe timer recovery need further verification.'}</p>
   {#if !(preparation?.available||executable)}<p class="notice" role="status">{reason(preparation?.reason)}</p>
   {:else if !desktop}<p class="notice" role="status">Review this Bridge here. Use a desktop to prepare a new spanning tree draft.</p>
   {:else}

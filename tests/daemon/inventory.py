@@ -46,6 +46,8 @@ def main():
     parser.add_argument('--frontend-browser', action='store_true')
     parser.add_argument('--policing-only', action='store_true')
     parser.add_argument('--browser-node')
+    parser.add_argument('--witness-bin-dir')
+    parser.add_argument('--frontend-spanning-execution', action='store_true')
     args = parser.parse_args()
     assert os.geteuid() == 0 and Path('/run/systemd/system').is_dir()
     repo = Path(__file__).resolve().parents[2]
@@ -68,6 +70,24 @@ def main():
     ovs = fixture / 'ovs'
     ovs.mkdir(mode=0o700)
     ovs_env = dict(os.environ, OVS_RUNDIR=str(ovs), OVS_LOGDIR=str(ovs), OVS_DBDIR=str(ovs))
+    if args.witness_bin_dir:
+        assert args.schema_version == '3.3.9' and args.frontend_browser and args.frontend_spanning_execution
+        native_build = Path(args.witness_bin_dir).resolve()
+        binary_dir = ovs / 'bin'
+        binary_dir.mkdir(mode=0o700)
+        for binary in ['ovs-vswitchd', 'ovsdb-server', 'ovsdb-tool', 'ovs-vsctl', 'ovsdb-client', 'ovs-appctl']:
+            folder = 'ovsdb' if binary.startswith('ovsdb-') else 'vswitchd' if binary == 'ovs-vswitchd' else 'utilities'
+            shutil.copyfile(native_build / folder / binary, binary_dir / binary)
+            (binary_dir / binary).chmod(0o755)
+        ovs_env['PATH'] = str(binary_dir) + ':' + os.environ['PATH']
+        os.environ['PATH'] = ovs_env['PATH']
+        profile = repo / 'internal/ovswitness/build-profile.json'
+        manifest = {'format':'ovs-webui.stp-build.v1', 'profile_sha256':hashlib.sha256(profile.read_bytes()).hexdigest(),
+                    'architecture':{'x86_64':'amd64','aarch64':'arm64'}[os.uname().machine], 'variant':'enabled',
+                    'executable_sha256':hashlib.sha256((binary_dir / 'ovs-vswitchd').read_bytes()).hexdigest()}
+        (ovs / 'witness-build.json').write_text(json.dumps(manifest)+'\n')
+        (ovs / 'witness-build.json').chmod(0o600)
+    assert not args.frontend_spanning_execution or args.witness_bin_dir
     conf, db_socket = ovs / 'conf.db', ovs / 'db.sock'
 
     def ovs_run(*cmd):
@@ -399,10 +419,16 @@ def main():
             from safe_apply import verify_safe_apply
             exercise = None
             if args.frontend_browser:
-                from frontend import verify_frontend
-                def exercise(network_metrics):
-                    return verify_frontend(repo, fixture, args.browser_node, origin, password, call, get,
-                                           vsctl, units, db_socket, ovs, conf, credentials, network_metrics, eventually)
+                if args.frontend_spanning_execution:
+                    from spanning_tree_frontend import verify_spanning_tree_frontend
+                    def exercise(network_metrics):
+                        return verify_spanning_tree_frontend(repo, fixture, args.browser_node, origin, password, call, get,
+                                                             vsctl, units, ovs, manager_db, credentials, network_metrics, eventually)
+                else:
+                    from frontend import verify_frontend
+                    def exercise(network_metrics):
+                        return verify_frontend(repo, fixture, args.browser_node, origin, password, call, get,
+                                               vsctl, units, db_socket, ovs, conf, credentials, network_metrics, eventually)
             result = verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
                                        eventually, fixture, config, cert, port, exercise=exercise)
             result.update({'platform': os.uname().machine, 'schema_fixture': args.schema_version,
