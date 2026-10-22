@@ -23,6 +23,10 @@ export function treeGateMessage(code: string): string {
       'Execution requires separate Bridge authorization and a qualified native runtime source.',
     SPANNING_TREE_ORIGINAL_PARAMETERS_UNPROVEN:
       'The captured native parameters must be supported before a reversible change is available.',
+    SPANNING_TREE_MULTICAST_COMBINATION_UNVERIFIED:
+      'Spanning tree changes on a Bridge with multicast snooping need separate qualification.',
+    SPANNING_TREE_ISOLATION_COMBINATION_UNVERIFIED:
+      'Spanning tree changes with protected Ports need separate qualification.',
     RSTP_FORWARD_TIMER_ORDER_UNPROVEN:
       'These RSTP timers cannot be installed in the native setter order. Review a smaller change.',
     RSTP_ROLLBACK_TIMER_ORDER_UNPROVEN:

@@ -193,26 +193,32 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 	}
 	var original, buildSchema string
 	check := func() error {
+		treeEvidenceStep(ctx, "witness-authorization")
 		if err := authorize(ctx); err != nil {
 			return err
 		}
+		treeEvidenceStep(ctx, "control-source")
 		daemon, err := spanningTreeDaemon(conn, control.PeerUID)
 		if err != nil || daemon != control.ExpectedDaemon {
 			return witnessUnproven
 		}
+		treeEvidenceStep(ctx, "witness-source")
 		source, err := spanningTreeSource(ctx, conn, control.PeerUID, database, expected, build.Executable)
 		if err != nil {
 			return err
 		}
+		treeEvidenceStep(ctx, "witness-build")
 		attestation, schema, err := attestWitnessBuild(ctx, conn, control.PeerUID, build)
 		if err != nil {
 			return err
 		}
+		treeEvidenceStep(ctx, "witness-pair")
 		identity := source + "/" + attestation
 		if original != "" && original != identity {
 			return witnessUnproven
 		}
 		original, buildSchema = identity, schema
+		treeEvidenceStep(ctx, "witness-authorization")
 		if err := authorize(ctx); err != nil {
 			return err
 		}
@@ -225,6 +231,7 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 	if err = check(); err != nil {
 		return empty, err
 	}
+	treeEvidenceStep(ctx, "witness-reply")
 	sample, receivedAt, err := requestSpanningTreeWitness(conn, bridgeUUID)
 	if err != nil {
 		return empty, err

@@ -103,7 +103,9 @@ revocation, root revocation, field conflict, denied dispatch admission, RSTP
 creation timer order and changed-after-image compensation refusal. The same
 tests run on all three OVS versions and both architectures. They also check
 lost-reply target uncertainty, preservation of unrelated map values, raw leading
-zeros and unset values.
+zeros and unset values. Execution fixtures include a real kernel system data
+Port in addition to the local internal Port and check all five object bindings.
+Unqualified positive multicast/protected-Port combinations remain blocked.
 
 Manager repository tests separately cover the dedicated capability and old
 credential ceiling, sealed operation, durable member reservations, confirmation

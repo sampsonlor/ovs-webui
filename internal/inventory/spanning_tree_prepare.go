@@ -176,6 +176,9 @@ func spanningTreeGraph(v *view, bridge Row, authority string) (string, string, s
 	if !empty(bridge.Configuration["controller"]) {
 		block("SPANNING_TREE_EXTERNAL_CONTROLLER")
 	}
+	if enabled, _ := bridge.Configuration["mcast_snooping_enable"].(bool); enabled {
+		block("SPANNING_TREE_MULTICAST_COMBINATION_UNVERIFIED")
+	}
 	// Positive references to telemetry or other native domains need separate
 	// compatibility evidence. Missing/unknown reference values do not pass.
 	for _, t := range v.observation.Schema.Tables {
@@ -196,6 +199,9 @@ func spanningTreeGraph(v *view, bridge Row, authority string) (string, string, s
 	for _, id := range ports {
 		port := v.observation.Rows["Port"][id]
 		inspect("Port", port)
+		if enabled, _ := port.Configuration["protected"].(bool); enabled {
+			block("SPANNING_TREE_ISOLATION_COMBINATION_UNVERIFIED")
+		}
 		parentBridge, unique := parent(v, "Bridge", "ports", id)
 		if !unique || parentBridge.UUID != bridge.UUID {
 			block("SPANNING_TREE_SHARED_PORT_UNSUPPORTED")

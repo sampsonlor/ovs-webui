@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,18 @@ import (
 func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv *inventory.Service, b candidate.Binding, control ovsdb.SpanningTreeControl, build ovsdb.SpanningTreeWitnessBuild, authorize func(context.Context) error, vs func(...string) string, draft func() candidate.StoredIntent, grants func(), role func([]string), caps, oldCaps []string) {
 	must(t, e.ConfigureSpanningTreeExecution(ovsdb.SpanningTreeExecutionOptions{ControlSocket: control.Socket, PeerUID: control.PeerUID, Executable: build.Executable, Manifest: build.Manifest, ManifestDigest: build.ManifestDigest}))
 	writeCtx := execution.WithAdmission(ctx, authorize)
+	ip := func(args ...string) {
+		t.Helper()
+		out, err := exec.CommandContext(ctx, "ip", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("isolated data Port fixture: %v %s", err, out)
+		}
+	}
+	ip("link", "add", "wexec-data", "type", "veth", "peer", "name", "wexec-peer")
+	defer func() { vs("--if-exists", "del-port", "br-witness", "wexec-data"); ip("link", "del", "wexec-data") }()
+	ip("link", "set", "wexec-data", "up")
+	ip("link", "set", "wexec-peer", "up")
+	vs("add-port", "br-witness", "wexec-data")
 	defer func() {
 		grants()
 		role(caps)
@@ -50,8 +63,8 @@ func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv
 		id := repository.NewID()
 		p, err := e.Prepare(writeCtx, id, candidate.Digest([]any{id, in}), in)
 		must(t, err)
-		if len(p.GraphBindings) < 3 {
-			t.Fatal("graph reservation omitted Bridge/local members", p.GraphBindings)
+		if len(p.GraphBindings) != 5 {
+			t.Fatal("graph reservation omitted local or real system data Port members", p.GraphBindings)
 		}
 		return p
 	}

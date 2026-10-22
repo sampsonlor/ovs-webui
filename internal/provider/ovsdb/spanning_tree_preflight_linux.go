@@ -50,6 +50,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	treeEvidenceStep(ctx, "authorization")
 	if err := authorize(ctx); err != nil {
 		return empty, err
 	}
@@ -66,6 +67,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 			}
 		}
 	}
+	treeEvidenceStep(ctx, "execution-view")
 	view, err := e.inventory.SpanningTreeExecutionView(ctx, draft.Object)
 	if err != nil {
 		return empty, err
@@ -118,6 +120,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	}
 	// Set cancellation/deadline BEFORE get_schema. The held connection is used
 	// for both atomic fences; no reconnect, retry or polling can refresh evidence.
+	treeEvidenceStep(ctx, "database-source")
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", e.provider.options.Socket)
 	if err != nil {
 		return empty, treeFenceChanged
@@ -134,6 +137,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 		return empty, treeFenceChanged
 	}
 	r := bufio.NewReader(conn)
+	treeEvidenceStep(ctx, "schema")
 	raw, err := call(conn, r, 1, "get_schema", []any{"Open_vSwitch"})
 	if err != nil {
 		return empty, treeFenceChanged
@@ -142,6 +146,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	if err != nil || d.public.Digest != draft.Schema || !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
 		return empty, treeFenceChanged
 	}
+	treeEvidenceStep(ctx, "fence-before")
 	ops, err := treeFenceOperations(view, d)
 	if err != nil {
 		return empty, err
@@ -159,6 +164,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 		if err = check(ctx); err != nil {
 			return empty, err
 		}
+		treeEvidenceStep(ctx, "fence-before")
 		first, err := readTreeWitnessFence(conn, r, ops, view, draft.Object)
 		if err != nil {
 			return empty, err
@@ -174,7 +180,15 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 		if err = check(ctx); err != nil {
 			return empty, err
 		}
+		treeEvidenceStep(ctx, "fence-after")
 		last, err := readTreeWitnessFence(conn, r, ops, view, draft.Object)
+		if err != nil {
+			if draft.Operation == candidate.SpanningTreeConfigure {
+				return empty, err
+			}
+			return empty, witnessUnproven
+		}
+		treeEvidenceStep(ctx, "witness-pair")
 		installed := ovswitness.Exclusive(a.Witness)
 		if draft.Operation == candidate.SpanningTreeConfigure {
 			installed = ovswitness.Installed(a.Witness)
@@ -208,6 +222,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 			return empty, treeFenceChanged
 		}
 	}
+	treeEvidenceStep(ctx, "final-scope")
 	currentPeer, _, err := peer(conn, e.provider.options.PeerUID)
 	if err != nil || currentPeer != peerID || !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
 		return empty, treeFenceChanged
@@ -218,6 +233,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	if time.Since(sample.ObservedAt) < 0 || time.Since(sample.ObservedAt) > 2*time.Second {
 		return empty, errors.New("SPANNING_TREE_RUNTIME_SAMPLE_STALE")
 	}
+	treeEvidenceStep(ctx, "transition")
 	assessment := spanningtree.AssessTransition(before, after, sample.Runtime)
 	if draft.Operation == candidate.SpanningTreeConfigure {
 		assessment = spanningtree.AssessExecutionTransition(before, after, sample.Runtime)

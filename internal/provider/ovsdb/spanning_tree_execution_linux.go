@@ -25,19 +25,30 @@ func treeWitnessAuthority(p SpanningTreePreflight) string {
 	return candidate.Digest([]any{s.buildIdentity, s.buildSchema, s.Daemon, w.Daemon, w.Database.RootUUID, w.Database.Authority, w.Bridge.UUID, w.Bridge.Instance, w.Bridge.Epoch})
 }
 
-func (e *Executor) treeExecutionEvidence(ctx context.Context, i candidate.StoredIntent, check func(context.Context) error) (SpanningTreePreflight, error) {
+func (e *Executor) treeExecutionEvidence(ctx context.Context, i candidate.StoredIntent, check func(context.Context) error) (out SpanningTreePreflight, err error) {
 	if e.spanningTree == nil {
 		return SpanningTreePreflight{}, errors.New("SPANNING_TREE_WITNESS_NOT_CONFIGURED")
 	}
 	o := e.spanningTree
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	trace := &treeEvidenceTrace{stage: "authorization"}
+	ctx = context.WithValue(ctx, treeEvidenceTraceKey{}, trace)
+	defer func() {
+		if err != nil {
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			}
+			err = &treeEvidenceFailure{stage: trace.stage, cause: err}
+		}
+	}()
 	if check == nil {
 		return SpanningTreePreflight{}, witnessUnproven
 	}
 	if err := check(ctx); err != nil {
 		return SpanningTreePreflight{}, err
 	}
+	treeEvidenceStep(ctx, "control-source")
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", o.ControlSocket)
 	if err != nil {
 		return SpanningTreePreflight{}, witnessUnproven

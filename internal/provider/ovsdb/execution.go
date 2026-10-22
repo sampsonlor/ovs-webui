@@ -485,7 +485,7 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		return notSent
 	}
 	if err = e.treeDispatchCheck(ctx, p, n); err != nil {
-		notSent.Reason = "spanning-tree-dispatch-unproven"
+		notSent.Reason = treeDispatchReason(err)
 		return notSent
 	}
 	if beforeSend == nil || beforeSend() != nil {

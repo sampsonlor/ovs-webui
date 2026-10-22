@@ -4,6 +4,7 @@ package ovsdb
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -12,6 +13,19 @@ import (
 )
 
 func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *testing.T) {
+	t.Run("closed-reasons-do-not-expose-native-details", func(t *testing.T) {
+		private := "/private/example bearer=not-a-real-credential"
+		for _, stage := range []string{"witness-pair", private} {
+			err := &treeEvidenceFailure{stage: stage, cause: errors.New(private)}
+			reason := treeDispatchReason(err)
+			if strings.Contains(reason, "/private") || strings.Contains(reason, "credential") || strings.Contains(reason, "bearer") {
+				t.Fatal("private details in public reason", reason)
+			}
+			if stage == private && reason != "spanning-tree-dispatch-unproven" {
+				t.Fatal("unreviewed reason admitted", reason)
+			}
+		}
+	})
 	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			d, v := treeFenceFixture(t, version)
