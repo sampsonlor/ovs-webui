@@ -10,8 +10,8 @@
   const mtu = $derived(fields.some((field) => field.operation === 'interface.mtu.set' || field.operation === 'interface.mtu.clear'));
   const policing = $derived(fields.some((field) => field.operation === 'interface.policing.set'));
   function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
-    if (field.operation === 'bridge.spanning-tree.prepare' && value === null) return field.conflict && side === 'current' ? 'Native default / unavailable · review conflict' : 'Native default (unset)';
-    if (field.operation === 'bridge.spanning-tree.prepare') return typeof value === 'boolean' ? (value ? 'Enabled' : 'Disabled') : String(value);
+    if ((field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') && value === null) return field.conflict && side === 'current' ? 'Native default / unavailable · review conflict' : 'Native default (unset)';
+    if ((field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure')) return typeof value === 'boolean' ? (value ? 'Enabled' : 'Disabled') : String(value);
     if (field.operation === 'interface.policing.set' && value !== null && value !== undefined) {
       if (field.field.endsWith('_burst') && value === 0) return '0 · OVS-selected default preserved';
       if (field.field === 'ingress_policing_rate') return `${value} kbit/s${value === 0 ? ' · disabled' : ''}`;
@@ -116,7 +116,7 @@
           ><th scope="row"
             >{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field === 'mtu_default_dependency' ? 'Automatic MTU dependency (bytes)' : field.operation === 'bridge.spanning-tree.prepare' ? treeFields[field.field] ?? field.field : field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field === 'mtu_default_dependency' ? 'Automatic MTU dependency (bytes)' : (field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') ? treeFields[field.field] ?? field.field : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field, 'before')}</td><td
             >{display(field.current, field, 'current')}</td

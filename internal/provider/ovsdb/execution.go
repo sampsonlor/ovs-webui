@@ -20,11 +20,14 @@ import (
 )
 
 type Executor struct {
-	provider  *Provider
-	inventory *inventory.Service
+	provider     *Provider
+	inventory    *inventory.Service
+	spanningTree *SpanningTreeExecutionOptions
 }
 
-func (p *Provider) Executor(s *inventory.Service) *Executor { return &Executor{p, s} }
+func (p *Provider) Executor(s *inventory.Service) *Executor {
+	return &Executor{provider: p, inventory: s}
+}
 
 type nativePlan struct {
 	TopologyDevices      map[string]string         `json:"topology_devices,omitempty"`
@@ -37,6 +40,8 @@ type nativePlan struct {
 	Evidence             inventory.Evidence        `json:"evidence"`
 	CreationMarker       string                    `json:"creation_marker,omitempty"`
 	InsertUUIDs          map[int]string            `json:"insert_uuids,omitempty"`
+	TreeAuthority        string                    `json:"tree_authority,omitempty"`
+	TreePolicy           string                    `json:"tree_policy,omitempty"`
 }
 
 func uuidValue(id string) []any     { return []any{"uuid", id} }
@@ -260,9 +265,16 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if err != nil {
 		return execution.Plan{}, err
 	}
-	return e.preparePolicingKernel(ctx, compiled, view, nil)
+	compiled, err = e.preparePolicingKernel(ctx, compiled, view, nil)
+	if err != nil {
+		return execution.Plan{}, err
+	}
+	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if _, ok := spanningTreeIntent(envelope.Candidate); ok {
+		return compileSpanningTreeExecution(id, marker, envelope, view, d)
+	}
 	if _, ok := topologyIntent(envelope.Candidate); ok {
 		return compileTopologyExecution(id, marker, envelope, view, d, nil)
 	}
@@ -472,6 +484,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = "policing-dispatch-unproven"
 		return notSent
 	}
+	if err = e.treeDispatchCheck(ctx, p, n); err != nil {
+		notSent.Reason = "spanning-tree-dispatch-unproven"
+		return notSent
+	}
 	if beforeSend == nil || beforeSend() != nil {
 		notSent.Reason = "dispatch-admission-denied"
 		return notSent
@@ -589,10 +605,16 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	all, anyMarker := true, false
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
+		if intent.Operation == candidate.SpanningTreeConfigure {
+			row, exists = view.Observation.Rows["Bridge"][intent.Object.OVSUUID]
+		}
 		if candidate.IsMTUOperation(intent.Operation) || intent.Operation == candidate.InterfacePolicingSet {
 			row, exists = view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 		}
 		markerKey := execution.MarkerKey
+		if intent.Operation == candidate.SpanningTreeConfigure {
+			markerKey = candidate.SpanningTreeMarker
+		}
 		if candidate.IsGraphOperation(intent.Operation) {
 			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
 			markerKey = bridgeMarkerKey
@@ -648,6 +670,9 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
+		if intent.Operation == candidate.SpanningTreeConfigure {
+			continue
+		}
 		if intent.Operation == candidate.InterfacePolicingSet {
 			iface := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 			values, ok := iface.Values["error"].([]any)

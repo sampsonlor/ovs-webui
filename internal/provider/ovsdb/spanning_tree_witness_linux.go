@@ -30,8 +30,8 @@ import (
 var witnessUnproven = errors.New("SPANNING_TREE_WITNESS_UNPROVEN")
 
 // SpanningTreeWitnessBuild is an independent root-supplied build pin. There is
-// no flag, public request, environment lookup or default manifest discovery.
-// This experimental prerequisite does not qualify installation or execution.
+// no public request, environment lookup or default manifest discovery. Pinning
+// alone cannot qualify execution or replace installed-state observations.
 type SpanningTreeWitnessBuild struct {
 	Executable     string
 	Manifest       string

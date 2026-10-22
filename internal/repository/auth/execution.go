@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
@@ -143,7 +144,8 @@ func (r *Repository) ExecutionAuthorizer(credential string) executions.Authorize
 		out.ChangeSet = v.ChangeSetID
 		out.Validation = in.ValidationID
 		out.Scope = plan.Digest([]any{in.ValidationID, envelope, v.Risk, v.ProviderPolicy})
-		out.FieldCapabilities = strings.Join(plan.Capabilities(envelope.Candidate), ",")
+		fields := slices.DeleteFunc(plan.Capabilities(envelope.Candidate), func(cap string) bool { return cap == "configuration.read" })
+		out.FieldCapabilities = strings.Join(fields, ",")
 		out.Expires = v.Expires
 		return out, nil
 	}

@@ -8,12 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"slices"
 	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
-	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ovswitness"
 	"github.com/sampsonlor/ovs-webui/internal/spanningtree"
@@ -28,9 +26,6 @@ type SpanningTreePreflight struct {
 	Transition spanningtree.Transition
 	Witness    *SpanningTreeWitnessPair
 }
-
-var treeFenceTables = []string{"Open_vSwitch", "Bridge", "Port", "Interface"}
-var treeFenceChanged = errors.New("SPANNING_TREE_NATIVE_FENCE_CHANGED")
 
 // ReadSpanningTreePreflight composes the independent execution grant, current
 // inventory scope, reviewed original, native database fences and qualified
@@ -58,7 +53,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	if err := authorize(ctx); err != nil {
 		return empty, err
 	}
-	if draft.Operation != candidate.SpanningTreePrepare || draft.SpanningTree == nil || e == nil || e.inventory == nil || e.provider == nil {
+	if !candidate.IsSpanningTreeOperation(draft.Operation) || draft.SpanningTree == nil || e == nil || e.inventory == nil || e.provider == nil || draft.Operation == candidate.SpanningTreeConfigure && build == nil {
 		return empty, errors.New("INVALID_SPANNING_TREE_PREFLIGHT")
 	}
 	for _, image := range []candidate.SpanningTreeConfig{draft.SpanningTree.Before, draft.SpanningTree.After} {
@@ -93,7 +88,10 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	if !*before.STP && *before.RSTP {
 		protocol = "rstp"
 	}
-	if *before.STP == *before.RSTP || spanningtree.Validate(before.STP, before.RSTP, before.Other).State != "valid" || spanningtree.Validate(after.STP, after.RSTP, after.Other).State != "valid" {
+	if draft.Operation == candidate.SpanningTreeConfigure {
+		protocol = spanningtree.Protocol(before)
+	}
+	if *before.STP && *before.RSTP || draft.Operation == candidate.SpanningTreePrepare && *before.STP == *before.RSTP || spanningtree.Validate(before.STP, before.RSTP, before.Other).State != "valid" || spanningtree.Validate(after.STP, after.RSTP, after.Other).State != "valid" {
 		return empty, errors.New("SPANNING_TREE_PREFLIGHT_CONFIGURATION_UNPROVEN")
 	}
 	bridge, ok := view.Observation.Rows["Bridge"][draft.Object.OVSUUID].Configuration["name"].(string)
@@ -177,17 +175,24 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 			return empty, err
 		}
 		last, err := readTreeWitnessFence(conn, r, ops, view, draft.Object)
-		if err != nil || candidate.Digest(first) != candidate.Digest(last) || !sameWitnessPair(a, b) || a.buildSchema != candidate.Digest(d.native) || ovswitness.Exclusive(a.Witness) != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
+		installed := ovswitness.Exclusive(a.Witness)
+		if draft.Operation == candidate.SpanningTreeConfigure {
+			installed = ovswitness.Installed(a.Witness)
+		}
+		if err != nil || candidate.Digest(first) != candidate.Digest(last) || !sameWitnessPair(a, b) || a.buildSchema != candidate.Digest(d.native) || installed != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
 			return empty, witnessUnproven
 		}
 		local := a.Witness.Native.STP.Local
 		if protocol == "rstp" {
 			local = a.Witness.Native.RSTP.Local
 		}
-		if local == nil {
+		if local == nil && protocol != "disabled" {
 			return empty, witnessUnproven
 		}
-		sample = SpanningTreeRuntimeSample{Daemon: a.Daemon, ObservedAt: a.ObservedAt, Runtime: spanningtree.Runtime{Protocol: protocol, BridgeName: bridge, Local: spanningtree.LocalParameters{Priority: int(local.Priority), SystemID: local.SystemID, Timers: spanningtree.Timers{HelloTime: int(local.HelloMS / 1000), MaxAge: int(local.MaxAgeMS / 1000), ForwardDelay: int(local.ForwardMS / 1000)}}}}
+		sample = SpanningTreeRuntimeSample{Daemon: a.Daemon, ObservedAt: a.ObservedAt, Runtime: spanningtree.Runtime{Protocol: protocol, BridgeName: bridge}}
+		if local != nil {
+			sample.Runtime.Local = spanningtree.LocalParameters{Priority: int(local.Priority), SystemID: local.SystemID, Timers: spanningtree.Timers{HelloTime: int(local.HelloMS / 1000), MaxAge: int(local.MaxAgeMS / 1000), ForwardDelay: int(local.ForwardMS / 1000)}}
+		}
 		pair = &SpanningTreeWitnessPair{First: a, Second: b}
 	} else {
 		versions, err = readTreeFence(conn, r, ops)
@@ -214,6 +219,9 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 		return empty, errors.New("SPANNING_TREE_RUNTIME_SAMPLE_STALE")
 	}
 	assessment := spanningtree.AssessTransition(before, after, sample.Runtime)
+	if draft.Operation == candidate.SpanningTreeConfigure {
+		assessment = spanningtree.AssessExecutionTransition(before, after, sample.Runtime)
+	}
 	if assessment.State != "compatible" {
 		return empty, errors.New("SPANNING_TREE_RUNTIME_TRANSITION_UNPROVEN")
 	}
@@ -230,75 +238,6 @@ func treeScopeFingerprint(v inventory.ExecutionView, b candidate.Binding) string
 // Matching _uuid sets prevents unnoticed additions/removals at either fence.
 // Four same-transaction version selects detect changes-and-restores of rows
 // present at the first fence. Runtime/status changes also reject conservatively.
-func treeFenceOperations(v inventory.ExecutionView, d discovered) ([]map[string]any, error) {
-	ops := []map[string]any{}
-	count := 0
-	for _, table := range treeFenceTables {
-		rows, exists := v.Observation.Rows[table]
-		if !exists {
-			return nil, treeFenceChanged
-		}
-		columns := []string{"_uuid"}
-		for name, c := range d.native.Tables[table].Columns {
-			if graphConfigurationColumn(table, name, c) {
-				columns = append(columns, name)
-			}
-		}
-		if table == "Open_vSwitch" {
-			if len(rows) != 1 {
-				return nil, treeFenceChanged
-			}
-			columns = append(columns, "next_cfg", "cur_cfg")
-		}
-		slices.Sort(columns)
-		ids := []string{}
-		for id := range rows {
-			ids = append(ids, id)
-		}
-		slices.Sort(ids)
-		expected := []any{}
-		for _, id := range ids {
-			row := rows[id]
-			count++
-			if count > inventory.MaxRows || row.UUID != id || !apitypes.UUID(id) {
-				return nil, treeFenceChanged
-			}
-			values := map[string]any{"_uuid": uuidValue(id)}
-			for _, name := range columns {
-				if name == "_uuid" {
-					continue
-				}
-				value, known := row.Configuration[name]
-				if table == "Open_vSwitch" && (name == "next_cfg" || name == "cur_cfg") {
-					next, e1 := number(row.Values["next_cfg"])
-					current, e2 := number(row.Values["cur_cfg"])
-					if id != v.Observation.Evidence.Root || e1 != nil || e2 != nil || next != current {
-						return nil, errors.New("SPANNING_TREE_CONFIGURATION_NOT_SETTLED")
-					}
-					value, known = row.Values[name]
-				}
-				if !known {
-					return nil, treeFenceChanged
-				}
-				native, err := nativeValue(value, d.native.Tables[table].Columns[name])
-				if err != nil {
-					return nil, treeFenceChanged
-				}
-				values[name] = native
-			}
-			expected = append(expected, values)
-		}
-		ops = append(ops, waitRows(table, []any{}, columns, expected))
-	}
-	for _, table := range treeFenceTables {
-		ops = append(ops, map[string]any{"op": "select", "table": table, "where": []any{}, "columns": []string{"_uuid", "_version"}})
-	}
-	data, err := json.Marshal(ops)
-	if err != nil || len(data) > execution.MaxPlanBytes {
-		return nil, errors.New("SPANNING_TREE_FENCE_BUDGET")
-	}
-	return ops, nil
-}
 
 func readTreeFence(conn net.Conn, r *bufio.Reader, ops []map[string]any) (map[string]string, error) {
 	params := []any{"Open_vSwitch"}

@@ -18,8 +18,9 @@
   const c = $derived(model.workspace.value?.candidate ?? null);
   const topology = $derived(c?.intents.some(i => ['port.create','bond.create','port.delete','bridge.delete-tree','port.move','bond.members.set','interface.ofport.set','interface.ofport.clear','interface.patch.connect','interface.patch.disconnect'].includes(i.operation)) ?? false);
   const spanningTree = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.prepare')??false);
+  const spanningTreeExecution = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.configure')??false);
   const v = $derived(model.validation.value);
-  const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare') ?? false);
+  const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare' || f.operation === 'bridge.spanning-tree.configure') ?? false);
   const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !treeValidation || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);
   const blocked = $derived(model.busy || !!model.pending || !model.sessionReady);
@@ -103,6 +104,7 @@
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
     {#if spanningTree}<section class="notice warning" aria-label="Spanning tree draft boundary"><strong>Spanning tree draft only</strong><p>Review the captured configuration and native parameter checks. Execution and safe timer recovery are not available yet. Apply remains blocked.</p>{#if c.state === 'reconciliation-required'}<p>Configuration, attachment or authority changed. Discard this intent, review the Bridge and prepare a new draft. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
+    {#if spanningTreeExecution}<section class="notice warning" aria-label="Spanning tree change boundary"><strong>Spanning tree Safe Apply</strong><p>Changing or switching protocols can interrupt traffic and management connectivity. Execution checks the current native runtime, preserves the original for guarded compensation and requires management reachability and confirmation. Installed protocol state does not prove network convergence.</p>{#if c.state === 'reconciliation-required'}<p>Discard this intent and review the current Bridge. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if topology && c.state === 'reconciliation-required'}<section class="panel"><h2>Review and restage this topology change</h2><p>Native configuration, references or ownership changed. Discard this intent, review the current topology and stage a new request. Rebase cannot replace captured identities or the original recovery image.</p></section>{/if}
     {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set')}
       <section class="panel">
@@ -129,7 +131,7 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
-            topology || spanningTree || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
+            topology || spanningTree || spanningTreeExecution || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||

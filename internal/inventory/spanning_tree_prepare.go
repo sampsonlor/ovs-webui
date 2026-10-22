@@ -79,6 +79,15 @@ func projectSpanningTree(v *view, allow map[string]bool, out *candidate.Snapshot
 			}
 		}
 		p.GraphGate, p.Dependency, p.Authority = spanningTreeGraph(v, row, p.Authority)
+		p.Bindings = []candidate.Binding{p.Binding}
+		for _, portID := range refs(row.Values["ports"]) {
+			for _, object := range append([]string{Key("Port", portID)}, interfaceBindingKeys(v, portID)...) {
+				b := v.decision.Bindings[object]
+				if b.State == "active" {
+					p.Bindings = append(p.Bindings, candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: b.Table, Generation: out.Generation})
+				}
+			}
+		}
 		out.SpanningTrees[b.ManagementID] = p
 	}
 	out.Policy = Digest([]any{out.Policy, allow})
@@ -127,6 +136,9 @@ func spanningTreeGraph(v *view, bridge Row, authority string) (string, string, s
 			authority = "externally-controlled"
 		}
 		if table == "Bridge" {
+			if labels, ok := cfg["external_ids"].(map[string]any); ok {
+				delete(labels, candidate.SpanningTreeMarker)
+			}
 			delete(cfg, "stp_enable")
 			delete(cfg, "rstp_enable")
 			other, ok := cfg["other_config"].(map[string]any)
@@ -235,6 +247,14 @@ func spanningTreeGraph(v *view, bridge Row, authority string) (string, string, s
 		block("SPANNING_TREE_LOCAL_PORT_UNVERIFIED")
 	}
 	return code, Digest(images), authority
+}
+
+func interfaceBindingKeys(v *view, port string) []string {
+	keys := []string{}
+	for _, id := range refs(v.observation.Rows["Port"][port].Values["interfaces"]) {
+		keys = append(keys, Key("Interface", id))
+	}
+	return keys
 }
 
 func spanningTreePreparation(v *view, b Binding, fresh string, config bool, allow map[string]bool, claims authn.Claims) map[string]any {

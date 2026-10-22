@@ -17,16 +17,17 @@ const AppliedFor = 15 * time.Second
 const MarkerKey = "ovs-webui.vlan-commit"
 
 type Plan struct {
-	ID         string             `json:"id"`
-	Envelope   candidate.Envelope `json:"envelope"`
-	Schema     string             `json:"schema"`
-	Generation string             `json:"generation"`
-	Root       string             `json:"root"`
-	Marker     string             `json:"marker"`
-	NextFloor  string             `json:"next_floor"`
-	CurFloor   string             `json:"cur_floor"`
-	Prepared   time.Time          `json:"prepared_at"`
-	Native     json.RawMessage    `json:"native"`
+	ID            string              `json:"id"`
+	Envelope      candidate.Envelope  `json:"envelope"`
+	Schema        string              `json:"schema"`
+	Generation    string              `json:"generation"`
+	Root          string              `json:"root"`
+	Marker        string              `json:"marker"`
+	NextFloor     string              `json:"next_floor"`
+	CurFloor      string              `json:"cur_floor"`
+	Prepared      time.Time           `json:"prepared_at"`
+	Native        json.RawMessage     `json:"native"`
+	GraphBindings []candidate.Binding `json:"graph_bindings,omitempty"`
 }
 
 type Outcome struct {

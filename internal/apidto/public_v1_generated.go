@@ -788,6 +788,7 @@ type SpanningTree struct {
 	AllowedOperations  []string                      `json:"allowed_operations"`
 	WriteReason        string                        `json:"write_reason"`
 	Preparation        SpanningTreePreparation       `json:"preparation,omitempty"`
+	Execution          SpanningTreeExecution         `json:"execution,omitempty"`
 	ExtraFields        map[string]json.RawMessage    `json:"-"`
 }
 
@@ -1277,6 +1278,12 @@ type SpanningTreePrepareIntent struct {
 	Object       ObjectBinding              `json:"object"`
 	SpanningTree SpanningTreePrepareRequest `json:"spanning_tree"`
 }
+type SpanningTreeConfigureIntent struct {
+	IntentId     Id                         `json:"intent_id"`
+	Operation    string                     `json:"operation"`
+	Object       ObjectBinding              `json:"object"`
+	SpanningTree SpanningTreePrepareRequest `json:"spanning_tree"`
+}
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`
 	Parameters map[string]json.RawMessage `json:"parameters"`
@@ -1296,6 +1303,12 @@ type SpanningTreePreparation struct {
 	Authority  string `json:"authority"`
 	Mode       string `json:"mode"`
 	Capability string `json:"capability"`
+}
+type SpanningTreeExecution struct {
+	Available  bool   `json:"available"`
+	Reason     string `json:"reason"`
+	Capability string `json:"capability"`
+	Mode       string `json:"mode"`
 }
 type InternalPortCreation struct {
 	Name            string                     `json:"name"`

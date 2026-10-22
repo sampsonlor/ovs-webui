@@ -92,7 +92,7 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
-		if i.Operation == SpanningTreePrepare {
+		if IsSpanningTreeOperation(i.Operation) {
 			if problem := spanningTreeProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
 				v.State = "reconciliation-required"
@@ -240,7 +240,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
-			if in.SpanningTree != nil && in.Operation != SpanningTreePrepare {
+			if in.SpanningTree != nil && !IsSpanningTreeOperation(in.Operation) {
 				return e, apitypes.Fail(422, "INVALID_SPANNING_TREE_DRAFT")
 			}
 			if in.Topology != nil && !IsTopologyOperation(in.Operation) {
@@ -250,7 +250,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 				return e, apitypes.Fail(422, "INVALID_INTERFACE_POLICING")
 			}
 		}
-		if hasSpanningTree(c.Intents) || cmd.Intents[0].Operation == SpanningTreePrepare {
+		if hasSpanningTree(c.Intents) || IsSpanningTreeOperation(cmd.Intents[0].Operation) {
 			var err error
 			c, err = stageSpanningTree(c, cmd, s)
 			if err != nil {
@@ -486,7 +486,7 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
-		if i.Operation == SpanningTreePrepare {
+		if IsSpanningTreeOperation(i.Operation) {
 			checks = append(checks, spanningTreeChecks(i, s)...)
 			continue
 		}

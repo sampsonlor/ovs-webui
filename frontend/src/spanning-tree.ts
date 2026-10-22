@@ -17,6 +17,18 @@ export const treeParameterMessages: Record<string, string> = {
 
 export function treeGateMessage(code: string): string {
   const messages: Record<string, string> = {
+    SPANNING_TREE_NATIVE_WITNESS_REQUIRED:
+      'Execution requires a fresh verified native runtime before dispatch and after installation.',
+    SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED:
+      'Execution requires separate Bridge authorization and a qualified native runtime source.',
+    SPANNING_TREE_ORIGINAL_PARAMETERS_UNPROVEN:
+      'The captured native parameters must be supported before a reversible change is available.',
+    RSTP_FORWARD_TIMER_ORDER_UNPROVEN:
+      'These RSTP timers cannot be installed in the native setter order. Review a smaller change.',
+    RSTP_ROLLBACK_TIMER_ORDER_UNPROVEN:
+      'The original RSTP timers cannot be restored in one native pass. Review a smaller change.',
+    RSTP_INITIAL_TIMER_ORDER_UNPROVEN:
+      'This protocol change would need additional timer steps to install or restore the requested RSTP values.',
     SPANNING_TREE_EXECUTION_PENDING:
       'Draft review is available. Execution and safe timer recovery have not been verified, so Apply remains blocked.',
     SPANNING_TREE_BRIDGE_AUTHORITY_REQUIRED:

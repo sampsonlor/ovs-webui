@@ -28,7 +28,7 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	proof := p.Envelope
 	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
 	for i := range proof.Candidate.Intents {
-		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) || proof.Candidate.Intents[i].Operation == candidate.InterfacePolicingSet {
+		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) || proof.Candidate.Intents[i].Operation == candidate.InterfacePolicingSet || proof.Candidate.Intents[i].Operation == candidate.SpanningTreeConfigure {
 			candidate.AfterImage(&proof.Candidate.Intents[i])
 		}
 	}
@@ -49,6 +49,9 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
+		if intent.Operation == candidate.SpanningTreeConfigure {
+			continue
+		}
 		if intent.Operation == candidate.InterfacePolicingSet {
 			row := view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 			g, err := guard(d, "Interface", row, []string{"error", "ifindex"}, []any{uuidCondition(row.UUID)})
@@ -172,6 +175,9 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 			if !inventory.PolicingMatches(sample, i.Policing.After) || sample.ConfigurationDigest != kernelBefore.ConfigurationDigest {
 				return errors.New("POLICING_INSTALLED_RATE_CHANGED")
 			}
+		}
+		if err = e.treeAppliedProof(ctx, p, view, out.Target); err != nil {
+			return err
 		}
 		value, observed := strconv.FormatInt(current, 10), time.Now().UTC()
 		out.Current, out.Observed = &value, &observed

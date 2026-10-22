@@ -46,11 +46,16 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 			continue
 		}
 		table := "Port"
+		markerKey := execution.MarkerKey
+		if intent.Operation == candidate.SpanningTreeConfigure {
+			table = "Bridge"
+			markerKey = candidate.SpanningTreeMarker
+		}
 		if candidate.IsMTUOperation(intent.Operation) || intent.Operation == candidate.InterfacePolicingSet {
 			table = "Interface"
 		}
 		labels, _ := view.Observation.Rows[table][intent.Object.OVSUUID].Values["external_ids"].(map[string]any)
-		if labels[execution.MarkerKey] != original.Marker {
+		if labels[markerKey] != original.Marker {
 			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 		}
 		candidate.Reverse(intent)
@@ -114,5 +119,8 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	if errors.As(err, &problem) && (problem.Code == "POLICING_KERNEL_CONFLICT" || problem.Code == "POLICING_KERNEL_CONFIGURATION_CONFLICT") {
 		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 	}
-	return prepared, err
+	if err != nil {
+		return prepared, err
+	}
+	return e.prepareTreeExecution(ctx, prepared)
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
@@ -398,6 +399,22 @@ func (e *Engine) rollbackMarker(id, marker string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 func (e *Engine) rollback(ctx context.Context, r execution.Record, s safety.Record) error {
+	ctx = execution.WithAdmission(ctx, func(checkCtx context.Context) error {
+		current, state, err := e.readSafety(checkCtx, r.ID)
+		if err != nil {
+			return err
+		}
+		if safety.Terminal(state.State) || candidate.Digest(current.Plan) != candidate.Digest(r.Plan) {
+			return apitypes.Fail(409, "ROLLBACK_CHECKPOINT_CHANGED")
+		}
+		// Compensation is necessary precisely when the management path is
+		// unreachable or the initiating credential was revoked. Neither is an
+		// admission requirement for the frozen, guarded recovery checkpoint.
+		if !e.SafetyAvailable() || e.safety.Clock().BootID == "" {
+			return apitypes.Fail(409, "SAFE_APPLY_CAPABILITY_UNAVAILABLE")
+		}
+		return checkCtx.Err()
+	})
 	p, err := e.provider.(safety.Provider).PrepareRollback(ctx, r.Plan, e.rollbackMarker(r.ID, r.Plan.Marker))
 	if err != nil {
 		state, reason := "recovery-required", "rollback-provider-unavailable"

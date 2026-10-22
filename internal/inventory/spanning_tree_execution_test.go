@@ -26,6 +26,17 @@ func TestSpanningTreeExecutionRootGrantNeverInheritsPreparationOrTopology(t *tes
 	if err != nil || v.Candidate.SpanningTrees[b.ManagementID].Binding != b {
 		t.Fatal(v, err)
 	}
+	bindings := v.Candidate.SpanningTrees[b.ManagementID].Bindings
+	if len(bindings) != 3 {
+		t.Fatal("graph reservation omitted a member", bindings)
+	}
+	seen := map[string]bool{}
+	for _, ref := range bindings {
+		if ref.Generation != b.Generation || ref.ManagementID == "" || seen[ref.Table] {
+			t.Fatal("invalid graph binding", bindings)
+		}
+		seen[ref.Table] = true
+	}
 	ordinary, err := s.ExecutionView(ctx, nil)
 	if err != nil || ordinary.Candidate.Policy == v.Candidate.Policy {
 		t.Fatal("execution policy missing from private fingerprint", err)

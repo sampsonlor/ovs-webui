@@ -11,9 +11,11 @@
   let expanded=$state(false);
   const names:Record<string,string>={'stp-priority':'STP priority','stp-hello-time':'STP hello time (seconds)','stp-max-age':'STP max age (seconds)','stp-forward-delay':'STP forward delay (seconds)','rstp-priority':'RSTP priority','rstp-max-age':'RSTP max age (seconds)','rstp-forward-delay':'RSTP forward delay (seconds)'};
   const preparation=$derived(item.preparation);
+  const executable=$derived(item.execution?.available === true);
+  const operation=$derived(executable?'bridge.spanning-tree.configure':'bridge.spanning-tree.prepare');
   const c=$derived(model.workspace.value?.candidate);
-  const workspaceConflict=$derived(!!c?.intents.length && (c.intents.length!==1 || c.intents[0].operation!=='bridge.spanning-tree.prepare' || c.intents[0].object.management_id!==item.management_id));
-  const unavailable=$derived(!desktop || !preparation?.available || !c || workspaceConflict || c.consumed_by!==null || model.busy || !!model.pending || !model.sessionReady);
+  const workspaceConflict=$derived(!!c?.intents.length && (c.intents.length!==1 || c.intents[0].operation!==operation || c.intents[0].object.management_id!==item.management_id));
+  const unavailable=$derived(!desktop || !(preparation?.available||executable) || !c || workspaceConflict || c.consumed_by!==null || model.busy || !!model.pending || !model.sessionReady);
   $effect(()=>{
     const id=item.management_id+'/'+item.instance_generation;
     if(scope!==id){
@@ -43,17 +45,17 @@
       if(value!==''&&!/^[0-9]{1,128}$/.test(value)){error='Enter decimal digits, or leave a parameter blank to use the native default.';return;}
       parameters[k]=value===''?null:value;
     }
-    await controller.stageSpanningTree(item,{protocol,parameters});
+    await controller.stageSpanningTree(item,{protocol,parameters},executable);
   }
 </script>
 
 <section class="panel" aria-label="Spanning tree draft preparation">
-  <h2>Prepare a configuration draft</h2>
-  <p>Spanning tree changes can interrupt traffic and management connectivity. This release supports preparing and reviewing a draft; execution and safe timer recovery need further verification.</p>
-  {#if !preparation?.available}<p class="notice" role="status">{reason(preparation?.reason)}</p>
+  <h2>{executable?'Prepare a spanning tree change':'Prepare a configuration draft'}</h2>
+  <p>Spanning tree changes can interrupt traffic and management connectivity. {executable?'Review the captured configuration and Validation before Safe Apply. A separate management reachability check and confirmation window protect each change. Protocol switches can interrupt traffic; installation does not prove network convergence.':'This Bridge supports preparing and reviewing a draft. Execution needs separate authorization and a verified native runtime source.'}</p>
+  {#if !(preparation?.available||executable)}<p class="notice" role="status">{reason(preparation?.reason)}</p>
   {:else if !desktop}<p class="notice" role="status">Review this Bridge here. Use a desktop to prepare a new spanning tree draft.</p>
   {:else}
-    <details bind:open={expanded}><summary>Prepare spanning tree draft</summary>
+    <details bind:open={expanded}><summary>{executable?'Prepare spanning tree change':'Prepare spanning tree draft'}</summary>
       {#if workspaceConflict}<p class="notice warning">Review or remove the existing Candidate intent before preparing a draft for this Bridge.</p>{/if}
       <form onsubmit={save}>
         <fieldset disabled={unavailable}>
@@ -66,7 +68,7 @@
           {#if protocol==='rstp'}<p>RSTP hello time is fixed by the native protocol and has no editable Bridge parameter. Priority must be a multiple of 4096.</p>{/if}
           {#if protocol==='stp'}<p class="notice warning">Explicit STP hello time values of 2–10 seconds need independent runtime verification. Configured values alone do not prove installed timers.</p>{/if}
           {#if protocol==='disabled'}<p>Disabling preserves all captured basic parameter values. This draft does not disable the live Bridge.</p>{/if}
-          <button type="submit" class="primary" disabled={!protocol}>Stage spanning tree draft</button>
+          <button type="submit" class="primary" disabled={!protocol}>{executable?'Stage spanning tree change':'Stage spanning tree draft'}</button>
         </fieldset>
         {#if error}<p class="notice warning" role="alert">{error}</p>{/if}
       </form>

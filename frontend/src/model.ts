@@ -596,12 +596,13 @@ export class Controller {
       protocol: 'disabled' | 'stp' | 'rstp';
       parameters: Record<string, string | null>;
     },
+    executable = false,
   ) {
     const c = this.state.workspace.value?.candidate;
     if (!c) return;
     const existing = c.intents.find(
       (i) =>
-        i.operation === 'bridge.spanning-tree.prepare' &&
+        i.operation === (executable ? 'bridge.spanning-tree.configure' : 'bridge.spanning-tree.prepare') &&
         i.object.management_id === item.management_id,
     );
     return this.mutate(
@@ -615,7 +616,7 @@ export class Controller {
             intents: [
               {
                 intent_id: existing?.intent_id ?? crypto.randomUUID(),
-                operation: 'bridge.spanning-tree.prepare',
+                operation: executable ? 'bridge.spanning-tree.configure' : 'bridge.spanning-tree.prepare',
                 object: {
                   management_id: item.management_id,
                   ovs_uuid: item.ovs_uuid,

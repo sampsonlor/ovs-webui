@@ -168,6 +168,19 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 	if err != nil {
 		return out, err
 	}
+	ctx = execution.WithAdmission(ctx, func(checkCtx context.Context) error {
+		if err := lease.Check(checkCtx, in); err != nil {
+			return err
+		}
+		fresh, err := e.authorization(checkCtx, in, a, false)
+		if err != nil {
+			return err
+		}
+		if fresh != c || !time.Now().Before(fresh.Expires) {
+			return apitypes.Fail(409, "EXECUTION_AUTHORITY_CHANGED")
+		}
+		return nil
+	})
 	id := repository.NewID()
 	h := hmac.New(sha256.New, e.key)
 	_, _ = h.Write([]byte("ovs-webui/field-commit/v1\x00" + id + "\x00" + c.Scope))
@@ -227,6 +240,17 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
+			if intent.Operation == candidate.SpanningTreeConfigure {
+				// The native tree compiler guards the persistent graph. Reserve all
+				// of its managed objects, including member field groups, durably.
+				if len(p.GraphBindings) == 0 {
+					return requests.Mutation{}, apitypes.Fail(409, "SPANNING_TREE_GRAPH_RESERVATION_REQUIRED")
+				}
+				if err = protectGraph(ctx, tx, id, p.Root, p.GraphBindings); err != nil {
+					return requests.Mutation{}, err
+				}
+				continue
+			}
 			if intent.Topology != nil {
 				if err = protectGraph(ctx, tx, id, p.Root, candidate.TopologyBindings(intent)); err != nil {
 					return requests.Mutation{}, err
