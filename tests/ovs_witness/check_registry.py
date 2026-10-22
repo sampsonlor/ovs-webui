@@ -31,4 +31,5 @@ for name, expected in profile["files"].items():
 assert profile["upstream_commit"] == "1a3fefbcd0b0f70ced621b92e286fef3dffaac09"
 assert profile["configure"] == ["--enable-ssl", "--disable-libcapng", "--disable-shared", "--enable-static", "--enable-ovs-webui-witness"]
 assert profile["cflags"] == "-O1 -g -Werror" and profile["libs"] == "-lm"
+assert schema == json.loads(Path("internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema").read_text())
 print("Reviewed build profile and input bytes verified")

@@ -8,7 +8,7 @@
 
 整个调用共用原有两秒截止时间：当前授权/私有 scope → 固定 DB peer/file/schema → 第一个原子只读围栏 → witness A → witness B → 第二个原子只读围栏 → DB peer/file、当前授权及 scope 复核 → 本地参数和正反向 setter 验证。没有失败重试、轮询刷新、缓存或未知值默认补齐。隔离测试为等待自己引起的配置/独立 monitor 更新使用的 barrier 不在预检内部。
 
-两个 DB 事务各保留原有四个 whole-table、零超时 wait 和四个 `_uuid` / `_version` select，再加入固定 52 字段及 Interface 实际 ofport 的四个 select。请求上限继续为 256 KiB，围栏结果另限 1 MiB；完整持久配置/UUID 集合和行版本继续围住不属于输入摘要的字段及其他拓扑引用。独立输入按已审查的 Root→Bridge→Port→Interface 图提取，缺字段、额外字段、缺/重复/外来行及不受支持的引用拒绝。Go 原生 schema codec 的全 schema 规范摘要必须与固定 3.3.9 profile 一致，不能由相同版本字符串或三个 fixture 推导支持。
+两个 DB 事务各保留原有四个 whole-table、零超时 wait 和四个 `_uuid` / `_version` select，再加入固定 52 字段及 Interface 实际 ofport 的四个 select。请求上限继续为 256 KiB，围栏结果另限 1 MiB；完整持久配置/UUID 集合和行版本继续围住不属于输入摘要的字段及其他拓扑引用。独立输入按已审查的 Root→Bridge→Port→Interface 图提取，缺字段、额外字段、缺/重复/外来行及不受支持的引用拒绝。实际 `get_schema` 经 Go 原生 schema codec 编码的全 schema 摘要必须与固定 3.3.9 profile 一致（OVS 会重编码 schema；源码文件编码另行固定），不能由相同版本字符串或三个 fixture 推导支持。
 
 每次 witness 只发送 `ovs-webui/stp-witness-v1`、固定绑定的规范小写 Bridge UUID 和新生成的 32 字节密码学随机 nonce。沿用现有实际 SO_PEERCRED、boot/PID/start、真实 DB 打开文件、schema/root 和双向 established Unix socket-pair 来源检查，并在来源/构建读取前后重验授权。完整 wire 限 64 KiB，接收时间在帧完成时记录，后续鉴证不能刷新时间。
 
@@ -28,6 +28,6 @@ manifest 必须是 root-owned、不可被 group/world 写入的普通文件，�
 
 保留 P1 每架构默认关闭，以及 enabled / ASan+UBSan 各 23 个真实 kernel system Bridge 场景、5 个 C 检查和默认/启用的上游 STP/RSTP 测试；保留旧 Go race、正式 browser、认证/TLS/恢复/预算及原生预检基线。
 
-新增 Go 单元检查固定方法/独立 nonce、wire 错误全零、逐项 epoch/实例变化、完整原子围栏与缺字段、清单/可执行文件预算和取消、profile 字节固定。实际补丁版 3.3.9 的两个架构、enabled / sanitized 各运行 20 个组合场景：STP/RSTP 正向只读、旧凭证上限、8 类构建/清单错误、两次采样间角色撤销/两个 root grant ABA/配置 ABA/清单替换/取消，以及整个预检截止。完整 test2json、构建 provenance、失败历史和官方 artifact digest 与对应提交一起保留；源提交与合并 main 分开验收，不拼接不同运行的通过项。
+新增 Go 单元检查固定方法/独立 nonce、wire 错误全零、逐项 epoch/实例变化、完整原子围栏与缺字段、清单/可执行文件预算和取消、profile 字节固定。实际补丁版 3.3.9 的两个架构、enabled / sanitized 各运行 20 个组合场景：STP/RSTP 正向只读、旧凭证上限、8 类构建/清单错误、两次采样间角色撤销/两个 root grant ABA/配置 ABA/清单替换/取消，以及整个预检截止、原生进程暂停和 RSTP 补偿方向。完整 test2json、构建 provenance、失败历史和官方 artifact digest 与对应提交一起保留；源提交与合并 main 分开验收，不拼接不同运行的通过项。
 
 前端与公开协议没有变化，既有截图回归继续独立校验，不增加人工截图验收结论。

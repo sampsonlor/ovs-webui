@@ -14,7 +14,7 @@ func TestWitnessBuildProfilePinsReviewedInputs(t *testing.T) {
 	var profile struct {
 		Files map[string]string `json:"files"`
 	}
-	if json.Unmarshal(buildProfile, &profile) != nil || len(profile.Files) != 7 || !hex64(BuildProfileDigest()) || !hex64(BuildSchemaDigest()) {
+	if json.Unmarshal(buildProfile, &profile) != nil || len(profile.Files) != 8 || !hex64(BuildProfileDigest()) || !hex64(BuildSchemaDigest()) {
 		t.Fatal("invalid build profile")
 	}
 	for name, want := range profile.Files {

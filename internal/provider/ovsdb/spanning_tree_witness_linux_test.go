@@ -134,7 +134,14 @@ func TestSpanningTreeWitnessPairRejectsEveryIdentityAndEpochChange(t *testing.T)
 
 func TestSpanningTreeWitnessFenceKeepsAtomicGuardsAndClosedRegistry(t *testing.T) {
 	d, v := treeFenceFixture(t, "3.3.9")
-	if candidate.Digest(d.native) != ovswitness.BuildSchemaDigest() {
+	profileBytes, err := os.ReadFile("../../ovswitness/build-profile.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile struct {
+		SourceSchema string `json:"source_schema_digest"`
+	}
+	if json.Unmarshal(profileBytes, &profile) != nil || candidate.Digest(d.native) != profile.SourceSchema {
 		t.Fatal("schema pin mismatch", d.public.Digest)
 	}
 	ops, err := treeFenceOperations(v, d)

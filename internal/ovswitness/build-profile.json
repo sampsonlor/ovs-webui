@@ -9,7 +9,7 @@
     "--enable-static",
     "--enable-ovs-webui-witness"
   ],
-  "database_schema_digest": "2d11713b5a62be071b77b9d88925c778cdbe30df970d75a7dee1d9c6d8873080",
+  "database_schema_digest": "7f80147dcd380ce8534ae2db44f6250bc6d39736cf00aa950385e266f690dd49",
   "files": {
     "extensions/ovs-witness/3.3.9/input-columns.json": "63972314f39dc94a50533b494507765730ad234aa822d3170b65396408b2c094",
     "extensions/ovs-witness/3.3.9/overlay/lib/ovs-webui-witness.h": "30371af9050ea9ced9ad0bedb8fd8cdb5467304278b630b4a83275143323953d",
@@ -17,7 +17,8 @@
     "extensions/ovs-witness/3.3.9/overlay/vswitchd/ovs-webui-witness.inc": "8e80a8f288c36f89de4e26d71d99dd72689d158776ded673129c2b87c06d33c7",
     "extensions/ovs-witness/3.3.9/witness.patch": "7a539422522115326c0f7b0212b7050a82d40b497acc725c2f2ad6ca953963b6",
     "internal/ovswitness/input-types.json": "db5dd71a3525823a4e51a593a575a7b8af279bb4a0f125c4a96339f693ff1a11",
-    "internal/ovswitness/witness.schema.json": "9ee748bf6fcb391ada36b9e02dd0c7cf9f5bc3d359e6a5e63ef611e9650a875f"
+    "internal/ovswitness/witness.schema.json": "9ee748bf6fcb391ada36b9e02dd0c7cf9f5bc3d359e6a5e63ef611e9650a875f",
+    "internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema": "c18c754664bdb880c73d7ba49553fc898c43b1b8fbc80b6c0e53162b3cd36fba"
   },
   "format": "ovs-webui.stp-build-profile.v1",
   "libs": "-lm",
@@ -29,5 +30,7 @@
       "cflags": "-fsanitize=address,undefined -fno-omit-frame-pointer",
       "ldflags": "-fsanitize=address,undefined"
     }
-  }
+  },
+  "source_schema_digest": "2d11713b5a62be071b77b9d88925c778cdbe30df970d75a7dee1d9c6d8873080",
+  "schema_encoding": "libovsdb-native-codec: actual OVS 3.3.9 get_schema; source encoding pinned separately"
 }

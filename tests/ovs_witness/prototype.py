@@ -40,6 +40,8 @@ def members(value):
 def preflight(f, mode, report):
     """Actual private Go provider composition; never installed as a service."""
     profile = Path("internal/ovswitness/build-profile.json").read_bytes()
+    Path("test-results/ovs-witness/server-schema-" + mode + ".json").write_text(
+        f.run("ovsdb-client", "get-schema", "unix:" + str(f.root / "db.sock"), "Open_vSwitch"), encoding="utf-8")
     manifest = {"format": "ovs-webui.stp-build.v1",
                 "profile_sha256": hashlib.sha256(profile).hexdigest(),
                 "architecture": {"x86_64": "amd64", "aarch64": "arm64"}[os.uname().machine],
