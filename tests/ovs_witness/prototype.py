@@ -81,7 +81,8 @@ def preflight(f, mode, report):
     passed = sorted(e["Test"].split("/", 1)[1] for e in events
                     if e.get("Action") == "pass" and e.get("Test", "").startswith("TestNativeWitnessExecution/"))
     assert len(passed) == 16 and not any(e.get("Action") == "fail" for e in events), passed
-    report["execution"] = {"status": "pass", "cases": passed}
+    report["execution"] = {"status": "pass", "cases": passed,
+                           "database_executable_sha256": f.manifest["ovsdb-server"]}
 
 
 class Fixture:

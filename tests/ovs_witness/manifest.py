@@ -24,6 +24,7 @@ result = {
     "build_profile_sha256": sha(profile_path),
     "overlay_sha256": {str(p.relative_to(extension)): sha(p) for p in sorted((extension / "overlay").rglob("*")) if p.is_file()},
     "executables": {mode: sha(out / mode / "vswitchd/ovs-vswitchd") for mode in ["default", "enabled", "sanitized"]},
+    "database_executables": {mode: sha(out / mode / "ovsdb/ovsdb-server") for mode in ["default", "enabled", "sanitized"]},
     "compiler": subprocess.check_output(["gcc", "--version"], text=True).splitlines()[0],
     "configure_common": ["--enable-ssl", "--disable-libcapng", "--disable-shared", "--enable-static"],
     "libs": "-lm",

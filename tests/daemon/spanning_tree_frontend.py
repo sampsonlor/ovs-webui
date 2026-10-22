@@ -45,7 +45,8 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
     flags += f' --spanning-tree-witness-socket={ovs}/switch.ctl --spanning-tree-witness-executable={ovs}/bin/ovs-vswitchd'
     flags += f' --spanning-tree-witness-manifest={manifest} --spanning-tree-witness-manifest-sha256={sha}'
     database = ovs / 'bin/ovsdb-server'
-    flags += f' --spanning-tree-database-executable={database} --spanning-tree-database-sha256={hashlib.sha256(database.read_bytes()).hexdigest()}'
+    database_hash = hashlib.sha256(database.read_bytes()).hexdigest()
+    flags += f' --spanning-tree-database-executable={database} --spanning-tree-database-sha256={database_hash}'
     # Provision only the dedicated fixture role; existing credentials cannot
     # acquire this capability and the builtin templates are unchanged.
     run('systemctl','is-active','--quiet',units['mgrd'])
@@ -68,6 +69,7 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
         assert result.returncode==0,'qualified native spanning-tree frontend acceptance failed'
         return {'verified':True,'network':network,'backend':'qualified OVS 3.3.9 / root mgrd / unprivileged webd / HTTPS / Unix IPC',
                 'default_proc_restriction_retained':True,'optional_fixture_capability':'CAP_SYS_PTRACE',
+                'database_executable_sha256':database_hash,
                 'report':'test-results/ovs-witness/frontend.xml','credentials_persisted_in_artifacts':False}
     finally:
         private.unlink(missing_ok=True)
