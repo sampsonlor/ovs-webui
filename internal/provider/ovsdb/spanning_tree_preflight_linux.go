@@ -21,10 +21,11 @@ import (
 // not an execution.Plan, reservation, seal, Applied proof or public response.
 // The runtime protocol identifies a name, not an immutable installed UUID.
 type SpanningTreePreflight struct {
-	Binding    candidate.Binding
-	Sample     SpanningTreeRuntimeSample
-	Transition spanningtree.Transition
-	Witness    *SpanningTreeWitnessPair
+	Binding          candidate.Binding
+	Sample           SpanningTreeRuntimeSample
+	Transition       spanningtree.Transition
+	Witness          *SpanningTreeWitnessPair
+	journalAuthority string
 }
 
 // ReadSpanningTreePreflight composes the independent execution grant, current
@@ -36,9 +37,10 @@ func (e *Executor) ReadSpanningTreePreflight(ctx context.Context, draft candidat
 	return e.readSpanningTreePreflight(ctx, draft, control, executable, nil, authorize)
 }
 
-// ReadSpanningTreeWitnessPreflight is the opt-in private P2a composition. No
-// production caller or write path is registered. A build pin alone does not
-// replace the independent root policies, current credential or DB fences.
+// ReadSpanningTreeWitnessPreflight composes private build-pinned read evidence.
+// The separately opted-in configure path also requires its pinned standalone
+// journal fence. Prepare retains its original readonly qualification; neither
+// a build pin nor this result replaces authorization and one-shot dispatch.
 func (e *Executor) ReadSpanningTreeWitnessPreflight(ctx context.Context, draft candidate.StoredIntent, control SpanningTreeControl, build SpanningTreeWitnessBuild, authorize func(context.Context) error) (SpanningTreePreflight, error) {
 	return e.readSpanningTreePreflight(ctx, draft, control, build.Executable, &build, authorize)
 }
@@ -154,9 +156,16 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	var versions map[string]string
 	var sample SpanningTreeRuntimeSample
 	var pair *SpanningTreeWitnessPair
+	var journal *treeJournal
 	if build != nil {
 		monitored := draft.Operation == candidate.SpanningTreeConfigure
 		if monitored {
+			treeEvidenceStep(ctx, "journal")
+			journal, err = e.openTreeJournal(ctx, pid, view.Observation.Evidence)
+			if err != nil {
+				return empty, err
+			}
+			defer journal.file.Close()
 			if err = startTreeExecutionMonitor(conn, r, d); err != nil {
 				return empty, err
 			}
@@ -198,12 +207,18 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 		sameFence := candidate.Digest(first) == candidate.Digest(last)
 		if monitored {
 			// Both reads reject every monitor notification on this held socket.
-			// Persistent ABA is detected without depending on statistics versions.
+			// The independently held journal also detects coalesced persistent ABA.
 			sameFence = sameTreeExecutionFence(first, last)
 		}
 		if !sameFence {
 			treeEvidenceStep(ctx, "fence-snapshot-changed")
 			return empty, witnessUnproven
+		}
+		if journal != nil {
+			treeEvidenceStep(ctx, "journal")
+			if err = journal.check(e, pid, view.Observation.Evidence); err != nil {
+				return empty, err
+			}
 		}
 		if !sameWitnessPair(a, b) {
 			treeEvidenceStep(ctx, "witness-pair-changed")
@@ -261,7 +276,15 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	if assessment.State != "compatible" {
 		return empty, errors.New("SPANNING_TREE_RUNTIME_TRANSITION_UNPROVEN")
 	}
-	return SpanningTreePreflight{Binding: draft.Object, Sample: sample, Transition: assessment, Witness: pair}, nil
+	out := SpanningTreePreflight{Binding: draft.Object, Sample: sample, Transition: assessment, Witness: pair}
+	if journal != nil {
+		treeEvidenceStep(ctx, "journal")
+		if err = journal.check(e, pid, view.Observation.Evidence); err != nil {
+			return empty, err
+		}
+		out.journalAuthority = journal.authority
+	}
+	return out, nil
 }
 
 func treeScopeFingerprint(v inventory.ExecutionView, b candidate.Binding) string {

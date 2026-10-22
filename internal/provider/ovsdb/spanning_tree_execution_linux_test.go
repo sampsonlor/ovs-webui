@@ -5,15 +5,72 @@ package ovsdb
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"golang.org/x/sys/unix"
 )
 
 func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *testing.T) {
+	t.Run("journal-rejects-restoration-without-monitor-notification", func(t *testing.T) {
+		for _, fault := range []string{"append", "truncate-restore", "replacement"} {
+			t.Run(fault, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "conf.db")
+				original := []byte("OVSDB JSON journal-test\n")
+				if err := os.WriteFile(path, original, 0600); err != nil {
+					t.Fatal(err)
+				}
+				f, err := os.Open(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer f.Close()
+				j := &treeJournal{file: f}
+				if unix.Fstat(int(f.Fd()), &j.before) != nil || unix.Stat("/proc/self/exe", &j.executable) != nil {
+					t.Fatal("fixture stat")
+				}
+				e := &Executor{provider: &Provider{options: Options{DatabaseFile: path}}, spanningTree: &SpanningTreeExecutionOptions{DatabaseExecutable: "/proc/self/exe"}}
+				evidence := inventory.Evidence{File: witness(path, os.Getpid(), inventory.FileWitness{})}
+				if err := j.check(e, os.Getpid(), evidence); err != nil {
+					t.Fatal("unchanged held journal rejected", err)
+				}
+				switch fault {
+				case "append":
+					out, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, err = out.WriteString("persistent transaction\n")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err = out.Close(); err != nil {
+						t.Fatal(err)
+					}
+				case "truncate-restore":
+					if err := os.WriteFile(path, original, 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "replacement":
+					if err := os.Rename(path, path+".old"); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, original, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if j.check(e, os.Getpid(), evidence) == nil {
+					t.Fatal("journal change escaped independent ABA fence", fault)
+				}
+			})
+		}
+	})
 	t.Run("closed-reasons-do-not-expose-native-details", func(t *testing.T) {
 		private := "/private/example bearer=not-a-real-credential"
 		for _, stage := range []string{"witness-pair", private} {

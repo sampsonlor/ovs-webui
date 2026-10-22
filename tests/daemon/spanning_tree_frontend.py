@@ -44,6 +44,8 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
     flags = f' --local-spanning-tree-bridges={bridge["management_id"]} --local-spanning-tree-execution-bridges={bridge["management_id"]}'
     flags += f' --spanning-tree-witness-socket={ovs}/switch.ctl --spanning-tree-witness-executable={ovs}/bin/ovs-vswitchd'
     flags += f' --spanning-tree-witness-manifest={manifest} --spanning-tree-witness-manifest-sha256={sha}'
+    database = ovs / 'bin/ovsdb-server'
+    flags += f' --spanning-tree-database-executable={database} --spanning-tree-database-sha256={hashlib.sha256(database.read_bytes()).hexdigest()}'
     # Provision only the dedicated fixture role; existing credentials cannot
     # acquire this capability and the builtin templates are unchanged.
     run('systemctl','is-active','--quiet',units['mgrd'])

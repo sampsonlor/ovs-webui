@@ -4,6 +4,8 @@ package preflight
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -20,8 +22,13 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
-func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv *inventory.Service, b candidate.Binding, control ovsdb.SpanningTreeControl, build ovsdb.SpanningTreeWitnessBuild, authorize func(context.Context) error, vs func(...string) string, draft func() candidate.StoredIntent, grants func(), role func([]string), caps, oldCaps []string) {
-	must(t, e.ConfigureSpanningTreeExecution(ovsdb.SpanningTreeExecutionOptions{ControlSocket: control.Socket, PeerUID: control.PeerUID, Executable: build.Executable, Manifest: build.Manifest, ManifestDigest: build.ManifestDigest}))
+func runExecutionCases(t *testing.T, ctx context.Context, source *ovsdb.Provider, e *ovsdb.Executor, inv *inventory.Service, b candidate.Binding, control ovsdb.SpanningTreeControl, build ovsdb.SpanningTreeWitnessBuild, authorize func(context.Context) error, vs func(...string) string, draft func() candidate.StoredIntent, grants func(), role func([]string), caps, oldCaps []string) {
+	databaseExecutable := filepath.Join(os.Getenv("OVS_WITNESS_ROOT"), "bin/ovsdb-server")
+	data, err := os.ReadFile(databaseExecutable)
+	must(t, err)
+	databaseHash := sha256.Sum256(data)
+	options := ovsdb.SpanningTreeExecutionOptions{ControlSocket: control.Socket, PeerUID: control.PeerUID, Executable: build.Executable, Manifest: build.Manifest, ManifestDigest: build.ManifestDigest, DatabaseExecutable: databaseExecutable, DatabaseSHA256: hex.EncodeToString(databaseHash[:])}
+	must(t, e.ConfigureSpanningTreeExecution(options))
 	writeCtx := execution.WithAdmission(ctx, authorize)
 	ip := func(args ...string) {
 		t.Helper()
@@ -150,6 +157,17 @@ func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv
 			}
 		})
 	}
+	t.Run("database_executable_pin_mismatch_rejects_before_write", func(t *testing.T) {
+		setup("stp")
+		before := vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config")
+		bad := source.Executor(inv)
+		pin := options
+		pin.DatabaseSHA256 = strings.Repeat("0", 64)
+		must(t, bad.ConfigureSpanningTreeExecution(pin))
+		if _, err := bad.Prepare(writeCtx, repository.NewID(), strings.Repeat("c", 64), envelope("rstp", nil)); err == nil || vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config") != before {
+			t.Fatal("unqualified database executable admitted or changed native configuration", err)
+		}
+	})
 	t.Run("persistent_ABA_during_witness_rejects_without_dispatch", func(t *testing.T) {
 		setup("stp")
 		in := envelope("rstp", nil).Candidate.Intents[0]

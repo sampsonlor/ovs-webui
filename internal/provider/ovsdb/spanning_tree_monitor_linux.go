@@ -9,10 +9,11 @@ import (
 	"slices"
 )
 
-// A connection-scoped monitor detects persistent changes, including ABA,
-// between the atomic fences. Row _version also advances for routine statistics
-// updates and therefore cannot be used as a configuration revision. Legacy
-// prepare preflights retain their original conservative version checks.
+// A connection-scoped monitor conservatively rejects configuration and ofport
+// notifications between atomic fences. OVSDB may coalesce restoration/ABA;
+// openTreeJournal independently guards persistent ABA. Row _version also
+// advances for statistics. Legacy prepare preflights retain their original
+// conservative version checks.
 func treeExecutionMonitorRequests(d discovered) map[string]any {
 	requests := map[string]any{}
 	for _, table := range treeFenceTables {

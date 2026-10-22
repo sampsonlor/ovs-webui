@@ -20,11 +20,12 @@ import (
 // client-controlled control socket, executable, profile, transaction or command.
 type SpanningTreeExecutionOptions struct {
 	ControlSocket, Executable, Manifest, ManifestDigest string
+	DatabaseExecutable, DatabaseSHA256                  string
 	PeerUID                                             uint32
 }
 
 func (e *Executor) ConfigureSpanningTreeExecution(o SpanningTreeExecutionOptions) error {
-	if e == nil || e.spanningTree != nil || !filepath.IsAbs(o.ControlSocket) || len(o.ControlSocket) > 100 || !filepath.IsAbs(o.Executable) || !filepath.IsAbs(o.Manifest) || strings.ContainsAny(o.ControlSocket+o.Executable+o.Manifest, "\x00\r\n") || len(o.ManifestDigest) != 64 || strings.Trim(o.ManifestDigest, "0123456789abcdef") != "" || o.PeerUID == ^uint32(0) {
+	if e == nil || e.spanningTree != nil || !filepath.IsAbs(o.ControlSocket) || len(o.ControlSocket) > 100 || !filepath.IsAbs(o.Executable) || !filepath.IsAbs(o.Manifest) || !filepath.IsAbs(o.DatabaseExecutable) || strings.ContainsAny(o.ControlSocket+o.Executable+o.Manifest+o.DatabaseExecutable, "\x00\r\n") || len(o.DatabaseSHA256) != 64 || strings.Trim(o.DatabaseSHA256, "0123456789abcdef") != "" || len(o.ManifestDigest) != 64 || strings.Trim(o.ManifestDigest, "0123456789abcdef") != "" || o.PeerUID == ^uint32(0) {
 		return apitypes.Fail(422, "INVALID_SPANNING_TREE_WITNESS_CONFIGURATION")
 	}
 	e.spanningTree = &o

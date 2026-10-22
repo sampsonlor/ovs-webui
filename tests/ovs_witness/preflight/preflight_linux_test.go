@@ -178,7 +178,7 @@ func runNativeWitnessFixture(t *testing.T, execute bool) {
 		}
 	}
 	if execute {
-		runExecutionCases(t, ctx, executor, inv, binding, control, build, authorize, vs, draft, grants, role, caps, login.Claims.Capabilities)
+		runExecutionCases(t, ctx, p, executor, inv, binding, control, build, authorize, vs, draft, grants, role, caps, login.Claims.Capabilities)
 		return
 	}
 	for _, protocol := range []string{"stp", "rstp"} {

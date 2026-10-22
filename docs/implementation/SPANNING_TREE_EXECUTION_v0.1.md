@@ -29,6 +29,8 @@ The manager defaults to execution disabled. An opt-in deployment needs all of:
 - `--spanning-tree-witness-executable` with the exact root-owned executable;
 - `--spanning-tree-witness-manifest` and
   `--spanning-tree-witness-manifest-sha256` with the reviewed build manifest;
+- `--spanning-tree-database-executable` and `--spanning-tree-database-sha256`
+  pinning the reviewed standalone ovsdb-server build;
 - the existing independently configured Safe Apply management endpoint and
   interface.
 
@@ -72,8 +74,22 @@ generic RPC or blind write retry.
 
 A held database connection monitors every persistent column in all four guarded
 tables, settled counters and Interface ofport throughout both witness reads.
-Any insert, delete or modification notification aborts, including a change
-followed by restoration. Atomic whole-table waits still guard both images.
+Any insert, delete or modification notification aborts. Notifications may be
+coalesced, so a monitor is not independent ABA evidence. Atomic whole-table
+waits still guard both images. A held standalone OVSDB journal is additionally
+checked before and after the entire proof, including its device/inode, size,
+mode/owner and mtime/ctime. Its actual DB peer must retain the open file, and
+its actual executable must match the separately configured root-owned pin.
+The flat-file header must identify standalone JSON storage; clustered/in-memory
+storage, unsafe file permissions, append, truncation/restoration and
+replacement/compaction reject this attempt. The journal is never parsed as
+configuration or returned publicly. The qualified server logs and flushes
+persistent changes before completion; ephemeral-only statistics are omitted.
+This independently detects persistent ABA even when monitor updates coalesce.
+See the pinned source
+[file transaction encoding](https://github.com/openvswitch/ovs/blob/1a3fefbcd0b0f70ced621b92e286fef3dffaac09/ovsdb/file.c)
+and [log writes](https://github.com/openvswitch/ovs/blob/1a3fefbcd0b0f70ced621b92e286fef3dffaac09/ovsdb/log.c);
+the same paths are checked in the separately pinned 3.7.1 and 4.0.0 sources.
 Routine statistics changes do not invalidate this execution-only monitor; legacy
 readonly prepare preflights retain their conservative row-version checks.
 Monitor semantics follow [RFC 7047 sections 4.1.5–4.1.6](https://www.rfc-editor.org/rfc/rfc7047.html#section-4.1.5).
@@ -108,11 +124,13 @@ management reachability.
 ## Qualification
 
 The isolated enabled and ASan/UBSan native fixtures retain all 21 readonly
-composition cases and add 15 execution cases: all nine protocol endpoint
+composition cases and add 16 execution cases: all nine protocol endpoint
 combinations except the disabled no-op (eight forward/compensation pairs), role
 revocation, root revocation, field conflict, denied dispatch admission, RSTP
 creation timer order, changed-after-image compensation refusal and persistent
-ABA during witness collection. The same
+ABA during witness collection without a next_cfg increment, and a rejected
+database executable pin. Unit cases independently test journal append,
+truncate/restoration and replacement without relying on monitor delivery. The same
 tests run on all three OVS versions and both architectures. They also check
 lost-reply target uncertainty, preservation of unrelated map values, raw leading
 zeros and unset values. Execution fixtures include a real kernel system data

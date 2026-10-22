@@ -63,6 +63,8 @@ func run() int {
 	treeExecutable := flag.String("spanning-tree-witness-executable", "", "Root-owned executable of the qualified optional OVS witness build")
 	treeManifest := flag.String("spanning-tree-witness-manifest", "", "Root-owned exact optional OVS build manifest")
 	treeManifestDigest := flag.String("spanning-tree-witness-manifest-sha256", "", "Reviewed SHA256 of the exact optional OVS build manifest")
+	treeDatabaseExecutable := flag.String("spanning-tree-database-executable", "", "Root-owned qualified standalone ovsdb-server executable")
+	treeDatabaseSHA256 := flag.String("spanning-tree-database-sha256", "", "Reviewed SHA256 of the qualified standalone ovsdb-server executable")
 	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
 	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
@@ -81,8 +83,8 @@ func run() int {
 		return 0
 	}
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
-	treeConfigured := *localSpanningTreeExecution != "" || *treeControl != "" || *treeExecutable != "" || *treeManifest != "" || *treeManifestDigest != ""
-	if treeConfigured && (*localSpanningTreeExecution == "" || *treeControl == "" || *treeExecutable == "" || *treeManifest == "" || *treeManifestDigest == "") {
+	treeConfigured := *localSpanningTreeExecution != "" || *treeControl != "" || *treeExecutable != "" || *treeManifest != "" || *treeManifestDigest != "" || *treeDatabaseExecutable != "" || *treeDatabaseSHA256 != ""
+	if treeConfigured && (*localSpanningTreeExecution == "" || *treeControl == "" || *treeExecutable == "" || *treeManifest == "" || *treeManifestDigest == "" || *treeDatabaseExecutable == "" || *treeDatabaseSHA256 == "") {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_SPANNING_TREE_WITNESS_CONFIGURATION")
 		return 2
 	}
@@ -412,7 +414,7 @@ func run() int {
 			authentication.WithInventory(inventoryService)
 			executor := provider.Executor(inventoryService)
 			if treeConfigured {
-				if err = executor.ConfigureSpanningTreeExecution(ovsprovider.SpanningTreeExecutionOptions{ControlSocket: *treeControl, Executable: *treeExecutable, Manifest: *treeManifest, ManifestDigest: *treeManifestDigest, PeerUID: uint32(*ovsUID)}); err != nil {
+				if err = executor.ConfigureSpanningTreeExecution(ovsprovider.SpanningTreeExecutionOptions{ControlSocket: *treeControl, Executable: *treeExecutable, Manifest: *treeManifest, ManifestDigest: *treeManifestDigest, DatabaseExecutable: *treeDatabaseExecutable, DatabaseSHA256: *treeDatabaseSHA256, PeerUID: uint32(*ovsUID)}); err != nil {
 					logger.Error("service_start_failed", "code", "INVALID_SPANNING_TREE_WITNESS_CONFIGURATION")
 					return 2
 				}

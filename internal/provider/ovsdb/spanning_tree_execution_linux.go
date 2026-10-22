@@ -22,7 +22,10 @@ func treeWitnessAuthority(p SpanningTreePreflight) string {
 	}
 	s := p.Witness.Second
 	w := s.Witness
-	return candidate.Digest([]any{s.buildIdentity, s.buildSchema, s.Daemon, w.Daemon, w.Database.RootUUID, w.Database.Authority, w.Bridge.UUID, w.Bridge.Instance, w.Bridge.Epoch})
+	if p.journalAuthority == "" {
+		return ""
+	}
+	return candidate.Digest([]any{p.journalAuthority, s.buildIdentity, s.buildSchema, s.Daemon, w.Daemon, w.Database.RootUUID, w.Database.Authority, w.Bridge.UUID, w.Bridge.Instance, w.Bridge.Epoch})
 }
 
 func (e *Executor) treeExecutionEvidence(ctx context.Context, i candidate.StoredIntent, check func(context.Context) error) (out SpanningTreePreflight, err error) {
