@@ -58,6 +58,8 @@ async function apply(page: Page) {
   const transaction = await get(page.context(), path);
   expect(transaction.applied_outcome).toBe('applied');
   expect(transaction.applied_evidence.next_cfg_target).not.toBeNull();
+  await expect(page.getByTestId('safe-state')).toHaveText('awaiting-confirmation');
+  await expect(page.getByRole('button', { name: 'Confirm configuration', exact: true })).toBeEnabled();
   return path;
 }
 
@@ -110,6 +112,7 @@ test('qualified native execution reviews responsive UI and confirms actual insta
   await expect(page.getByRole('button', { name: 'Confirm configuration', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Confirm configuration', exact: true }).click();
   await expect.poll(async () => (await get(page.context(), path)).safe_apply).toBe('confirmed');
+  await expect(page.getByTestId('safe-state')).toHaveText('confirmed');
   const row = await get(page.context(), source);
   expect(row.spanning_tree.protocol).toBe('rstp');
   expect(row.spanning_tree.configuration['rstp-priority'].value).toBe('4096');
@@ -128,10 +131,12 @@ test('actual management path loss restores captured native flags and raw paramet
     execFileSync('ip', ['link', 'set', fixture.probeInterface, 'up']);
   }
   await expect.poll(async () => (await get(page.context(), path)).safe_apply).toBe('rolled-back');
+  await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
   const counter = () => execFileSync(fixture.nativeBinary,
     ['--timeout=5',`--db=unix:${fixture.dbSocket}`,'get','Open_vSwitch','.','next_cfg'],{encoding:'utf8'}).trim();
   const settled = counter();
   await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click();
+  await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
   expect(native()).toBe(original);
   expect(counter()).toBe(settled);
   await screen(page, 'native-tree-management-recovered');
