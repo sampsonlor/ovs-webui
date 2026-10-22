@@ -1,5 +1,5 @@
-// Package ovswitness is an isolated experimental codec. Production daemons do
-// not import it; a decoded observation is never an execution capability.
+// Package ovswitness implements the experimental closed codec used by private
+// read-only preflight. A decoded observation is never an execution capability.
 package ovswitness
 
 import (

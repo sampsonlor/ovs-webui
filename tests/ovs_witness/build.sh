@@ -5,7 +5,10 @@ out="$repo/outputs/ovs-witness-ci"
 mkdir -p "$out" test-results/ovs-witness
 test "$(uname -m)" = "${EXPECTED_MACHINE:?}"
 CGO_ENABLED=0 go build -trimpath -o "$out/decoder" ./tests/ovs_witness/decoder
+go test -race -c -o "$out/preflight.test" ./tests/ovs_witness/preflight
+cp "$(go tool -n test2json)" "$out/test2json"
 go test -json -count=1 ./internal/ovswitness > test-results/ovs-witness/go-codec.json
+go test -race -json -count=1 ./internal/provider/ovsdb > test-results/ovs-witness/go-provider.json
 go test ./internal/ovswitness -run '^$' -fuzz '^FuzzWitnessDecode$' -fuzztime=3s -parallel=2 > test-results/ovs-witness/go-fuzz.log
 commit=1a3fefbcd0b0f70ced621b92e286fef3dffaac09
 curl --fail --location --retry 0 --max-time 90 \
