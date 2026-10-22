@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net"
 	"slices"
+	"strconv"
 
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
@@ -147,9 +148,13 @@ func decodeTreeWitnessFence(data []byte, view inventory.ExecutionView, binding c
 	if err != nil {
 		return empty, err
 	}
-	next, ok := input["Open_vSwitch"][0]["next_cfg"].(json.Number)
-	if !ok || string(next) != view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root].Values["next_cfg"] {
+	// next_cfg is deliberately outside the 52-column runtime input digest. Its
+	// exact value is guarded, with cur_cfg, by the first wait in this transaction.
+	root := view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root]
+	next, ok := root.Values["next_cfg"].(string)
+	n, err := number(next)
+	if !ok || err != nil || strconv.FormatInt(n, 10) != next {
 		return empty, witnessUnproven
 	}
-	return treeWitnessFence{Versions: versions, InputDigest: hash, NextCfg: string(next)}, nil
+	return treeWitnessFence{Versions: versions, InputDigest: hash, NextCfg: next}, nil
 }

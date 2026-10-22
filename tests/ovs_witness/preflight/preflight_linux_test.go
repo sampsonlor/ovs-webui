@@ -15,13 +15,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
+	"github.com/sampsonlor/ovs-webui/internal/ovswitness"
 	"github.com/sampsonlor/ovs-webui/internal/provider/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
@@ -46,6 +50,13 @@ func TestNativeWitnessPreflight(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	schemaData, err := exec.CommandContext(ctx, filepath.Join(root, "bin/ovsdb-client"), "get-schema", "unix:"+filepath.Join(root, "db.sock"), "Open_vSwitch").Output()
+	must(t, err)
+	var actualSchema native.DatabaseSchema
+	must(t, json.Unmarshal(schemaData, &actualSchema))
+	if got := inventory.Digest(actualSchema); got != ovswitness.BuildSchemaDigest() {
+		t.Fatal("actual native schema does not match qualified profile", got, ovswitness.BuildSchemaDigest())
+	}
 	vs := func(args ...string) string {
 		t.Helper()
 		c := exec.CommandContext(ctx, filepath.Join(root, "bin/ovs-vsctl"), append([]string{"--timeout=5", "--db=unix:" + filepath.Join(root, "db.sock")}, args...)...)
@@ -169,6 +180,34 @@ func TestNativeWitnessPreflight(t *testing.T) {
 	}
 	t.Run("old_credential_ceiling_remains_denied", func(t *testing.T) {
 		noEvidence(executor.ReadSpanningTreeWitnessPreflight(ctx, draft(), control, build, a.SpanningTreeExecutionAuthorizer(login.Grant)))
+	})
+	t.Run("rstp_compensation_direction_remains_required", func(t *testing.T) {
+		i := draft()
+		maxAge, delay := "6", "4"
+		i.SpanningTree.After.Parameters["rstp-max-age"] = &maxAge
+		i.SpanningTree.After.Parameters["rstp-forward-delay"] = &delay
+		out, err := executor.ReadSpanningTreeWitnessPreflight(ctx, i, control, build, authorize)
+		noEvidence(out, err)
+		if err.Error() != "SPANNING_TREE_RUNTIME_TRANSITION_UNPROVEN" {
+			t.Fatal("did not reach the two-direction transition check", err)
+		}
+	})
+	t.Run("paused_native_daemon_cannot_supply_cached_evidence", func(t *testing.T) {
+		i := draft()
+		pid, err := strconv.Atoi(os.Getenv("OVS_WITNESS_PID"))
+		must(t, err)
+		if pid <= 1 {
+			t.Fatal("fixture process required")
+		}
+		must(t, syscall.Kill(pid, syscall.SIGSTOP))
+		defer func() { must(t, syscall.Kill(pid, syscall.SIGCONT)) }()
+		readCtx, stop := context.WithTimeout(ctx, 200*time.Millisecond)
+		defer stop()
+		start := time.Now()
+		noEvidence(executor.ReadSpanningTreeWitnessPreflight(readCtx, i, control, build, authorize))
+		if time.Since(start) > 2*time.Second {
+			t.Fatal("whole deadline was extended")
+		}
 	})
 	for _, fault := range []string{"manifest-hash", "profile", "architecture", "variant", "executable-hash", "manifest-mode", "executable-mode", "wrong-path"} {
 		t.Run("build_"+fault+"_withholds_all", func(t *testing.T) {

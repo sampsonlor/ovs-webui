@@ -186,7 +186,7 @@ func TestSpanningTreeWitnessFenceKeepsAtomicGuardsAndClosedRegistry(t *testing.T
 			}
 			if table == "Open_vSwitch" {
 				v.Observation.Evidence.Root = id
-				values["next_cfg"] = string(row["next_cfg"].(json.Number))
+				values["next_cfg"] = "5" // separate whole-table wait, not a digest column
 			}
 			if table == "Bridge" {
 				binding.OVSUUID = id

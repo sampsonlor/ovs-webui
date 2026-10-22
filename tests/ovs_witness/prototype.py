@@ -51,7 +51,7 @@ def preflight(f, mode, report):
     result = subprocess.run([str(out / "test2json"), "-t", "-p", "witness/preflight",
                              "ip", "netns", "exec", f.ns, str(out / "preflight.test"),
                              "-test.v=test2json", "-test.run=^TestNativeWitnessPreflight$"],
-                            env=dict(f.env, OVS_WITNESS_ROOT=str(f.root)),
+                            env=dict(f.env, OVS_WITNESS_ROOT=str(f.root), OVS_WITNESS_PID=str(f.vswitchd.pid)),
                             capture_output=True, timeout=60)
     Path("test-results/ovs-witness/preflight-" + mode + ".json").write_bytes(result.stdout)
     Path("test-results/ovs-witness/preflight-" + mode + ".stderr").write_bytes(result.stderr)
@@ -59,7 +59,7 @@ def preflight(f, mode, report):
     events = [json.loads(line) for line in result.stdout.splitlines()]
     passed = sorted(e["Test"].split("/", 1)[1] for e in events
                     if e.get("Action") == "pass" and e.get("Test", "").startswith("TestNativeWitnessPreflight/"))
-    assert len(passed) == 18 and not any(e.get("Action") == "fail" for e in events), passed
+    assert len(passed) == 20 and not any(e.get("Action") == "fail" for e in events), passed
     report["preflight"] = {"status": "pass", "cases": passed,
                            "profile_sha256": manifest["profile_sha256"], "manifest": manifest}
 
