@@ -37,6 +37,33 @@ def members(value):
     return value[1] if isinstance(value, list) and value[0] == "set" else [value]
 
 
+def preflight(f, mode, report):
+    """Actual private Go provider composition; never installed as a service."""
+    profile = Path("internal/ovswitness/build-profile.json").read_bytes()
+    manifest = {"format": "ovs-webui.stp-build.v1",
+                "profile_sha256": hashlib.sha256(profile).hexdigest(),
+                "architecture": {"x86_64": "amd64", "aarch64": "arm64"}[os.uname().machine],
+                "variant": mode, "executable_sha256": f.manifest["ovs-vswitchd"]}
+    path = f.root / "preflight-build.json"
+    path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+    path.chmod(0o600)
+    out = Path("outputs/ovs-witness-ci").resolve()
+    result = subprocess.run([str(out / "test2json"), "-t", "-p", "witness/preflight",
+                             "ip", "netns", "exec", f.ns, str(out / "preflight.test"),
+                             "-test.v=test2json", "-test.run=^TestNativeWitnessPreflight$"],
+                            env=dict(f.env, OVS_WITNESS_ROOT=str(f.root)),
+                            capture_output=True, timeout=60)
+    Path("test-results/ovs-witness/preflight-" + mode + ".json").write_bytes(result.stdout)
+    Path("test-results/ovs-witness/preflight-" + mode + ".stderr").write_bytes(result.stderr)
+    assert result.returncode == 0, result.stdout.decode()[-12000:] + result.stderr.decode()[-2000:]
+    events = [json.loads(line) for line in result.stdout.splitlines()]
+    passed = sorted(e["Test"].split("/", 1)[1] for e in events
+                    if e.get("Action") == "pass" and e.get("Test", "").startswith("TestNativeWitnessPreflight/"))
+    assert len(passed) == 18 and not any(e.get("Action") == "fail" for e in events), passed
+    report["preflight"] = {"status": "pass", "cases": passed,
+                           "profile_sha256": manifest["profile_sha256"], "manifest": manifest}
+
+
 class Fixture:
     def __init__(self, build, source, decoder=None):
         self.build, self.source = Path(build).resolve(), Path(source).resolve()
@@ -536,6 +563,7 @@ def main():
                 assert value["native"]["stp"]["local"]["hello_time_ms"] == 2000
                 report["sample"] = value
                 report["cases"].append({"name": "kernel_stp_identity_and_local_snapshot", "status": "pass"})
+                preflight(f, args.mode, report)
                 f.vsctl("set", "Bridge", "br-witness", "stp_enable=false", "rstp_enable=true")
                 value = f.witness()
                 assert value["state"] == "known", value

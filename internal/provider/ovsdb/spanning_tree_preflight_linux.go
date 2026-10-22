@@ -15,6 +15,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
+	"github.com/sampsonlor/ovs-webui/internal/ovswitness"
 	"github.com/sampsonlor/ovs-webui/internal/spanningtree"
 )
 
@@ -25,6 +26,7 @@ type SpanningTreePreflight struct {
 	Binding    candidate.Binding
 	Sample     SpanningTreeRuntimeSample
 	Transition spanningtree.Transition
+	Witness    *SpanningTreeWitnessPair
 }
 
 var treeFenceTables = []string{"Open_vSwitch", "Bridge", "Port", "Interface"}
@@ -36,6 +38,17 @@ var treeFenceChanged = errors.New("SPANNING_TREE_NATIVE_FENCE_CHANGED")
 // A future write path still needs an authenticated sealed execution scope,
 // reservations, installed UUID/exclusive-protocol proof and Safe Apply.
 func (e *Executor) ReadSpanningTreePreflight(ctx context.Context, draft candidate.StoredIntent, control SpanningTreeControl, executable string, authorize func(context.Context) error) (SpanningTreePreflight, error) {
+	return e.readSpanningTreePreflight(ctx, draft, control, executable, nil, authorize)
+}
+
+// ReadSpanningTreeWitnessPreflight is the opt-in private P2a composition. No
+// production caller or write path is registered. A build pin alone does not
+// replace the independent root policies, current credential or DB fences.
+func (e *Executor) ReadSpanningTreeWitnessPreflight(ctx context.Context, draft candidate.StoredIntent, control SpanningTreeControl, build SpanningTreeWitnessBuild, authorize func(context.Context) error) (SpanningTreePreflight, error) {
+	return e.readSpanningTreePreflight(ctx, draft, control, build.Executable, &build, authorize)
+}
+
+func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidate.StoredIntent, control SpanningTreeControl, executable string, build *SpanningTreeWitnessBuild, authorize func(context.Context) error) (SpanningTreePreflight, error) {
 	empty := SpanningTreePreflight{}
 	if authorize == nil {
 		return empty, errors.New("SPANNING_TREE_EXECUTION_AUTHORIZATION_REQUIRED")
@@ -135,17 +148,63 @@ func (e *Executor) ReadSpanningTreePreflight(ctx context.Context, draft candidat
 	if err != nil {
 		return empty, err
 	}
-	versions, err := readTreeFence(conn, r, ops)
-	if err != nil {
-		return empty, err
-	}
-	sample, err := ReadBoundSpanningTreeRuntime(ctx, control, e.provider.options, view.Observation.Evidence, executable, protocol, bridge, check)
-	if err != nil {
-		return empty, err
-	}
-	currentVersions, err := readTreeFence(conn, r, ops)
-	if err != nil || candidate.Digest(versions) != candidate.Digest(currentVersions) {
-		return empty, treeFenceChanged
+	var versions map[string]string
+	var sample SpanningTreeRuntimeSample
+	var pair *SpanningTreeWitnessPair
+	if build != nil {
+		if candidate.Digest(d.native) != ovswitness.BuildSchemaDigest() {
+			return empty, witnessUnproven
+		}
+		// Both native input images are read in the same transactions as the
+		// original whole-table guards and row versions, around both witnesses.
+		ops, err = treeWitnessOperations(ops, d)
+		if err != nil {
+			return empty, err
+		}
+		if err = check(ctx); err != nil {
+			return empty, err
+		}
+		first, err := readTreeWitnessFence(conn, r, ops, view, draft.Object)
+		if err != nil {
+			return empty, err
+		}
+		a, err := ReadBoundSpanningTreeWitness(ctx, control, e.provider.options, view.Observation.Evidence, *build, draft.Object.OVSUUID, check)
+		if err != nil {
+			return empty, err
+		}
+		b, err := ReadBoundSpanningTreeWitness(ctx, control, e.provider.options, view.Observation.Evidence, *build, draft.Object.OVSUUID, check)
+		if err != nil {
+			return empty, err
+		}
+		if err = check(ctx); err != nil {
+			return empty, err
+		}
+		last, err := readTreeWitnessFence(conn, r, ops, view, draft.Object)
+		if err != nil || candidate.Digest(first) != candidate.Digest(last) || !sameWitnessPair(a, b) || ovswitness.Exclusive(a.Witness) != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
+			return empty, witnessUnproven
+		}
+		local := a.Witness.Native.STP.Local
+		if protocol == "rstp" {
+			local = a.Witness.Native.RSTP.Local
+		}
+		if local == nil {
+			return empty, witnessUnproven
+		}
+		sample = SpanningTreeRuntimeSample{Daemon: a.Daemon, ObservedAt: a.ObservedAt, Runtime: spanningtree.Runtime{Protocol: protocol, BridgeName: bridge, Local: spanningtree.LocalParameters{Priority: int(local.Priority), SystemID: local.SystemID, Timers: spanningtree.Timers{HelloTime: int(local.HelloMS / 1000), MaxAge: int(local.MaxAgeMS / 1000), ForwardDelay: int(local.ForwardMS / 1000)}}}}
+		pair = &SpanningTreeWitnessPair{First: a, Second: b}
+	} else {
+		versions, err = readTreeFence(conn, r, ops)
+		if err != nil {
+			return empty, err
+		}
+		sample, err = ReadBoundSpanningTreeRuntime(ctx, control, e.provider.options, view.Observation.Evidence, executable, protocol, bridge, check)
+		if err != nil {
+			return empty, err
+		}
+		currentVersions, err := readTreeFence(conn, r, ops)
+		if err != nil || candidate.Digest(versions) != candidate.Digest(currentVersions) {
+			return empty, treeFenceChanged
+		}
 	}
 	currentPeer, _, err := peer(conn, e.provider.options.PeerUID)
 	if err != nil || currentPeer != peerID || !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
@@ -161,7 +220,7 @@ func (e *Executor) ReadSpanningTreePreflight(ctx context.Context, draft candidat
 	if assessment.State != "compatible" {
 		return empty, errors.New("SPANNING_TREE_RUNTIME_TRANSITION_UNPROVEN")
 	}
-	return SpanningTreePreflight{Binding: draft.Object, Sample: sample, Transition: assessment}, nil
+	return SpanningTreePreflight{Binding: draft.Object, Sample: sample, Transition: assessment, Witness: pair}, nil
 }
 
 func treeScopeFingerprint(v inventory.ExecutionView, b candidate.Binding) string {

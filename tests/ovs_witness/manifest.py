@@ -18,6 +18,7 @@ result = {
     "architecture": os.uname().machine,
     "witness_abi": "ovs-webui.stp-witness.v1",
     "patch_sha256": sha(extension / "witness.patch"),
+    "build_profile_sha256": sha(Path("internal/ovswitness/build-profile.json")),
     "overlay_sha256": {str(p.relative_to(extension)): sha(p) for p in sorted((extension / "overlay").rglob("*")) if p.is_file()},
     "executables": {mode: sha(out / mode / "vswitchd/ovs-vswitchd") for mode in ["default", "enabled", "sanitized"]},
     "compiler": subprocess.check_output(["gcc", "--version"], text=True).splitlines()[0],

@@ -15,6 +15,21 @@ import (
 //go:embed input-types.json
 var inputTypes []byte
 
+// InputColumns returns a fresh copy of the closed native input registry. It
+// grants no permission to issue a generic database query.
+func InputColumns() map[string][]string {
+	var registry map[string]map[string]columnType
+	_ = json.Unmarshal(inputTypes, &registry)
+	out := map[string][]string{}
+	for table, columns := range registry {
+		for name := range columns {
+			out[table] = append(out[table], name)
+		}
+		sort.Strings(out[table])
+	}
+	return out
+}
+
 type columnType struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

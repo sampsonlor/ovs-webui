@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Keep C/Go registry metadata tied to the actual pinned upstream schema."""
 import json
+import hashlib
 from pathlib import Path
 import re
 import sys
@@ -24,3 +25,10 @@ for table, suffix in [("Open_vSwitch", "root"), ("Bridge", "bridge"), ("Port", "
         assert types[table][name] == expected, (table, name)
         assert expected["key"] != "real" and expected["value"] != "real"
 print("Pinned C/Go input registry: 52 fields verified")
+profile = json.loads(Path("internal/ovswitness/build-profile.json").read_text())
+for name, expected in profile["files"].items():
+    assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == expected, name
+assert profile["upstream_commit"] == "1a3fefbcd0b0f70ced621b92e286fef3dffaac09"
+assert profile["configure"] == ["--enable-ssl", "--disable-libcapng", "--disable-shared", "--enable-static", "--enable-ovs-webui-witness"]
+assert profile["cflags"] == "-O1 -g -Werror" and profile["libs"] == "-lm"
+print("Reviewed build profile and input bytes verified")
