@@ -483,6 +483,8 @@ jobs:
           install: false
       - name: Build production services and browser for qualified native UI
         if: matrix.version == '3.3.9'
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /tmp/ovs-witness-browsers
         run: |
           pnpm install --frozen-lockfile --no-runtime
           pnpm frontend:build
@@ -496,6 +498,7 @@ jobs:
           WITNESS_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           OVS_WITNESS_VERSION: ${{ matrix.version }}
           WITNESS_BROWSER_NODE: ${{ matrix.version == '3.3.9' && 'node' || '' }}
+          PLAYWRIGHT_BROWSERS_PATH: /tmp/ovs-witness-browsers
         run: bash tests/ovs_witness/build.sh
       - name: Retain exact source build and witness evidence
         if: always()

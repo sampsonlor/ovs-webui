@@ -34,6 +34,9 @@ async function stage(page: Page, protocol: 'stp'|'rstp', priority: string) {
   await page.getByRole('region', { name: 'Spanning tree change preparation', exact: true }).locator('summary').click();
   await page.getByLabel('Spanning tree protocol', { exact: true }).selectOption(protocol);
   await page.getByLabel(protocol.toUpperCase() + ' priority', { exact: true }).fill(priority);
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel(protocol.toUpperCase() + ' max age (seconds)', { exact: true })).toBeFocused();
+  await screen(page, 'native-tree-editor-' + protocol);
   await page.getByRole('button', { name: 'Stage spanning tree change', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Candidate Workspace', exact: true })).toBeVisible();
   const c = await get(page.context(), '/candidate');
