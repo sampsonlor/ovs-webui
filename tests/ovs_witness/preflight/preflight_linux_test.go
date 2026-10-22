@@ -56,6 +56,7 @@ func TestNativeWitnessPreflight(t *testing.T) {
 		return strings.TrimSpace(string(out))
 	}
 	dir := t.TempDir()
+	must(t, os.Chmod(dir, 0700))
 	options := sqlite.Options{Path: filepath.Join(dir, "manager.db"), Kind: repository.Manager, SoftwareVersion: "witness-preflight-test"}
 	must(t, sqlite.Initialize(ctx, options))
 	store, err := sqlite.Open(ctx, options)
