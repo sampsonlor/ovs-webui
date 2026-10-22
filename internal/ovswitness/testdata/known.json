@@ -1,0 +1,59 @@
+{
+  "schema_version": "ovs-webui.stp-witness.v1",
+  "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "state": "known",
+  "daemon_instance_id": "11111111-1111-4111-8111-111111111111",
+  "database": {
+    "root_uuid": "22222222-2222-4222-8222-222222222222",
+    "connected": true,
+    "lock_name": "ovs_vswitchd",
+    "lock_owned": true,
+    "lock_contended": false,
+    "authority_epoch": "9",
+    "idl_seqno": "17"
+  },
+  "bridge": {
+    "ovs_uuid": "33333333-3333-4333-8333-333333333333",
+    "name": "br-test",
+    "runtime_instance_id": "44444444-4444-4444-8444-444444444444",
+    "binding_epoch": "3"
+  },
+  "configuration": {
+    "epoch": "12",
+    "idl_seqno": "17",
+    "root_next_cfg": "5",
+    "completion": "complete",
+    "setters_reported_error": false,
+    "runtime_input_format": "ovs-webui.stp-input.v1",
+    "runtime_input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source": {
+      "stp_enable": true,
+      "rstp_enable": false,
+      "parameters": {
+        "stp-priority": null,
+        "stp-hello-time": null,
+        "stp-max-age": null,
+        "stp-forward-delay": null,
+        "rstp-priority": null,
+        "rstp-max-age": null,
+        "rstp-forward-delay": null
+      }
+    }
+  },
+  "native": {
+    "stp": {
+      "enabled": true,
+      "local": {
+        "priority": 32768,
+        "system_id": "02:00:00:00:00:01",
+        "hello_time_ms": 2000,
+        "max_age_ms": 20000,
+        "forward_delay_ms": 15000
+      }
+    },
+    "rstp": {
+      "enabled": false,
+      "local": null
+    }
+  }
+}

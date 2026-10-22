@@ -439,10 +439,50 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  ovs-witness:
+    name: OVS 3.3.9 read-only witness (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            machine: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            machine: aarch64
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install isolated upstream build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential autoconf automake libtool pkg-config libssl-dev python3-six iproute2 kmod
+      - name: Build default and opted-in actual OVS 3.3.9 and test disposable kernel namespaces
+        env:
+          EXPECTED_MACHINE: ${{ matrix.machine }}
+          WITNESS_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash tests/ovs_witness/build.sh
+      - name: Retain exact source build and witness evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ovs-witness-${{ matrix.arch }}
+          path: test-results/ovs-witness/
+          if-no-files-found: error
+          retention-days: 7
+
   gate:
     name: CI Gate
     if: always()
-    needs: [quality, integration, browser, go-runtime, native-topology]
+    needs: [quality, integration, browser, go-runtime, native-topology, ovs-witness]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -453,9 +493,11 @@ jobs:
           BROWSER_RESULT: ${{ needs.browser.result }}
           GO_RUNTIME_RESULT: ${{ needs.go-runtime.result }}
           NATIVE_TOPOLOGY_RESULT: ${{ needs.native-topology.result }}
+          OVS_WITNESS_RESULT: ${{ needs.ovs-witness.result }}
         run: |
           test "$QUALITY_RESULT" = success
           test "$INTEGRATION_RESULT" = success
           test "$BROWSER_RESULT" = success
           test "$GO_RUNTIME_RESULT" = success
           test "$NATIVE_TOPOLOGY_RESULT" = success
+          test "$OVS_WITNESS_RESULT" = success

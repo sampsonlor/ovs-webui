@@ -1,0 +1,192 @@
+{
+  "Open_vSwitch": [
+    {
+      "_uuid": [
+        "uuid",
+        "22222222-2222-4222-8222-222222222222"
+      ],
+      "bridges": [
+        "uuid",
+        "33333333-3333-4333-8333-333333333333"
+      ],
+      "datapaths": [
+        "map",
+        []
+      ],
+      "manager_options": [
+        "set",
+        []
+      ],
+      "other_config": [
+        "map",
+        []
+      ],
+      "ssl": [
+        "set",
+        []
+      ]
+    }
+  ],
+  "Bridge": [
+    {
+      "_uuid": [
+        "uuid",
+        "33333333-3333-4333-8333-333333333333"
+      ],
+      "auto_attach": [
+        "set",
+        []
+      ],
+      "controller": [
+        "set",
+        []
+      ],
+      "datapath_type": "",
+      "fail_mode": [
+        "set",
+        []
+      ],
+      "flood_vlans": [
+        "set",
+        []
+      ],
+      "flow_tables": [
+        "map",
+        []
+      ],
+      "ipfix": [
+        "set",
+        []
+      ],
+      "mcast_snooping_enable": false,
+      "mirrors": [
+        "set",
+        []
+      ],
+      "name": "br-test",
+      "netflow": [
+        "set",
+        []
+      ],
+      "other_config": [
+        "map",
+        []
+      ],
+      "ports": [
+        "uuid",
+        "55555555-5555-4555-8555-555555555555"
+      ],
+      "protocols": [
+        "set",
+        []
+      ],
+      "rstp_enable": false,
+      "sflow": [
+        "set",
+        []
+      ],
+      "stp_enable": true
+    }
+  ],
+  "Port": [
+    {
+      "_uuid": [
+        "uuid",
+        "55555555-5555-4555-8555-555555555555"
+      ],
+      "bond_downdelay": 0,
+      "bond_fake_iface": false,
+      "bond_mode": [
+        "set",
+        []
+      ],
+      "bond_updelay": 0,
+      "cvlans": [
+        "set",
+        []
+      ],
+      "fake_bridge": false,
+      "interfaces": [
+        "uuid",
+        "66666666-6666-4666-8666-666666666666"
+      ],
+      "lacp": [
+        "set",
+        []
+      ],
+      "mac": [
+        "set",
+        []
+      ],
+      "name": "br-test",
+      "other_config": [
+        "map",
+        []
+      ],
+      "protected": false,
+      "qos": [
+        "set",
+        []
+      ],
+      "tag": [
+        "set",
+        []
+      ],
+      "trunks": [
+        "set",
+        []
+      ],
+      "vlan_mode": [
+        "set",
+        []
+      ]
+    }
+  ],
+  "Interface": [
+    {
+      "_uuid": [
+        "uuid",
+        "66666666-6666-4666-8666-666666666666"
+      ],
+      "bfd": [
+        "map",
+        []
+      ],
+      "cfm_mpid": [
+        "set",
+        []
+      ],
+      "ingress_policing_burst": 0,
+      "ingress_policing_kpkts_burst": 0,
+      "ingress_policing_kpkts_rate": 0,
+      "ingress_policing_rate": 0,
+      "lldp": [
+        "map",
+        []
+      ],
+      "mac": [
+        "set",
+        []
+      ],
+      "mtu_request": [
+        "set",
+        []
+      ],
+      "name": "br-test",
+      "ofport_request": [
+        "set",
+        []
+      ],
+      "options": [
+        "map",
+        []
+      ],
+      "other_config": [
+        "map",
+        []
+      ],
+      "type": "internal",
+      "ofport": 65534
+    }
+  ]
+}

@@ -1,0 +1,512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ovs-webui.invalid/experimental/stp-witness-v1.schema.json",
+  "title": "Experimental private OVS 3.3.9 observation; not an execution API",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "nonce",
+        "state",
+        "daemon_instance_id",
+        "database",
+        "bridge",
+        "configuration",
+        "native"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ovs-webui.stp-witness.v1"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "state": {
+          "const": "known"
+        },
+        "daemon_instance_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "root_uuid",
+            "connected",
+            "lock_name",
+            "lock_owned",
+            "lock_contended",
+            "authority_epoch",
+            "idl_seqno"
+          ],
+          "properties": {
+            "root_uuid": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "connected": {
+              "const": true
+            },
+            "lock_name": {
+              "const": "ovs_vswitchd"
+            },
+            "lock_owned": {
+              "const": true
+            },
+            "lock_contended": {
+              "const": false
+            },
+            "authority_epoch": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "idl_seqno": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            }
+          }
+        },
+        "bridge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ovs_uuid",
+            "name",
+            "runtime_instance_id",
+            "binding_epoch"
+          ],
+          "properties": {
+            "ovs_uuid": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 15,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "runtime_instance_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "binding_epoch": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            }
+          }
+        },
+        "configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "epoch",
+            "idl_seqno",
+            "root_next_cfg",
+            "completion",
+            "setters_reported_error",
+            "runtime_input_format",
+            "runtime_input_digest",
+            "source"
+          ],
+          "properties": {
+            "epoch": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "idl_seqno": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "root_next_cfg": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            },
+            "completion": {
+              "const": "complete"
+            },
+            "setters_reported_error": {
+              "const": false
+            },
+            "runtime_input_format": {
+              "const": "ovs-webui.stp-input.v1"
+            },
+            "runtime_input_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stp_enable",
+                "rstp_enable",
+                "parameters"
+              ],
+              "properties": {
+                "stp_enable": {
+                  "type": "boolean"
+                },
+                "rstp_enable": {
+                  "type": "boolean"
+                },
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "stp-priority",
+                    "stp-hello-time",
+                    "stp-max-age",
+                    "stp-forward-delay",
+                    "rstp-priority",
+                    "rstp-max-age",
+                    "rstp-forward-delay"
+                  ],
+                  "properties": {
+                    "stp-priority": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    },
+                    "stp-hello-time": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    },
+                    "stp-max-age": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    },
+                    "stp-forward-delay": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    },
+                    "rstp-priority": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    },
+                    "rstp-max-age": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    },
+                    "rstp-forward-delay": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 128,
+                      "pattern": "^[^\u0000]*$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "native": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stp",
+            "rstp"
+          ],
+          "properties": {
+            "stp": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "enabled",
+                "local"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "local": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "priority",
+                        "system_id",
+                        "hello_time_ms",
+                        "max_age_ms",
+                        "forward_delay_ms"
+                      ],
+                      "properties": {
+                        "priority": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535
+                        },
+                        "system_id": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+                        },
+                        "hello_time_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4294967295
+                        },
+                        "max_age_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4294967295
+                        },
+                        "forward_delay_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4294967295
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "enabled": {
+                        "const": false
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "local": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "local": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "priority",
+                          "system_id",
+                          "hello_time_ms",
+                          "max_age_ms",
+                          "forward_delay_ms"
+                        ],
+                        "properties": {
+                          "priority": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 65535
+                          },
+                          "system_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+                          },
+                          "hello_time_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4294967295
+                          },
+                          "max_age_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4294967295
+                          },
+                          "forward_delay_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4294967295
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "rstp": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "enabled",
+                "local"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "local": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "priority",
+                        "system_id",
+                        "hello_time_ms",
+                        "max_age_ms",
+                        "forward_delay_ms"
+                      ],
+                      "properties": {
+                        "priority": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 65535
+                        },
+                        "system_id": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+                        },
+                        "hello_time_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4294967295
+                        },
+                        "max_age_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4294967295
+                        },
+                        "forward_delay_ms": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 4294967295
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "enabled": {
+                        "const": false
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "local": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "local": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "priority",
+                          "system_id",
+                          "hello_time_ms",
+                          "max_age_ms",
+                          "forward_delay_ms"
+                        ],
+                        "properties": {
+                          "priority": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 65535
+                          },
+                          "system_id": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+                          },
+                          "hello_time_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4294967295
+                          },
+                          "max_age_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4294967295
+                          },
+                          "forward_delay_ms": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 4294967295
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "nonce",
+        "state",
+        "reason"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ovs-webui.stp-witness.v1"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "state": {
+          "const": "withheld"
+        },
+        "reason": {
+          "enum": [
+            "IDL_NOT_CONNECTED",
+            "IDL_LOCK_UNOWNED",
+            "IDL_LOCK_CONTENDED",
+            "CONFIGURATION_IN_PROGRESS",
+            "BRIDGE_NOT_CONFIGURED",
+            "BINDING_UNPROVEN",
+            "PROVIDER_SNAPSHOT_UNSUPPORTED",
+            "SETTER_REPORTED_ERROR",
+            "WITNESS_BUDGET",
+            "EPOCH_EXHAUSTED"
+          ]
+        }
+      }
+    }
+  ]
+}
