@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
 func TestWitnessBuildProfilePinsReviewedInputs(t *testing.T) {
@@ -21,10 +23,15 @@ func TestWitnessBuildProfilePinsReviewedInputs(t *testing.T) {
 			t.Fatal(err)
 		}
 		var profile struct {
-			Files map[string]string `json:"files"`
+			Files  map[string]string `json:"files"`
+			Source string            `json:"source_schema_digest"`
+		}
+		expectedFiles := 8
+		if version != "3.3.9" {
+			expectedFiles = 9
 		}
 		p, ok := BuildProfile(version)
-		if json.Unmarshal(buildProfile, &profile) != nil || len(profile.Files) != 8 || !ok || !hex64(p.Digest) || !hex64(p.Schema) {
+		if json.Unmarshal(buildProfile, &profile) != nil || len(profile.Files) != expectedFiles || !ok || !hex64(p.Digest) || !hex64(p.Schema) {
 			t.Fatal("invalid build profile")
 		}
 		for name, want := range profile.Files {
@@ -36,6 +43,26 @@ func TestWitnessBuildProfilePinsReviewedInputs(t *testing.T) {
 			h := sha256.Sum256(data)
 			if hex.EncodeToString(h[:]) != want {
 				t.Fatal("reviewed source changed", name)
+			}
+		}
+		if version != "3.3.9" {
+			for path, want := range map[string]string{
+				"testdata/server-schema-8.8.0.json":                            p.Schema,
+				"../provider/ovsdb/testdata/vswitch-" + version + ".ovsschema": profile.Source,
+			} {
+				data, err := os.ReadFile(path)
+				var schema native.DatabaseSchema
+				if err != nil || json.Unmarshal(data, &schema) != nil {
+					t.Fatal("schema fixture", path, err)
+				}
+				encoded, err := json.Marshal(schema)
+				if err != nil {
+					t.Fatal(err)
+				}
+				h := sha256.Sum256(encoded)
+				if hex.EncodeToString(h[:]) != want {
+					t.Fatal("source/server codec pin conflated", version, path)
+				}
 			}
 		}
 	}
