@@ -5,11 +5,16 @@ import hashlib
 from pathlib import Path
 import re
 import sys
+import os
+version = os.environ["OVS_WITNESS_VERSION"]
+assert version in ["3.3.9", "3.7.1", "4.0.0"]
+extension = Path("extensions/ovs-witness") / version
+profile_path = Path("internal/ovswitness") / ("build-profile.json" if version == "3.3.9" else "build-profile-" + version + ".json")
 
 schema = json.loads((Path(sys.argv[1]) / "vswitchd/vswitch.ovsschema").read_text())
-columns = json.loads(Path("extensions/ovs-witness/3.3.9/input-columns.json").read_text())
+columns = json.loads((extension / "input-columns.json").read_text())
 types = json.loads(Path("internal/ovswitness/input-types.json").read_text())
-c = Path("extensions/ovs-witness/3.3.9/overlay/vswitchd/ovs-webui-input-columns.inc").read_text()
+c = (extension / "overlay/vswitchd/ovs-webui-input-columns.inc").read_text()
 base = lambda v: v if isinstance(v, str) else v["type"]
 for table, suffix in [("Open_vSwitch", "root"), ("Bridge", "bridge"), ("Port", "port"), ("Interface", "iface")]:
     names = columns[table]
@@ -25,11 +30,12 @@ for table, suffix in [("Open_vSwitch", "root"), ("Bridge", "bridge"), ("Port", "
         assert types[table][name] == expected, (table, name)
         assert expected["key"] != "real" and expected["value"] != "real"
 print("Pinned C/Go input registry: 52 fields verified")
-profile = json.loads(Path("internal/ovswitness/build-profile.json").read_text())
+profile = json.loads(profile_path.read_text())
 for name, expected in profile["files"].items():
     assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == expected, name
-assert profile["upstream_commit"] == "1a3fefbcd0b0f70ced621b92e286fef3dffaac09"
+pin = json.loads((extension / "upstream.json").read_text())
+assert profile["upstream_commit"] == pin["commit"] and profile["archive_sha256"] == pin["archive_sha256"] and profile["runtime"] == version
 assert profile["configure"] == ["--enable-ssl", "--disable-libcapng", "--disable-shared", "--enable-static", "--enable-ovs-webui-witness"]
 assert profile["cflags"] == "-O1 -g -Werror" and profile["libs"] == "-lm"
-assert schema == json.loads(Path("internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema").read_text())
+assert schema == json.loads(Path("internal/provider/ovsdb/testdata/vswitch-" + version + ".ovsschema").read_text())
 print("Reviewed build profile and input bytes verified")

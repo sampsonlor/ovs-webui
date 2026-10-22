@@ -440,12 +440,14 @@ jobs:
           retention-days: 7
 
   ovs-witness:
-    name: OVS 3.3.9 read-only witness (${{ matrix.arch }})
+    name: OVS ${{ matrix.version }} read-only witness (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
+        version: [3.3.9, 3.7.1, 4.0.0]
+        arch: [amd64, arm64]
         include:
           - arch: amd64
             runner: ubuntu-24.04
@@ -465,16 +467,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y build-essential autoconf automake libtool pkg-config libssl-dev python3-six iproute2 kmod
-      - name: Build default and opted-in actual OVS 3.3.9 and test disposable kernel namespaces
+      - name: Build default and opted-in actual pinned OVS and test disposable kernel namespaces
         env:
           EXPECTED_MACHINE: ${{ matrix.machine }}
           WITNESS_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          OVS_WITNESS_VERSION: ${{ matrix.version }}
         run: bash tests/ovs_witness/build.sh
       - name: Retain exact source build and witness evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ovs-witness-${{ matrix.arch }}
+          name: ovs-witness-${{ matrix.version }}-${{ matrix.arch }}
           path: test-results/ovs-witness/
           if-no-files-found: error
           retention-days: 7

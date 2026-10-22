@@ -43,7 +43,7 @@ func must(t *testing.T, err error) {
 func TestNativeWitnessPreflight(t *testing.T) {
 	root := os.Getenv("OVS_WITNESS_ROOT")
 	if root == "" {
-		t.Skip("requires disposable patched OVS 3.3.9 kernel fixture")
+		t.Skip("requires disposable patched OVS kernel fixture")
 	}
 	if os.Geteuid() != 0 || !filepath.IsAbs(root) {
 		t.Fatal("isolated root fixture required")
@@ -54,8 +54,9 @@ func TestNativeWitnessPreflight(t *testing.T) {
 	must(t, err)
 	var actualSchema native.DatabaseSchema
 	must(t, json.Unmarshal(schemaData, &actualSchema))
-	if got := inventory.Digest(actualSchema); got != ovswitness.BuildSchemaDigest() {
-		t.Fatal("actual native schema does not match qualified profile", got, ovswitness.BuildSchemaDigest())
+	profile, qualified := ovswitness.BuildProfile(os.Getenv("OVS_WITNESS_VERSION"))
+	if got := inventory.Digest(actualSchema); !qualified || got != profile.Schema {
+		t.Fatal("actual native schema does not match qualified profile", got, profile.Schema)
 	}
 	vs := func(args ...string) string {
 		t.Helper()
@@ -209,7 +210,7 @@ func TestNativeWitnessPreflight(t *testing.T) {
 			t.Fatal("whole deadline was extended")
 		}
 	})
-	for _, fault := range []string{"manifest-hash", "profile", "architecture", "variant", "executable-hash", "manifest-mode", "executable-mode", "wrong-path"} {
+	for _, fault := range []string{"manifest-hash", "profile", "cross-schema-profile", "architecture", "variant", "executable-hash", "manifest-mode", "executable-mode", "wrong-path"} {
 		t.Run("build_"+fault+"_withholds_all", func(t *testing.T) {
 			i := draft()
 			pin := build
@@ -229,6 +230,20 @@ func TestNativeWitnessPreflight(t *testing.T) {
 				must(t, os.Chmod(build.Executable, 0777))
 			case "wrong-path":
 				pin.Executable = filepath.Join(root, "bin/ovsdb-server")
+			case "cross-schema-profile":
+				other := "3.3.9"
+				if profile.Version == other {
+					other = "3.7.1"
+				}
+				p, ok := ovswitness.BuildProfile(other)
+				if !ok || p.Schema == profile.Schema {
+					t.Fatal("cross-schema fixture")
+				}
+				m["profile_sha256"] = p.Digest
+				data, _ := json.Marshal(m)
+				must(t, os.WriteFile(manifestPath, data, 0600))
+				h := sha256.Sum256(data)
+				pin.ManifestDigest = hex.EncodeToString(h[:])
 			default:
 				key := map[string]string{"profile": "profile_sha256", "architecture": "architecture", "variant": "variant", "executable-hash": "executable_sha256"}[fault]
 				m[key] = "unqualified"

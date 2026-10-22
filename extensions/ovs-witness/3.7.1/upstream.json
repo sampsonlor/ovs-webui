@@ -1,0 +1,20 @@
+{
+  "commit": "7921d9c6924b8934ea1de9481891ac1172649280",
+  "version": "3.7.1",
+  "inputs": {
+    "configure.ac": "671b11b3d6a7498c79b86c3d170b2ee2de0a7edcc23bc983f69aa4d9f2a841fc",
+    "lib/ovsdb-cs.c": "57d70467995c42434f44fe2a719f92f8a7926b6db9bf92896dda5b3d245f07bf",
+    "lib/ovsdb-cs.h": "bfb34caf83522cc5c7f6e6eac07337017aaf34034fbb208ee25d6a07f6b575b1",
+    "lib/ovsdb-idl.c": "8c9558cf30e0a80757a73d39c1d9b44cbaf0252b9cbe002a9914e11a4bc01fd9",
+    "lib/ovsdb-idl.h": "a1efcb5813887f9094a0e39bd12bfd423a94a2ee9d5bc6a7e45447abf7697a99",
+    "lib/stp.c": "2353f3c8b082338331bdfec5f4eb6678076d8470eb71e9d8fedcce56dc097169",
+    "lib/rstp.c": "0594f994f7f8facf53b7ca344946315ea3975b5e2b2b0196c9c303145a835c2f",
+    "ofproto/ofproto.c": "9f28b5c2af2af416469936e2539bc65892f5aff86c0627cd29ec6b11e54c7cf8",
+    "ofproto/ofproto-dpif.c": "9080c2542e3640a880c748848eed9639a0ccc31fc5437be21117e44cdbd87a2a",
+    "ofproto/ofproto.h": "73f7891330474bee0defc8fdb3e76b5bfd6cb497f744f339bb9300f489924d89",
+    "vswitchd/bridge.c": "780492787e6c9ea905f55b798384e770814be4d4d23bc0d565cf1095e87beec8",
+    "ofproto/ofproto-provider.h": "4cb5771ac1a1cced6bac4f0b89f0683b07521d73ba6caec103ae1c6d4da5d8d2",
+    "vswitchd/vswitch.ovsschema": "35663bcb750d28f743d95039bde4eed1eee3324791a8981cde31c7e1829b2232"
+  },
+  "archive_sha256": "d2496304f92f4a423534424a92579db8656aec1780590de8bf0deb8f7e8a7e9f"
+}
