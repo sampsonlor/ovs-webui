@@ -155,6 +155,12 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	var sample SpanningTreeRuntimeSample
 	var pair *SpanningTreeWitnessPair
 	if build != nil {
+		monitored := draft.Operation == candidate.SpanningTreeConfigure
+		if monitored {
+			if err = startTreeExecutionMonitor(conn, r, d); err != nil {
+				return empty, err
+			}
+		}
 		// Both native input images are read in the same transactions as the
 		// original whole-table guards and row versions, around both witnesses.
 		ops, err = treeWitnessOperations(ops, d)
@@ -189,7 +195,13 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 			return empty, witnessUnproven
 		}
 		treeEvidenceStep(ctx, "witness-pair")
-		if candidate.Digest(first) != candidate.Digest(last) {
+		sameFence := candidate.Digest(first) == candidate.Digest(last)
+		if monitored {
+			// Both reads reject every monitor notification on this held socket.
+			// Persistent ABA is detected without depending on statistics versions.
+			sameFence = sameTreeExecutionFence(first, last)
+		}
+		if !sameFence {
 			treeEvidenceStep(ctx, "fence-snapshot-changed")
 			return empty, witnessUnproven
 		}
@@ -201,7 +213,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 		if draft.Operation == candidate.SpanningTreeConfigure {
 			installed = ovswitness.Installed(a.Witness)
 		}
-		if err != nil || candidate.Digest(first) != candidate.Digest(last) || !sameWitnessPair(a, b) || a.buildSchema != candidate.Digest(d.native) || installed != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
+		if !sameFence || !sameWitnessPair(a, b) || a.buildSchema != candidate.Digest(d.native) || installed != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
 			return empty, witnessUnproven
 		}
 		local := a.Witness.Native.STP.Local

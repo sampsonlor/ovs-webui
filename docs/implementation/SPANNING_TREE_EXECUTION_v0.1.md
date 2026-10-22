@@ -70,6 +70,17 @@ private commit marker and the root configuration counter. Unrelated map entries
 are preserved. There is no raw transaction input, shell command, flow change,
 generic RPC or blind write retry.
 
+A held database connection monitors every persistent column in all four guarded
+tables, settled counters and Interface ofport throughout both witness reads.
+Any insert, delete or modification notification aborts, including a change
+followed by restoration. Atomic whole-table waits still guard both images.
+Routine statistics changes do not invalidate this execution-only monitor; legacy
+readonly prepare preflights retain their conservative row-version checks.
+Monitor semantics follow [RFC 7047 sections 4.1.5–4.1.6](https://www.rfc-editor.org/rfc/rfc7047.html#section-4.1.5).
+The qualified OVS server flushes monitors before sending a transaction reply
+(`ovsdb_jsonrpc_session_send` in each pinned `ovsdb/jsonrpc-server.c`); the
+second atomic read therefore also forms a notification barrier.
+
 Commit and Applied remain separate. Exact target counters, marker/after-image,
 fresh atomic database fences and two matching installed witnesses are required
 for Applied. Native process/build, root/Bridge UUID, runtime instance, binding and
@@ -97,10 +108,11 @@ management reachability.
 ## Qualification
 
 The isolated enabled and ASan/UBSan native fixtures retain all 21 readonly
-composition cases and add 14 execution cases: all nine protocol endpoint
+composition cases and add 15 execution cases: all nine protocol endpoint
 combinations except the disabled no-op (eight forward/compensation pairs), role
 revocation, root revocation, field conflict, denied dispatch admission, RSTP
-creation timer order and changed-after-image compensation refusal. The same
+creation timer order, changed-after-image compensation refusal and persistent
+ABA during witness collection. The same
 tests run on all three OVS versions and both architectures. They also check
 lost-reply target uncertainty, preservation of unrelated map values, raw leading
 zeros and unset values. Execution fixtures include a real kernel system data

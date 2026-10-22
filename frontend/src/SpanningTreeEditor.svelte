@@ -74,5 +74,5 @@
       </form>
     </details>
   {/if}
-  {#if expert&&preparation}<p class="muted">Draft authority: {preparation.authority} · {preparation.mode}{preparation.reason?' · '+preparation.reason:''}</p>{/if}
+  {#if expert&&preparation}<p class="muted">{executable?'Change authority':'Draft authority'}: {preparation.authority} · {executable?'Safe Apply required':preparation.mode}{preparation.reason&&!executable?' · '+preparation.reason:''}</p>{/if}
 </section>

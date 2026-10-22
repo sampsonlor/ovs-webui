@@ -5,6 +5,7 @@ package ovsdb
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,6 +30,20 @@ func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *tes
 	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			d, v := treeFenceFixture(t, version)
+			for table, request := range treeExecutionMonitorRequests(d) {
+				r := request.([]any)[0].(map[string]any)
+				columns := r["columns"].([]string)
+				for name, c := range d.native.Tables[table].Columns {
+					want := graphConfigurationColumn(table, name, c) || table == "Open_vSwitch" && (name == "cur_cfg" || name == "next_cfg") || table == "Interface" && name == "ofport"
+					if slices.Contains(columns, name) != want {
+						t.Fatal("monitor omitted configuration or admitted unrelated status", table, name)
+					}
+				}
+				selects := r["select"].(map[string]bool)
+				if selects["initial"] || !selects["insert"] || !selects["delete"] || !selects["modify"] {
+					t.Fatal("monitor does not detect persistent ABA", selects)
+				}
+			}
 			var id string
 			for key := range v.Observation.Rows["Bridge"] {
 				id = key

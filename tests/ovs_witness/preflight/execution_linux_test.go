@@ -148,6 +148,29 @@ func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv
 			}
 		})
 	}
+	t.Run("persistent_ABA_during_witness_rejects_without_dispatch", func(t *testing.T) {
+		setup("stp")
+		in := envelope("rstp", nil).Candidate.Intents[0]
+		before := vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config")
+		calls := 0
+		_, err := e.ReadSpanningTreeWitnessPreflight(ctx, in, control, build, func(c context.Context) error {
+			if err := authorize(c); err != nil {
+				return err
+			}
+			calls++
+			// The third callback follows installation of the connection-scoped
+			// monitor, before its first atomic fence. The image is restored, but
+			// the monitor must still reject the intervening transactions.
+			if calls == 3 {
+				vs("set", "Bridge", "br-witness", "other_config:execution-opaque=changed")
+				vs("set", "Bridge", "br-witness", "other_config:execution-opaque=preserve")
+			}
+			return nil
+		})
+		if err == nil || calls < 3 || vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config") != before {
+			t.Fatal("persistent ABA accepted or native original changed", err, calls)
+		}
+	})
 	t.Run("native_rstp_creation_timer_order_rejects_before_write", func(t *testing.T) {
 		setup("disabled")
 		age, delay := "40", "21"

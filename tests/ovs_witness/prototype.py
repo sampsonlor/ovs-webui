@@ -80,7 +80,7 @@ def preflight(f, mode, report):
     events = [json.loads(line) for line in execution.stdout.splitlines()]
     passed = sorted(e["Test"].split("/", 1)[1] for e in events
                     if e.get("Action") == "pass" and e.get("Test", "").startswith("TestNativeWitnessExecution/"))
-    assert len(passed) == 14 and not any(e.get("Action") == "fail" for e in events), passed
+    assert len(passed) == 15 and not any(e.get("Action") == "fail" for e in events), passed
     report["execution"] = {"status": "pass", "cases": passed}
 
 
