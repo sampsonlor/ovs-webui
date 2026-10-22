@@ -61,7 +61,27 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
      ovsdb_cs_send_schema_request(cs, &cs->server);
      ovsdb_cs_transition(cs, CS_S_SERVER_SCHEMA_REQUESTED);
      cs->data.monitor_version = 0;
-@@ -1121,6 +1131,9 @@
+@@ -922,6 +932,9 @@
+ void
+ ovsdb_cs_clear_condition(struct ovsdb_cs *cs, const char *table)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     uint32_t hash = hash_string(table, 0);
+     struct ovsdb_cs_db *db = &cs->data;
+
+@@ -938,6 +951,9 @@
+ void
+ ovsdb_cs_reset_last_id(struct ovsdb_cs *cs)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     cs->data.last_id = UUID_ZERO;
+ }
+
+@@ -1121,6 +1137,9 @@
  static void
  ovsdb_cs_db_sync_condition(struct ovsdb_cs_db *db)
  {
@@ -71,7 +91,7 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
      struct ovsdb_cs_db_table *table;
 
      HMAP_FOR_EACH (table, hmap_node, &db->tables) {
-@@ -1174,6 +1187,9 @@
+@@ -1174,6 +1193,9 @@
 
      struct jsonrpc_msg *msg = ovsdb_cs_db_compose_cond_change(&cs->data);
      if (msg) {
@@ -81,7 +101,7 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
          cs->request_id = json_clone(msg->id);
          jsonrpc_session_send(cs->session, msg);
      }
-@@ -1311,6 +1327,9 @@
+@@ -1311,6 +1333,9 @@
  static void
  ovsdb_cs_db_update_has_lock(struct ovsdb_cs_db *db, bool new_has_lock)
  {
@@ -91,7 +111,7 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
      if (new_has_lock && !db->has_lock) {
          ovsdb_cs_db_add_event(db, OVSDB_CS_EVENT_TYPE_LOCKED);
          db->is_lock_contended = false;
-@@ -1520,6 +1539,9 @@
+@@ -1520,6 +1545,9 @@
  ovsdb_cs_send_monitor_request(struct ovsdb_cs *cs, struct ovsdb_cs_db *db,
                                int version)
  {
@@ -101,7 +121,7 @@ diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
      struct json *mrs = db->ops->compose_monitor_requests(
          db->schema, db->ops_aux);
      /* XXX handle failure */
-@@ -2435,3 +2457,11 @@
+@@ -2435,3 +2463,11 @@
      return NULL;
  }
 

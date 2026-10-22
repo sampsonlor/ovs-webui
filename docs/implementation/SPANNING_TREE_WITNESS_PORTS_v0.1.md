@@ -10,13 +10,13 @@
 
 每个版本有独立的 `extensions/ovs-witness/<version>/`：修改前的逐文件摘要、对应补丁、三个 overlay 文件和固定输入列清单。应用前验证归档、原文件和 overlay 目标；不能将旧版本补丁应用成功等同于新版本资格。原生 CI 分别运行默认、显式启用、ASan+UBSan 三种实际源码构建。默认构建必须没有扩展命令。
 
-移植核对范围包括 bridge 配置开始/完成/销毁、同名 UUID 替换、STP/RSTP setter 返回路径、ofproto 生命周期、两协议库的本地参数及互斥锁、IDL FSM/monitor/条件更新/锁事件、Unixctl 主线程调用顺序。两版仍保持现有调用顺序；hook 只记录观察身份、失效和错误，不驱动 IDL、重新请求锁或执行 setter。共享 ABI 仍为 `ovs-webui.stp-witness.v1`，四表 52 个持久输入列及其原子类型/基数由每版实际 schema 对照共同 C/Go 注册表验证。原生 CI 独立读数据库后计算摘要，与 C 输出逐次对照。
+移植核对范围包括 bridge 配置开始/完成/销毁、同名 UUID 替换、STP/RSTP setter 返回路径、ofproto 生命周期、两协议库的本地参数及互斥锁、IDL FSM/monitor/条件更新/锁事件、Unixctl 主线程调用顺序。4.0.0 新增的 clear-condition/reset-last-id 接口额外推进 authority epoch，直接覆盖尚未发出下次 monitor 请求的失效窗口，并以无 session/remote 的 C 单元验证这些调用不会产生 I/O。两版仍保持现有调用顺序；hook 只记录观察身份、失效和错误，不驱动 IDL、重新请求锁或执行 setter。共享 ABI 仍为 `ovs-webui.stp-witness.v1`，四表 52 个持久输入列及其原子类型/基数由每版实际 schema 对照共同 C/Go 注册表验证。原生 CI 独立读数据库后计算摘要，与 C 输出逐次对照。
 
 三份编译进 Go 的构建档案固定各自源码、补丁、overlay、类型注册表、wire schema、数据库 source schema、构建选项。只允许精确的档案摘要和 amd64/arm64 的 enabled/sanitized 变体。无版本范围匹配、默认发现或未知版本回退。3.7.1 和 4.0.0 使用相同 8.8.0 数据库结构，但源码及档案摘要不同。档案身份不能由 schema 版本、ABI 字符串或命令存在性替代。
 
 数据库 source schema 与实际服务器 `get_schema` 的 libovsdb 原生编码分别固定；上游会排序 enum 等内容，不能直接使用 source 编码替代服务器编码。CI 必须读取每版实际运行的服务器 schema 并命中档案摘要。两个 witness 都携带私有构建/schema 身份，组合预检要求两次身份一致，并匹配同一受保护数据库连接发现的实际 native schema。不存在部分成功或跨 schema 档案回退。
 
-每个版本/架构均保留 P1 的 23 个原生场景、两个启用变体各 5 个 C 单元场景、默认/启用的上游 STP/RSTP 测试，以及 P2a 的 20 个组合场景。新增第 21 个组合场景：使用另一已知但数据库结构不匹配的档案，独立重新固定 manifest 摘要，仍须返回零证据。Go 回归保留既有名称并新增闭合构建集合测试；正式浏览器回归及旧的 source/fence、权限、故障诊断和其他功能原生门禁继续执行。
+每个版本/架构均保留 P1 的 23 个原生场景、两个启用变体各 5 个既有 C 单元场景（4.0.0 另加 monitor schema 重置失效场景）、默认/启用的上游 STP/RSTP 测试，以及 P2a 的 20 个组合场景。新增第 21 个组合场景：使用另一已知但数据库结构不匹配的档案，独立重新固定 manifest 摘要，仍须返回零证据。Go 回归保留既有名称并新增闭合构建集合测试；正式浏览器回归及旧的 source/fence、权限、故障诊断和其他功能原生门禁继续执行。
 
 证据按 `ovs-witness-<version>-<arch>` 分开保留，包含源码/归档/补丁/overlay/档案/实际可执行文件摘要、三个构建和 native 报告、实际服务器 schema、逐场景 Go 组合日志、C 单元和上游套件日志。六个 witness job 全部属于 CI Gate；不改变既有截止时间或重试策略，不将仅通过旧 schema fixture 的测试记为实际版本移植成功。
 

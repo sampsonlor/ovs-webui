@@ -15,7 +15,7 @@
     "extensions/ovs-witness/4.0.0/overlay/lib/ovs-webui-witness.h": "30371af9050ea9ced9ad0bedb8fd8cdb5467304278b630b4a83275143323953d",
     "extensions/ovs-witness/4.0.0/overlay/vswitchd/ovs-webui-input-columns.inc": "9c22324be13008b3f80d3067e310e79311b940d0dff9f51c6d49430454eddf62",
     "extensions/ovs-witness/4.0.0/overlay/vswitchd/ovs-webui-witness.inc": "8e80a8f288c36f89de4e26d71d99dd72689d158776ded673129c2b87c06d33c7",
-    "extensions/ovs-witness/4.0.0/witness.patch": "1c22e21ba2bb2cee29f469ca95c39a578b43f4af243787373a6e999a96da2862",
+    "extensions/ovs-witness/4.0.0/witness.patch": "32b2dc164395cd9dd13b7680fd7fd6eb7453ce283b930bd224c088c2cef87d80",
     "internal/ovswitness/input-types.json": "db5dd71a3525823a4e51a593a575a7b8af279bb4a0f125c4a96339f693ff1a11",
     "internal/ovswitness/witness.schema.json": "9ee748bf6fcb391ada36b9e02dd0c7cf9f5bc3d359e6a5e63ef611e9650a875f",
     "internal/provider/ovsdb/testdata/vswitch-4.0.0.ovsschema": "35663bcb750d28f743d95039bde4eed1eee3324791a8981cde31c7e1829b2232"

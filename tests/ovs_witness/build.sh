@@ -45,7 +45,9 @@ for mode in enabled sanitized default; do
     CFLAGS="$cflags" LDFLAGS="$ldflags" LIBS='-lm' > "$repo/test-results/ovs-witness/configure-$mode.log" 2>&1
   make -j4 > "$repo/test-results/ovs-witness/build-$mode.log" 2>&1
   if [ "$mode" != default ]; then
-    ./libtool --mode=link gcc $cflags $ldflags -I. -I./include -I./lib \
+    unitflags=()
+    if [ "$version" = 4.0.0 ]; then unitflags+=(-DOVS_WEBUI_WITNESS_RESET_API); fi
+    ./libtool --mode=link gcc $cflags $ldflags "${unitflags[@]}" -I. -I./include -I./lib \
       -I"$out/source" -I"$out/source/lib" -I"$out/source/include" \
       "$repo/tests/ovs_witness/unit.c" -Wl,--start-group \
       ofproto/libofproto.la ovsdb/libovsdb.la lib/libsflow.la lib/libopenvswitch.la \
@@ -62,7 +64,7 @@ for mode in enabled sanitized default; do
     done
   fi
   cd "$repo"
-  sudo -- env ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  sudo -- env OVS_WITNESS_VERSION="$version" ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
     python3 tests/ovs_witness/prototype.py --build "$out/$mode" \
     --source "$out/source" --mode "$mode" \
     --report "test-results/ovs-witness/native-$mode.json"
