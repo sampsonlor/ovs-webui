@@ -192,3 +192,15 @@ func Exclusive(s Sample) error {
 	}
 	return nil
 }
+
+// Installed accepts the complete disabled state in addition to Exclusive's
+// active-engine relationship. Neither state establishes network convergence.
+func Installed(s Sample) error {
+	if !s.Configuration.Source.STP && !s.Configuration.Source.RSTP {
+		if s.State != "known" || s.Native.STP.Enabled || s.Native.RSTP.Enabled || s.Native.STP.Local != nil || s.Native.RSTP.Local != nil {
+			return ErrInvalid
+		}
+		return nil
+	}
+	return Exclusive(s)
+}

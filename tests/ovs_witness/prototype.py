@@ -69,6 +69,20 @@ def preflight(f, mode, report):
     assert len(passed) == 21 and not any(e.get("Action") == "fail" for e in events), passed
     report["preflight"] = {"status": "pass", "cases": passed,
                            "profile_sha256": manifest["profile_sha256"], "manifest": manifest}
+    execution = subprocess.run([str(out / "test2json"), "-t", "-p", "witness/execution",
+                                "ip", "netns", "exec", f.ns, str(out / "preflight.test"),
+                                "-test.v=test2json", "-test.run=^TestNativeWitnessExecution$"],
+                               env=dict(f.env, OVS_WITNESS_ROOT=str(f.root), OVS_WITNESS_PID=str(f.vswitchd.pid)),
+                               capture_output=True, timeout=120)
+    Path("test-results/ovs-witness/execution-" + mode + ".json").write_bytes(execution.stdout)
+    Path("test-results/ovs-witness/execution-" + mode + ".stderr").write_bytes(execution.stderr)
+    assert execution.returncode == 0, execution.stdout.decode()[-16000:] + execution.stderr.decode()[-2000:]
+    events = [json.loads(line) for line in execution.stdout.splitlines()]
+    passed = sorted(e["Test"].split("/", 1)[1] for e in events
+                    if e.get("Action") == "pass" and e.get("Test", "").startswith("TestNativeWitnessExecution/"))
+    assert len(passed) == 16 and not any(e.get("Action") == "fail" for e in events), passed
+    report["execution"] = {"status": "pass", "cases": passed,
+                           "database_executable_sha256": f.manifest["ovsdb-server"]}
 
 
 class Fixture:

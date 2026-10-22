@@ -150,6 +150,15 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	projectPolicing(v, s.localPolicing, &out, bindings)
 	projectTopology(v, s.localTopology, s.localTopologyCreates, &out)
 	projectSpanningTree(v, s.localSpanningTree, &out, bindings)
+	executionScope := false
+	for id, tree := range out.SpanningTrees {
+		tree.Executable = s.localSpanningTreeExecution[id]
+		executionScope = executionScope || tree.Executable
+		out.SpanningTrees[id] = tree
+	}
+	if executionScope {
+		out.Policy = Digest([]any{out.Policy, s.localSpanningTreeExecution, s.spanningTreeAuthorityRevision})
+	}
 	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" }) {
 		projectCreation(v, s.localBridgeNames, &out)
 		projectDeletion(v, s.localBridgeDeleteNames, &out)

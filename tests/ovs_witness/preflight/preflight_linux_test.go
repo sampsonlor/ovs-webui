@@ -41,6 +41,14 @@ func must(t *testing.T, err error) {
 }
 
 func TestNativeWitnessPreflight(t *testing.T) {
+	runNativeWitnessFixture(t, false)
+}
+
+func TestNativeWitnessExecution(t *testing.T) {
+	runNativeWitnessFixture(t, true)
+}
+
+func runNativeWitnessFixture(t *testing.T, execute bool) {
 	root := os.Getenv("OVS_WITNESS_ROOT")
 	if root == "" {
 		t.Skip("requires disposable patched OVS kernel fixture")
@@ -121,6 +129,9 @@ func TestNativeWitnessPreflight(t *testing.T) {
 	must(t, err)
 	authorize := a.SpanningTreeExecutionAuthorizer(fresh.Grant)
 	control := ovsdb.SpanningTreeControl{Socket: filepath.Join(root, "vsd.ctl"), PeerUID: 0}
+	if execute {
+		vs("set", "Bridge", "br-witness", "stp_enable=true", "rstp_enable=false")
+	}
 	initial, err := ovsdb.ReadSpanningTreeRuntime(ctx, control, "stp", "br-witness")
 	must(t, err)
 	control.ExpectedDaemon = initial.Daemon
@@ -165,6 +176,10 @@ func TestNativeWitnessPreflight(t *testing.T) {
 		if e == nil || !reflect.DeepEqual(out, ovsdb.SpanningTreePreflight{}) {
 			t.Fatal("unproven partial evidence", out, e)
 		}
+	}
+	if execute {
+		runExecutionCases(t, ctx, p, executor, inv, binding, control, build, authorize, vs, draft, grants, role, caps, login.Claims.Capabilities)
+		return
 	}
 	for _, protocol := range []string{"stp", "rstp"} {
 		t.Run("two_"+protocol+"_witnesses_match_native_fences_and_preserve_configuration", func(t *testing.T) {

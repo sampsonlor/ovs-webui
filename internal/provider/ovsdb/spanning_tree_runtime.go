@@ -17,7 +17,7 @@ import (
 )
 
 // SpanningTreeControl is private root-supplied transport configuration. There
-// is intentionally no public endpoint, CLI flag, command name or generic RPC.
+// is intentionally no public endpoint, client-selected command or generic RPC.
 // A sample alone does not bind this daemon/name to an immutable OVSDB Bridge.
 type SpanningTreeControl struct {
 	Socket         string

@@ -13,6 +13,16 @@ import (
 const SpanningTreePrepare = "bridge.spanning-tree.prepare"
 const SpanningTreePrepareCapability = "ovs.bridge.spanning-tree.prepare"
 
+// Execution is a distinct operation. A signed prepare envelope is never
+// promoted to execution, including when root policy changes after its review.
+const SpanningTreeConfigure = "bridge.spanning-tree.configure"
+const SpanningTreeWriteCapability = "ovs.bridge.spanning-tree.write"
+const SpanningTreeMarker = "ovs-webui.spanning-tree-commit"
+
+func IsSpanningTreeOperation(op string) bool {
+	return op == SpanningTreePrepare || op == SpanningTreeConfigure
+}
+
 var SpanningTreeBasicKeys = []string{"stp-priority", "stp-hello-time", "stp-max-age", "stp-forward-delay", "rstp-priority", "rstp-max-age", "rstp-forward-delay"}
 
 // Missing request keys preserve the captured value; explicit null removes a
@@ -31,6 +41,8 @@ type SpanningTreeBridge struct {
 	Binding                          Binding
 	Configuration                    SpanningTreeConfig
 	Known, Supported                 bool
+	Executable                       bool
+	Bindings                         []Binding
 	Authority, Dependency, GraphGate string
 }
 type SpanningTreeChange struct {
@@ -59,13 +71,18 @@ func treeConfigValid(c SpanningTreeConfig) bool {
 	return true
 }
 func treeAssessment(c SpanningTreeConfig) spanningtree.Validation {
+	image := treeConfiguration(c)
+	return spanningtree.Validate(image.STP, image.RSTP, image.Other)
+}
+
+func treeConfiguration(c SpanningTreeConfig) spanningtree.Configuration {
 	m := map[string]any{}
 	for k, v := range c.Parameters {
 		if v != nil {
 			m[k] = *v
 		}
 	}
-	return spanningtree.Validate(&c.STP, &c.RSTP, m)
+	return spanningtree.Configuration{STP: &c.STP, RSTP: &c.RSTP, Other: m}
 }
 func TreePreparationProblem(p SpanningTreeBridge) string {
 	if !p.Known {
@@ -80,7 +97,7 @@ func TreePreparationProblem(p SpanningTreeBridge) string {
 	return p.GraphGate
 }
 func spanningTreeProblem(i StoredIntent, s Snapshot) string {
-	if i.Operation != SpanningTreePrepare || i.SpanningTree == nil || i.Object.Table != "Bridge" || !treeConfigValid(i.SpanningTree.Before) || !treeConfigValid(i.SpanningTree.After) {
+	if !IsSpanningTreeOperation(i.Operation) || i.SpanningTree == nil || i.Object.Table != "Bridge" || !treeConfigValid(i.SpanningTree.Before) || !treeConfigValid(i.SpanningTree.After) {
 		return "INVALID_SPANNING_TREE_DRAFT"
 	}
 	if i.Object.Generation != s.Generation {
@@ -96,6 +113,9 @@ func spanningTreeProblem(i StoredIntent, s Snapshot) string {
 	if code := TreePreparationProblem(p); code != "" {
 		return code
 	}
+	if i.Operation == SpanningTreeConfigure && !p.Executable {
+		return "SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED"
+	}
 	if Digest(i.SpanningTree.Before) != Digest(p.Configuration) {
 		return "FIELD_CONFLICT"
 	}
@@ -106,15 +126,31 @@ func spanningTreeProblem(i StoredIntent, s Snapshot) string {
 }
 func spanningTreeChecks(i StoredIntent, s Snapshot) []Gate {
 	out := []Gate{}
+	if i.Operation == SpanningTreeConfigure && i.SpanningTree != nil && treeAssessment(i.SpanningTree.Before).State != "valid" {
+		out = append(out, gate("SPANNING_TREE_ORIGINAL_PARAMETERS_UNPROVEN", "blocked", i.ID))
+	}
 	if i.SpanningTree != nil {
 		v := treeAssessment(i.SpanningTree.After)
 		for _, c := range v.Checks {
 			out = append(out, gate(c.Code, "blocked", i.ID))
 		}
+		if i.Operation == SpanningTreeConfigure && v.State == "valid" && treeAssessment(i.SpanningTree.Before).State == "valid" {
+			for _, code := range spanningtree.AssessSetterOrder(treeConfiguration(i.SpanningTree.Before), treeConfiguration(i.SpanningTree.After)).Checks {
+				out = append(out, gate(code, "blocked", i.ID))
+			}
+		}
 	}
-	// This blocker is unconditional, including forged images and future readers
-	// with an enabled Safe Apply service. A successful review is not executable.
-	return append(out, gate("SPANNING_TREE_EXECUTION_PENDING", "blocked", i.ID))
+	// Preparation keeps its unconditional blocker. Execution still requires a
+	// fresh, installed native witness at prepare and immediately before dispatch.
+	if i.Operation == SpanningTreePrepare {
+		out = append(out, gate("SPANNING_TREE_EXECUTION_PENDING", "blocked", i.ID))
+	} else {
+		if !s.SpanningTrees[i.Object.ManagementID].Executable {
+			out = append(out, gate("SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED", "blocked", i.ID))
+		}
+		out = append(out, gate("SPANNING_TREE_NATIVE_WITNESS_REQUIRED", "allowed", i.ID))
+	}
+	return out
 }
 func spanningTreeDiff(i StoredIntent, s Snapshot) []Diff {
 	if i.SpanningTree == nil {
@@ -138,10 +174,10 @@ func spanningTreeDiff(i StoredIntent, s Snapshot) []Diff {
 	return out
 }
 func hasSpanningTree(intents []StoredIntent) bool {
-	return slices.ContainsFunc(intents, func(i StoredIntent) bool { return i.Operation == SpanningTreePrepare })
+	return slices.ContainsFunc(intents, func(i StoredIntent) bool { return IsSpanningTreeOperation(i.Operation) })
 }
 func stageSpanningTree(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
-	if len(cmd.Intents) != 1 || len(c.Intents) > 1 || cmd.Intents[0].Operation != SpanningTreePrepare {
+	if len(cmd.Intents) != 1 || len(c.Intents) > 1 || !IsSpanningTreeOperation(cmd.Intents[0].Operation) {
 		return c, apitypes.Fail(422, "SPANNING_TREE_SINGLE_INTENT_REQUIRED")
 	}
 	in := cmd.Intents[0]
@@ -159,11 +195,14 @@ func stageSpanningTree(c Candidate, cmd Command, s Snapshot) (Candidate, error) 
 	if code := TreePreparationProblem(p); code != "" {
 		return c, apitypes.Fail(409, code)
 	}
+	if in.Operation == SpanningTreeConfigure && !p.Executable {
+		return c, apitypes.Fail(403, "SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED")
+	}
 	base := cloneTreeConfig(p.Configuration)
 	i := StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Schema: s.Schema, Dependency: p.Dependency, Value: normalize(VLAN{}), Before: normalize(VLAN{}), SpanningTree: &SpanningTreeChange{Before: cloneTreeConfig(base)}}
 	if len(c.Intents) == 1 {
 		prior := c.Intents[0]
-		if prior.Operation != SpanningTreePrepare || prior.ID != in.ID || prior.Object != in.Object || spanningTreeProblem(prior, s) != "" {
+		if prior.Operation != in.Operation || prior.ID != in.ID || prior.Object != in.Object || spanningTreeProblem(prior, s) != "" {
 			return c, apitypes.Fail(409, "SPANNING_TREE_RESTAGE_REQUIRED")
 		}
 		i = prior

@@ -157,6 +157,12 @@ jobs:
           fi
       - name: Bounded protocol fuzzing
         run: go test ./internal/ipc -run '^$' -fuzz '^FuzzDecodeStrict$' -fuzztime=3s -parallel=2
+      - name: Spanning tree write authority and durable recovery
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          CGO_ENABLED=1 go test -race -count=1 -json -run '^TestSpanningTree(Write|SafeApply)' ./internal/repository/auth \
+            | tee test-results/go-spanning-tree-write-authority.json
       - name: Install frontend build and browser test toolchain
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
@@ -372,6 +378,7 @@ jobs:
             test-results/go-interface-mtu-*.json
             test-results/go-interface-policing-*.json
             test-results/go-spanning-tree-runtime-*.json
+            test-results/go-spanning-tree-write-authority.json
               test-results/go-spanning-tree-source-*.json
               test-results/go-spanning-tree-preflight-*.json
             test-results/go-isolated-bridge-*.json
@@ -467,11 +474,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y build-essential autoconf automake libtool pkg-config libssl-dev python3-six iproute2 kmod
+      - name: Install pinned native execution UI toolchain
+        if: matrix.version == '3.3.9'
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24.19.0
+          cache: true
+          install: false
+      - name: Build production services and browser for qualified native UI
+        if: matrix.version == '3.3.9'
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /tmp/ovs-witness-browsers
+        run: |
+          pnpm install --frozen-lockfile --no-runtime
+          pnpm frontend:build
+          pnpm exec playwright install --with-deps chromium
+          mkdir -p outputs/runtime
+          CGO_ENABLED=0 go build -trimpath -o outputs/runtime/ovs-mgrd ./cmd/ovs-mgrd
+          CGO_ENABLED=0 go build -trimpath -o outputs/runtime/ovs-webd ./cmd/ovs-webd
       - name: Build default and opted-in actual pinned OVS and test disposable kernel namespaces
         env:
           EXPECTED_MACHINE: ${{ matrix.machine }}
           WITNESS_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           OVS_WITNESS_VERSION: ${{ matrix.version }}
+          WITNESS_BROWSER_NODE: ${{ matrix.version == '3.3.9' && 'node' || '' }}
+          PLAYWRIGHT_BROWSERS_PATH: /tmp/ovs-witness-browsers
         run: bash tests/ovs_witness/build.sh
       - name: Retain exact source build and witness evidence
         if: always()

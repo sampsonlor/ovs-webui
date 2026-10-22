@@ -2,14 +2,16 @@ package inventory
 
 import (
 	"context"
+	"slices"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
-// This private root policy is independent of the preparation grant. There is
-// deliberately no CLI flag or public execution operation in this prerequisite.
+// The root execution policy is independent of the preparation grant. It is
+// default-off; the process also needs an explicitly pinned optional witness.
 func (s *Service) SetLocalSpanningTreeExecutionBridges(ids []string) error {
 	if len(ids) > 128 {
 		return apitypes.Fail(422, "INVALID_SPANNING_TREE_EXECUTION_AUTHORITY")
@@ -26,6 +28,24 @@ func (s *Service) SetLocalSpanningTreeExecutionBridges(ids []string) error {
 	s.localSpanningTreeExecution = allow
 	s.spanningTreeAuthorityRevision = repository.NewID()
 	return nil
+}
+
+func spanningTreeExecution(v *view, b Binding, fresh string, config bool, prepare, execute map[string]bool, c authn.Claims) map[string]any {
+	reason := "CONFIGURATION_WITHHELD"
+	if config {
+		binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Bridge", Generation: v.decision.Generation}
+		s := candidate.Snapshot{Generation: v.decision.Generation}
+		projectSpanningTree(v, prepare, &s, []candidate.Binding{binding})
+		reason = candidate.TreePreparationProblem(s.SpanningTrees[b.ManagementID])
+		if fresh != "fresh" {
+			reason = "SPANNING_TREE_OBSERVATION_STALE"
+		} else if !slices.Contains(c.Capabilities, "workspace.write") || !slices.Contains(c.Capabilities, candidate.SpanningTreeWriteCapability) {
+			reason = "CAPABILITY_DENIED"
+		} else if !execute[b.ManagementID] {
+			reason = "SPANNING_TREE_EXECUTION_AUTHORITY_REQUIRED"
+		}
+	}
+	return map[string]any{"available": reason == "", "reason": reason, "capability": candidate.SpanningTreeWriteCapability, "mode": "safe-apply"}
 }
 
 // SpanningTreeExecutionView admits one exact immutable binding to the private

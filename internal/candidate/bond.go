@@ -26,6 +26,12 @@ func Capabilities(c Candidate) []string {
 				out = append(out, "configuration.read")
 			}
 		}
+		if i.Operation == SpanningTreeConfigure {
+			cap = SpanningTreeWriteCapability
+			if !slices.Contains(out, "configuration.read") {
+				out = append(out, "configuration.read")
+			}
+		}
 		if IsTopologyOperation(i.Operation) {
 			cap = "ovs.topology.write"
 		}
@@ -207,6 +213,12 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.SpanningTree != nil {
+		m := *i.SpanningTree
+		m.Before = cloneTreeConfig(m.After)
+		i.SpanningTree = &m
+		return
+	}
 	if i.Topology != nil {
 		c := *i.Topology
 		c.Observed = true
@@ -252,6 +264,12 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.SpanningTree != nil {
+		m := *i.SpanningTree
+		m.Before, m.After = cloneTreeConfig(m.After), cloneTreeConfig(m.Before)
+		i.SpanningTree = &m
+		return
+	}
 	if i.Topology != nil {
 		c := *i.Topology
 		c.Compensating = true

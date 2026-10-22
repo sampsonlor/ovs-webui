@@ -70,3 +70,16 @@ for mode in enabled sanitized default; do
     --report "test-results/ovs-witness/native-$mode.json"
 done
 python3 tests/ovs_witness/manifest.py "$out"
+if [ "$version" = 3.3.9 ]; then
+  # Full production HTTPS/IPC admission and Svelte execution, with a separate
+  # explicitly configured optional source-access profile in the disposable VM.
+  # All default and source-denial gates remain unchanged.
+  ui_status=0
+  sudo -- env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:?}" python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser \
+    --frontend-spanning-execution --witness-bin-dir "$out/enabled" \
+    --browser-node "$(command -v "${WITNESS_BROWSER_NODE:?}")" || ui_status=$?
+  for proof in test-results/go-frontend.json test-results/go-frontend-journal.log; do
+    if [ -f "$proof" ]; then cp "$proof" test-results/ovs-witness/; fi
+  done
+  test "$ui_status" = 0
+fi

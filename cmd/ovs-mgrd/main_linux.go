@@ -46,6 +46,8 @@ func run() int {
 	authKeyPath := flag.String("auth-key-file", "", "Private authentication key (default: auth.key beside manager.db)")
 	initAuthKey := flag.Bool("init-auth-key", false, "Explicitly create a new authentication key and exit; never overwrite")
 	bootstrap := flag.String("bootstrap-admin", "", "Initialize first local administrator; read password from stdin, then exit")
+	grantTreeRole := flag.String("grant-spanning-tree-execution-role", "", "Offline root action: explicitly grant one existing role the independent STP/RSTP write capability, then exit; new login required")
+	revokeTreeRole := flag.String("revoke-spanning-tree-execution-role", "", "Offline root action: revoke one role's independent STP/RSTP write capability, then exit")
 	secretDir := flag.String("secret-key-directory", "", "Private versioned privileged keys (default: secret-keys beside manager.db)")
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
 	rotateSecret := flag.Bool("rotate-secret-key", false, "Offline privileged key rotation, retaining old versions")
@@ -56,6 +58,13 @@ func run() int {
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localSpanningTree := flag.String("local-spanning-tree-bridges", "", "Reviewed immutable Bridge IDs permitted to prepare STP/RSTP drafts; no execution grant, independent of topology and Port authority")
+	localSpanningTreeExecution := flag.String("local-spanning-tree-execution-bridges", "", "Independent reviewed Bridge IDs permitted for guarded STP/RSTP Safe Apply; requires an explicit qualified witness build")
+	treeControl := flag.String("spanning-tree-witness-socket", "", "Explicit local ovs-vswitchd Unix control socket for read-only installed witnesses")
+	treeExecutable := flag.String("spanning-tree-witness-executable", "", "Root-owned executable of the qualified optional OVS witness build")
+	treeManifest := flag.String("spanning-tree-witness-manifest", "", "Root-owned exact optional OVS build manifest")
+	treeManifestDigest := flag.String("spanning-tree-witness-manifest-sha256", "", "Reviewed SHA256 of the exact optional OVS build manifest")
+	treeDatabaseExecutable := flag.String("spanning-tree-database-executable", "", "Root-owned qualified standalone ovsdb-server executable")
+	treeDatabaseSHA256 := flag.String("spanning-tree-database-sha256", "", "Reviewed SHA256 of the qualified standalone ovsdb-server executable")
 	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
 	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
@@ -74,8 +83,13 @@ func run() int {
 		return 0
 	}
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
+	treeConfigured := *localSpanningTreeExecution != "" || *treeControl != "" || *treeExecutable != "" || *treeManifest != "" || *treeManifestDigest != "" || *treeDatabaseExecutable != "" || *treeDatabaseSHA256 != ""
+	if treeConfigured && (*localSpanningTreeExecution == "" || *treeControl == "" || *treeExecutable == "" || *treeManifest == "" || *treeManifestDigest == "" || *treeDatabaseExecutable == "" || *treeDatabaseSHA256 == "") {
+		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_SPANNING_TREE_WITNESS_CONFIGURATION")
+		return 2
+	}
 	actions := 0
-	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
+	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
 		if enabled {
 			actions++
 		}
@@ -187,6 +201,22 @@ func run() int {
 		logger.Info("local_administrator_initialized")
 		return 0
 	}
+	if *grantTreeRole != "" || *revokeTreeRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantTreeRole, true
+		if *revokeTreeRole != "" {
+			id, enabled = *revokeTreeRole, false
+		}
+		if err := authentication.SetSpanningTreeExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		logger.Info("spanning_tree_role_policy_updated", "enabled", enabled)
+		return 0
+	}
 	if *restore {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -238,6 +268,12 @@ func run() int {
 		if err = inventoryService.SetLocalSpanningTreeBridges(spanningTreeIDs); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_SPANNING_TREE_AUTHORITY")
 			return 2
+		}
+		if treeConfigured {
+			if err = inventoryService.SetLocalSpanningTreeExecutionBridges(strings.Split(*localSpanningTreeExecution, ",")); err != nil {
+				logger.Error("inventory_start_failed", "code", "INVALID_SPANNING_TREE_EXECUTION_AUTHORITY")
+				return 2
+			}
 		}
 		topologyIDs := []string{}
 		if *localTopology != "" {
@@ -376,7 +412,14 @@ func run() int {
 		}
 		if authentication != nil {
 			authentication.WithInventory(inventoryService)
-			fields, err = authentication.ConfigureExecution(provider.Executor(inventoryService))
+			executor := provider.Executor(inventoryService)
+			if treeConfigured {
+				if err = executor.ConfigureSpanningTreeExecution(ovsprovider.SpanningTreeExecutionOptions{ControlSocket: *treeControl, Executable: *treeExecutable, Manifest: *treeManifest, ManifestDigest: *treeManifestDigest, DatabaseExecutable: *treeDatabaseExecutable, DatabaseSHA256: *treeDatabaseSHA256, PeerUID: uint32(*ovsUID)}); err != nil {
+					logger.Error("service_start_failed", "code", "INVALID_SPANNING_TREE_WITNESS_CONFIGURATION")
+					return 2
+				}
+			}
+			fields, err = authentication.ConfigureExecution(executor)
 			if err != nil || fields.Recover(ctx) != nil {
 				logger.Error("service_start_failed", "code", "EXECUTION_RECOVERY_UNAVAILABLE")
 				return 1

@@ -88,7 +88,7 @@ func TestSpanningTreePreparationAuthorityIsIndependentAndHintsAreNotExecution(t 
 }
 
 func TestSpanningTreePreparationGraphAndPermissionGates(t *testing.T) {
-	for _, scenario := range []string{"withheld", "capability", "stale", "external-root", "external-child", "controller", "mirror", "datapath", "interface-type", "options", "bond", "qinq", "advanced", "port-override", "missing-private", "immutable-schema", "unknown-value", "unknown-datapath", "unknown-external-ids", "referenced-domain", "unknown-name", "unknown-member", "duplicate-port"} {
+	for _, scenario := range []string{"withheld", "capability", "stale", "external-root", "external-child", "controller", "mirror", "multicast", "isolation", "datapath", "interface-type", "options", "bond", "qinq", "advanced", "port-override", "missing-private", "immutable-schema", "unknown-value", "unknown-datapath", "unknown-external-ids", "referenced-domain", "unknown-name", "unknown-member", "duplicate-port"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, o, d, c, b := treePreparationFixture(t)
 			if err := s.SetLocalSpanningTreeBridges([]string{b.ManagementID}); err != nil {
@@ -113,6 +113,10 @@ func TestSpanningTreePreparationGraphAndPermissionGates(t *testing.T) {
 				br.Values["controller"] = []any{repository.NewID()}
 			case "mirror":
 				br.Values["mirrors"] = []any{repository.NewID()}
+			case "multicast":
+				br.Values["mcast_snooping_enable"] = true
+			case "isolation":
+				port.Values["protected"] = true
 			case "datapath":
 				br.Values["datapath_type"] = "netdev"
 			case "interface-type":

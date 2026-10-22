@@ -1,0 +1,9 @@
+# OPTIONAL, NOT INSTALLED: process-read access for the strict STP witness source.
+# A deployment review must explicitly accept this additional capability before
+# installing a drop-in. It permits more than reading these two OVS processes.
+# No production code enables capabilities or substitutes weaker source proof.
+# The normal ovs-mgrd unit intentionally keeps CAP_SYS_PTRACE absent.
+# Paths, Bridge grants and exact build/manifest pins are also required; this
+# example alone must never advertise execution availability or grant a role.
+[Service]
+CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE
