@@ -29,7 +29,7 @@ func treeDispatchReason(err error) string {
 	var failure *treeEvidenceFailure
 	if errors.As(err, &failure) {
 		switch failure.stage {
-		case "authorization", "execution-view", "database-source", "schema", "fence-before", "fence-after", "control-source", "witness-source", "witness-build", "witness-reply", "witness-authorization", "witness-pair", "final-scope", "transition":
+		case "authorization", "execution-view", "database-source", "schema", "fence-before", "fence-after", "fence-snapshot-changed", "control-source", "witness-source", "witness-build", "witness-reply", "witness-authorization", "witness-pair", "witness-pair-changed", "final-scope", "transition":
 			return "spanning-tree-dispatch-" + failure.stage
 		}
 	}

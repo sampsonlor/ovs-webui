@@ -189,6 +189,14 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 			return empty, witnessUnproven
 		}
 		treeEvidenceStep(ctx, "witness-pair")
+		if candidate.Digest(first) != candidate.Digest(last) {
+			treeEvidenceStep(ctx, "fence-snapshot-changed")
+			return empty, witnessUnproven
+		}
+		if !sameWitnessPair(a, b) {
+			treeEvidenceStep(ctx, "witness-pair-changed")
+			return empty, witnessUnproven
+		}
 		installed := ovswitness.Exclusive(a.Witness)
 		if draft.Operation == candidate.SpanningTreeConfigure {
 			installed = ovswitness.Installed(a.Witness)
