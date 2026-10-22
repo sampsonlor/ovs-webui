@@ -14,6 +14,11 @@ import time
 import uuid
 
 
+VERSION = os.environ["OVS_WITNESS_VERSION"]
+assert VERSION in ["3.3.9", "3.7.1", "4.0.0"]
+EXTENSION = Path("extensions/ovs-witness") / VERSION
+PROFILE = Path("internal/ovswitness") / ("build-profile.json" if VERSION == "3.3.9" else "build-profile-" + VERSION + ".json")
+
 def control(path, method, args):
     with socket.socket(socket.AF_UNIX) as sock:
         sock.settimeout(2)
@@ -39,7 +44,7 @@ def members(value):
 
 def preflight(f, mode, report):
     """Actual private Go provider composition; never installed as a service."""
-    profile = Path("internal/ovswitness/build-profile.json").read_bytes()
+    profile = PROFILE.read_bytes()
     Path("test-results/ovs-witness/server-schema-" + mode + ".json").write_text(
         f.run("ovsdb-client", "get-schema", "unix:" + str(f.root / "db.sock"), "Open_vSwitch"), encoding="utf-8")
     manifest = {"format": "ovs-webui.stp-build.v1",
@@ -61,7 +66,7 @@ def preflight(f, mode, report):
     events = [json.loads(line) for line in result.stdout.splitlines()]
     passed = sorted(e["Test"].split("/", 1)[1] for e in events
                     if e.get("Action") == "pass" and e.get("Test", "").startswith("TestNativeWitnessPreflight/"))
-    assert len(passed) == 20 and not any(e.get("Action") == "fail" for e in events), passed
+    assert len(passed) == 21 and not any(e.get("Action") == "fail" for e in events), passed
     report["preflight"] = {"status": "pass", "cases": passed,
                            "profile_sha256": manifest["profile_sha256"], "manifest": manifest}
 
@@ -103,7 +108,7 @@ class Fixture:
         return value
 
     def independent_inputs(self):
-        columns = json.loads(Path("extensions/ovs-witness/3.3.9/input-columns.json").read_text())
+        columns = json.loads((EXTENSION / "input-columns.json").read_text())
         operations = [{"op": "select", "table": table, "where": [],
                        "columns": ["_uuid", *names, *(["ofport"] if table == "Interface" else [])]}
                       for table, names in columns.items()]
@@ -366,7 +371,7 @@ def extended(f, report):
     def same_name_uuid():
         before = known()
         old = f.bridge_uuid
-        columns = json.loads(Path("extensions/ovs-witness/3.3.9/input-columns.json").read_text())["Bridge"]
+        columns = json.loads((EXTENSION / "input-columns.json").read_text())["Bridge"]
         rows = f.transaction([{"op": "select", "table": "Bridge", "where": [["_uuid", "==", ["uuid", old]]], "columns": columns},
                               {"op": "select", "table": "Open_vSwitch", "where": [], "columns": ["_uuid", "next_cfg"]}])
         root = rows[1]["rows"][0]
@@ -549,7 +554,7 @@ def main():
         parser.add_argument("--" + name, required=True)
     args = parser.parse_args()
     subprocess.run(["modprobe", "openvswitch"], check=True)
-    report = {"mode": args.mode, "cases": [], "runtime": "3.3.9", "architecture": os.uname().machine}
+    report = {"mode": args.mode, "cases": [], "runtime": VERSION, "architecture": os.uname().machine}
     try:
         decoder = str(Path("outputs/ovs-witness-ci/decoder").resolve())
         with Fixture(args.build, args.source, decoder if Path(decoder).exists() else None) as f:

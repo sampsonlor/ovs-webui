@@ -51,6 +51,7 @@ type SpanningTreeWitnessSample struct {
 	ObservedAt    time.Time
 	Witness       ovswitness.Sample
 	buildIdentity string
+	buildSchema   string
 }
 
 // SpanningTreeWitnessPair is transient read evidence, not a seal or a claim
@@ -113,49 +114,53 @@ func witnessSameFile(a, b unix.Stat_t) bool {
 	return a.Dev == b.Dev && a.Ino == b.Ino && a.Size == b.Size && a.Mode == b.Mode && a.Uid == b.Uid && a.Gid == b.Gid && a.Mtim == b.Mtim && a.Ctim == b.Ctim
 }
 
-func attestWitnessBuild(ctx context.Context, conn net.Conn, uid uint32, pin SpanningTreeWitnessBuild) (string, error) {
+func attestWitnessBuild(ctx context.Context, conn net.Conn, uid uint32, pin SpanningTreeWitnessBuild) (string, string, error) {
 	if !filepath.IsAbs(pin.Executable) || !filepath.IsAbs(pin.Manifest) || strings.ContainsAny(pin.Executable+pin.Manifest, "\x00\r\n") || !witnessHex(pin.ManifestDigest) {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	// Read the small pinned manifest from the same FD whose identity is checked.
 	hash, identity, err := witnessFileHash(ctx, pin.Manifest, 4096, false)
 	if err != nil || hash != pin.ManifestDigest {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	fd, err := unix.Open(pin.Manifest, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	f := os.NewFile(uintptr(fd), "witness-manifest")
 	defer f.Close()
 	var stat unix.Stat_t
 	if unix.Fstat(fd, &stat) != nil || !witnessSameFile(identity, stat) {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	data, err := io.ReadAll(io.LimitReader(f, 4097))
 	actualHash := sha256.Sum256(data)
 	var manifest witnessBuildManifest
-	if err != nil || len(data) > 4096 || hex.EncodeToString(actualHash[:]) != pin.ManifestDigest || ipc.DecodeStrict(data, &manifest) != nil || manifest.Format != "ovs-webui.stp-build.v1" || manifest.Profile != ovswitness.BuildProfileDigest() || !witnessArchitecture(manifest.Arch, runtime.GOARCH) || manifest.Variant != "enabled" && manifest.Variant != "sanitized" || !witnessHex(manifest.Executable) {
-		return "", witnessUnproven
+	if err != nil || len(data) > 4096 || hex.EncodeToString(actualHash[:]) != pin.ManifestDigest || ipc.DecodeStrict(data, &manifest) != nil || manifest.Format != "ovs-webui.stp-build.v1" || !witnessArchitecture(manifest.Arch, runtime.GOARCH) || manifest.Variant != "enabled" && manifest.Variant != "sanitized" || !witnessHex(manifest.Executable) {
+		return "", "", witnessUnproven
+	}
+	profile, ok := ovswitness.LookupBuildProfile(manifest.Profile)
+	if !ok {
+		return "", "", witnessUnproven
 	}
 	var after, named unix.Stat_t
 	if unix.Fstat(fd, &after) != nil || unix.Stat(pin.Manifest, &named) != nil || !witnessSameFile(identity, after) || !witnessSameFile(identity, named) {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	_, pid, err := peer(conn, uid)
 	if err != nil {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	exeHash, exe, err := witnessFileHash(ctx, fmt.Sprintf("/proc/%d/exe", pid), 128<<20, true)
 	var configured unix.Stat_t
 	if err != nil || exeHash != manifest.Executable || unix.Stat(pin.Executable, &configured) != nil || !witnessSameFile(exe, configured) {
-		return "", witnessUnproven
+		return "", "", witnessUnproven
 	}
 	// Bind both file identities, not just their digests, across the two requests.
 	stable := func(s unix.Stat_t) string {
 		return fmt.Sprintf("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d", s.Dev, s.Ino, s.Size, s.Mode, s.Uid, s.Gid, s.Mtim.Sec, s.Mtim.Nsec, s.Ctim.Sec, s.Ctim.Nsec)
 	}
-	return hash + "/" + stable(identity) + "/" + exeHash + "/" + stable(exe), nil
+	return hash + "/" + stable(identity) + "/" + exeHash + "/" + stable(exe), profile.Schema, nil
 }
 
 // ReadBoundSpanningTreeWitness has exactly one fixed UUID/nonce method. It
@@ -186,7 +191,7 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 	if conn.SetDeadline(deadline) != nil {
 		return empty, witnessUnproven
 	}
-	var original string
+	var original, buildSchema string
 	check := func() error {
 		if err := authorize(ctx); err != nil {
 			return err
@@ -199,7 +204,7 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 		if err != nil {
 			return err
 		}
-		attestation, err := attestWitnessBuild(ctx, conn, control.PeerUID, build)
+		attestation, schema, err := attestWitnessBuild(ctx, conn, control.PeerUID, build)
 		if err != nil {
 			return err
 		}
@@ -207,7 +212,7 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 		if original != "" && original != identity {
 			return witnessUnproven
 		}
-		original = identity
+		original, buildSchema = identity, schema
 		if err := authorize(ctx); err != nil {
 			return err
 		}
@@ -230,7 +235,7 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 	if sample.Database.RootUUID != expected.Root || ctx.Err() != nil {
 		return empty, witnessUnproven
 	}
-	return SpanningTreeWitnessSample{Daemon: control.ExpectedDaemon, ObservedAt: receivedAt, Witness: sample, buildIdentity: original}, nil
+	return SpanningTreeWitnessSample{Daemon: control.ExpectedDaemon, ObservedAt: receivedAt, Witness: sample, buildIdentity: original, buildSchema: buildSchema}, nil
 }
 
 func requestSpanningTreeWitness(conn net.Conn, bridgeUUID string) (ovswitness.Sample, time.Time, error) {
@@ -257,7 +262,7 @@ func requestSpanningTreeWitness(conn net.Conn, bridgeUUID string) (ovswitness.Sa
 
 func sameWitnessPair(a, b SpanningTreeWitnessSample) bool {
 	x, y := a.Witness, b.Witness
-	if a.Daemon == "" || a.Daemon != b.Daemon || a.buildIdentity == "" || a.buildIdentity != b.buildIdentity || x.Nonce == y.Nonce || a.ObservedAt.IsZero() || b.ObservedAt.Before(a.ObservedAt) {
+	if a.Daemon == "" || a.Daemon != b.Daemon || a.buildIdentity == "" || a.buildIdentity != b.buildIdentity || !witnessHex(a.buildSchema) || a.buildSchema != b.buildSchema || x.Nonce == y.Nonce || a.ObservedAt.IsZero() || b.ObservedAt.Before(a.ObservedAt) {
 		return false
 	}
 	x.Nonce, y.Nonce = "", ""

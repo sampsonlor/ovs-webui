@@ -98,26 +98,28 @@ func TestSpanningTreeWitnessWireUsesFreshNonceAndClosedMethod(t *testing.T) {
 
 func TestSpanningTreeWitnessPairRejectsEveryIdentityAndEpochChange(t *testing.T) {
 	s := witnessExample(t)
-	a := SpanningTreeWitnessSample{Daemon: "boot:pid:start", ObservedAt: time.Now(), Witness: s, buildIdentity: "exact-fds"}
+	a := SpanningTreeWitnessSample{Daemon: "boot:pid:start", ObservedAt: time.Now(), Witness: s, buildIdentity: "exact-fds", buildSchema: strings.Repeat("a", 64)}
 	b := a
 	b.Witness.Nonce = strings.Repeat("f", 64)
 	if !sameWitnessPair(a, b) {
 		t.Fatal("identical fresh pair denied")
 	}
 	changes := map[string]func(*SpanningTreeWitnessSample){
-		"daemon":        func(s *SpanningTreeWitnessSample) { s.Daemon = "other" },
-		"build":         func(s *SpanningTreeWitnessSample) { s.buildIdentity = "other" },
-		"replay":        func(s *SpanningTreeWitnessSample) { s.Witness.Nonce = a.Witness.Nonce },
-		"time":          func(s *SpanningTreeWitnessSample) { s.ObservedAt = a.ObservedAt.Add(-time.Second) },
-		"process":       func(s *SpanningTreeWitnessSample) { s.Witness.Daemon = "other" },
-		"root":          func(s *SpanningTreeWitnessSample) { s.Witness.Database.RootUUID = "other" },
-		"authority":     func(s *SpanningTreeWitnessSample) { s.Witness.Database.Authority = "2" },
-		"seqno":         func(s *SpanningTreeWitnessSample) { s.Witness.Database.IDLSeqno = "999" },
-		"uuid":          func(s *SpanningTreeWitnessSample) { s.Witness.Bridge.UUID = "other" },
-		"runtime":       func(s *SpanningTreeWitnessSample) { s.Witness.Bridge.Instance = "other" },
-		"binding":       func(s *SpanningTreeWitnessSample) { s.Witness.Bridge.Epoch = "999" },
-		"configuration": func(s *SpanningTreeWitnessSample) { s.Witness.Configuration.Epoch = "999" },
-		"input":         func(s *SpanningTreeWitnessSample) { s.Witness.Configuration.InputDigest = strings.Repeat("0", 64) },
+		"daemon":         func(s *SpanningTreeWitnessSample) { s.Daemon = "other" },
+		"build":          func(s *SpanningTreeWitnessSample) { s.buildIdentity = "other" },
+		"build-schema":   func(s *SpanningTreeWitnessSample) { s.buildSchema = strings.Repeat("b", 64) },
+		"missing-schema": func(s *SpanningTreeWitnessSample) { s.buildSchema = "" },
+		"replay":         func(s *SpanningTreeWitnessSample) { s.Witness.Nonce = a.Witness.Nonce },
+		"time":           func(s *SpanningTreeWitnessSample) { s.ObservedAt = a.ObservedAt.Add(-time.Second) },
+		"process":        func(s *SpanningTreeWitnessSample) { s.Witness.Daemon = "other" },
+		"root":           func(s *SpanningTreeWitnessSample) { s.Witness.Database.RootUUID = "other" },
+		"authority":      func(s *SpanningTreeWitnessSample) { s.Witness.Database.Authority = "2" },
+		"seqno":          func(s *SpanningTreeWitnessSample) { s.Witness.Database.IDLSeqno = "999" },
+		"uuid":           func(s *SpanningTreeWitnessSample) { s.Witness.Bridge.UUID = "other" },
+		"runtime":        func(s *SpanningTreeWitnessSample) { s.Witness.Bridge.Instance = "other" },
+		"binding":        func(s *SpanningTreeWitnessSample) { s.Witness.Bridge.Epoch = "999" },
+		"configuration":  func(s *SpanningTreeWitnessSample) { s.Witness.Configuration.Epoch = "999" },
+		"input":          func(s *SpanningTreeWitnessSample) { s.Witness.Configuration.InputDigest = strings.Repeat("0", 64) },
 		"source": func(s *SpanningTreeWitnessSample) {
 			s.Witness.Configuration.Source.STP = !s.Witness.Configuration.Source.STP
 		},

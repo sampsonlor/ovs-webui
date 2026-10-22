@@ -8,6 +8,10 @@
 #include "stp.h"
 #include "rstp.h"
 #include "util.h"
+#ifdef OVS_WEBUI_WITNESS_RESET_API
+#include "ovsdb-cs.h"
+#include "openvswitch/json.h"
+#endif
 
 static void *
 change_priority(void *arg)
@@ -33,6 +37,28 @@ main(int argc OVS_UNUSED, char *argv[])
     webui_epoch_advance(&epoch);
     ovs_assert(epoch == UINT64_MAX);
     puts("PASS epoch_saturates_without_ABA");
+
+#ifdef OVS_WEBUI_WITNESS_RESET_API
+    /* OVS 4.0 schema-driven condition removal/reset must invalidate old
+     * evidence immediately, even before a new monitor request is sent. No
+     * session/remote is configured in this unit: these calls perform no I/O. */
+    const struct ovsdb_cs_ops ops = {0};
+    struct ovsdb_cs *cs = ovsdb_cs_create("Open_vSwitch", 3, &ops, NULL);
+    struct json *condition = json_array_create_1(json_boolean_create(true));
+    ovsdb_cs_set_condition(cs, "Bridge", condition);
+    json_destroy(condition);
+    uint64_t authority = ovsdb_cs_webui_epoch(cs);
+    ovsdb_cs_clear_condition(cs, "Bridge");
+    ovs_assert(ovsdb_cs_webui_epoch(cs) > authority);
+    authority = ovsdb_cs_webui_epoch(cs);
+    ovsdb_cs_reset_last_id(cs);
+    ovs_assert(ovsdb_cs_webui_epoch(cs) > authority);
+    authority = ovsdb_cs_webui_epoch(cs);
+    ovsdb_cs_clear_condition(cs, "missing");
+    ovs_assert(ovsdb_cs_webui_epoch(cs) > authority);
+    ovsdb_cs_destroy(cs);
+    puts("PASS monitor_schema_reset_invalidates_authority_without_io");
+#endif
 
     const struct ofproto_class unsupported = {0};
     struct ofproto fake = {0};

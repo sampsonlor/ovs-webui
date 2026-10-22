@@ -8,7 +8,10 @@ import subprocess
 import sys
 
 out = Path(sys.argv[1])
-extension = Path("extensions/ovs-witness/3.3.9")
+version = os.environ["OVS_WITNESS_VERSION"]
+assert version in ["3.3.9", "3.7.1", "4.0.0"]
+extension = Path("extensions/ovs-witness") / version
+profile_path = Path("internal/ovswitness") / ("build-profile.json" if version == "3.3.9" else "build-profile-" + version + ".json")
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 result = {
     "status": "isolated-prototype-not-a-production-release",
@@ -18,7 +21,7 @@ result = {
     "architecture": os.uname().machine,
     "witness_abi": "ovs-webui.stp-witness.v1",
     "patch_sha256": sha(extension / "witness.patch"),
-    "build_profile_sha256": sha(Path("internal/ovswitness/build-profile.json")),
+    "build_profile_sha256": sha(profile_path),
     "overlay_sha256": {str(p.relative_to(extension)): sha(p) for p in sorted((extension / "overlay").rglob("*")) if p.is_file()},
     "executables": {mode: sha(out / mode / "vswitchd/ovs-vswitchd") for mode in ["default", "enabled", "sanitized"]},
     "compiler": subprocess.check_output(["gcc", "--version"], text=True).splitlines()[0],

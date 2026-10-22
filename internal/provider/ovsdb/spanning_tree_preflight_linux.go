@@ -152,9 +152,6 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	var sample SpanningTreeRuntimeSample
 	var pair *SpanningTreeWitnessPair
 	if build != nil {
-		if candidate.Digest(d.native) != ovswitness.BuildSchemaDigest() {
-			return empty, witnessUnproven
-		}
 		// Both native input images are read in the same transactions as the
 		// original whole-table guards and row versions, around both witnesses.
 		ops, err = treeWitnessOperations(ops, d)
@@ -180,7 +177,7 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 			return empty, err
 		}
 		last, err := readTreeWitnessFence(conn, r, ops, view, draft.Object)
-		if err != nil || candidate.Digest(first) != candidate.Digest(last) || !sameWitnessPair(a, b) || ovswitness.Exclusive(a.Witness) != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
+		if err != nil || candidate.Digest(first) != candidate.Digest(last) || !sameWitnessPair(a, b) || a.buildSchema != candidate.Digest(d.native) || ovswitness.Exclusive(a.Witness) != nil || a.Witness.Bridge.Name != bridge || a.Witness.Configuration.InputDigest != first.InputDigest || a.Witness.Configuration.NextCfg != first.NextCfg || a.Witness.Database.RootUUID != view.Observation.Evidence.Root || a.Witness.Configuration.Source.STP != draft.SpanningTree.Before.STP || a.Witness.Configuration.Source.RSTP != draft.SpanningTree.Before.RSTP || candidate.Digest(a.Witness.Configuration.Source.Parameters) != candidate.Digest(draft.SpanningTree.Before.Parameters) {
 			return empty, witnessUnproven
 		}
 		local := a.Witness.Native.STP.Local

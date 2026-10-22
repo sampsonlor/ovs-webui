@@ -1,0 +1,538 @@
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -92,6 +92,18 @@
+ OVS_CHECK_USDT
+ OVS_CHECK_NETLINK
+ OVS_CHECK_OPENSSL
++AC_ARG_ENABLE([ovs-webui-witness],
++  [AS_HELP_STRING([--enable-ovs-webui-witness],
++                  [build experimental read-only STP witness (default: no)])],
++  [], [enable_ovs_webui_witness=no])
++AS_CASE([$enable_ovs_webui_witness], [yes|no], [],
++        [AC_MSG_ERROR([invalid ovs-webui-witness option])])
++AS_IF([test "$enable_ovs_webui_witness" = yes], [
++  AS_IF([test "$HAVE_OPENSSL" != yes],
++        [AC_MSG_ERROR([OVS WebUI witness requires OpenSSL SHA-256])])
++  AC_DEFINE([ENABLE_OVS_WEBUI_WITNESS], [1],
++            [Build the optional read-only OVS WebUI witness])
++])
+ OVS_CHECK_LIBCAPNG
+ OVS_CHECK_LOGDIR
+ OVS_CHECK_PYTHON3
+diff --git a/lib/ovsdb-cs.c b/lib/ovsdb-cs.c
+--- a/lib/ovsdb-cs.c
++++ b/lib/ovsdb-cs.c
+@@ -15,6 +15,7 @@
+  */
+
+ #include <config.h>
++#include "ovs-webui-witness.h"
+
+ #include "ovsdb-cs.h"
+
+@@ -195,6 +196,9 @@
+ static void ovsdb_cs_db_sync_condition(struct ovsdb_cs_db *db);
+
+ struct ovsdb_cs {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    uint64_t webui_epoch;
++#endif
+     struct ovsdb_cs_db server;
+     struct ovsdb_cs_db data;
+
+@@ -387,6 +391,9 @@
+              ovsdb_cs_state_to_string(cs->state),
+              ovsdb_cs_state_to_string(new_state),
+              where);
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     cs->state = new_state;
+ }
+
+@@ -412,6 +419,9 @@
+ static void
+ ovsdb_cs_restart_fsm(struct ovsdb_cs *cs)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     ovsdb_cs_send_schema_request(cs, &cs->server);
+     ovsdb_cs_transition(cs, CS_S_SERVER_SCHEMA_REQUESTED);
+     cs->data.monitor_version = 0;
+@@ -922,6 +932,9 @@
+ void
+ ovsdb_cs_clear_condition(struct ovsdb_cs *cs, const char *table)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     uint32_t hash = hash_string(table, 0);
+     struct ovsdb_cs_db *db = &cs->data;
+
+@@ -938,6 +951,9 @@
+ void
+ ovsdb_cs_reset_last_id(struct ovsdb_cs *cs)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     cs->data.last_id = UUID_ZERO;
+ }
+
+@@ -1121,6 +1137,9 @@
+ static void
+ ovsdb_cs_db_sync_condition(struct ovsdb_cs_db *db)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&db->cs->webui_epoch);
++#endif
+     struct ovsdb_cs_db_table *table;
+
+     HMAP_FOR_EACH (table, hmap_node, &db->tables) {
+@@ -1174,6 +1193,9 @@
+
+     struct jsonrpc_msg *msg = ovsdb_cs_db_compose_cond_change(&cs->data);
+     if (msg) {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++        webui_epoch_advance(&cs->webui_epoch);
++#endif
+         cs->request_id = json_clone(msg->id);
+         jsonrpc_session_send(cs->session, msg);
+     }
+@@ -1311,6 +1333,9 @@
+ static void
+ ovsdb_cs_db_update_has_lock(struct ovsdb_cs_db *db, bool new_has_lock)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&db->cs->webui_epoch);
++#endif
+     if (new_has_lock && !db->has_lock) {
+         ovsdb_cs_db_add_event(db, OVSDB_CS_EVENT_TYPE_LOCKED);
+         db->is_lock_contended = false;
+@@ -1520,6 +1545,9 @@
+ ovsdb_cs_send_monitor_request(struct ovsdb_cs *cs, struct ovsdb_cs_db *db,
+                               int version)
+ {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_epoch_advance(&cs->webui_epoch);
++#endif
+     struct json *mrs = db->ops->compose_monitor_requests(
+         db->schema, db->ops_aux);
+     /* XXX handle failure */
+@@ -2435,3 +2463,11 @@
+     return NULL;
+ }
+
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++uint64_t
++ovsdb_cs_webui_epoch(const struct ovsdb_cs *cs)
++{
++    return cs->webui_epoch;
++}
++#endif
+diff --git a/lib/ovsdb-cs.h b/lib/ovsdb-cs.h
+--- a/lib/ovsdb-cs.h
++++ b/lib/ovsdb-cs.h
+@@ -34,6 +34,9 @@
+ struct json;
+ struct jsonrpc_session_options;
+ struct ovsdb_cs;
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++uint64_t ovsdb_cs_webui_epoch(const struct ovsdb_cs *);
++#endif
+ 
+ struct ovsdb_cs_ops {
+     /* Returns <monitor-requests> to use for the specified <schema>.  The
+diff --git a/lib/ovsdb-idl.c b/lib/ovsdb-idl.c
+--- a/lib/ovsdb-idl.c
++++ b/lib/ovsdb-idl.c
+@@ -4711,3 +4711,11 @@
+
+     return retval;
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++uint64_t
++ovsdb_idl_webui_epoch(const struct ovsdb_idl *idl)
++{
++    return ovsdb_cs_webui_epoch(idl->cs);
++}
++#endif
+diff --git a/lib/ovsdb-idl.h b/lib/ovsdb-idl.h
+--- a/lib/ovsdb-idl.h
++++ b/lib/ovsdb-idl.h
+@@ -81,6 +81,9 @@
+
+ void ovsdb_idl_set_lock(struct ovsdb_idl *, const char *lock_name);
+ bool ovsdb_idl_has_lock(const struct ovsdb_idl *);
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++uint64_t ovsdb_idl_webui_epoch(const struct ovsdb_idl *);
++#endif
+ bool ovsdb_idl_is_lock_contended(const struct ovsdb_idl *);
+
+ unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
+diff --git a/lib/stp.c b/lib/stp.c
+--- a/lib/stp.c
++++ b/lib/stp.c
+@@ -18,6 +18,7 @@
+  * applies to all modifications. */
+
+ #include <config.h>
++#include "ovs-webui-witness.h"
+
+ #include "stp.h"
+ #include <sys/types.h>
+@@ -1731,3 +1732,16 @@
+ out:
+     ovs_mutex_unlock(&mutex);
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++void
++stp_webui_snapshot(const struct stp *stp, struct webui_local *s)
++{
++    ovs_mutex_lock(&mutex);
++    s->bridge_id = stp->bridge_id;
++    s->hello_ms = timer_to_ms(stp->bridge_hello_time);
++    s->max_age_ms = timer_to_ms(stp->bridge_max_age);
++    s->forward_delay_ms = timer_to_ms(stp->bridge_forward_delay);
++    ovs_mutex_unlock(&mutex);
++}
++#endif
+diff --git a/lib/rstp.c b/lib/rstp.c
+--- a/lib/rstp.c
++++ b/lib/rstp.c
+@@ -28,6 +28,7 @@
+  */
+
+ #include <config.h>
++#include "ovs-webui-witness.h"
+
+ #include "rstp.h"
+ #include "rstp-common.h"
+@@ -1685,3 +1686,16 @@
+ out:
+     ovs_mutex_unlock(&rstp_mutex);
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++void
++rstp_webui_snapshot(const struct rstp *rstp, struct webui_local *s)
++{
++    ovs_mutex_lock(&rstp_mutex);
++    s->bridge_id = rstp->bridge_identifier;
++    s->hello_ms = (uint32_t) rstp->bridge_hello_time * 1000;
++    s->max_age_ms = (uint32_t) rstp->bridge_max_age * 1000;
++    s->forward_delay_ms = (uint32_t) rstp->bridge_forward_delay * 1000;
++    ovs_mutex_unlock(&rstp_mutex);
++}
++#endif
+diff --git a/ofproto/ofproto.c b/ofproto/ofproto.c
+--- a/ofproto/ofproto.c
++++ b/ofproto/ofproto.c
+@@ -16,6 +16,7 @@
+  */
+
+ #include <config.h>
++#include "ovs-webui-witness.h"
+ #include <errno.h>
+ #include <inttypes.h>
+ #include <stdbool.h>
+@@ -511,6 +512,9 @@
+     ovs_mutex_lock(&ofproto_mutex);
+     memset(ofproto, 0, sizeof *ofproto);
+     ofproto->ofproto_class = class;
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    uuid_generate(&ofproto->webui_instance);
++#endif
+     ofproto->name = xstrdup(datapath_name);
+     ofproto->type = xstrdup(datapath_type);
+     hmap_insert(&all_ofprotos, &ofproto->hmap_node,
+@@ -9541,3 +9545,12 @@
+ {
+     flow_limit_vlans(vlan_limit);
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++int
++ofproto_webui_snapshot(struct ofproto *ofproto, struct webui_native *s)
++{
++    return ofproto->ofproto_class->webui_snapshot
++        ? ofproto->ofproto_class->webui_snapshot(ofproto, s) : EOPNOTSUPP;
++}
++#endif
+diff --git a/ofproto/ofproto-dpif.c b/ofproto/ofproto-dpif.c
+--- a/ofproto/ofproto-dpif.c
++++ b/ofproto/ofproto-dpif.c
+@@ -14,6 +14,7 @@
+  */
+
+ #include <config.h>
++#include "ovs-webui-witness.h"
+ #include <errno.h>
+
+ #include "bfd.h"
+@@ -2834,6 +2835,27 @@
+         }
+     }
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++/* Called on the main thread, as are the two engine create/unref paths.
++ * Protocol worker updates are protected by each library's own mutex. */
++static int
++webui_snapshot(struct ofproto *ofproto_, struct webui_native *s)
++{
++    struct ofproto_dpif *p = ofproto_dpif_cast(ofproto_);
++    memset(s, 0, sizeof *s);
++    s->instance = ofproto_->webui_instance;
++    s->stp_enabled = p->stp != NULL;
++    s->rstp_enabled = p->rstp != NULL;
++    if (p->stp) {
++        stp_webui_snapshot(p->stp, &s->stp);
++    }
++    if (p->rstp) {
++        rstp_webui_snapshot(p->rstp, &s->rstp);
++    }
++    return 0;
++}
++#endif
+
+ static void
+ get_rstp_status(struct ofproto *ofproto_, struct ofproto_rstp_status *s)
+@@ -7490,6 +7512,9 @@
+     get_stp_port_status,
+     get_stp_port_stats,
+     set_rstp,
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_snapshot,
++#endif
+     get_rstp_status,
+     set_rstp_port,
+     get_rstp_port_status,
+diff --git a/ofproto/ofproto.h b/ofproto/ofproto.h
+--- a/ofproto/ofproto.h
++++ b/ofproto/ofproto.h
+@@ -20,6 +20,7 @@
+ #include <sys/types.h>
+ #include <netinet/in.h>
+ #include <stdbool.h>
++#include "ovs-webui-witness.h"
+ #include <stddef.h>
+ #include <stdint.h>
+ #include "cfm.h"
+diff --git a/vswitchd/bridge.c b/vswitchd/bridge.c
+--- a/vswitchd/bridge.c
++++ b/vswitchd/bridge.c
+@@ -14,6 +14,8 @@
+  */
+
+ #include <config.h>
++#include "ovs-webui-witness.h"
++#include "openvswitch/json.h"
+ #include "bridge.h"
+ #include <errno.h>
+ #include <inttypes.h>
+@@ -124,6 +126,9 @@
+
+     /* OpenFlow switch processing. */
+     struct ofproto *ofproto;    /* OpenFlow switch. */
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    struct webui_bridge webui;
++#endif
+
+     /* Bridge ports. */
+     struct hmap ports;          /* "struct port"s indexed by name. */
+@@ -289,6 +294,21 @@
+ static void bridge_configure_ipfix(struct bridge *);
+ static void bridge_configure_lsample(struct bridge *);
+ static void bridge_configure_spanning_tree(struct bridge *);
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++static void webui_begin(struct bridge *);
++static void webui_finish(struct bridge *, const struct ovsrec_open_vswitch *);
++static void webui_show(struct unixctl_conn *, int, const char *[], void *);
++static struct uuid webui_daemon_instance;
++static int
++webui_check(struct bridge *br, int error)
++{
++    br->webui.setter_error |= error != 0;
++    return error;
++}
++#define WEBUI_CHECK(BR, EXPR) webui_check(BR, EXPR)
++#else
++#define WEBUI_CHECK(BR, EXPR) (EXPR)
++#endif
+ static void bridge_configure_tables(struct bridge *);
+ static void bridge_configure_dp_desc(struct bridge *);
+ static void bridge_configure_serial_desc(struct bridge *);
+@@ -516,6 +536,11 @@
+
+     ovsdb_idl_omit(idl, &ovsrec_ssl_col_external_ids);
+
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    uuid_generate(&webui_daemon_instance);
++    unixctl_command_register("ovs-webui/stp-witness-v1", "bridge-uuid nonce", 2, 2,
++                             webui_show, NULL);
++#endif
+     /* Register unixctl commands. */
+     unixctl_command_register("qos/show-types", "interface", 1, 1,
+                              qos_unixctl_show_types, NULL);
+@@ -868,6 +893,11 @@
+     size_t n_managers;
+
+     COVERAGE_INC(bridge_reconfigure);
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    HMAP_FOR_EACH (br, node, &all_bridges) {
++        webui_begin(br);
++    }
++#endif
+
+     ofproto_set_flow_limit(smap_get_uint(&ovs_cfg->other_config, "flow-limit",
+                                         OFPROTO_FLOW_LIMIT_DEFAULT));
+@@ -1009,6 +1039,11 @@
+      * narrow race window in which e.g. ofproto/trace will not recognize the
+      * new configuration (sometimes this causes unit test failures). */
+     bridge_run__();
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    HMAP_FOR_EACH (br, node, &all_bridges) {
++        webui_finish(br, ovs_cfg);
++    }
++#endif
+ }
+
+ /* Delete ofprotos which aren't configured or have the wrong type.  Create
+@@ -1932,7 +1967,7 @@
+ bridge_configure_stp(struct bridge *br, bool enable_stp)
+ {
+     if (!enable_stp) {
+-        ofproto_set_stp(br->ofproto, NULL);
++        WEBUI_CHECK(br, ofproto_set_stp(br->ofproto, NULL));
+     } else {
+         struct ofproto_stp_settings br_s;
+         const char *config_str;
+@@ -1968,7 +2003,7 @@
+                                          STP_DEFAULT_FWD_DELAY / 1000) * 1000;
+
+         /* Configure STP on the bridge. */
+-        if (ofproto_set_stp(br->ofproto, &br_s)) {
++        if (WEBUI_CHECK(br, ofproto_set_stp(br->ofproto, &br_s))) {
+             VLOG_ERR("bridge %s: could not enable STP", br->name);
+             return;
+         }
+@@ -1988,8 +2023,8 @@
+             /* As bonds are not supported, just apply configuration to
+              * all interfaces. */
+             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+-                if (ofproto_port_set_stp(br->ofproto, iface->ofp_port,
+-                                         &port_s)) {
++                if (WEBUI_CHECK(br, ofproto_port_set_stp(br->ofproto, iface->ofp_port,
++                                         &port_s))) {
+                     VLOG_ERR("port %s: could not enable STP", port->name);
+                     continue;
+                 }
+@@ -1998,9 +2033,10 @@
+
+         if (bitmap_scan(port_num_bitmap, 1, 0, STP_MAX_PORTS) != STP_MAX_PORTS
+                     && port_num_counter) {
++            (void) WEBUI_CHECK(br, EINVAL);
+             VLOG_ERR("bridge %s: must manually configure all STP port "
+                      "IDs or none, disabling", br->name);
+-            ofproto_set_stp(br->ofproto, NULL);
++            WEBUI_CHECK(br, ofproto_set_stp(br->ofproto, NULL));
+         }
+         bitmap_free(port_num_bitmap);
+     }
+@@ -2010,7 +2046,7 @@
+ bridge_configure_rstp(struct bridge *br, bool enable_rstp)
+ {
+     if (!enable_rstp) {
+-        ofproto_set_rstp(br->ofproto, NULL);
++        WEBUI_CHECK(br, ofproto_set_rstp(br->ofproto, NULL));
+     } else {
+         struct ofproto_rstp_settings br_s;
+         const char *config_str;
+@@ -2049,7 +2085,7 @@
+             oc, "rstp-transmit-hold-count", RSTP_DEFAULT_TRANSMIT_HOLD_COUNT);
+
+         /* Configure RSTP on the bridge. */
+-        if (ofproto_set_rstp(br->ofproto, &br_s)) {
++        if (WEBUI_CHECK(br, ofproto_set_rstp(br->ofproto, &br_s))) {
+             VLOG_ERR("bridge %s: could not enable RSTP", br->name);
+             return;
+         }
+@@ -2065,8 +2101,8 @@
+             /* As bonds are not supported, just apply configuration to
+              * all interfaces. */
+             LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
+-                if (ofproto_port_set_rstp(br->ofproto, iface->ofp_port,
+-                            &port_s)) {
++                if (WEBUI_CHECK(br, ofproto_port_set_rstp(br->ofproto, iface->ofp_port,
++                            &port_s))) {
+                     VLOG_ERR("port %s: could not enable RSTP", port->name);
+                     continue;
+                 }
+@@ -2134,6 +2170,9 @@
+     /* Get rid of deleted bridges or those whose types have changed.
+      * Update 'cfg' of bridges that still exist. */
+     HMAP_FOR_EACH_SAFE (br, node, &all_bridges) {
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++        br->webui.valid = false;
++#endif
+         br->cfg = shash_find_data(&new_br, br->name);
+         if (!br->cfg || strcmp(br->type, ofproto_normalize_type(
+                                    br->cfg->datapath_type))) {
+@@ -3685,6 +3724,9 @@
+     br->name = xstrdup(br_cfg->name);
+     br->type = xstrdup(ofproto_normalize_type(br_cfg->datapath_type));
+     br->cfg = br_cfg;
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    webui_begin(br);
++#endif
+
+     /* Derive the default Ethernet address from the bridge's UUID.  This should
+      * be unique and it will be stable between ovs-vswitchd runs.  */
+@@ -3721,6 +3763,9 @@
+         hmap_destroy(&br->iface_by_name);
+         hmap_destroy(&br->mirrors);
+         hmap_destroy(&br->mappings);
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++        json_destroy(br->webui.source);
++#endif
+         free(br->name);
+         free(br->type);
+         free(br);
+@@ -5393,3 +5438,7 @@
+     free(iface_types);
+     sset_destroy(&types);
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++#include "vswitchd/ovs-webui-witness.inc"
++#endif
+diff --git a/ofproto/ofproto-provider.h b/ofproto/ofproto-provider.h
+--- a/ofproto/ofproto-provider.h
++++ b/ofproto/ofproto-provider.h
+@@ -79,6 +79,9 @@
+ struct ofproto {
+     struct hmap_node hmap_node; /* In global 'all_ofprotos' hmap. */
+     const struct ofproto_class *ofproto_class;
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    struct uuid webui_instance;
++#endif
+     char *type;                 /* Datapath type. */
+     char *name;                 /* Datapath name. */
+
+@@ -1687,6 +1690,10 @@
+      * support RSTP, as does a null pointer. */
+     void (*set_rstp)(struct ofproto *ofproto,
+                     const struct ofproto_rstp_settings *s);
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++    int (*webui_snapshot)(struct ofproto *, struct webui_native *);
++#endif
+
+     /* Retrieves state of Rapid Spanning Tree Protocol (RSTP) on 'ofproto'.
+      *

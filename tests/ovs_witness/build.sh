@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo=$(pwd)
+version=${OVS_WITNESS_VERSION:?}
+case "$version" in 3.3.9|3.7.1|4.0.0) ;; *) exit 1 ;; esac
+export OVS_WITNESS_VERSION
+extension="extensions/ovs-witness/$version"
 out="$repo/outputs/ovs-witness-ci"
 mkdir -p "$out" test-results/ovs-witness
 test "$(uname -m)" = "${EXPECTED_MACHINE:?}"
@@ -10,18 +14,18 @@ cp "$(go tool -n test2json)" "$out/test2json"
 go test -json -count=1 ./internal/ovswitness > test-results/ovs-witness/go-codec.json
 go test -race -json -count=1 ./internal/provider/ovsdb > test-results/ovs-witness/go-provider.json
 go test ./internal/ovswitness -run '^$' -fuzz '^FuzzWitnessDecode$' -fuzztime=3s -parallel=2 > test-results/ovs-witness/go-fuzz.log
-commit=1a3fefbcd0b0f70ced621b92e286fef3dffaac09
+commit=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$extension/upstream.json")
 curl --fail --location --retry 0 --max-time 90 \
   "https://api.github.com/repos/openvswitch/ovs/tarball/$commit" -o "$out/upstream.tar.gz"
-python3 - "$out/upstream.tar.gz" <<'PY'
+python3 - "$out/upstream.tar.gz" "$extension/upstream.json" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
-expected = json.loads(Path('extensions/ovs-witness/3.3.9/upstream.json').read_text())['archive_sha256']
+expected = json.loads(Path(sys.argv[2]).read_text())['archive_sha256']
 assert hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest() == expected, 'Untrusted archive'
 PY
 mkdir "$out/source"
 tar -xzf "$out/upstream.tar.gz" --strip-components=1 -C "$out/source"
-python3 extensions/ovs-witness/3.3.9/apply.py "$out/source" "$out/upstream.tar.gz"
+python3 "$extension/apply.py" "$out/source" "$out/upstream.tar.gz"
 python3 tests/ovs_witness/check_registry.py "$out/source"
 cd "$out/source"
 ./boot.sh > "$repo/test-results/ovs-witness/bootstrap.log" 2>&1
@@ -41,7 +45,9 @@ for mode in enabled sanitized default; do
     CFLAGS="$cflags" LDFLAGS="$ldflags" LIBS='-lm' > "$repo/test-results/ovs-witness/configure-$mode.log" 2>&1
   make -j4 > "$repo/test-results/ovs-witness/build-$mode.log" 2>&1
   if [ "$mode" != default ]; then
-    ./libtool --mode=link gcc $cflags $ldflags -I. -I./include -I./lib \
+    unitflags=()
+    if [ "$version" = 4.0.0 ]; then unitflags+=(-DOVS_WEBUI_WITNESS_RESET_API); fi
+    ./libtool --mode=link gcc $cflags $ldflags "${unitflags[@]}" -I. -I./include -I./lib \
       -I"$out/source" -I"$out/source/lib" -I"$out/source/include" \
       "$repo/tests/ovs_witness/unit.c" -Wl,--start-group \
       ofproto/libofproto.la ovsdb/libovsdb.la lib/libsflow.la lib/libopenvswitch.la \
@@ -58,7 +64,7 @@ for mode in enabled sanitized default; do
     done
   fi
   cd "$repo"
-  sudo -- env ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  sudo -- env OVS_WITNESS_VERSION="$version" ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
     python3 tests/ovs_witness/prototype.py --build "$out/$mode" \
     --source "$out/source" --mode "$mode" \
     --report "test-results/ovs-witness/native-$mode.json"
