@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -152,6 +154,19 @@ func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv
 		setup("stp")
 		in := envelope("rstp", nil).Candidate.Intents[0]
 		before := vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config")
+		counter := vs("get", "Open_vSwitch", ".", "next_cfg")
+		mutate := func(value string) {
+			body, err := json.Marshal([]any{"Open_vSwitch", map[string]any{"op": "mutate", "table": "Bridge", "where": []any{[]any{"_uuid", "==", []any{"uuid", b.OVSUUID}}}, "mutations": []any{[]any{"other_config", "delete", []any{"set", []any{"execution-opaque"}}}, []any{"other_config", "insert", []any{"map", []any{[]any{"execution-opaque", value}}}}}}})
+			must(t, err)
+			root := os.Getenv("OVS_WITNESS_ROOT")
+			out, err := exec.CommandContext(ctx, filepath.Join(root, "bin/ovsdb-client"), "transact", "unix:"+filepath.Join(root, "db.sock"), string(body)).CombinedOutput()
+			var result []struct {
+				Count int `json:"count"`
+			}
+			if err != nil || json.Unmarshal(out, &result) != nil || len(result) != 1 || result[0].Count != 1 {
+				t.Fatalf("isolated persistent ABA mutation: %v %s", err, out)
+			}
+		}
 		calls := 0
 		_, err := e.ReadSpanningTreeWitnessPreflight(ctx, in, control, build, func(c context.Context) error {
 			if err := authorize(c); err != nil {
@@ -162,12 +177,12 @@ func runExecutionCases(t *testing.T, ctx context.Context, e *ovsdb.Executor, inv
 			// monitor, before its first atomic fence. The image is restored, but
 			// the monitor must still reject the intervening transactions.
 			if calls == 3 {
-				vs("set", "Bridge", "br-witness", "other_config:execution-opaque=changed")
-				vs("set", "Bridge", "br-witness", "other_config:execution-opaque=preserve")
+				mutate("changed")
+				mutate("preserve")
 			}
 			return nil
 		})
-		if err == nil || calls < 3 || vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config") != before {
+		if err == nil || calls < 3 || vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config") != before || vs("get", "Open_vSwitch", ".", "next_cfg") != counter {
 			t.Fatal("persistent ABA accepted or native original changed", err, calls)
 		}
 	})
