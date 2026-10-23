@@ -63,6 +63,30 @@ async function apply(page: Page) {
   return path;
 }
 
+async function confirm(page: Page) {
+  // Match the formal browser suite's explicit review flow. A watchdog update
+  // can invalidate the displayed sequence without executing this decision.
+  for (let review = 0; review < 4; review++) {
+    const reply = page.waitForResponse(r =>
+      r.request().method() === 'POST' && r.url().endsWith('/decisions'));
+    await page.getByRole('button', { name: 'Confirm configuration', exact: true }).click();
+    const response = await reply;
+    if (response.status() === 202) {
+      await expect(page.getByTestId('safe-state')).toHaveText('confirmed');
+      return;
+    }
+    const problem = await response.json();
+    expect(response.status()).toBe(409);
+    expect(problem.code).toBe('TRANSACTION_VERSION_CHANGED');
+    expect(problem.command_effect).toBe('not-started');
+    await expect(page.getByRole('button', { name: 'Recover original request' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click();
+    await expect(page.getByTestId('safe-state')).toHaveText('awaiting-confirmation');
+    await expect(page.getByRole('button', { name: 'Confirm configuration', exact: true })).toBeEnabled();
+  }
+  throw new Error('Transaction did not stabilize for an explicitly reviewed confirmation');
+}
+
 test('default hardened service refuses unproven native source without changing OVS', async ({ page }) => {
   await login(page, 'native-tree-denied');
   const before = native();
@@ -110,7 +134,7 @@ test('qualified native execution reviews responsive UI and confirms actual insta
   const path = await apply(page);
   await screen(page, 'native-tree-awaiting-confirmation');
   await expect(page.getByRole('button', { name: 'Confirm configuration', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Confirm configuration', exact: true }).click();
+  await confirm(page);
   await expect.poll(async () => (await get(page.context(), path)).safe_apply).toBe('confirmed');
   await expect(page.getByTestId('safe-state')).toHaveText('confirmed');
   const row = await get(page.context(), source);

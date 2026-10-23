@@ -178,3 +178,16 @@ identities. The original failure and all earlier superseded runs remain
 separately retained. No authentication deadline or retry policy was relaxed;
 #71 remains deferred. Independent main qualification is required before the
 release tag and #23 closure. This record does not complete the other #43 domains.
+
+Main `c7c05c1fc50d6c0e1a7ce78d764b85079f0a2c51` (CI 39782368345)
+retained all thirteen official artifacts with verified digests. Twelve checks
+passed; the 3.3.9 arm64 UI check failed. The native write reached Applied, but
+the one-click confirmation received `TRANSACTION_VERSION_CHANGED`; the page
+explicitly asked for refreshed review. Its unresolved transaction then correctly
+protected the graph against the following test. The service journal and both
+failure snapshots are retained. The new UI test now follows the same bounded
+explicit-review flow as the existing formal suite: only an exact 409 plus
+`command_effect=not-started` permits refreshing evidence and making a new human
+decision. Unknown outcomes never enter this flow. Test deadlines, retries,
+production confirmation logic and #71 are unchanged. A new full source and
+independent main qualification are required.
