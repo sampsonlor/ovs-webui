@@ -1,5 +1,3 @@
-//go:build linux
-
 package ovsdb
 
 import (
@@ -21,7 +19,11 @@ func TestMulticastPlanGuardsWholeGraphAndPreservesForeignKeys(t *testing.T) {
 			}
 			row := v.Observation.Rows["Bridge"][uuid]
 			row.Values["mcast_snooping_enable"] = false
-			row.Values["other_config"].(map[string]any)["keep-native"] = "opaque"
+			row.Configuration["mcast_snooping_enable"] = false
+			other := candidate.CloneConfiguration(row.Configuration["other_config"].(map[string]any))
+			other["keep-native"] = "opaque"
+			row.Configuration["other_config"] = other
+			row.Values["other_config"] = candidate.CloneConfiguration(other)
 			v.Observation.Rows["Bridge"][uuid] = row
 			cfg := multicast.Configuration{Parameters: map[string]*string{multicast.Keys[0]: nil, multicast.Keys[1]: nil, multicast.Keys[2]: nil}}
 			age := "300"
