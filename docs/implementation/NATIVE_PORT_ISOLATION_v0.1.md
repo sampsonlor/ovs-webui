@@ -64,6 +64,17 @@ production HTTPS/IPC/browser cases cover read permissions, Standard/Expert,
 light/dark, desktop/tablet/mobile, Candidate/Diff/Validation, confirmation and
 exact Safe Apply rollback. Passing results and screenshot review remain pending.
 
+The failed source runs remain separate from acceptance: 39887393915 failed
+formatting; 39887559728 retained a rolled-back draft before the independent
+lost-reply case; 39888271098 attempted HTTP delegation of a reserved capability
+and was correctly denied. Provisioning now uses the offline root action.
+Run 39889415052 retained a native STP source-preflight refusal. Run 39890762111
+exposed the missing HTTP isolation deep links, a test wait that could read an old
+pre-commit boolean before external drift, and another safe STP witness-source
+dispatch refusal. The deep links and ordered observation wait have dedicated
+regressions; source diagnostics now use a closed subphase vocabulary. No native
+source proof, authentication, timeout or retry requirement has been relaxed.
+
 This slice does not close #43. Multicast, Tunnel, Mirror, QoS/Queue, all three
 exporters and Profile/Drift remain separate required work. STP/RSTP #23 also
 requires its independently qualified main baseline. #71 remains deferred.

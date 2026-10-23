@@ -73,7 +73,7 @@ func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *tes
 	})
 	t.Run("closed-reasons-do-not-expose-native-details", func(t *testing.T) {
 		private := "/private/example bearer=not-a-real-credential"
-		for _, stage := range []string{"witness-pair", private} {
+		for _, stage := range []string{"witness-pair", "witness-source", private} {
 			err := &treeEvidenceFailure{stage: stage, cause: errors.New(private)}
 			reason := SpanningTreeExecutionEvidenceReason(err)
 			if strings.Contains(reason, "/private") || strings.Contains(reason, "credential") || strings.Contains(reason, "bearer") {
@@ -82,6 +82,9 @@ func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *tes
 			if stage == private && reason != "spanning-tree-dispatch-unproven" {
 				t.Fatal("unreviewed reason admitted", reason)
 			}
+		}
+		if reason := SpanningTreeExecutionEvidenceReason(&treeEvidenceFailure{stage: "witness-source", cause: errors.New("SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN")}); reason != "spanning-tree-dispatch-witness-source-process-fds" {
+			t.Fatal("closed source phase missing", reason)
 		}
 	})
 	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {

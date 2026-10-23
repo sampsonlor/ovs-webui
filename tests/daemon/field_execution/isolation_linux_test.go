@@ -129,6 +129,12 @@ func TestNativePortIsolation(t *testing.T) {
 		t.Fatal("lost reply invented native success", out)
 	}
 	waitFor(t, func() bool { return f.vs("get", "Port", ports[0], "protected") == "true" })
+	// Establish the monitor's after-image before introducing external drift.
+	// Otherwise an older pre-commit false value can satisfy the later wait.
+	waitFor(t, func() bool {
+		s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{binding})
+		return err == nil && s.Isolations[binding.ManagementID].Protected
+	})
 	for n := 0; n < 3; n++ {
 		out = f.executor.Observe(f.ctx, p, out)
 		if out.Target != nil || out.Applied == "applied" {

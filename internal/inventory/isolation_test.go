@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"testing"
@@ -57,6 +58,16 @@ func TestIsolationRootGrantGraphAndPrivateDependency(t *testing.T) {
 	p := read()
 	if !candidate.IsolationEditable(p) || len(p.Bindings) != 5 {
 		t.Fatal(p)
+	}
+	observed, err := s.Read(context.Background(), "readPort", map[string]string{"port_id": b.ManagementID}, nil, authn.Claims{Capabilities: []string{"inventory.read", "state.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource := observed.(map[string]any)
+	permission := resource["isolation_execution"].(map[string]any)
+	field := resource["fields"].(map[string]any)["protected"].(map[string]any)
+	if permission["available"] != false || permission["authority"] != "withheld" || field["value"] != nil || field["availability"] != "withheld" {
+		t.Fatal("observation exposed configuration or ownership", resource)
 	}
 	row := o.Rows["Port"][b.OVSUUID]
 	row.Values["protected"] = true

@@ -52,6 +52,11 @@ async function apply(page:Page,desired:'protected'|'unprotected') {
 
 test('native isolation review keeps read permission, depth and mobile responsibility separate',async({page})=>{
   await login(page,'browser-isolation-reader');
+  await page.goto(fixture.origin+'/switching/isolation?filter=iso-ui-data&limit=1');
+  await expect(page.getByRole('table',{name:'Observed ports in this page'})).toContainText('iso-ui-data');
+  await screen(page,'list');
+  await page.getByRole('link',{name:'iso-ui-data',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'iso-ui-data',exact:true})).toBeVisible();
   await expect(page.getByText('Configuration unavailable:',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Stage isolation change',exact:true})).toHaveCount(0);
   await screen(page,'reader-standard');

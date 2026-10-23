@@ -28,6 +28,26 @@ func treeDispatchReason(err error) string {
 	}
 	var failure *treeEvidenceFailure
 	if errors.As(err, &failure) {
+		if failure.stage == "witness-source" && failure.cause != nil {
+			// Closed source diagnostics only; never return arbitrary cause text.
+			for _, item := range []struct{ code, reason string }{
+				{"SPANNING_TREE_SOURCE_EVIDENCE_UNPROVEN", "evidence"},
+				{"SPANNING_TREE_SOURCE_CONTROL_UNPROVEN", "control"},
+				{"SPANNING_TREE_SOURCE_EXECUTABLE_UNPROVEN", "executable"},
+				{"SPANNING_TREE_SOURCE_DATABASE_UNAVAILABLE", "database"},
+				{"SPANNING_TREE_SOURCE_DATABASE_PEER_UNPROVEN", "database-peer"},
+				{"SPANNING_TREE_SOURCE_SCHEMA_UNPROVEN", "schema"},
+				{"SPANNING_TREE_SOURCE_ROOT_UNPROVEN", "root"},
+				{"SPANNING_TREE_SOURCE_FILE_UNPROVEN", "file"},
+				{"SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN", "process-fds"},
+				{"SPANNING_TREE_SOURCE_DIAG_UNPROVEN", "socket-diag"},
+				{"SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN", "connection"},
+			} {
+				if failure.cause.Error() == item.code {
+					return "spanning-tree-dispatch-witness-source-" + item.reason
+				}
+			}
+		}
 		switch failure.stage {
 		case "authorization", "execution-view", "database-source", "journal", "schema", "fence-before", "fence-after", "fence-snapshot-changed", "control-source", "witness-source", "witness-build", "witness-reply", "witness-authorization", "witness-pair", "witness-pair-changed", "final-scope", "transition":
 			return "spanning-tree-dispatch-" + failure.stage
