@@ -50,9 +50,17 @@ func TestNativeMulticastGroups(t *testing.T) {
 	}
 	name := "br-mcast-groups"
 	vs("add-br", name, "--", "set", "Bridge", name, "datapath_type=system")
-	t.Cleanup(func() { vs("--if-exists", "del-br", name) })
+	t.Cleanup(func() {
+		cleanup, done := context.WithTimeout(context.Background(), 5*time.Second)
+		defer done()
+		out, err := exec.CommandContext(cleanup, filepath.Join(root, "bin/ovs-vsctl"), "--timeout=5", "--db=unix:"+filepath.Join(root, "db.sock"), "--if-exists", "del-br", name).CombinedOutput()
+		if err != nil {
+			t.Errorf("isolated Bridge cleanup: %v %s", err, out)
+		}
+	})
 	uuid := vs("get", "Bridge", name, "_uuid")
 	dir := t.TempDir()
+	must(t, os.Chmod(dir, 0700))
 	options := sqlite.Options{Path: filepath.Join(dir, "manager.db"), Kind: repository.Manager, SoftwareVersion: "native-multicast-groups"}
 	must(t, sqlite.Initialize(ctx, options))
 	store, err := sqlite.Open(ctx, options)
