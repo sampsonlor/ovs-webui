@@ -182,6 +182,18 @@ func TestNativeSpanningTreePreflight(t *testing.T) {
 						for _, value := range []string{"transient", "original"} {
 							payload, _ := json.Marshal([]any{"Open_vSwitch", map[string]any{"op": "update", "table": "Bridge", "where": []any{[]any{"_uuid", "==", []any{"uuid", binding.OVSUUID}}}, "row": map[string]any{"other_config": []any{"map", []any{[]any{"m2c3-opaque", value}}}}}})
 							f.run("ovsdb-client", "transact", "unix:"+f.dbSocket, string(payload))
+							// Wait for BOTH ordered monitor images. Waiting only for
+							// the restored dependency can match the old original before
+							// either notification arrives, contaminating this assertion
+							// and the next scenario with the delayed transient image.
+							waitFor(t, func() bool {
+								v, err := inv.SpanningTreeExecutionView(ctx, binding)
+								if err != nil {
+									return false
+								}
+								other, ok := v.Observation.Rows["Bridge"][binding.OVSUUID].Configuration["other_config"].(map[string]any)
+								return ok && other["m2c3-opaque"] == value
+							})
 						}
 						waitFor(t, func() bool {
 							v, err := inv.SpanningTreeExecutionView(ctx, binding)

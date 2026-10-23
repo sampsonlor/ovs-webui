@@ -113,6 +113,16 @@ teardown during an attempt; actual complete source/main qualification is still
 required, and the historical failure is not declared diagnosed solely from the
 coarse process-FD code. No retry was added.
 
+Run 39902587870 exposed an arm64 three-schema fixture ordering error in the
+raw configuration-ABA preflight case: its wait for restored originals could
+match the original cached image before either real update arrived. The delayed
+transient image then triggered the scope check, or contaminated the following
+cancel case before it reached the intended boundary. The fixture now waits for
+the transient image and then the restored image, in order, after the two actual
+transactions. It retains the same native version-fence error assertion, all
+authorization/cancellation assertions, test names and production deadlines.
+This is setup synchronization, not a retry of a failed preflight.
+
 This slice does not close #43. Multicast, Tunnel, Mirror, QoS/Queue, all three
 exporters and Profile/Drift remain separate required work. STP/RSTP #23 completed
 its independently qualified main baseline `phase1-spanning-tree-execution-v0.1`.
