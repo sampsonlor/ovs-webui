@@ -171,6 +171,8 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 	empty := SpanningTreeWitnessSample{}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	ctx, release := treeSourceContext(ctx)
+	defer release()
 	if authorize == nil {
 		return empty, witnessUnproven
 	}
@@ -184,7 +186,9 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 	if err != nil {
 		return empty, witnessUnproven
 	}
-	defer conn.Close()
+	if err = retainTreeSourceConnection(ctx, conn); err != nil {
+		return empty, err
+	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	deadline, _ := ctx.Deadline()

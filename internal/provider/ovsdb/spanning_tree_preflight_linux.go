@@ -52,6 +52,8 @@ func (e *Executor) readSpanningTreePreflight(ctx context.Context, draft candidat
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	ctx, release := treeSourceContext(ctx)
+	defer release()
 	treeEvidenceStep(ctx, "authorization")
 	if err := authorize(ctx); err != nil {
 		return empty, err

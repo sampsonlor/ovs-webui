@@ -57,7 +57,9 @@ func (e *Executor) treeExecutionEvidence(ctx context.Context, i candidate.Stored
 		return SpanningTreePreflight{}, witnessUnproven
 	}
 	daemon, err := spanningTreeDaemon(conn, o.PeerUID)
-	_ = conn.Close()
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	if err != nil {
 		return SpanningTreePreflight{}, witnessUnproven
 	}

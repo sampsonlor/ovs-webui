@@ -31,6 +31,8 @@ var sourceUnproven = errors.New("SPANNING_TREE_SOURCE_UNPROVEN")
 // runtime reply, qualify exclusive IDL ownership or produce Applied evidence.
 // Graph/Bridge qualification and dispatch reservations remain separate gates.
 func ReadBoundSpanningTreeRuntime(ctx context.Context, control SpanningTreeControl, database Options, expected inventory.Evidence, executable, protocol, bridge string, authorize func(context.Context) error) (SpanningTreeRuntimeSample, error) {
+	ctx, release := treeSourceContext(ctx)
+	defer release()
 	if authorize == nil {
 		return SpanningTreeRuntimeSample{}, sourceUnproven
 	}
@@ -82,7 +84,9 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 	if err != nil {
 		return "", errors.New("SPANNING_TREE_SOURCE_DATABASE_UNAVAILABLE")
 	}
-	defer db.Close()
+	if err = retainTreeSourceConnection(ctx, db); err != nil {
+		return "", err
+	}
 	closeOnCancel := context.AfterFunc(ctx, func() { _ = db.Close() })
 	defer closeOnCancel()
 	dbPeer, dbPID, err := peer(db, database.PeerUID)

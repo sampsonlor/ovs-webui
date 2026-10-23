@@ -97,6 +97,22 @@ reported only unproven. Preparation now retains the private cause behind an
 unchanged public Problem; error text never includes the native cause. This is
 diagnostic preservation, not a claim that the refusal's root cause is fixed.
 
+Run 39898083233 on 1b0f5bc passed all 14 jobs; its 13 official archive digests
+are retained. The next source 90d74e3 passed both formal browser suites,
+including empty/stale isolation views, but OVS 3.3.9 amd64 rejected a native STP
+dispatch at the strict process-FD source check. The log does not identify which
+FD vanished. Inspection found that this preflight closed its own read-only DB
+and control probes between consecutive /proc inspections, allowing the server
+to remove accepted FDs asynchronously. These probe connections now remain held
+within the same attempt, with a fixed twelve-connection budget and cleanup on
+return, cancellation or the existing deadline. The FD enumeration, established
+peer relation, source/build/authority fences and two-second deadline are
+unchanged; vanished FDs still reject. Dedicated lifecycle/budget regressions
+join the existing source admission test. This removes self-induced connection
+teardown during an attempt; actual complete source/main qualification is still
+required, and the historical failure is not declared diagnosed solely from the
+coarse process-FD code. No retry was added.
+
 This slice does not close #43. Multicast, Tunnel, Mirror, QoS/Queue, all three
 exporters and Profile/Drift remain separate required work. STP/RSTP #23 completed
 its independently qualified main baseline `phase1-spanning-tree-execution-v0.1`.
