@@ -23,7 +23,9 @@ func TestMulticastPlanGuardsWholeGraphAndPreservesForeignKeys(t *testing.T) {
 			other := candidate.CloneConfiguration(row.Configuration["other_config"].(map[string]any))
 			other["keep-native"] = "opaque"
 			row.Configuration["other_config"] = other
-			row.Values["other_config"] = candidate.CloneConfiguration(other)
+			// The public view deliberately omits unrelated native map keys.
+			// A writer must merge from the complete private persistent image.
+			row.Values["other_config"] = sanitize("Bridge", "other_config", other)
 			v.Observation.Rows["Bridge"][uuid] = row
 			cfg := multicast.Configuration{Parameters: map[string]*string{multicast.Keys[0]: nil, multicast.Keys[1]: nil, multicast.Keys[2]: nil}}
 			age := "300"
@@ -50,6 +52,10 @@ func TestMulticastPlanGuardsWholeGraphAndPreservesForeignKeys(t *testing.T) {
 			fields := plan.Operations[4]["row"].(map[string]any)
 			if len(fields) != 2 || fields["mcast_snooping_enable"] != true || !strings.Contains(string(p.Native), "keep-native") || !strings.Contains(string(p.Native), candidate.MulticastMarker) {
 				t.Fatal("native field/key preservation failed", string(p.Native))
+			}
+			written, err := normalize(fields["other_config"], d.native.Tables["Bridge"].Columns["other_config"])
+			if err != nil || written.(map[string]any)["keep-native"] != "opaque" || written.(map[string]any)[multicast.Keys[0]] != "300" {
+				t.Fatal("update row lost a foreign key or closed parameter", written, err)
 			}
 			bview := v.Candidate.Multicasts[b.ManagementID]
 			bview.Configuration = after

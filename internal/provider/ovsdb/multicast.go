@@ -69,8 +69,8 @@ func compileMulticastExecution(id, marker string, envelope candidate.Envelope, v
 			return out, apitypes.Fail(409, "APPLIED_COUNTER_UNSUPPORTED")
 		}
 	}
-	port := view.Observation.Rows["Bridge"][i.Object.OVSUUID]
-	labels, ok := port.Values["external_ids"].(map[string]any)
+	bridge := view.Observation.Rows["Bridge"][i.Object.OVSUUID]
+	labels, ok := bridge.Configuration["external_ids"].(map[string]any)
 	if !ok || !d.multicastMaps["external_ids"] {
 		return out, apitypes.Fail(409, "COMMIT_EVIDENCE_UNSUPPORTED")
 	}
@@ -86,7 +86,9 @@ func compileMulticastExecution(id, marker string, envelope candidate.Envelope, v
 	n := nativePlan{Operations: ops[:4], Evidence: view.Observation.Evidence}
 	where := []any{uuidCondition(i.Object.OVSUUID)}
 	n.CountIndexes = append(n.CountIndexes, len(n.Operations))
-	other, ok := port.Values["other_config"].(map[string]any)
+	// Values is a deliberately filtered public projection. Only the complete
+	// private persistent image can preserve unknown and unrelated native keys.
+	other, ok := bridge.Configuration["other_config"].(map[string]any)
 	if !ok {
 		return out, apitypes.Fail(409, "MULTICAST_CONFIGURATION_UNKNOWN")
 	}

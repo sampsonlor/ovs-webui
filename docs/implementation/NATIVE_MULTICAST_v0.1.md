@@ -14,7 +14,9 @@ Bridge snooping flag and three basic native `other_config` keys:
 - `mcast-snooping-disable-flood-unregistered`: exact `true` or `false`.
 
 Explicit null removes a key; omitted keys preserve their captured native
-values. Unset values remain unset in Diff and compensation, rather than being
+values. The native compiler merges from the complete private persistent map;
+the filtered public projection is never a native rewrite source. Unset values
+remain unset in Diff and compensation, rather than being
 replaced with guessed native defaults. Other map entries are preserved.
 Configured snooping is neither proof of group membership nor measured delivery.
 Advanced multicast policy and forced flooding combinations remain read-only.
