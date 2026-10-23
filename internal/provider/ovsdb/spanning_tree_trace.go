@@ -35,3 +35,8 @@ func treeDispatchReason(err error) string {
 	}
 	return "spanning-tree-dispatch-unproven"
 }
+
+// SpanningTreeExecutionEvidenceReason returns the same closed diagnostic phase
+// used at dispatch. It never exposes native frames, process details or paths,
+// and does not authorize a retry or change an unproven outcome.
+func SpanningTreeExecutionEvidenceReason(err error) string { return treeDispatchReason(err) }

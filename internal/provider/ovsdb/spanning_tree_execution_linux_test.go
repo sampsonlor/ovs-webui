@@ -75,7 +75,7 @@ func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *tes
 		private := "/private/example bearer=not-a-real-credential"
 		for _, stage := range []string{"witness-pair", private} {
 			err := &treeEvidenceFailure{stage: stage, cause: errors.New(private)}
-			reason := treeDispatchReason(err)
+			reason := SpanningTreeExecutionEvidenceReason(err)
 			if strings.Contains(reason, "/private") || strings.Contains(reason, "credential") || strings.Contains(reason, "bearer") {
 				t.Fatal("private details in public reason", reason)
 			}

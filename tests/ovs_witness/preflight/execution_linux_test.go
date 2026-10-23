@@ -68,12 +68,15 @@ func runExecutionCases(t *testing.T, ctx context.Context, source *ovsdb.Provider
 		}
 		return candidate.Envelope{Owner: repository.NewID(), Epoch: repository.NewID(), Sequence: 1, Candidate: candidate.Candidate{ID: repository.NewID(), Revision: repository.NewID(), Generation: &b.Generation, Intents: []candidate.StoredIntent{i}}}
 	}
-	prepare := func(in candidate.Envelope) execution.Plan {
+	prepare := func(caseT *testing.T, in candidate.Envelope) execution.Plan {
+		caseT.Helper()
 		id := repository.NewID()
 		p, err := e.Prepare(writeCtx, id, candidate.Digest([]any{id, in}), in)
-		must(t, err)
+		if err != nil {
+			caseT.Fatalf("native execution preflight rejected: %s", ovsdb.SpanningTreeExecutionEvidenceReason(err))
+		}
 		if len(p.GraphBindings) != 5 {
-			t.Fatal("graph reservation omitted local or real system data Port members", p.GraphBindings)
+			caseT.Fatal("graph reservation omitted local or real system data Port members", p.GraphBindings)
 		}
 		return p
 	}
@@ -111,7 +114,7 @@ func runExecutionCases(t *testing.T, ctx context.Context, source *ovsdb.Provider
 				priority := "4096"
 				params[change.after+"-priority"] = &priority
 			}
-			p := prepare(envelope(change.after, params))
+			p := prepare(t, envelope(change.after, params))
 			o := observe(p, commit(p))
 			if lost := e.Observe(ctx, p, execution.Outcome{Commit: "unknown", Applied: "unknown"}); lost.Commit != "committed" || lost.Applied == "applied" || lost.Target != nil {
 				t.Fatal("lost reply invented a target", lost)
@@ -127,7 +130,7 @@ func runExecutionCases(t *testing.T, ctx context.Context, source *ovsdb.Provider
 	for _, fault := range []string{"role-revoked", "root-revoked", "field-conflict", "before-send-denied"} {
 		t.Run(fault+"_rejects_without_dispatch", func(t *testing.T) {
 			setup("stp")
-			p := prepare(envelope("rstp", nil))
+			p := prepare(t, envelope("rstp", nil))
 			before := vs("get", "Bridge", "br-witness", "stp_enable", "rstp_enable", "other_config")
 			defer grants()
 			defer role(caps)
@@ -214,7 +217,7 @@ func runExecutionCases(t *testing.T, ctx context.Context, source *ovsdb.Provider
 	})
 	t.Run("changed_after_image_refuses_compensation", func(t *testing.T) {
 		setup("stp")
-		p := prepare(envelope("rstp", nil))
+		p := prepare(t, envelope("rstp", nil))
 		observe(p, commit(p))
 		vs("set", "Bridge", "br-witness", "other_config:rstp-priority=8192")
 		draft() // wait for an explicitly induced external-change observation
