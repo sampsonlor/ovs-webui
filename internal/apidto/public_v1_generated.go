@@ -117,6 +117,7 @@ type ObservedIntent struct {
 	SchemaDigest           string                     `json:"schema_digest,omitempty"`
 	QinqContext            QinQContext                `json:"qinq_context,omitempty"`
 	TopologyChange         TopologyChange             `json:"topology_change,omitempty"`
+	IsolationChange        IsolationChange            `json:"isolation_change,omitempty"`
 	SpanningTreeChange     SpanningTreeDraft          `json:"spanning_tree_change,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
@@ -154,6 +155,7 @@ type Port struct {
 	AllowedOperations  []string                    `json:"allowed_operations"`
 	QinqEditable       bool                        `json:"qinq_editable,omitempty"`
 	QinqEthertype      json.RawMessage             `json:"qinq_ethertype,omitempty"`
+	IsolationExecution IsolationExecution          `json:"isolation_execution,omitempty"`
 	SpanningTree       SpanningTreePortObservation `json:"spanning_tree,omitempty"`
 	ExtraFields        map[string]json.RawMessage  `json:"-"`
 }
@@ -1107,6 +1109,16 @@ func (v TopologyChange) MarshalJSON() ([]byte, error) {
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
+type IsolationChange struct {
+	Before bool `json:"before"`
+	After  bool `json:"after"`
+}
+type IsolationExecution struct {
+	Available  bool   `json:"available"`
+	Reason     string `json:"reason"`
+	Authority  string `json:"authority"`
+	Capability string `json:"capability"`
+}
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
 	Operation    string `json:"operation"`
@@ -1283,6 +1295,12 @@ type SpanningTreeConfigureIntent struct {
 	Operation    string                     `json:"operation"`
 	Object       ObjectBinding              `json:"object"`
 	SpanningTree SpanningTreePrepareRequest `json:"spanning_tree"`
+}
+type PortIsolationIntent struct {
+	IntentId  Id            `json:"intent_id"`
+	Operation string        `json:"operation"`
+	Object    ObjectBinding `json:"object"`
+	Protected bool          `json:"protected"`
 }
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`

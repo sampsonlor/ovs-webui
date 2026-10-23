@@ -373,7 +373,10 @@ export class Controller {
             ? '/inventory/spanning-tree' + query
             : `/bridges/${encodeURIComponent(parts[2])}/spanning-tree`;
         capability = 'inventory.read';
-      } else if (parts[0] === 'bridges') {
+        } else if (path === '/switching/isolation' || path.startsWith('/switching/isolation/')) {
+          resourceURL = parts.length===2 ? '/ports'+query : `/ports/${encodeURIComponent(parts[2])}`;
+          capability = 'inventory.read';
+        } else if (parts[0] === 'bridges') {
         resourceURL = path + (parts.length === 1 ? query : '');
         capability = 'inventory.read';
       } else if (path === '/interfaces' && selectedBridge) {

@@ -272,6 +272,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.PortIsolationSet {
+		return compileIsolationExecution(id, marker, envelope, view, d)
+	}
 	if _, ok := spanningTreeIntent(envelope.Candidate); ok {
 		return compileSpanningTreeExecution(id, marker, envelope, view, d)
 	}

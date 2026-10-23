@@ -58,6 +58,7 @@ func run() int {
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localSpanningTree := flag.String("local-spanning-tree-bridges", "", "Reviewed immutable Bridge IDs permitted to prepare STP/RSTP drafts; no execution grant, independent of topology and Port authority")
+	localIsolation := flag.String("local-isolation-ports", "", "Independent reviewed immutable Port IDs permitted for native protected-Port Safe Apply")
 	localSpanningTreeExecution := flag.String("local-spanning-tree-execution-bridges", "", "Independent reviewed Bridge IDs permitted for guarded STP/RSTP Safe Apply; requires an explicit qualified witness build")
 	treeControl := flag.String("spanning-tree-witness-socket", "", "Explicit local ovs-vswitchd Unix control socket for read-only installed witnesses")
 	treeExecutable := flag.String("spanning-tree-witness-executable", "", "Root-owned executable of the qualified optional OVS witness build")
@@ -254,6 +255,14 @@ func run() int {
 			return 1
 		}
 		inventoryService = inventory.New(reg)
+		var isolationIDs []string
+		if *localIsolation != "" {
+			isolationIDs = strings.Split(*localIsolation, ",")
+		}
+		if err = inventoryService.SetLocalIsolationPorts(isolationIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_ISOLATION_AUTHORITY")
+			return 2
+		}
 		linuxObserver := linuxprovider.New()
 		inventoryService.SetDeviceObserver(linuxObserver)
 		inventoryService.SetPolicingObserver(linuxObserver)

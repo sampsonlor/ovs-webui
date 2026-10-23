@@ -233,6 +233,14 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeSpanningTreeRuntime$' -test.v -test.timeout=120s \
               | go tool test2json -p "native-spanning-tree-runtime-$schema" | tee "test-results/go-spanning-tree-runtime-$schema.json"
           done
+      - name: Native protected Port forwarding and compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativePortIsolation$' -test.v -test.timeout=120s \
+              | go tool test2json -p "native-port-isolation-$schema" | tee "test-results/go-port-isolation-$schema.json"
+          done
       - name: Native explicit internal Interface MTU and compensation matrix
         run: |
           set -o pipefail

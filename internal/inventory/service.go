@@ -27,6 +27,8 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	localIsolation                 map[string]bool
+	isolationAuthorityRevision     string
 	spanningTreeAuthorityRevision  string
 	localSpanningTreeExecution     map[string]bool
 	localSpanningTree              map[string]bool
@@ -132,6 +134,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
 	localSpanningTree := s.localSpanningTree
+	localIsolation := s.localIsolation
 	localSpanningTreeExecution := s.localSpanningTreeExecution
 	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
 	s.mu.RUnlock()
@@ -235,6 +238,29 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			return item, err
 		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err == nil && b.Table == "Port" {
+			reason, authority := "CONFIGURATION_WITHHELD", "withheld"
+			if allowedConfig {
+				binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Port", Generation: v.decision.Generation}
+				snapshot := candidate.Snapshot{Generation: v.decision.Generation}
+				projectIsolation(v, localIsolation, &snapshot, []candidate.Binding{binding})
+				p := snapshot.Isolations[b.ManagementID]
+				reason, authority = p.Gate, p.Authority
+				if !p.Known {
+					reason = "NATIVE_CONFIGURATION_UNKNOWN"
+				} else if !p.Supported {
+					reason = "ISOLATION_SCHEMA_UNSUPPORTED"
+				} else if p.Authority != "local-managed" {
+					reason = "ISOLATION_AUTHORITY_REQUIRED"
+				}
+				if fresh != "fresh" {
+					reason = "ISOLATION_OBSERVATION_STALE"
+				} else if !slices.Contains(c.Capabilities, "workspace.write") || !slices.Contains(c.Capabilities, candidate.PortIsolationCapability) {
+					reason = "CAPABILITY_DENIED"
+				}
+			}
+			item["isolation_execution"] = map[string]any{"available": reason == "", "reason": reason, "authority": authority, "capability": candidate.PortIsolationCapability}
+		}
 		if err == nil && (op == "listPorts" || op == "listBridges" || op == "listBonds") {
 			// Detail carries the shared projection. Avoid repeating it alongside
 			// native fields in ordinary bounded inventory pages.

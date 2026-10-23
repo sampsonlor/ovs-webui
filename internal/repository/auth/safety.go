@@ -75,6 +75,10 @@ func (r *Repository) safeAuthority(ctx context.Context, q evidence.Query, a exec
 	} // legacy VLAN journals
 	required := []string{"configuration.apply", "configuration.confirm", "configuration.read", "inventory.read"}
 	for _, cap := range strings.Split(fields, ",") {
+		if cap == plan.PortIsolationCapability {
+			required = append(required, cap)
+			continue
+		}
 		if cap != plan.SpanningTreeWriteCapability && cap != "ovs.topology.write" && cap != "ovs.port.vlan.write" && cap != "ovs.port.bond.write" && cap != "ovs.bridge.create" && cap != "ovs.bridge.delete" && cap != "ovs.port.internal.create" && cap != "ovs.port.internal.delete" && cap != "ovs.interface.mtu.write" && cap != "ovs.interface.policing.write" {
 			return apitypes.Fail(403, "APPLY_AUTHORITY_REVOKED")
 		}
