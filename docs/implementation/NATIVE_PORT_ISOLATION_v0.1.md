@@ -62,7 +62,12 @@ unprotected peer reachability and exact compensation, then loses a separate
 native reply to check unknown Applied and no mutation replay. Two additional
 production HTTPS/IPC/browser cases cover read permissions, Standard/Expert,
 light/dark, desktop/tablet/mobile, Candidate/Diff/Validation, confirmation and
-exact Safe Apply rollback. Passing results and screenshot review remain pending.
+exact Safe Apply rollback. The browser also introduces an external protected
+field change, keeps the original frozen, withholds validation/rebase and shows
+explicit discard/restage guidance without changing the external configuration.
+Standard messages explain native isolation and permissions in plain language;
+Expert mode retains the diagnostic codes. Passing final results and screenshot
+review remain pending.
 
 The failed source runs remain separate from acceptance: 39887393915 failed
 formatting; 39887559728 retained a rolled-back draft before the independent
@@ -75,6 +80,13 @@ dispatch refusal. The deep links and ordered observation wait have dedicated
 regressions; source diagnostics now use a closed subphase vocabulary. No native
 source proof, authentication, timeout or retry requirement has been relaxed.
 
+The next source cf312e3 passed the native and formal isolation steps on both
+architectures. Screenshot review found internal codes duplicated in Standard
+validation and missing isolation-specific restage guidance. Those presentation
+issues are corrected before final acceptance; its results are retained
+separately and do not qualify a later source commit.
+
 This slice does not close #43. Multicast, Tunnel, Mirror, QoS/Queue, all three
-exporters and Profile/Drift remain separate required work. STP/RSTP #23 also
-requires its independently qualified main baseline. #71 remains deferred.
+exporters and Profile/Drift remain separate required work. STP/RSTP #23 completed
+its independently qualified main baseline `phase1-spanning-tree-execution-v0.1`.
+#71 remains deferred.

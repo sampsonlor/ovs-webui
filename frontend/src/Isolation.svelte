@@ -4,6 +4,7 @@
   import { controller } from './model';
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
+  import { isolationMessage } from './isolation';
   let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const detail = $derived(model.path.split('/').length === 4);
   const item = $derived(detail ? model.resource.value as unknown as Port | null : null);
@@ -46,7 +47,7 @@
       <caption>Observed ports in this page</caption>
       <thead><tr><th>Port</th><th>Isolation</th><th>Configuration</th>{#if expert}<th>Management ID</th>{/if}</tr></thead>
       <tbody>{#each items as port (port.management_id)}
-        <tr><th scope="row"><Link href={`/switching/isolation/${port.management_id}`}>{port.name}</Link></th><td>{isolationLabel(port)}</td><td>{port.isolation_execution?.available ? 'Review available' : port.isolation_execution?.reason ?? 'Unavailable'}</td>{#if expert}<td class="mono">{port.management_id}</td>{/if}</tr>
+        <tr><th scope="row"><Link href={`/switching/isolation/${port.management_id}`}>{port.name}</Link></th><td>{isolationLabel(port)}</td><td>{port.isolation_execution?.available ? 'Review available' : isolationMessage(port.isolation_execution?.reason)}</td>{#if expert}<td class="mono">{port.management_id}</td>{/if}</tr>
       {/each}</tbody>
     </table></div>
     {#if page && items.length===0}<p>No ports in this observation.</p>{/if}
@@ -67,7 +68,7 @@
         <button class="primary" disabled={field?.availability!=='known'}>Stage isolation change</button>
         </fieldset>
       </form>
-    {:else}<p role="status">Configuration unavailable: {item.isolation_execution?.reason ?? 'No current execution authority'}.</p>{/if}
+    {:else}<p role="status">Configuration unavailable: {isolationMessage(item.isolation_execution?.reason)}</p>{#if expert && item.isolation_execution?.reason}<code>{item.isolation_execution.reason}</code>{/if}{/if}
     {#if expert}<dl><dt>Ownership</dt><dd>{item.isolation_execution?.authority ?? 'Unknown'}</dd><dt>Native field</dt><dd>Port.protected</dd><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>Source</dt><dd>{field?.source ? JSON.stringify(field.source) : 'Unknown'}</dd></dl>{/if}
   {/if}
 </section>

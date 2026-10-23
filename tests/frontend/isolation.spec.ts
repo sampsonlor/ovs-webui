@@ -41,6 +41,8 @@ async function apply(page:Page,desired:'protected'|'unprotected') {
   await expect(page.getByRole('table',{name:'Original → Current → Yours · values supplied by the server'})).toContainText('protected');
   await page.getByRole('button',{name:'Validate Candidate',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Diff & Validation',exact:true})).toBeVisible();
+  await expect(page.getByText('Protected ports cannot communicate with other protected ports on this Bridge. Review management connectivity before applying.',{exact:true})).toBeVisible();
+  await expect(page.getByText('PROTECTED_PORT_NATIVE_SEMANTICS_REVIEW_REQUIRED',{exact:true})).toHaveCount(0);
   await screen(page,'validation-'+desired);
   await page.getByLabel('Change reason',{exact:true}).fill('Synthetic native protected Port review');
   await page.getByRole('checkbox').check();
@@ -58,6 +60,7 @@ test('native isolation review keeps read permission, depth and mobile responsibi
   await page.getByRole('link',{name:'iso-ui-data',exact:true}).click();
   await expect(page.getByRole('heading',{name:'iso-ui-data',exact:true})).toBeVisible();
   await expect(page.getByText('Configuration unavailable:',{exact:false})).toBeVisible();
+  await expect(page.getByText('Your current permissions allow review but do not allow isolation changes.',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Stage isolation change',exact:true})).toHaveCount(0);
   await screen(page,'reader-standard');
   await page.getByRole('button',{name:'Standard',exact:true}).click();
@@ -87,4 +90,14 @@ test('native protected Port uses shared confirmation and exact Safe Apply recove
   await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
   expect(vs('get','Open_vSwitch','.','next_cfg')).toBe(settled);
   await screen(page,'recovered');
+  vs('set','Port','iso-ui-data','protected=false');
+  const external=vs('get','Open_vSwitch','.','next_cfg');
+  await page.goto(fixture.origin+'/changes/candidate');
+  await expect(page.getByRole('region',{name:'Isolation change needs review',exact:true})).toBeVisible();
+  await expect(page.getByText('Live isolation changed after this draft was captured. Discard this intent and review the current Port.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Validate Candidate',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Rebase reviewed choices',exact:true})).toHaveCount(0);
+  expect(vs('get','Port','iso-ui-data','protected')).toBe('false');
+  expect(vs('get','Open_vSwitch','.','next_cfg')).toBe(external);
+  await screen(page,'conflict');
 });
