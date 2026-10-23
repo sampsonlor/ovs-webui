@@ -191,3 +191,16 @@ explicit-review flow as the existing formal suite: only an exact 409 plus
 decision. Unknown outcomes never enter this flow. Test deadlines, retries,
 production confirmation logic and #71 are unchanged. A new full source and
 independent main qualification are required.
+
+The next source CI 39884753177 passed all six native witness jobs, including the
+three execution UI cases on each architecture, but both full-runtime jobs failed
+the existing draft browser case when its next validation used an old Candidate
+revision (`CANDIDATE_CHANGED`). All thirteen official artifact digests and the
+failed snapshots are retained separately. A delayed pre-acknowledgement read can
+leave the previous Candidate's controls available after staging acknowledgement
+while a fresh read is queued. A deterministic controller regression reproduces
+this with the original implementation. After acknowledgement the controller now
+invalidates older read tickets and withholds workspace/validation/transaction
+controls until authoritative reads finish. The same regression passes without
+replaying any mutation. The server's version admission and request-recovery
+rules are unchanged; this does not diagnose or resolve #71.
