@@ -96,7 +96,9 @@ replies, external conflict and no replay. Separately, the three actual pinned OV
 ASan/UBSan variants on both architectures. Seven bound group-source cases are
 additionally required in enabled and ASan/UBSan variants. Schema fixtures
 are not described as distinct running binaries. Existing native witness,
-upstream, authority, deadline, recovery and all regression gates remain.
+upstream, authority, deadline, recovery and all regression gates remain. Each
+actual-build writer runs in its own disposable network namespace so its daemon
+cannot contend with the independent witness daemon for a kernel datapath.
 
 Two new formal real-service browser cases cover read permissions, empty/stale
 views and restoration, Standard/Expert, light/dark, desktop/tablet/mobile,

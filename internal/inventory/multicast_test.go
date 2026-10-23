@@ -99,6 +99,24 @@ func TestMulticastRootGrantAndPersistentGraphRemainIndependent(t *testing.T) {
 	if projected.Dependency != after.Dependency || !after.Configuration.Enabled {
 		t.Fatal("owned field became a dependency")
 	}
+	// Model the complete native transaction after-image, including its private
+	// marker and all three parameters. It must retain the captured graph while
+	// an unrelated map entry below must still invalidate that same graph.
+	for key, value := range map[string]string{"mcast-snooping-aging-time": "300", "mcast-snooping-table-size": "64", "mcast-snooping-disable-flood-unregistered": "true"} {
+		row.Configuration["other_config"].(map[string]any)[key] = value
+	}
+	row.Configuration["external_ids"].(map[string]any)[candidate.MulticastMarker] = "synthetic-owned-commit"
+	row.Values["other_config"] = candidate.CloneConfiguration(row.Configuration["other_config"].(map[string]any))
+	row.Values["external_ids"] = candidate.CloneConfiguration(row.Configuration["external_ids"].(map[string]any))
+	o.Rows["Bridge"][b.OVSUUID] = row
+	s.install(o, d)
+	complete := read()
+	i := candidate.StoredIntent{Object: b, Operation: candidate.BridgeMulticastSet, Schema: before.Schema, Dependency: projected.Dependency, Multicast: &candidate.MulticastChange{Before: projected.Configuration, After: complete.Multicasts[b.ManagementID].Configuration}}
+	candidate.AfterImage(&i)
+	checks, _ := candidate.Checks(candidate.Candidate{Intents: []candidate.StoredIntent{i}}, complete)
+	if !candidate.Passed(checks) {
+		t.Fatal("own native after-image was not admissible", checks)
+	}
 	row.Configuration["other_config"].(map[string]any)["foreign-key"] = "changed"
 	s.install(o, d)
 	if after.Dependency == read().Multicasts[b.ManagementID].Dependency {

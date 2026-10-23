@@ -10,6 +10,7 @@ import (
 	"net"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
@@ -650,6 +651,19 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	if !candidate.Passed(checks) {
 		out.Applied = "unknown"
 		out.Reason = "committed-target-changed"
+		if len(after.Intents) == 1 && after.Intents[0].Operation == candidate.BridgeMulticastSet {
+			for _, check := range checks {
+				if check.State != "blocked" {
+					continue
+				}
+				// Only closed server-generated gate codes, never native frames or
+				// configuration values. Keep the unknown outcome and no replay.
+				if strings.HasPrefix(check.Code, "MULTICAST_") || slices.Contains([]string{"FIELD_CONFLICT", "OBJECT_BINDING_CHANGED", "GENERATION_RECONCILIATION_REQUIRED", "SCHEMA_CHANGED", "NATIVE_CONFIGURATION_UNKNOWN"}, check.Code) {
+					out.Reason = "multicast-target-" + strings.ToLower(strings.ReplaceAll(check.Code, "_", "-"))
+				}
+				break
+			}
+		}
 		return out
 	}
 	// Marker evidence can prove commit after a lost reply, but cannot recover the

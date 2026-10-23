@@ -77,6 +77,16 @@ func TestNativeMulticast(t *testing.T) {
 		s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{binding})
 		return err == nil && candidate.MulticastEditable(s.Multicasts[binding.ManagementID]) && f.vs("get", "Open_vSwitch", ".", "next_cfg") == f.vs("get", "Open_vSwitch", ".", "cur_cfg")
 	})
+	// Establish the real kernel datapath before starting the bounded multicast
+	// captures. This setup barrier grants no production retry or extra deadline.
+	waitFor(t, func() bool {
+		for n := 2; n <= 3; n++ {
+			if exec.Command("ip", "netns", "exec", namespaces[0], "ping", "-n", "-c", "1", "-W", "1", "198.19.202."+strconv.Itoa(n)).Run() != nil {
+				return false
+			}
+		}
+		return true
+	})
 	// These bounded captures run only in the three disposable test namespaces.
 	// The listener joins through the kernel; no flow/script emulates snooping.
 	capture := func(index int, join bool, token, family string) func() bool {
@@ -161,8 +171,10 @@ else:
  s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.setsockopt(socket.IPPROTO_IP,socket.IP_MULTICAST_IF,socket.inet_aton('198.19.202.1'));s.setsockopt(socket.IPPROTO_IP,socket.IP_MULTICAST_LOOP,0);target=('239.192.0.7',20000)
 for _ in range(3):s.sendto(token.encode(),target);time.sleep(.05)
 `, family, peers[0], token)
-			if !listener() || outsider() == snooping {
-				t.Fatal("native listener/nonmember forwarding disagrees with snooping state", snooping, family)
+			listenerSeen, outsiderSeen := listener(), outsider()
+			if !listenerSeen || outsiderSeen == snooping {
+				t.Log(f.vs("--columns=name,ofport,admin_state,link_state,error", "list", "Interface"))
+				t.Fatalf("native forwarding disagrees: snooping=%v family=%s listener=%v nonmember=%v", snooping, family, listenerSeen, outsiderSeen)
 			}
 		}
 	}
