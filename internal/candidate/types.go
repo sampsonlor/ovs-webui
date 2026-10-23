@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "native-spanning-tree-execution-v2"
+const ValidatorVersion = "native-port-isolation-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`

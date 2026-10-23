@@ -17,6 +17,9 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                                       'capabilities': ['state.read', 'inventory.read']})
     assert code == 202
     roles = {role['name']: role['id'] for role in get('/roles')['items']}
+    network_role = next(role for role in get('/roles')['items'] if role['name']=='NetworkAdmin')
+    code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeIsolation','capabilities':network_role['capabilities']+['ovs.port.isolation.write']})
+    assert code == 202
     code, _, _ = call('/roles', 'POST', {'request_id': request_id(), 'name': 'SpanningTreeDenied', 'capabilities': ['state.read']})
     assert code == 202
     roles.update({role['name']: role['id'] for role in get('/roles')['items']})
@@ -32,6 +35,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-tree', 'NetworkAdmin'), ('browser-tree-observer', 'InterfaceObserver'), ('browser-tree-exceptions', 'Reader'), ('browser-tree-outage', 'Reader'),
                        ('browser-tree-denied', 'SpanningTreeDenied'), ('browser-tree-parameters', 'NetworkAdmin'),
                        ('browser-tree-draft', 'NetworkAdmin'),
+                       ('browser-isolation', 'NativeIsolation'), ('browser-isolation-reader', 'Reader'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -55,14 +59,16 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     # grants and all production authentication/recovery budgets are preserved.
     vsctl('--no-wait', 'add-br', 'br-tree-plan', '--', 'set', 'Bridge', 'br-tree-plan', 'datapath_type=system')
     tree = eventually(lambda: next((b for b in get('/inventory/spanning-tree?filter=br-tree-plan')['items'] if b['name'] == 'br-tree-plan'), None))
+    vsctl('add-br','br-iso-ui','--','set','Bridge','br-iso-ui','datapath_type=system','--','add-port','br-iso-ui','iso-ui-data','--','set','Interface','iso-ui-data','type=internal')
+    isolation = eventually(lambda: next((p for p in get('/ports?filter=iso-ui-data')['items'] if p['name']=='iso-ui-data'),None))
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
     assert needle in unit_original and '--local-spanning-tree-bridges' not in unit_original
-    reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']))
+    reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']))
     eventually(lambda: call('/inventory')[0] == 200)
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
-                'ovsDirectory': str(ovs), 'database': str(conf)}
+                'ovsDirectory': str(ovs), 'database': str(conf), 'isolation': isolation}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
@@ -81,3 +87,4 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
         path.unlink(missing_ok=True)
         reconfigure_draft_fixture(unit_path, units['mgrd'], unit_original)
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tree-plan')
+        vsctl('--no-wait', '--if-exists', 'del-br', 'br-iso-ui')

@@ -105,6 +105,11 @@ func isolationGraph(v *view, target, bridge Row, generation string) (string, str
 		block("ISOLATION_OFFLOAD_UNQUALIFIED")
 	}
 	ports := refs(bridge.Values["ports"])
+	for _, otherBridge := range v.observation.Rows["Bridge"] {
+		if !empty(otherBridge.Configuration["mirrors"]) {
+			block("ISOLATION_MIRROR_RELATION_UNQUALIFIED")
+		}
+	}
 	if len(ports) < 2 || len(ports) > 32 {
 		block("ISOLATION_GRAPH_BUDGET")
 	}
@@ -131,8 +136,12 @@ func isolationGraph(v *view, target, bridge Row, generation string) (string, str
 	}
 	inspect("Open_vSwitch", root)
 	inspect("Bridge", bridge)
+	local := 0
 	for _, id := range ports {
 		p := v.observation.Rows["Port"][id]
+		if p.Values["name"] == bridge.Values["name"] {
+			local++
+		}
 		inspect("Port", p)
 		owner, unique := parent(v, "Bridge", "ports", id)
 		if !unique || owner.UUID != bridge.UUID {
@@ -143,7 +152,7 @@ func isolationGraph(v *view, target, bridge Row, generation string) (string, str
 			block("ISOLATION_PORT_COMBINATION_UNQUALIFIED")
 		}
 		vlan, known := nativeVLAN(p)
-		if !known || len(vlan.CVLANs) > 0 || vlan.Mode != nil && !slices.Contains([]string{"access", "trunk", "native-tagged", "native-untagged"}, *vlan.Mode) {
+		if !known || len(vlan.CVLANs) > 0 || vlan.Tag != nil && (*vlan.Tag < 1 || *vlan.Tag > 4094) || vlan.Mode != nil && !slices.Contains([]string{"access", "trunk", "native-tagged", "native-untagged"}, *vlan.Mode) {
 			block("ISOLATION_VLAN_COMBINATION_UNQUALIFIED")
 		}
 		for _, iid := range members {
@@ -151,11 +160,17 @@ func isolationGraph(v *view, target, bridge Row, generation string) (string, str
 			inspect("Interface", i)
 			parentPort, unique := parent(v, "Port", "interfaces", iid)
 			typ, known := i.Configuration["type"].(string)
+			if p.Values["name"] == bridge.Values["name"] && (typ != "internal" || i.Values["name"] != bridge.Values["name"]) {
+				block("ISOLATION_LOCAL_PORT_UNPROVEN")
+			}
 			options, ok := i.Configuration["options"].(map[string]any)
 			if !unique || parentPort.UUID != id || !known || !slices.Contains([]string{"", "system", "internal"}, typ) || !ok || len(options) != 0 {
 				block("ISOLATION_INTERFACE_COMBINATION_UNQUALIFIED")
 			}
 		}
+	}
+	if local != 1 {
+		block("ISOLATION_LOCAL_PORT_UNPROVEN")
 	}
 	return code, Digest(images), bindings
 }

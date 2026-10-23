@@ -11,6 +11,9 @@
   const items = $derived(Array.isArray(page?.items) ? page.items as Port[] : []);
   let desired = $state('protected');
   const field = $derived((item?.fields as Record<string,InventoryField> | undefined)?.protected);
+  const candidate = $derived(model.workspace.value?.candidate);
+  const workspaceConflict = $derived(!!candidate?.intents.length && (candidate.intents.length!==1 || candidate.intents[0].operation!=='port.isolation.set' || candidate.intents[0].object.management_id!==item?.management_id));
+  const unavailable = $derived(!desktop || model.busy || !!model.pending || !model.sessionReady || !candidate || !!candidate.consumed_by || workspaceConflict);
   function isolationLabel(port: Port) {
     const f=(port.fields as Record<string,InventoryField> | undefined)?.protected;
     if (f?.availability!=='known' || typeof f.value!=='boolean') return f?.availability ?? 'unknown';
@@ -18,7 +21,7 @@
   }
   function stage(event: SubmitEvent) {
     event.preventDefault();
-    if (!item?.isolation_execution?.available || !desktop || model.busy) return;
+    if (!item?.isolation_execution?.available || unavailable) return;
     const existing=model.workspace.value?.candidate?.intents.find(i=>i.operation==='port.isolation.set'&&i.object.management_id===item.management_id);
     void controller.stageNativeIntent({
       intent_id:existing?.intent_id ?? crypto.randomUUID(),operation:'port.isolation.set',
@@ -39,13 +42,13 @@
   <p>This controls native OVS switching. It does not provide a firewall or general private VLAN policy.</p>
   <LoadNotice load={model.resource} />
   {#if !detail}
-    <table>
+    <div class="table-scroll"><table>
       <caption>Observed ports in this page</caption>
       <thead><tr><th>Port</th><th>Isolation</th><th>Configuration</th>{#if expert}<th>Management ID</th>{/if}</tr></thead>
       <tbody>{#each items as port (port.management_id)}
         <tr><th scope="row"><Link href={`/switching/isolation/${port.management_id}`}>{port.name}</Link></th><td>{isolationLabel(port)}</td><td>{port.isolation_execution?.available ? 'Review available' : port.isolation_execution?.reason ?? 'Unavailable'}</td>{#if expert}<td class="mono">{port.management_id}</td>{/if}</tr>
       {/each}</tbody>
-    </table>
+    </table></div>
     {#if page && items.length===0}<p>No ports in this observation.</p>{/if}
     {#if typeof page?.next_cursor==='string'}<Link href={next(page.next_cursor)}>Next page →</Link>{/if}
   {:else if item}
@@ -56,9 +59,12 @@
     {#if !desktop}<p>Review mode. Use a desktop to prepare a change.</p>
     {:else if item.isolation_execution?.available}
       <form onsubmit={stage} aria-label="Prepare native isolation change">
-        <label>Desired isolation<select bind:value={desired}><option value="protected">Protected</option><option value="unprotected">Unprotected</option></select></label>
+        {#if workspaceConflict}<p>Review or remove the existing Candidate intent before preparing this change.</p>{/if}
+        <fieldset disabled={unavailable}><legend>Native protected Port</legend>
+        <label for="isolation-choice">Desired isolation</label><select id="isolation-choice" bind:value={desired}><option value="protected">Protected</option><option value="unprotected">Unprotected</option></select>
         <p>The change is staged for shared Diff, Validation and Safe Apply. Review management connectivity before applying.</p>
-        <button class="primary" disabled={model.busy || field?.availability!=='known' || !model.workspace.value}>Stage isolation change</button>
+        <button class="primary" disabled={field?.availability!=='known'}>Stage isolation change</button>
+        </fieldset>
       </form>
     {:else}<p role="status">Configuration unavailable: {item.isolation_execution?.reason ?? 'No current execution authority'}.</p>{/if}
     {#if expert}<dl><dt>Ownership</dt><dd>{item.isolation_execution?.authority ?? 'Unknown'}</dd><dt>Native field</dt><dd>Port.protected</dd><dt>Management ID</dt><dd class="mono">{item.management_id}</dd><dt>Source</dt><dd>{field?.source ? JSON.stringify(field.source) : 'Unknown'}</dd></dl>{/if}

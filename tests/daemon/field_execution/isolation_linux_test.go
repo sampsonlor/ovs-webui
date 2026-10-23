@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -86,5 +87,26 @@ func TestNativePortIsolation(t *testing.T) {
 	must(t, f.engine.SafetyTick(f.ctx))
 	if f.vs("get", "Open_vSwitch", ".", "next_cfg") != settled {
 		t.Fatal("terminal recovery replayed a mutation")
+	}
+	// Independently lose this domain's native commit reply. Observing its marker
+	// may recover commit knowledge, but cannot invent the exact Applied counter.
+	in = f.prepareIntents([]map[string]any{{"intent_id": repository.NewID(), "operation": candidate.PortIsolationSet, "object": binding, "protected": true}})
+	p, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
+	must(t, err)
+	f.proxy.dropReply.Store(true)
+	sent := f.proxy.sent.Load()
+	out := f.executor.Commit(f.ctx, p, func() error { return nil })
+	if out.Commit != "unknown" || out.Target != nil || out.Applied == "applied" {
+		t.Fatal("lost reply invented native success", out)
+	}
+	waitFor(t, func() bool { return f.vs("get", "Port", ports[0], "protected") == "true" })
+	for n := 0; n < 3; n++ {
+		out = f.executor.Observe(f.ctx, p, out)
+		if out.Target != nil || out.Applied == "applied" {
+			t.Fatal("observation invented exact Applied", out)
+		}
+	}
+	if f.proxy.sent.Load() != sent+1 {
+		t.Fatal("lost native reply replayed a mutation")
 	}
 }
