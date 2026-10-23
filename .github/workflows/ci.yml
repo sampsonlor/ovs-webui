@@ -210,6 +210,14 @@ jobs:
           done
       # Fail early on formal transport/permission/UI regressions, retaining the
       # same complete browser suite and every later native/recovery/race gate.
+      - name: Native protected Port forwarding and compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativePortIsolation$' -test.v -test.timeout=120s \
+              | go tool test2json -p "native-port-isolation-$schema" | tee "test-results/go-port-isolation-$schema.json"
+          done
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
         run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
       - name: Linux ingress policing protocol and early kernel gate
@@ -375,6 +383,7 @@ jobs:
             test-results/go-execution-*.json
             test-results/go-bond-lacp-*.json
             test-results/go-qinq-*.json
+            test-results/go-port-isolation-*.json
             test-results/go-interface-mtu-*.json
             test-results/go-interface-policing-*.json
             test-results/go-spanning-tree-runtime-*.json

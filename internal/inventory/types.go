@@ -28,6 +28,7 @@ type Reference struct {
 	Position string `json:"position"`
 }
 type Column struct {
+	IsolationCompatible       bool            `json:"-"`
 	Name                      string          `json:"name"`
 	Type                      string          `json:"type"`
 	NativeType                json.RawMessage `json:"native_type"`

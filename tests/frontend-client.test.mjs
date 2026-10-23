@@ -120,6 +120,16 @@ const response = (value, status = 200) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+void test('native isolation apply needs its explicit field capability and desktop responsibility',()=>{
+  const c={id:resource,revision:'native-isolation',state:'dirty',safe_apply_available:true,intents:[{operation:'port.isolation.set'}]};
+  const v={candidate_id:c.id,candidate_revision:c.revision,state:'passed',usable:true,execution_ready:true};
+  const allowed={effective_capabilities:['configuration.apply','ovs.port.isolation.write']};
+  assert.equal(applyReady(c,v,session,true),false,'VLAN permission became isolation permission');
+  assert.equal(applyReady(c,v,allowed,true),true);
+  assert.equal(applyReady(c,v,allowed,false),false);
+  assert.equal(applyReady(c,{...v,usable:false},allowed,true),false);
+});
+
 await test('acknowledged mutation with a delayed old read withholds stale Candidate commands until fresh review', async () => {
   const oldCandidate={id:resource,revision:'before',state:'dirty',intents:[]};
   const newCandidate={...oldCandidate,revision:'after'};

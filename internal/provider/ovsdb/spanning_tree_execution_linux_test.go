@@ -3,6 +3,7 @@
 package ovsdb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -73,14 +75,27 @@ func TestSpanningTreeCompilerGuardsWholeGraphAndWritesOnlyItsClosedFields(t *tes
 	})
 	t.Run("closed-reasons-do-not-expose-native-details", func(t *testing.T) {
 		private := "/private/example bearer=not-a-real-credential"
-		for _, stage := range []string{"witness-pair", private} {
+		for _, stage := range []string{"witness-pair", "witness-source", private} {
 			err := &treeEvidenceFailure{stage: stage, cause: errors.New(private)}
-			reason := treeDispatchReason(err)
+			reason := SpanningTreeExecutionEvidenceReason(err)
 			if strings.Contains(reason, "/private") || strings.Contains(reason, "credential") || strings.Contains(reason, "bearer") {
 				t.Fatal("private details in public reason", reason)
 			}
 			if stage == private && reason != "spanning-tree-dispatch-unproven" {
 				t.Fatal("unreviewed reason admitted", reason)
+			}
+		}
+		if reason := SpanningTreeExecutionEvidenceReason(&treeEvidenceFailure{stage: "witness-source", cause: errors.New("SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN")}); reason != "spanning-tree-dispatch-witness-source-process-fds" {
+			t.Fatal("closed source phase missing", reason)
+		}
+		for _, cause := range []error{errors.New(private), context.DeadlineExceeded} {
+			wrapped := &treePreparationFailure{public: apitypes.Fail(409, "SPANNING_TREE_EXECUTION_EVIDENCE_UNPROVEN"), cause: &treeEvidenceFailure{stage: "witness-source", cause: cause}}
+			var problem *apitypes.Problem
+			if !errors.As(wrapped, &problem) || problem.Status != 409 || problem.Code != "SPANNING_TREE_EXECUTION_EVIDENCE_UNPROVEN" || wrapped.Error() != problem.Code {
+				t.Fatal("public preparation refusal changed")
+			}
+			if cause == context.DeadlineExceeded && (!errors.Is(wrapped, cause) || SpanningTreeExecutionEvidenceReason(wrapped) != "spanning-tree-dispatch-deadline") {
+				t.Fatal("private deadline cause lost")
 			}
 		}
 	})

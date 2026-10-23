@@ -47,6 +47,8 @@ func run() int {
 	initAuthKey := flag.Bool("init-auth-key", false, "Explicitly create a new authentication key and exit; never overwrite")
 	bootstrap := flag.String("bootstrap-admin", "", "Initialize first local administrator; read password from stdin, then exit")
 	grantTreeRole := flag.String("grant-spanning-tree-execution-role", "", "Offline root action: explicitly grant one existing role the independent STP/RSTP write capability, then exit; new login required")
+	grantIsolationRole := flag.String("grant-port-isolation-role", "", "Offline root action: grant one existing role native Port isolation capability, then exit; new login required")
+	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
 	revokeTreeRole := flag.String("revoke-spanning-tree-execution-role", "", "Offline root action: revoke one role's independent STP/RSTP write capability, then exit")
 	secretDir := flag.String("secret-key-directory", "", "Private versioned privileged keys (default: secret-keys beside manager.db)")
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
@@ -58,6 +60,7 @@ func run() int {
 	acceptEvidence := flag.String("reconcile-ovsdb", "", "Offline: accept an exact reviewed inventory evidence digest, assign a new generation, then exit")
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localSpanningTree := flag.String("local-spanning-tree-bridges", "", "Reviewed immutable Bridge IDs permitted to prepare STP/RSTP drafts; no execution grant, independent of topology and Port authority")
+	localIsolation := flag.String("local-isolation-ports", "", "Independent reviewed immutable Port IDs permitted for native protected-Port Safe Apply")
 	localSpanningTreeExecution := flag.String("local-spanning-tree-execution-bridges", "", "Independent reviewed Bridge IDs permitted for guarded STP/RSTP Safe Apply; requires an explicit qualified witness build")
 	treeControl := flag.String("spanning-tree-witness-socket", "", "Explicit local ovs-vswitchd Unix control socket for read-only installed witnesses")
 	treeExecutable := flag.String("spanning-tree-witness-executable", "", "Root-owned executable of the qualified optional OVS witness build")
@@ -89,6 +92,12 @@ func run() int {
 		return 2
 	}
 	actions := 0
+	if *grantIsolationRole != "" {
+		actions++
+	}
+	if *revokeIsolationRole != "" {
+		actions++
+	}
 	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
 		if enabled {
 			actions++
@@ -217,6 +226,21 @@ func run() int {
 		logger.Info("spanning_tree_role_policy_updated", "enabled", enabled)
 		return 0
 	}
+	if *grantIsolationRole != "" || *revokeIsolationRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantIsolationRole, true
+		if *revokeIsolationRole != "" {
+			id, enabled = *revokeIsolationRole, false
+		}
+		if err := authentication.SetIsolationExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		return 0
+	}
 	if *restore {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -254,6 +278,14 @@ func run() int {
 			return 1
 		}
 		inventoryService = inventory.New(reg)
+		var isolationIDs []string
+		if *localIsolation != "" {
+			isolationIDs = strings.Split(*localIsolation, ",")
+		}
+		if err = inventoryService.SetLocalIsolationPorts(isolationIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_ISOLATION_AUTHORITY")
+			return 2
+		}
 		linuxObserver := linuxprovider.New()
 		inventoryService.SetDeviceObserver(linuxObserver)
 		inventoryService.SetPolicingObserver(linuxObserver)

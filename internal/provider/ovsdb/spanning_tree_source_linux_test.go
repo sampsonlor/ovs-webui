@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -166,6 +167,46 @@ func TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers(t *testing.T) {
 }
 
 func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *testing.T) {
+	t.Run("own_probe_connections_survive_nested_checks_and_close_with_attempt", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ctx, release := treeSourceContext(ctx)
+		defer release()
+		nested, finish := treeSourceContext(ctx)
+		client, server := net.Pipe()
+		defer server.Close()
+		if err := retainTreeSourceConnection(nested, client); err != nil {
+			t.Fatal(err)
+		}
+		finish()
+		_ = server.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+		if _, err := server.Read(make([]byte, 1)); err == nil || errors.Is(err, io.EOF) {
+			t.Fatal("nested inspection closed a held probe", err)
+		}
+		cancel()
+		_ = server.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := server.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+			t.Fatal("cancelled attempt retained probe", err)
+		}
+		release()
+	})
+	t.Run("own_probe_budget_is_fixed_and_failed_admission_closes_socket", func(t *testing.T) {
+		ctx, release := treeSourceContext(context.Background())
+		defer release()
+		for n := 0; n < 13; n++ {
+			client, server := net.Pipe()
+			defer server.Close()
+			err := retainTreeSourceConnection(ctx, client)
+			if (err == nil) != (n < 12) {
+				t.Fatal("probe budget changed", n, err)
+			}
+			if n == 12 {
+				if _, err := server.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+					t.Fatal("over-budget probe retained", err)
+				}
+			}
+		}
+	})
 	denied := errors.New("current permission denied")
 	calls := 0
 	check := func(context.Context) error { calls++; return denied }

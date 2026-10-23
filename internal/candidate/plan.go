@@ -92,6 +92,14 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == PortIsolationSet {
+			if problem := isolationProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, isolationDiff(i, s))
+			continue
+		}
 		if IsSpanningTreeOperation(i.Operation) {
 			if problem := spanningTreeProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -240,6 +248,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
+			if in.Protected != nil && in.Operation != PortIsolationSet {
+				return e, apitypes.Fail(422, "INVALID_PORT_ISOLATION")
+			}
 			if in.SpanningTree != nil && !IsSpanningTreeOperation(in.Operation) {
 				return e, apitypes.Fail(422, "INVALID_SPANNING_TREE_DRAFT")
 			}
@@ -249,6 +260,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if in.Policing != nil && in.Operation != InterfacePolicingSet {
 				return e, apitypes.Fail(422, "INVALID_INTERFACE_POLICING")
 			}
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == PortIsolationSet }) || cmd.Intents[0].Operation == PortIsolationSet {
+			var err error
+			c, err = stageIsolation(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if hasSpanningTree(c.Intents) || IsSpanningTreeOperation(cmd.Intents[0].Operation) {
 			var err error
@@ -431,6 +450,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if i.Operation == InterfacePolicingSet {
 				return e, apitypes.Fail(409, "POLICING_RESTAGE_REQUIRED")
 			}
+			if i.Operation == PortIsolationSet {
+				return e, apitypes.Fail(409, "ISOLATION_RESTAGE_REQUIRED")
+			}
 			if IsMTUOperation(i.Operation) {
 				return e, apitypes.Fail(409, "MTU_RESTAGE_REQUIRED")
 			}
@@ -486,6 +508,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == PortIsolationSet {
+			checks = append(checks, isolationChecks(i, s)...)
+			continue
+		}
 		if IsSpanningTreeOperation(i.Operation) {
 			checks = append(checks, spanningTreeChecks(i, s)...)
 			continue

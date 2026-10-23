@@ -68,7 +68,7 @@ func validateCapabilities(values []string) error {
 // The reserved execution capability can be explicitly assigned to a role, but
 // is not added to builtin templates during this read-only prerequisite.
 func knownCapability(c string) bool {
-	return c == SpanningTreeExecutionCapability || slices.Contains(allCapabilities(), c)
+	return c == "ovs.port.isolation.write" || c == SpanningTreeExecutionCapability || slices.Contains(allCapabilities(), c)
 }
 func subset(values, ceiling []string) bool {
 	for _, c := range values {

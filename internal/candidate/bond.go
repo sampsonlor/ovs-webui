@@ -20,6 +20,9 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if i.Operation == PortIsolationSet {
+			cap = PortIsolationCapability
+		}
 		if i.Operation == SpanningTreePrepare {
 			cap = SpanningTreePrepareCapability
 			if !slices.Contains(out, "configuration.read") {
@@ -213,6 +216,12 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.Isolation != nil {
+		m := *i.Isolation
+		m.Before = m.After
+		i.Isolation = &m
+		return
+	}
 	if i.SpanningTree != nil {
 		m := *i.SpanningTree
 		m.Before = cloneTreeConfig(m.After)
@@ -264,6 +273,12 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.Isolation != nil {
+		m := *i.Isolation
+		m.Before, m.After = m.After, m.Before
+		i.Isolation = &m
+		return
+	}
 	if i.SpanningTree != nil {
 		m := *i.SpanningTree
 		m.Before, m.After = cloneTreeConfig(m.After), cloneTreeConfig(m.Before)

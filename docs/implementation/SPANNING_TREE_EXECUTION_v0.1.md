@@ -1,7 +1,13 @@
 # STP / RSTP guarded execution
 
-Status: guarded Basic Manage implemented. Source `d07ad49a98c6a99bf99342ba720a32e2509ef2a2` qualified in
-[CI 39772835582](https://github.com/sampsonlor/ovs-webui/actions/runs/39772835582).
+Status: guarded Basic Manage accepted. Final source
+`8531af1fcecda1d5ab88dacf11272c27808700ee` passed complete
+[CI 39886539800](https://github.com/sampsonlor/ovs-webui/actions/runs/39886539800).
+Main `fb2513cb6164e1e60db3a9e7a7a60d61f2df9218` independently passed
+[CI 39890159942](https://github.com/sampsonlor/ovs-webui/actions/runs/39890159942),
+with the identical tree. Both runs passed all fourteen jobs and thirteen official
+artifact digests were verified per run. Baseline:
+`phase1-spanning-tree-execution-v0.1`; #23 is completed.
 Release/main acceptance is recorded with [#23](https://github.com/sampsonlor/ovs-webui/issues/23).
 The wider [#43](https://github.com/sampsonlor/ovs-webui/issues/43) remains open.
 No production deployment has been performed; activation remains an explicit

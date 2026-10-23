@@ -186,6 +186,7 @@ export function applyReady(
           'interface.mtu.clear': 'ovs.interface.mtu.write',
           'interface.policing.set': 'ovs.interface.policing.write',
           'bridge.spanning-tree.configure': 'ovs.bridge.spanning-tree.write',
+          'port.isolation.set': 'ovs.port.isolation.write',
           'port.create': 'ovs.topology.write',
           'bond.create': 'ovs.topology.write',
           'port.delete': 'ovs.topology.write',

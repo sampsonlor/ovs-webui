@@ -22,7 +22,7 @@ var selected = map[string][]string{
 	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths"},
 	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
-	"Port":         {"name", "interfaces", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
+	"Port":         {"name", "interfaces", "protected", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
 	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
@@ -92,6 +92,10 @@ func discover(data []byte) (discovered, error) {
 				}
 			}
 			if t == "Port" {
+				if name == "protected" {
+					c.IsolationCompatible = isolationConstraint(col)
+					c.Monitored = c.Monitored && c.IsolationCompatible
+				}
 				c.VLANCompatible, c.VLANModes = vlanConstraint(name, col)
 				c.BondCompatible = bondConstraint(name, col)
 			}

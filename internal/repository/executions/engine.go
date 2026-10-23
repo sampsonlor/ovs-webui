@@ -240,10 +240,13 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
-			if intent.Operation == candidate.SpanningTreeConfigure {
-				// The native tree compiler guards the persistent graph. Reserve all
+			if intent.Operation == candidate.SpanningTreeConfigure || intent.Operation == candidate.PortIsolationSet {
+				// These native compilers guard the persistent graph. Reserve all
 				// of its managed objects, including member field groups, durably.
 				if len(p.GraphBindings) == 0 {
+					if intent.Operation == candidate.PortIsolationSet {
+						return requests.Mutation{}, apitypes.Fail(409, "ISOLATION_GRAPH_RESERVATION_REQUIRED")
+					}
 					return requests.Mutation{}, apitypes.Fail(409, "SPANNING_TREE_GRAPH_RESERVATION_REQUIRED")
 				}
 				if err = protectGraph(ctx, tx, id, p.Root, p.GraphBindings); err != nil {

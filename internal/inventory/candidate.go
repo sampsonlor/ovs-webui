@@ -148,6 +148,10 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
 	projectMTU(v, s.localMTU, &out, bindings)
 	projectPolicing(v, s.localPolicing, &out, bindings)
+	projectIsolation(v, s.localIsolation, &out, bindings)
+	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Port" && s.localIsolation[b.ManagementID] }) {
+		out.Policy = Digest([]any{out.Policy, s.isolationAuthorityRevision})
+	}
 	projectTopology(v, s.localTopology, s.localTopologyCreates, &out)
 	projectSpanningTree(v, s.localSpanningTree, &out, bindings)
 	executionScope := false

@@ -17,7 +17,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "native-spanning-tree-execution-v2"
+const ValidatorVersion = "native-port-isolation-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`
@@ -32,6 +32,7 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
+	Protected    *bool                `json:"protected,omitempty"`
 	SpanningTree *SpanningTreeRequest `json:"spanning_tree,omitempty"`
 	Topology     *TopologyRequest     `json:"topology,omitempty"`
 	Policing     *PolicingRequest     `json:"policing,omitempty"`
@@ -48,6 +49,7 @@ type Intent struct {
 	MTURequest   int                  `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
+	Isolation    *IsolationChange    `json:"isolation_change,omitempty"`
 	SpanningTree *SpanningTreeChange `json:"spanning_tree_change,omitempty"`
 	Topology     *TopologyChange     `json:"topology_change,omitempty"`
 	Policing     *PolicingChange     `json:"policing_change,omitempty"`
@@ -150,6 +152,7 @@ type Port struct {
 	STP, RSTP                       bool
 }
 type Snapshot struct {
+	Isolations                           map[string]IsolationPort
 	SpanningTrees                        map[string]SpanningTreeBridge
 	Topology                             TopologySnapshot
 	Generation, Revision, Schema, Policy string

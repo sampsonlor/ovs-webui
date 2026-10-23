@@ -16,6 +16,7 @@
   import PolicingEditor from './PolicingEditor.svelte';
   import TopologyEditor from './TopologyEditor.svelte';
   import SpanningTree from './SpanningTree.svelte';
+  import Isolation from './Isolation.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -168,6 +169,7 @@
         <p class="eyebrow">Switching</p>
         <Link href="/ports" current={path.startsWith('/ports')}>Ports</Link>
         <Link href="/switching/spanning-tree" current={path.startsWith('/switching/spanning-tree')}>STP / RSTP</Link>
+        <Link href="/switching/isolation" current={path.startsWith('/switching/isolation')}>Port isolation</Link>
         {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
       <nav aria-label="Change Control" class="nav-section">
@@ -451,6 +453,8 @@
           {/if}
         {:else if path === '/switching/spanning-tree' || path.startsWith('/switching/spanning-tree/')}
           <SpanningTree model={$model} {expert} {desktop} />
+        {:else if path === '/switching/isolation' || path.startsWith('/switching/isolation/')}
+          <Isolation model={$model} {expert} {desktop} />
         {:else if path === '/interfaces'}
           <Interfaces model={$model} {expert} />
         {:else if path.startsWith('/interfaces/')}

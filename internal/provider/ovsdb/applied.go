@@ -28,6 +28,9 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	proof := p.Envelope
 	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
 	for i := range proof.Candidate.Intents {
+		if proof.Candidate.Intents[i].Operation == candidate.PortIsolationSet {
+			candidate.AfterImage(&proof.Candidate.Intents[i])
+		}
 		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) || proof.Candidate.Intents[i].Operation == candidate.InterfacePolicingSet || proof.Candidate.Intents[i].Operation == candidate.SpanningTreeConfigure {
 			candidate.AfterImage(&proof.Candidate.Intents[i])
 		}
