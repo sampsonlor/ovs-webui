@@ -10,6 +10,8 @@ export function isolationMessage(code: string | null | undefined): string {
       'This Port needs independent local authorization before an isolation change is available.',
     ISOLATION_SCHEMA_UNSUPPORTED:
       'This native OVS schema does not provide a supported protected Port field.',
+    ISOLATION_OBSERVATION_STALE:
+      'The native observation is stale. Wait for fresh data before preparing a change.',
     ISOLATION_SYSTEM_BRIDGE_REQUIRED:
       'Isolation changes require a supported system Bridge.',
     ISOLATION_LOCAL_PORT_UNSUPPORTED:

@@ -66,7 +66,11 @@ exact Safe Apply rollback. The browser also introduces an external protected
 field change, keeps the original frozen, withholds validation/rebase and shows
 explicit discard/restage guidance without changing the external configuration.
 Standard messages explain native isolation and permissions in plain language;
-Expert mode retains the diagnostic codes. Passing final results and screenshot
+Expert mode retains the diagnostic codes. Freshness and observation time remain
+visible in Standard mode as well as Expert. Browser acceptance includes an empty
+filtered list and an actual OVSDB outage/restoration: retained values are marked
+stale and configuration remains unavailable until fresh data returns.
+Passing final results and screenshot
 review remain pending.
 
 The failed source runs remain separate from acceptance: 39887393915 failed

@@ -12,6 +12,7 @@
   const items = $derived(Array.isArray(page?.items) ? page.items as Port[] : []);
   let desired = $state('protected');
   const field = $derived((item?.fields as Record<string,InventoryField> | undefined)?.protected);
+  const source = $derived(observation(item));
   const candidate = $derived(model.workspace.value?.candidate);
   const workspaceConflict = $derived(!!candidate?.intents.length && (candidate.intents.length!==1 || candidate.intents[0].operation!=='port.isolation.set' || candidate.intents[0].object.management_id!==item?.management_id));
   const unavailable = $derived(!desktop || model.busy || !!model.pending || !model.sessionReady || !candidate || !!candidate.consumed_by || workspaceConflict);
@@ -19,6 +20,15 @@
     const f=(port.fields as Record<string,InventoryField> | undefined)?.protected;
     if (f?.availability!=='known' || typeof f.value!=='boolean') return f?.availability ?? 'unknown';
     return f.value ? 'Protected' : 'Unprotected';
+  }
+  function observation(port: Port | null) {
+    const value = port?.source;
+    const current = value && typeof value === 'object' ? value as Record<string,unknown> : {};
+    return {
+      freshness: typeof current.freshness === 'string' ? current.freshness : 'unknown',
+      provider: typeof current.provider_id === 'string' ? current.provider_id : 'Unknown provider',
+      time: typeof current.observed_at === 'string' ? current.observed_at : 'Unknown time',
+    };
   }
   function stage(event: SubmitEvent) {
     event.preventDefault();
@@ -45,9 +55,9 @@
   {#if !detail}
     <div class="table-scroll"><table>
       <caption>Observed ports in this page</caption>
-      <thead><tr><th>Port</th><th>Isolation</th><th>Configuration</th>{#if expert}<th>Management ID</th>{/if}</tr></thead>
+      <thead><tr><th>Port</th><th>Isolation</th><th>Observation</th><th>Configuration</th>{#if expert}<th>Management ID</th>{/if}</tr></thead>
       <tbody>{#each items as port (port.management_id)}
-        <tr><th scope="row"><Link href={`/switching/isolation/${port.management_id}`}>{port.name}</Link></th><td>{isolationLabel(port)}</td><td>{port.isolation_execution?.available ? 'Review available' : isolationMessage(port.isolation_execution?.reason)}</td>{#if expert}<td class="mono">{port.management_id}</td>{/if}</tr>
+        <tr><th scope="row"><Link href={`/switching/isolation/${port.management_id}`}>{port.name}</Link></th><td>{isolationLabel(port)}</td><td>{observation(port).freshness}</td><td>{port.isolation_execution?.available ? 'Review available' : isolationMessage(port.isolation_execution?.reason)}</td>{#if expert}<td class="mono">{port.management_id}</td>{/if}</tr>
       {/each}</tbody>
     </table></div>
     {#if page && items.length===0}<p>No ports in this observation.</p>{/if}
@@ -55,7 +65,9 @@
   {:else if item}
     <Link href="/switching/isolation">← Port isolation</Link>
     <h2>{item.name}</h2>
-    <p>Current configuration: <strong>{isolationLabel(item)}</strong></p>
+    <p>Observed configuration: <strong>{isolationLabel(item)}</strong></p>
+    <p>Observation: {source.freshness} · {source.provider} · {source.time}</p>
+    {#if source.freshness !== 'fresh'}<p class="notice warning" role="status">This observation is not current. Values are last observed; configuration changes are unavailable.</p>{/if}
     <p><Link href={`/ports/${item.management_id}`}>Review Port details</Link></p>
     <p><Link href={`/operations/events?object_id=${item.management_id}`}>Port events</Link> · <Link href={`/operations/audit?object_id=${item.management_id}`}>Port audit</Link></p>
     {#if !desktop}<p>Review mode. Use a desktop to prepare a change.</p>

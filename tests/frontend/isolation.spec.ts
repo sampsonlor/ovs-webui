@@ -63,6 +63,11 @@ test('native isolation review keeps read permission, depth and mobile responsibi
   await expect(page.getByText('Your current permissions allow review but do not allow isolation changes.',{exact:false})).toBeVisible();
   await expect(page.getByRole('button',{name:'Stage isolation change',exact:true})).toHaveCount(0);
   await screen(page,'reader-standard');
+  await page.goto(fixture.origin+'/switching/isolation?filter=synthetic-no-isolation-match&limit=1');
+  await expect(page.getByText('No ports in this observation.',{exact:true})).toBeVisible();
+  await screen(page,'empty');
+  await page.goto(href);
+  await expect(page.getByRole('heading',{name:'iso-ui-data',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Standard',exact:true}).click();
   await screen(page,'reader-expert');
   await page.getByRole('button',{name:'Toggle color theme',exact:true}).click();
@@ -73,6 +78,17 @@ test('native isolation review keeps read permission, depth and mobile responsibi
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await screen(page,label);
   }
+  await page.setViewportSize({width:1440,height:1000});
+  execFileSync('ovs-appctl',['-t',`${fixture.ovsDirectory}/db.ctl`,'exit']);
+  try {
+    await expect(page.getByText('Observation: stale',{exact:false})).toBeVisible();
+    await expect(page.getByText('This observation is not current. Values are last observed; configuration changes are unavailable.',{exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Stage isolation change',exact:true})).toHaveCount(0);
+    await screen(page,'stale');
+  } finally {
+    execFileSync('ovsdb-server',[fixture.database,`--remote=punix:${fixture.dbSocket}`,`--pidfile=${fixture.ovsDirectory}/db.pid`,`--unixctl=${fixture.ovsDirectory}/db.ctl`,'--detach','--no-chdir','--overwrite-pidfile'],{env:{...process.env,OVS_RUNDIR:fixture.ovsDirectory,OVS_LOGDIR:fixture.ovsDirectory,OVS_DBDIR:fixture.ovsDirectory},stdio:'pipe'});
+  }
+  await expect(page.getByText('Observation: fresh',{exact:false})).toBeVisible();
 });
 
 test('native protected Port uses shared confirmation and exact Safe Apply recovery',async({page})=>{
