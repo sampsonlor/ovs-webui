@@ -1,8 +1,11 @@
 # STP / RSTP guarded execution
 
-Status: implementation under qualification. This document does not close #23
-or the wider #43 aggregate. Source and main acceptance evidence must be recorded
-before a release claim. No production deployment has been performed.
+Status: guarded Basic Manage implemented. Source `d07ad49a98c6a99bf99342ba720a32e2509ef2a2` qualified in
+[CI 39772835582](https://github.com/sampsonlor/ovs-webui/actions/runs/39772835582).
+Release/main acceptance is recorded with [#23](https://github.com/sampsonlor/ovs-webui/issues/23).
+The wider [#43](https://github.com/sampsonlor/ovs-webui/issues/43) remains open.
+No production deployment has been performed; activation remains an explicit
+host/build/security decision.
 
 ## Authority and configuration
 
@@ -141,8 +144,8 @@ Manager repository tests separately cover the dedicated capability and old
 credential ceiling, sealed operation, durable member reservations, confirmation
 authority, management-loss compensation and no compensation replay. Existing
 Safe Apply outage/restart/unknown-outcome matrices remain required. The existing
-formal readonly/draft browser cases remain required; new execution UI still needs
-its own browser acceptance evidence before #23 is closed. Additional OVS 3.3.9
+formal readonly/draft browser cases and the separate execution UI cases remain
+required for every release. Source qualification passed both sets. Additional OVS 3.3.9
 amd64/arm64 UI qualification uses the actual optional build and production
 hardened services, first proving default source denial, then explicitly enabling
 the temporary process-read profile to test responsive review, installed RSTP
@@ -154,3 +157,50 @@ The wider #43 also includes Multicast, Tunnel, Mirror, QoS/Queue, exporters,
 Isolation and Profile/Drift. This STP implementation does not complete those
 domains or change their accepted Phase 1 scope. #71 remains deferred and is not
 altered by this work.
+
+## Source qualification record
+
+Source `d07ad49a98c6a99bf99342ba720a32e2509ef2a2`, CI 39772835582: fourteen checks passed, thirteen official artifact
+SHA-256 values verified. Each architecture retains all 315 previously accepted
+top-level Go race cases and adds five (320 total), plus all 42 formal service
+browser cases. Three exact OVS versions on both architectures retain the
+default/enabled/sanitized matrices, 23 legacy native cases and 21 readonly
+composition cases; each enabled/sanitized variant adds 16 execution cases.
+Three actual OVS 3.3.9 UI cases per architecture passed; all 24 screenshots were
+manually reviewed. Actual database executable pins match the native and UI
+records and each build manifest.
+
+The initial amd64 3.3.9 job failed during prerequisite installation because an
+unrelated Microsoft package source returned HTTP 403, before tests or an
+artifact existed. Attempt 2 reran that job and its dependent Gate. The other
+twelve successful jobs retain identical execution times, steps and runner
+identities. The original failure and all earlier superseded runs remain
+separately retained. No authentication deadline or retry policy was relaxed;
+#71 remains deferred. Independent main qualification is required before the
+release tag and #23 closure. This record does not complete the other #43 domains.
+
+Main `c7c05c1fc50d6c0e1a7ce78d764b85079f0a2c51` (CI 39782368345)
+retained all thirteen official artifacts with verified digests. Twelve checks
+passed; the 3.3.9 arm64 UI check failed. The native write reached Applied, but
+the one-click confirmation received `TRANSACTION_VERSION_CHANGED`; the page
+explicitly asked for refreshed review. Its unresolved transaction then correctly
+protected the graph against the following test. The service journal and both
+failure snapshots are retained. The new UI test now follows the same bounded
+explicit-review flow as the existing formal suite: only an exact 409 plus
+`command_effect=not-started` permits refreshing evidence and making a new human
+decision. Unknown outcomes never enter this flow. Test deadlines, retries,
+production confirmation logic and #71 are unchanged. A new full source and
+independent main qualification are required.
+
+The next source CI 39884753177 passed all six native witness jobs, including the
+three execution UI cases on each architecture, but both full-runtime jobs failed
+the existing draft browser case when its next validation used an old Candidate
+revision (`CANDIDATE_CHANGED`). All thirteen official artifact digests and the
+failed snapshots are retained separately. A delayed pre-acknowledgement read can
+leave the previous Candidate's controls available after staging acknowledgement
+while a fresh read is queued. A deterministic controller regression reproduces
+this with the original implementation. After acknowledgement the controller now
+invalidates older read tickets and withholds workspace/validation/transaction
+controls until authoritative reads finish. The same regression passes without
+replaying any mutation. The server's version admission and request-recovery
+rules are unchanged; this does not diagnose or resolve #71.

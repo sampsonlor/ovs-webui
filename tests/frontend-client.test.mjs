@@ -120,6 +120,34 @@ const response = (value, status = 200) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+await test('acknowledged mutation with a delayed old read withholds stale Candidate commands until fresh review', async () => {
+  const oldCandidate={id:resource,revision:'before',state:'dirty',intents:[]};
+  const newCandidate={...oldCandidate,revision:'after'};
+  let current=oldCandidate, delayed=false, release, requested;
+  const held=new Promise(resolve=>{release=resolve;});
+  const started=new Promise(resolve=>{requested=resolve;});
+  let commands=0;
+  const c=new Controller(new API(async url=>{
+    if(url.endsWith('/session')) return response(session);
+    if(url.endsWith('/workspace')) {
+      if(delayed) { delayed=false;requested();return held; }
+      return response({candidate:current});
+    }
+    return response({});
+  },storage()),'/overview');
+  await c.refresh();
+  assert.equal(c.state.workspace.value.candidate.revision,'before');
+  delayed=true;
+  const oldRead=c.refresh();await started;
+  await c.mutate(async()=>{commands++;current=newCandidate;return newCandidate;});
+  assert.equal(c.state.workspace.value,null,'old revision remained available for Validate after acknowledged staging');
+  assert.equal(c.state.validation.value,null);
+  release(response({candidate:oldCandidate}));await oldRead;
+  for(let n=0;n<30&&c.state.workspace.status!=='ready';n++) await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(c.state.workspace.value.candidate.revision,'after','pre-acknowledgement read replaced authoritative review');
+  assert.equal(commands,1,'refresh replayed a mutation');
+});
+
 await test('spanning tree routes use typed observation endpoints, preserve page scope and fence revoked inventory', async () => {
   let current = session;
   const seen = [];

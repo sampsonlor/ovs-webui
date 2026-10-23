@@ -458,7 +458,14 @@ export class Controller {
     try {
       const result = await run();
       if (context !== this.context) return;
+      // Reads started before the acknowledgement may still contain the previous
+      // Candidate revision. Do not expose its command controls while the fresh
+      // authoritative read is queued behind that older batch.
+      this.fence.reset();
       this.update({
+        workspace: empty(),
+        validation: empty(),
+        transaction: empty(),
         pending: this.api.pending(),
         message: 'Request acknowledged. Reading authoritative state…',
       });
