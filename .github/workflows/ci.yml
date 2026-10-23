@@ -383,6 +383,7 @@ jobs:
             test-results/go-execution-*.json
             test-results/go-bond-lacp-*.json
             test-results/go-qinq-*.json
+            test-results/go-port-isolation-*.json
             test-results/go-interface-mtu-*.json
             test-results/go-interface-policing-*.json
             test-results/go-spanning-tree-runtime-*.json

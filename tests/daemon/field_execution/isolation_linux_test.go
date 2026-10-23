@@ -90,6 +90,7 @@ func TestNativePortIsolation(t *testing.T) {
 	}
 	// Independently lose this domain's native commit reply. Observing its marker
 	// may recover commit knowledge, but cannot invent the exact Applied counter.
+	f.discardPortDraft()
 	in = f.prepareIntents([]map[string]any{{"intent_id": repository.NewID(), "operation": candidate.PortIsolationSet, "object": binding, "protected": true}})
 	p, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
 	must(t, err)
