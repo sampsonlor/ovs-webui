@@ -3,6 +3,8 @@ package ovsdb
 import (
 	"context"
 	"errors"
+
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 )
 
 type treeEvidenceTraceKey struct{}
@@ -14,6 +16,16 @@ type treeEvidenceFailure struct {
 
 func (e *treeEvidenceFailure) Error() string { return "SPANNING_TREE_EXECUTION_EVIDENCE_UNPROVEN" }
 func (e *treeEvidenceFailure) Unwrap() error { return e.cause }
+
+// Keep the public Problem exactly as before while retaining private evidence
+// phases for diagnostics. Error() never formats the wrapped native cause.
+type treePreparationFailure struct {
+	public *apitypes.Problem
+	cause  error
+}
+
+func (e *treePreparationFailure) Error() string   { return e.public.Error() }
+func (e *treePreparationFailure) Unwrap() []error { return []error{e.public, e.cause} }
 
 // Closed phase names only. Paths, process details, credentials and native frames
 // never become public execution reasons or diagnostic strings.

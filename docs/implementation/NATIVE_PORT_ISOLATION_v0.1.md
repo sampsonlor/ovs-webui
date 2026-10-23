@@ -86,6 +86,13 @@ validation and missing isolation-specific restage guidance. Those presentation
 issues are corrected before final acceptance; its results are retained
 separately and do not qualify a later source commit.
 
+Run 39896727759 on db635c3 retained an arm64 native STP preflight refusal in
+the external-after-image compensation case. The preparation layer had replaced
+its private evidence error with the public Problem, so the closed diagnostic
+reported only unproven. Preparation now retains the private cause behind an
+unchanged public Problem; error text never includes the native cause. This is
+diagnostic preservation, not a claim that the refusal's root cause is fixed.
+
 This slice does not close #43. Multicast, Tunnel, Mirror, QoS/Queue, all three
 exporters and Profile/Drift remain separate required work. STP/RSTP #23 completed
 its independently qualified main baseline `phase1-spanning-tree-execution-v0.1`.

@@ -78,7 +78,7 @@ func (e *Executor) prepareTreeExecution(ctx context.Context, p execution.Plan) (
 		if errors.As(err, &problem) {
 			return execution.Plan{}, err
 		}
-		return execution.Plan{}, apitypes.Fail(409, "SPANNING_TREE_EXECUTION_EVIDENCE_UNPROVEN")
+		return execution.Plan{}, &treePreparationFailure{public: apitypes.Fail(409, "SPANNING_TREE_EXECUTION_EVIDENCE_UNPROVEN"), cause: err}
 	}
 	var n nativePlan
 	if json.Unmarshal(p.Native, &n) != nil {
