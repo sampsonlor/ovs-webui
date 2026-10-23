@@ -186,7 +186,56 @@ for _ in range(3):s.sendto(token.encode(),target);time.sleep(.05)
 		return []map[string]any{{"intent_id": repository.NewID(), "operation": candidate.BridgeMulticastSet, "object": binding, "multicast": map[string]any{"enabled": true, "parameters": map[string]any{"mcast-snooping-aging-time": "300", "mcast-snooping-table-size": "64", "mcast-snooping-disable-flood-unregistered": "true"}}}}
 	}
 	in := f.prepareIntents(request())
+	baseline, err := f.inventory.ExecutionView(f.ctx, []candidate.Binding{binding})
+	must(t, err)
 	id := f.safeApply(in)
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		current, err := f.inventory.ExecutionView(f.ctx, []candidate.Binding{binding})
+		if err != nil {
+			t.Log("failed native after-image unavailable", err)
+			return
+		}
+		beforeGraph, afterGraph := baseline.Candidate.Multicasts[binding.ManagementID], current.Candidate.Multicasts[binding.ManagementID]
+		t.Log("native graph gate", afterGraph.Gate, "dependency equal", beforeGraph.Dependency == afterGraph.Dependency)
+		objects := append([]candidate.Binding{{Table: "Open_vSwitch", OVSUUID: baseline.Observation.Evidence.Root}}, beforeGraph.Bindings...)
+		image := func(table, uuid string, configuration map[string]any) map[string]any {
+			out := candidate.CloneConfiguration(configuration)
+			if table == "Bridge" && uuid == binding.OVSUUID {
+				delete(out, "mcast_snooping_enable")
+				for _, field := range []string{"other_config", "external_ids"} {
+					values, _ := out[field].(map[string]any)
+					if field == "other_config" {
+						for _, key := range multicast.Keys {
+							delete(values, key)
+						}
+					} else {
+						delete(values, candidate.MulticastMarker)
+					}
+				}
+			}
+			return out
+		}
+		for _, object := range objects {
+			before := image(object.Table, object.OVSUUID, baseline.Observation.Rows[object.Table][object.OVSUUID].Configuration)
+			after := image(object.Table, object.OVSUUID, current.Observation.Rows[object.Table][object.OVSUUID].Configuration)
+			keys := map[string]bool{}
+			for key := range before {
+				keys[key] = true
+			}
+			for key := range after {
+				keys[key] = true
+			}
+			for key := range keys {
+				if candidate.Digest(before[key]) != candidate.Digest(after[key]) {
+					// Only synthetic fixture column names, never configuration values.
+					t.Logf("native dependency column changed: %s.%s", object.Table, key)
+				}
+			}
+		}
+	})
 	f.waitSafety(id, "awaiting-confirmation")
 	probe(true)
 	f.decide(id, "rollback")

@@ -117,6 +117,14 @@ func TestMulticastRootGrantAndPersistentGraphRemainIndependent(t *testing.T) {
 	if !candidate.Passed(checks) {
 		t.Fatal("own native after-image was not admissible", checks)
 	}
+	private, err := s.ExecutionView(context.Background(), []candidate.Binding{b})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checks, _ = candidate.Checks(candidate.Candidate{Intents: []candidate.StoredIntent{i}}, private.Candidate)
+	if !candidate.Passed(checks) {
+		t.Fatal("private execution snapshot lost the admissible after-image", checks)
+	}
 	row.Configuration["other_config"].(map[string]any)["foreign-key"] = "changed"
 	s.install(o, d)
 	if after.Dependency == read().Multicasts[b.ManagementID].Dependency {
