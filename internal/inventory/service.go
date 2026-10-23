@@ -27,6 +27,9 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	multicastGroupObserver         MulticastGroupObserver
+	localMulticast                 map[string]bool
+	multicastAuthorityRevision     string
 	localIsolation                 map[string]bool
 	isolationAuthorityRevision     string
 	spanningTreeAuthorityRevision  string
@@ -135,6 +138,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
 	localSpanningTree := s.localSpanningTree
 	localIsolation := s.localIsolation
+	localMulticast := s.localMulticast
 	localSpanningTreeExecution := s.localSpanningTreeExecution
 	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
 	s.mu.RUnlock()
@@ -238,6 +242,36 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			return item, err
 		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err == nil && b.Table == "Bridge" {
+			reason, authority := "CONFIGURATION_WITHHELD", "withheld"
+			item["multicast_config"] = nil
+			if allowedConfig {
+				binding := candidate.Binding{ManagementID: b.ManagementID, OVSUUID: b.UUID, Table: "Bridge", Generation: v.decision.Generation}
+				snapshot := candidate.Snapshot{Generation: v.decision.Generation}
+				projectMulticast(v, localMulticast, &snapshot, []candidate.Binding{binding})
+				p := snapshot.Multicasts[b.ManagementID]
+				reason, authority = p.Gate, p.Authority
+				if p.Known {
+					item["multicast_config"] = p.Configuration
+				} else {
+					reason = "NATIVE_CONFIGURATION_UNKNOWN"
+				}
+				if !p.Supported {
+					reason = "MULTICAST_SCHEMA_UNSUPPORTED"
+				} else if p.Authority != "local-managed" {
+					reason = "MULTICAST_AUTHORITY_REQUIRED"
+				}
+				if fresh != "fresh" {
+					reason = "MULTICAST_OBSERVATION_STALE"
+				} else if !slices.Contains(c.Capabilities, "workspace.write") || !slices.Contains(c.Capabilities, candidate.BridgeMulticastCapability) {
+					reason = "CAPABILITY_DENIED"
+				}
+			}
+			item["multicast_execution"] = map[string]any{"available": reason == "", "reason": reason, "authority": authority, "capability": candidate.BridgeMulticastCapability}
+			if op == "readBridge" {
+				item["multicast_groups"] = s.readMulticastGroups(ctx, v, b, fresh, allowedConfig)
+			}
+		}
 		if err == nil && b.Table == "Port" {
 			reason, authority := "CONFIGURATION_WITHHELD", "withheld"
 			if allowedConfig {

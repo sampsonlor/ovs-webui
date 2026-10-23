@@ -47,6 +47,10 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 		}
 		table := "Port"
 		markerKey := execution.MarkerKey
+		if intent.Operation == candidate.BridgeMulticastSet {
+			table = "Bridge"
+			markerKey = candidate.MulticastMarker
+		}
 		if intent.Operation == candidate.SpanningTreeConfigure {
 			table = "Bridge"
 			markerKey = candidate.SpanningTreeMarker

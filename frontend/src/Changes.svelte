@@ -8,6 +8,7 @@
   import Link from './Link.svelte';
   import { treeGateMessage } from './spanning-tree';
   import { isolationMessage } from './isolation';
+ import { multicastMessage } from './multicast';
   let {
     model,
     expert,
@@ -20,11 +21,13 @@
   const topology = $derived(c?.intents.some(i => ['port.create','bond.create','port.delete','bridge.delete-tree','port.move','bond.members.set','interface.ofport.set','interface.ofport.clear','interface.patch.connect','interface.patch.disconnect'].includes(i.operation)) ?? false);
   const spanningTree = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.prepare')??false);
   const spanningTreeExecution = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.configure')??false);
-  const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
+  const multicast=$derived(c?.intents.some(i=>i.operation==='bridge.multicast.configure')??false);
+ const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
   const v = $derived(model.validation.value);
   const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare' || f.operation === 'bridge.spanning-tree.configure') ?? false);
-  const isolationValidation = $derived(v?.diff.some(f=>f.operation==='port.isolation.set')??false);
-  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(treeValidation || isolationValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
+  const multicastValidation=$derived(v?.diff.some(f=>f.operation==='bridge.multicast.configure')??false);
+ const isolationValidation = $derived(v?.diff.some(f=>f.operation==='port.isolation.set')??false);
+  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(treeValidation || isolationValidation || multicastValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);
   const blocked = $derived(model.busy || !!model.pending || !model.sessionReady);
   const page = $derived(model.path.split('/')[2]);
@@ -99,8 +102,8 @@
         Revision {c.revision} · generation {c.instance_generation ?? 'Unknown'}
       </p>{/if}
     {#each c.checks ?? [] as gate}<div class="notice warning">
-        <strong>{isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if spanningTree || isolation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <strong>{multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     {#if c.diff_truncated}<p class="notice warning">
         Review is incomplete. Applying this Candidate is blocked.
@@ -108,7 +111,8 @@
     <Diff fields={c.diff ?? []} {expert} />
     {#if spanningTree}<section class="notice warning" aria-label="Spanning tree draft boundary"><strong>Spanning tree draft only</strong><p>Review the captured configuration and native parameter checks. Execution and safe timer recovery are not available yet. Apply remains blocked.</p>{#if c.state === 'reconciliation-required'}<p>Configuration, attachment or authority changed. Discard this intent, review the Bridge and prepare a new draft. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if spanningTreeExecution}<section class="notice warning" aria-label="Spanning tree change boundary"><strong>Spanning tree Safe Apply</strong><p>Changing or switching protocols can interrupt traffic and management connectivity. Execution checks the current native runtime, preserves the original for guarded compensation and requires management reachability and confirmation. Installed protocol state does not prove network convergence.</p>{#if c.state === 'reconciliation-required'}<p>Discard this intent and review the current Bridge. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
-    {#if isolation && (c.state === 'conflict' || c.state === 'reconciliation-required')}<section class="notice warning" aria-label="Isolation change needs review"><strong>Review and restage this isolation change</strong><p>Discard this intent and review the current Port and Bridge before preparing a new change. Rebase cannot replace the captured original or connected graph.</p></section>{/if}
+    {#if multicast && (c.state==='conflict'||c.state==='reconciliation-required')}<section class="notice warning" aria-label="Multicast change needs review"><strong>Review and restage this multicast change</strong><p>Discard this intent and review the current Bridge and Ports before preparing a new change. Rebase cannot replace the captured original or connected graph.</p></section>{/if}
+ {#if isolation && (c.state === 'conflict' || c.state === 'reconciliation-required')}<section class="notice warning" aria-label="Isolation change needs review"><strong>Review and restage this isolation change</strong><p>Discard this intent and review the current Port and Bridge before preparing a new change. Rebase cannot replace the captured original or connected graph.</p></section>{/if}
     {#if topology && c.state === 'reconciliation-required'}<section class="panel"><h2>Review and restage this topology change</h2><p>Native configuration, references or ownership changed. Discard this intent, review the current topology and stage a new request. Rebase cannot replace captured identities or the original recovery image.</p></section>{/if}
     {#if c.state === 'reconciliation-required' && c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set')}
       <section class="panel">
@@ -135,7 +139,7 @@
         <button
           onclick={rebase}
           disabled={!desktop ||
-            topology || spanningTree || spanningTreeExecution || isolation || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
+            topology || spanningTree || spanningTreeExecution || isolation || multicast || c.intents.some((i) => i.operation === 'interface.mtu.set' || i.operation === 'interface.mtu.clear' || i.operation === 'interface.policing.set') ||
             blocked ||
             !has(model.session, 'workspace.write') ||
             !c.conflict_snapshot_id ||
@@ -215,8 +219,8 @@
         class="notice"
         class:warning={gate.state !== 'allowed'}
       >
-        <Status value={gate.state} /> <strong>{isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if treeValidation || isolationValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <Status value={gate.state} /> <strong>{multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     <Diff fields={v.diff} {expert} />
     {#if expert}<details>

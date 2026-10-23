@@ -10,7 +10,8 @@
   const mtu = $derived(fields.some((field) => field.operation === 'interface.mtu.set' || field.operation === 'interface.mtu.clear'));
   const policing = $derived(fields.some((field) => field.operation === 'interface.policing.set'));
   function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
-    if(field.operation==='port.isolation.set') return typeof value==='boolean' ? (value ? 'Protected' : 'Unprotected') : 'Unavailable';
+    if(field.operation==='bridge.multicast.configure')return value===null ? (field.conflict&&side==='current'?'Unavailable or native default · review conflict':'Native default (unset)') : typeof value==='boolean'?(value?'Enabled':'Disabled'):String(value);
+ if(field.operation==='port.isolation.set') return typeof value==='boolean' ? (value ? 'Protected' : 'Unprotected') : 'Unavailable';
     if ((field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') && value === null) return field.conflict && side === 'current' ? 'Native default / unavailable · review conflict' : 'Native default (unset)';
     if ((field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure')) return typeof value === 'boolean' ? (value ? 'Enabled' : 'Disabled') : String(value);
     if (field.operation === 'interface.policing.set' && value !== null && value !== undefined) {

@@ -92,6 +92,14 @@ func Compare(c Candidate, s Snapshot) View {
 	id := ConflictID(c, s)
 	v.ConflictSnapshot = &id
 	for _, i := range c.Intents {
+		if i.Operation == BridgeMulticastSet {
+			if problem := multicastProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, multicastDiff(i, s)...)
+			continue
+		}
 		if i.Operation == PortIsolationSet {
 			if problem := isolationProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -248,6 +256,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
+			if in.Multicast != nil && in.Operation != BridgeMulticastSet {
+				return e, apitypes.Fail(422, "INVALID_MULTICAST_REQUEST")
+			}
 			if in.Protected != nil && in.Operation != PortIsolationSet {
 				return e, apitypes.Fail(422, "INVALID_PORT_ISOLATION")
 			}
@@ -260,6 +271,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if in.Policing != nil && in.Operation != InterfacePolicingSet {
 				return e, apitypes.Fail(422, "INVALID_INTERFACE_POLICING")
 			}
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == BridgeMulticastSet }) || cmd.Intents[0].Operation == BridgeMulticastSet {
+			var err error
+			c, err = stageMulticast(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
 		}
 		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == PortIsolationSet }) || cmd.Intents[0].Operation == PortIsolationSet {
 			var err error
@@ -450,6 +469,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			if i.Operation == InterfacePolicingSet {
 				return e, apitypes.Fail(409, "POLICING_RESTAGE_REQUIRED")
 			}
+			if i.Operation == BridgeMulticastSet {
+				return e, apitypes.Fail(409, "MULTICAST_RESTAGE_REQUIRED")
+			}
 			if i.Operation == PortIsolationSet {
 				return e, apitypes.Fail(409, "ISOLATION_RESTAGE_REQUIRED")
 			}
@@ -508,6 +530,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == BridgeMulticastSet {
+			checks = append(checks, multicastChecks(i, s)...)
+			continue
+		}
 		if i.Operation == PortIsolationSet {
 			checks = append(checks, isolationChecks(i, s)...)
 			continue

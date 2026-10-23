@@ -31,6 +31,11 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
         code, ack, _ = call('/users','POST',{'request_id':request_id(),'username':name,'password':password,'role_ids':[role_id]})
         assert code == 202, (code,ack)
         accounts[name] = password
+    multicast_password='synthetic-native-multicast-'+secrets.token_hex(16)
+    credentials.append(multicast_password)
+    reader_role=next(r['id'] for r in get('/roles')['items'] if r['name']=='Reader')
+    code,ack,_=call('/users','POST',{'request_id':request_id(),'username':'native-multicast-reader','password':multicast_password,'role_ids':[reader_role]})
+    assert code==202,(code,ack)
     name = 'br-native-tree'
     vsctl('add-br',name,'--','set','Bridge',name,'datapath_type=system')
     bridge = eventually(lambda: next((b for b in get('/bridges?filter='+name)['items'] if b['name']==name),None))
@@ -47,6 +52,8 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
     database = ovs / 'bin/ovsdb-server'
     database_hash = hashlib.sha256(database.read_bytes()).hexdigest()
     flags += f' --spanning-tree-database-executable={database} --spanning-tree-database-sha256={database_hash}'
+    flags += f' --multicast-group-witness-socket={ovs}/switch.ctl --multicast-group-witness-executable={ovs}/bin/ovs-vswitchd'
+    flags += f' --multicast-group-witness-manifest={manifest} --multicast-group-witness-manifest-sha256={sha}'
     # Provision only the dedicated fixture role; existing credentials cannot
     # acquire this capability and the builtin templates are unchanged.
     run('systemctl','is-active','--quiet',units['mgrd'])
@@ -67,6 +74,20 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
         result = subprocess.run([node,str(repo/'node_modules/@playwright/test/cli.js'),'test','--config',
                                  str(repo/'frontend/spanning-execution.playwright.config.ts')],cwd=repo,env=env,timeout=240)
         assert result.returncode==0,'qualified native spanning-tree frontend acceptance failed'
+        vsctl('add-br','br-mcast-live','--','set','Bridge','br-mcast-live','datapath_type=system','mcast_snooping_enable=true')
+        run('ip','link','add','mcast-live-p','type','veth','peer','name','mcast-live-peer')
+        for iface in ['mcast-live-p','mcast-live-peer']:
+            run('sysctl','-q','-w','net.ipv6.conf.'+iface+'.disable_ipv6=1')
+        vsctl('add-port','br-mcast-live','mcast-live-p')
+        run('ip','link','set','mcast-live-p','up')
+        run('ip','addr','add','198.19.204.1/24','dev','mcast-live-peer')
+        run('ip','link','set','mcast-live-peer','up')
+        run('sysctl','-q','-w','net.ipv4.conf.mcast-live-peer.force_igmp_version=2')
+        multicast_bridge=eventually(lambda: next((b for b in get('/bridges?filter=br-mcast-live')['items'] if b['name']=='br-mcast-live'),None))
+        private.write_text(json.dumps({'origin':origin,'password':multicast_password,'bridge':multicast_bridge,'unit':units['mgrd'],'unitPath':str(unit_path),'manifestDigest':sha}))
+        env=dict(os.environ,OVS_MULTICAST_FRONTEND_FIXTURE=str(private))
+        result=subprocess.run([node,str(repo/'node_modules/@playwright/test/cli.js'),'test','--config',str(repo/'frontend/multicast-execution.playwright.config.ts')],cwd=repo,env=env,timeout=120)
+        assert result.returncode==0,'qualified native multicast browser acceptance failed'
         return {'verified':True,'network':network,'backend':'qualified OVS 3.3.9 / root mgrd / unprivileged webd / HTTPS / Unix IPC',
                 'default_proc_restriction_retained':True,'optional_fixture_capability':'CAP_SYS_PTRACE',
                 'database_executable_sha256':database_hash,
@@ -76,3 +97,5 @@ def verify_spanning_tree_frontend(repo, fixture, node, origin, password, call, g
         run('ip','link','set',probe,'up',check=False)
         reconfigure_draft_fixture(unit_path,units['mgrd'],original)
         vsctl('--no-wait','--if-exists','del-br',name)
+        vsctl('--no-wait','--if-exists','del-br','br-mcast-live')
+        run('ip','link','del','mcast-live-p',check=False)

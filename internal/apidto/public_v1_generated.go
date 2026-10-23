@@ -118,6 +118,7 @@ type ObservedIntent struct {
 	QinqContext            QinQContext                `json:"qinq_context,omitempty"`
 	TopologyChange         TopologyChange             `json:"topology_change,omitempty"`
 	IsolationChange        IsolationChange            `json:"isolation_change,omitempty"`
+	MulticastChange        MulticastChange            `json:"multicast_change,omitempty"`
 	SpanningTreeChange     SpanningTreeDraft          `json:"spanning_tree_change,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
@@ -603,6 +604,9 @@ type Bridge struct {
 	PortRefs           []ResourceRef                 `json:"port_refs"`
 	DatapathType       string                        `json:"datapath_type"`
 	SpanningTree       SpanningTreeBridgeObservation `json:"spanning_tree,omitempty"`
+	MulticastConfig    json.RawMessage               `json:"multicast_config,omitempty"`
+	MulticastExecution MulticastExecution            `json:"multicast_execution,omitempty"`
+	MulticastGroups    MulticastGroups               `json:"multicast_groups,omitempty"`
 	ExtraFields        map[string]json.RawMessage    `json:"-"`
 }
 
@@ -1119,6 +1123,45 @@ type IsolationExecution struct {
 	Authority  string `json:"authority"`
 	Capability string `json:"capability"`
 }
+type MulticastParameters struct {
+	McastSnoopingAgingTime                json.RawMessage `json:"mcast-snooping-aging-time"`
+	McastSnoopingTableSize                json.RawMessage `json:"mcast-snooping-table-size"`
+	McastSnoopingDisableFloodUnregistered json.RawMessage `json:"mcast-snooping-disable-flood-unregistered"`
+}
+type MulticastNativeConfig struct {
+	Enabled    bool                `json:"enabled"`
+	Parameters MulticastParameters `json:"parameters"`
+}
+type MulticastRequest struct {
+	Enabled    bool                       `json:"enabled"`
+	Parameters map[string]json.RawMessage `json:"parameters"`
+}
+type MulticastChange struct {
+	Before MulticastNativeConfig `json:"before"`
+	After  MulticastNativeConfig `json:"after"`
+}
+type MulticastExecution struct {
+	Available  bool   `json:"available"`
+	Reason     string `json:"reason"`
+	Authority  string `json:"authority"`
+	Capability string `json:"capability"`
+}
+type MulticastGroup struct {
+	Ofport     int64       `json:"ofport"`
+	Vlan       int64       `json:"vlan"`
+	Protocol   string      `json:"protocol"`
+	Address    string      `json:"address"`
+	Router     bool        `json:"router"`
+	AgeSeconds int64       `json:"age_seconds"`
+	PortRef    ResourceRef `json:"port_ref"`
+	PortName   string      `json:"port_name"`
+}
+type MulticastGroups struct {
+	Availability string          `json:"availability"`
+	Reason       string          `json:"reason"`
+	Items        json.RawMessage `json:"items"`
+	Source       Source          `json:"source"`
+}
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
 	Operation    string `json:"operation"`
@@ -1301,6 +1344,12 @@ type PortIsolationIntent struct {
 	Operation string        `json:"operation"`
 	Object    ObjectBinding `json:"object"`
 	Protected bool          `json:"protected"`
+}
+type BridgeMulticastIntent struct {
+	IntentId  Id               `json:"intent_id"`
+	Operation string           `json:"operation"`
+	Object    ObjectBinding    `json:"object"`
+	Multicast MulticastRequest `json:"multicast"`
 }
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`

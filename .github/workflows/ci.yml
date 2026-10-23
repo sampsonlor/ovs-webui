@@ -220,6 +220,14 @@ jobs:
           done
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
         run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
+      - name: Native multicast listener forwarding and guarded compensation matrix
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeMulticast$' -test.v -test.timeout=180s \
+              | go tool test2json -p "native-multicast-$schema" | tee "test-results/go-multicast-$schema.json"
+          done
       - name: Linux ingress policing protocol and early kernel gate
         run: |
           set -o pipefail
@@ -384,6 +392,7 @@ jobs:
             test-results/go-bond-lacp-*.json
             test-results/go-qinq-*.json
             test-results/go-port-isolation-*.json
+            test-results/go-multicast-*.json
             test-results/go-interface-mtu-*.json
             test-results/go-interface-policing-*.json
             test-results/go-spanning-tree-runtime-*.json

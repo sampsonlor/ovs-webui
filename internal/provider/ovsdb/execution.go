@@ -272,6 +272,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.BridgeMulticastSet {
+		return compileMulticastExecution(id, marker, envelope, view, d)
+	}
 	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.PortIsolationSet {
 		return compileIsolationExecution(id, marker, envelope, view, d)
 	}
@@ -608,13 +611,16 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 	all, anyMarker := true, false
 	for _, intent := range p.Envelope.Candidate.Intents {
 		row, exists := view.Observation.Rows["Port"][intent.Object.OVSUUID]
-		if intent.Operation == candidate.SpanningTreeConfigure {
+		if intent.Operation == candidate.SpanningTreeConfigure || intent.Operation == candidate.BridgeMulticastSet {
 			row, exists = view.Observation.Rows["Bridge"][intent.Object.OVSUUID]
 		}
 		if candidate.IsMTUOperation(intent.Operation) || intent.Operation == candidate.InterfacePolicingSet {
 			row, exists = view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 		}
 		markerKey := execution.MarkerKey
+		if intent.Operation == candidate.BridgeMulticastSet {
+			markerKey = candidate.MulticastMarker
+		}
 		if intent.Operation == candidate.SpanningTreeConfigure {
 			markerKey = candidate.SpanningTreeMarker
 		}
@@ -673,6 +679,20 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		return out
 	}
 	for _, intent := range after.Intents {
+		if intent.Operation == candidate.BridgeMulticastSet {
+			for _, binding := range p.GraphBindings {
+				if binding.Table == "Interface" {
+					member := view.Observation.Rows["Interface"][binding.OVSUUID]
+					values, ok := member.Values["error"].([]any)
+					if !ok || len(values) != 0 {
+						out.Applied = "unknown"
+						out.Reason = "interface-apply-error"
+						return out
+					}
+				}
+			}
+			continue
+		}
 		if intent.Operation == candidate.SpanningTreeConfigure {
 			continue
 		}

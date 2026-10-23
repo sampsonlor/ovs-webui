@@ -16,7 +16,7 @@ func interfaceEvidenceObjects(r execution.Record) []apitypes.Ref {
 			refs = append(refs, apitypes.Ref{Kind: "port", ID: i.Object.ManagementID})
 			continue
 		}
-		if i.Operation == candidate.SpanningTreeConfigure && i.Object.Table == "Bridge" && apitypes.ManagementID(i.Object.ManagementID) {
+		if (i.Operation == candidate.SpanningTreeConfigure || i.Operation == candidate.BridgeMulticastSet) && i.Object.Table == "Bridge" && apitypes.ManagementID(i.Object.ManagementID) {
 			refs = append(refs, apitypes.Ref{Kind: "bridge", ID: i.Object.ManagementID})
 			continue
 		}

@@ -49,6 +49,8 @@ func run() int {
 	grantTreeRole := flag.String("grant-spanning-tree-execution-role", "", "Offline root action: explicitly grant one existing role the independent STP/RSTP write capability, then exit; new login required")
 	grantIsolationRole := flag.String("grant-port-isolation-role", "", "Offline root action: grant one existing role native Port isolation capability, then exit; new login required")
 	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
+	grantMulticastRole := flag.String("grant-multicast-role", "", "Offline root action: explicitly grant one existing role native multicast capability, then exit; new login required")
+	revokeMulticastRole := flag.String("revoke-multicast-role", "", "Offline root action: revoke one role native multicast capability, then exit")
 	revokeTreeRole := flag.String("revoke-spanning-tree-execution-role", "", "Offline root action: revoke one role's independent STP/RSTP write capability, then exit")
 	secretDir := flag.String("secret-key-directory", "", "Private versioned privileged keys (default: secret-keys beside manager.db)")
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
@@ -61,6 +63,11 @@ func run() int {
 	acceptReason := flag.String("reconciliation-reason", "", "Administrative reason for offline identity reconciliation")
 	localSpanningTree := flag.String("local-spanning-tree-bridges", "", "Reviewed immutable Bridge IDs permitted to prepare STP/RSTP drafts; no execution grant, independent of topology and Port authority")
 	localIsolation := flag.String("local-isolation-ports", "", "Independent reviewed immutable Port IDs permitted for native protected-Port Safe Apply")
+	localMulticast := flag.String("local-multicast-bridges", "", "Independent reviewed immutable Bridge IDs permitted for native multicast Safe Apply")
+	multicastControl := flag.String("multicast-group-witness-socket", "", "Optional explicit native multicast membership read source; no write authority")
+	multicastExecutable := flag.String("multicast-group-witness-executable", "", "Root-owned qualified optional OVS witness executable")
+	multicastManifest := flag.String("multicast-group-witness-manifest", "", "Root-owned exact optional OVS witness build manifest")
+	multicastManifestDigest := flag.String("multicast-group-witness-manifest-sha256", "", "Reviewed digest of the exact optional OVS witness build manifest")
 	localSpanningTreeExecution := flag.String("local-spanning-tree-execution-bridges", "", "Independent reviewed Bridge IDs permitted for guarded STP/RSTP Safe Apply; requires an explicit qualified witness build")
 	treeControl := flag.String("spanning-tree-witness-socket", "", "Explicit local ovs-vswitchd Unix control socket for read-only installed witnesses")
 	treeExecutable := flag.String("spanning-tree-witness-executable", "", "Root-owned executable of the qualified optional OVS witness build")
@@ -86,12 +93,23 @@ func run() int {
 		return 0
 	}
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
+	multicastGroupsConfigured := *multicastControl != "" || *multicastExecutable != "" || *multicastManifest != "" || *multicastManifestDigest != ""
+	if multicastGroupsConfigured && (*multicastControl == "" || *multicastExecutable == "" || *multicastManifest == "" || *multicastManifestDigest == "") {
+		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_MULTICAST_GROUP_SOURCE")
+		return 2
+	}
 	treeConfigured := *localSpanningTreeExecution != "" || *treeControl != "" || *treeExecutable != "" || *treeManifest != "" || *treeManifestDigest != "" || *treeDatabaseExecutable != "" || *treeDatabaseSHA256 != ""
 	if treeConfigured && (*localSpanningTreeExecution == "" || *treeControl == "" || *treeExecutable == "" || *treeManifest == "" || *treeManifestDigest == "" || *treeDatabaseExecutable == "" || *treeDatabaseSHA256 == "") {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_SPANNING_TREE_WITNESS_CONFIGURATION")
 		return 2
 	}
 	actions := 0
+	if *grantMulticastRole != "" {
+		actions++
+	}
+	if *revokeMulticastRole != "" {
+		actions++
+	}
 	if *grantIsolationRole != "" {
 		actions++
 	}
@@ -241,6 +259,21 @@ func run() int {
 		}
 		return 0
 	}
+	if *grantMulticastRole != "" || *revokeMulticastRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantMulticastRole, true
+		if *revokeMulticastRole != "" {
+			id, enabled = *revokeMulticastRole, false
+		}
+		if err := authentication.SetMulticastExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		return 0
+	}
 	if *restore {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -284,6 +317,14 @@ func run() int {
 		}
 		if err = inventoryService.SetLocalIsolationPorts(isolationIDs); err != nil {
 			logger.Error("inventory_start_failed", "code", "INVALID_ISOLATION_AUTHORITY")
+			return 2
+		}
+		var multicastIDs []string
+		if *localMulticast != "" {
+			multicastIDs = strings.Split(*localMulticast, ",")
+		}
+		if err = inventoryService.SetLocalMulticastBridges(multicastIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_MULTICAST_AUTHORITY")
 			return 2
 		}
 		linuxObserver := linuxprovider.New()
@@ -444,6 +485,14 @@ func run() int {
 		}
 		if authentication != nil {
 			authentication.WithInventory(inventoryService)
+			if multicastGroupsConfigured {
+				observer, observeErr := provider.MulticastGroupObserver(ovsprovider.MulticastGroupOptions{ControlSocket: *multicastControl, Executable: *multicastExecutable, Manifest: *multicastManifest, ManifestDigest: *multicastManifestDigest, PeerUID: uint32(*ovsUID)})
+				if observeErr != nil {
+					logger.Error("service_start_failed", "code", "INVALID_MULTICAST_GROUP_SOURCE")
+					return 2
+				}
+				inventoryService.SetMulticastGroupObserver(observer)
+			}
 			executor := provider.Executor(inventoryService)
 			if treeConfigured {
 				if err = executor.ConfigureSpanningTreeExecution(ovsprovider.SpanningTreeExecutionOptions{ControlSocket: *treeControl, Executable: *treeExecutable, Manifest: *treeManifest, ManifestDigest: *treeManifestDigest, DatabaseExecutable: *treeDatabaseExecutable, DatabaseSHA256: *treeDatabaseSHA256, PeerUID: uint32(*ovsUID)}); err != nil {

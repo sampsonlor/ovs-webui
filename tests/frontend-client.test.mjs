@@ -130,6 +130,16 @@ void test('native isolation apply needs its explicit field capability and deskto
   assert.equal(applyReady(c,{...v,usable:false},allowed,true),false);
 });
 
+void test('native multicast apply requires its independent capability and current desktop validation',()=>{
+  const c={id:resource,revision:'native-multicast',state:'dirty',safe_apply_available:true,intents:[{operation:'bridge.multicast.configure'}]};
+  const v={candidate_id:c.id,candidate_revision:c.revision,state:'passed',usable:true,execution_ready:true};
+  const allowed={effective_capabilities:['configuration.apply','ovs.bridge.multicast.write']};
+  assert.equal(applyReady(c,v,session,true),false,'VLAN permission became multicast permission');
+  assert.equal(applyReady(c,v,allowed,true),true);
+  assert.equal(applyReady(c,v,allowed,false),false);
+  assert.equal(applyReady(c,{...v,usable:false},allowed,true),false);
+});
+
 await test('acknowledged mutation with a delayed old read withholds stale Candidate commands until fresh review', async () => {
   const oldCandidate={id:resource,revision:'before',state:'dirty',intents:[]};
   const newCandidate={...oldCandidate,revision:'after'};

@@ -28,6 +28,7 @@ type Reference struct {
 	Position string `json:"position"`
 }
 type Column struct {
+	MulticastCompatible       bool            `json:"-"`
 	IsolationCompatible       bool            `json:"-"`
 	Name                      string          `json:"name"`
 	Type                      string          `json:"type"`
