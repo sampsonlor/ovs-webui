@@ -10,6 +10,7 @@ mkdir -p "$out" test-results/ovs-witness
 test "$(uname -m)" = "${EXPECTED_MACHINE:?}"
 CGO_ENABLED=0 go build -trimpath -o "$out/decoder" ./tests/ovs_witness/decoder
 go test -race -c -o "$out/preflight.test" ./tests/ovs_witness/preflight
+go test -race -c -o "$out/multicast-execution.test" ./tests/daemon/field_execution
 cp "$(go tool -n test2json)" "$out/test2json"
 go test -json -count=1 ./internal/ovswitness > test-results/ovs-witness/go-codec.json
 go test -race -json -count=1 ./internal/provider/ovsdb > test-results/ovs-witness/go-provider.json

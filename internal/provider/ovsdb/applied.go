@@ -28,7 +28,7 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	proof := p.Envelope
 	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
 	for i := range proof.Candidate.Intents {
-		if proof.Candidate.Intents[i].Operation == candidate.PortIsolationSet {
+		if proof.Candidate.Intents[i].Operation == candidate.PortIsolationSet || proof.Candidate.Intents[i].Operation == candidate.BridgeMulticastSet {
 			candidate.AfterImage(&proof.Candidate.Intents[i])
 		}
 		if candidate.IsMTUOperation(proof.Candidate.Intents[i].Operation) || proof.Candidate.Intents[i].Operation == candidate.InterfacePolicingSet || proof.Candidate.Intents[i].Operation == candidate.SpanningTreeConfigure {
@@ -52,6 +52,18 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
+		if intent.Operation == candidate.BridgeMulticastSet {
+			for _, binding := range p.GraphBindings {
+				if binding.Table == "Interface" {
+					g, err := guard(d, "Interface", view.Observation.Rows["Interface"][binding.OVSUUID], []string{"error"}, []any{uuidCondition(binding.OVSUUID)})
+					if err != nil {
+						return nil, err
+					}
+					ops = append(ops, g)
+				}
+			}
+			continue
+		}
 		if intent.Operation == candidate.SpanningTreeConfigure {
 			continue
 		}

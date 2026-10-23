@@ -21,16 +21,17 @@ import (
 var selected = map[string][]string{
 	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths"},
 	"Datapath":     {"capabilities"},
-	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
+	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "mcast_snooping_enable", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "protected", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
 	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
 
 type discovered struct {
-	public   inventory.Schema
-	native   native.DatabaseSchema
-	requests map[string]any
+	multicastMaps map[string]bool
+	public        inventory.Schema
+	native        native.DatabaseSchema
+	requests      map[string]any
 }
 
 func discover(data []byte) (discovered, error) {
@@ -49,6 +50,7 @@ func discover(data []byte) (discovered, error) {
 	}
 	d.public = inventory.Schema{Name: d.native.Name, Version: d.native.Version, Digest: inventory.Digest(raw), Tables: []inventory.Table{}}
 	d.requests = map[string]any{}
+	d.multicastMaps = map[string]bool{}
 	for t, columns := range required {
 		table := d.native.Tables[t]
 		for _, c := range columns {
@@ -76,6 +78,14 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			if t == "Bridge" && name == "mcast_snooping_enable" {
+				c.MulticastCompatible = isolationConstraint(col)
+				c.Monitored = c.Monitored && c.MulticastCompatible
+			}
+			if t == "Bridge" && (name == "other_config" || name == "external_ids") {
+				c.MulticastCompatible = multicastMapConstraint(col, multicastRawColumnType(raw, t, name))
+				d.multicastMaps[name] = c.MulticastCompatible
+			}
 			if spanningTreeColumn(t, name) {
 				c.SpanningTreeCompatible = spanningTreeConstraint(name, col)
 				c.Monitored = c.Monitored && c.SpanningTreeCompatible

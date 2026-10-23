@@ -21,6 +21,7 @@ func TestEmbeddedSPADeepLinksAndStaticSecurityBoundary(t *testing.T) {
 		{"/bridges", 200}, {"/bridges?cursor=sealed-page", 200}, {"/bridges/not-an-identity", 404}, {"/bridges/extra/path", 404},
 		{"/switching/topology", 200}, {"/switching/spanning-tree", 200}, {"/switching/spanning-tree?filter=synthetic", 200},
 		{"/switching/spanning-tree/11111111-1111-4111-8111-111111111111", 200}, {"/switching/spanning-tree/not-an-identity", 404}, {"/switching/spanning-tree/11111111-1111-4111-8111-111111111111/extra", 404},
+		{"/switching/multicast", 200}, {"/switching/multicast?filter=synthetic", 200}, {"/switching/multicast/11111111-1111-4111-8111-111111111111", 200}, {"/switching/multicast/not-an-identity", 404}, {"/switching/multicast/11111111-1111-4111-8111-111111111111/extra", 404},
 		{"/switching/isolation", 200}, {"/switching/isolation?filter=synthetic&limit=1", 200},
 		{"/switching/isolation/11111111-1111-4111-8111-111111111111", 200}, {"/switching/isolation/not-an-identity", 404}, {"/switching/isolation/11111111-1111-4111-8111-111111111111/extra", 404},
 		{"/interfaces", 200}, {"/interfaces/11111111-1111-4111-8111-111111111111", 200}, {"/interfaces/not-an-identity", 404}, {"/interfaces/11111111-1111-4111-8111-111111111111/mtu", 200}, {"/interfaces/not-an-identity/mtu", 404},

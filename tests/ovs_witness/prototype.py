@@ -85,6 +85,57 @@ def preflight(f, mode, report):
                            "database_executable_sha256": f.manifest["ovsdb-server"]}
 
 
+def multicast_groups(f, mode, report):
+    out = Path('outputs/ovs-witness-ci').resolve()
+    result = subprocess.run([str(out/'test2json'),'-t','-p','witness/multicast-groups',
+                             'ip','netns','exec',f.ns,str(out/'preflight.test'),
+                             '-test.v=test2json','-test.run=^TestNativeMulticastGroups$'],
+                            env=dict(f.env,OVS_WITNESS_ROOT=str(f.root)),capture_output=True,timeout=60)
+    Path('test-results/ovs-witness/multicast-groups-'+mode+'.json').write_bytes(result.stdout)
+    Path('test-results/ovs-witness/multicast-groups-'+mode+'.stderr').write_bytes(result.stderr)
+    assert result.returncode==0,result.stdout.decode()[-16000:]+result.stderr.decode()[-2000:]
+    events=[json.loads(line) for line in result.stdout.splitlines()]
+    passed=sorted(e['Test'].split('/',1)[1] for e in events if e.get('Action')=='pass' and e.get('Test','').startswith('TestNativeMulticastGroups/'))
+    assert len(passed)==7 and not any(e.get('Action') in ['fail','skip'] for e in events),passed
+    report['multicast_groups']={'status':'pass','cases':passed}
+
+
+def multicast_write(f, mode, report):
+    out=Path('outputs/ovs-witness-ci').resolve()
+    # Select the same attested actual binaries, not distro OVS plus a different
+    # schema. The test creates its own disposable DB/daemon/namespace peers.
+    env=dict(f.env,PATH=str(f.bin)+os.pathsep+os.environ['PATH'],OVS_EXECUTION_NATIVE_TEST='1',
+             OVS_EXECUTION_SCHEMA=str(f.source/'vswitchd/vswitch.ovsschema'))
+    # Two independent ovs-vswitchd instances must not own the same namespace's
+    # kernel ovs-system datapath. Keep the writer separate from the live witness
+    # fixture while still selecting exactly the same attested binaries.
+    writer_ns='ow-mc-'+uuid.uuid4().hex[:8]
+    subprocess.run(['ip','netns','add',writer_ns],check=True,timeout=5)
+    try:
+        result=subprocess.run([str(out/'test2json'),'-t','-p','witness/multicast-execution',
+                               'ip','netns','exec',writer_ns,str(out/'multicast-execution.test'),
+                               '-test.v=test2json','-test.run=^TestNativeMulticast$','-test.timeout=150s'],
+                              env=env,capture_output=True,timeout=180)
+    except subprocess.TimeoutExpired as failure:
+        Path('test-results/ovs-witness/multicast-execution-'+mode+'.json').write_bytes(failure.stdout or b'')
+        Path('test-results/ovs-witness/multicast-execution-'+mode+'.stderr').write_bytes(failure.stderr or b'')
+        raise
+    finally:
+        # Only this newly created disposable namespace is eligible for cleanup.
+        for pid in subprocess.check_output(['ip','netns','pids',writer_ns],timeout=5).split():
+            try:os.kill(int(pid),signal.SIGKILL)
+            except ProcessLookupError:pass
+        subprocess.run(['ip','netns','del',writer_ns],check=True,timeout=5)
+    Path('test-results/ovs-witness/multicast-execution-'+mode+'.json').write_bytes(result.stdout)
+    Path('test-results/ovs-witness/multicast-execution-'+mode+'.stderr').write_bytes(result.stderr)
+    assert result.returncode==0,result.stdout.decode()[-16000:]+result.stderr.decode()[-2000:]
+    events=[json.loads(line) for line in result.stdout.splitlines()]
+    assert sum(e.get('Action')=='pass' and e.get('Test')=='TestNativeMulticast' for e in events)==1
+    assert not any(e.get('Action') in ['fail','skip'] for e in events)
+    report['multicast_execution']={'status':'pass','runtime':VERSION,'schema':str(f.source/'vswitchd/vswitch.ovsschema'),
+                                   'executables':f.manifest,'datapath_isolation':'separate-network-namespace'}
+
+
 class Fixture:
     def __init__(self, build, source, decoder=None):
         self.build, self.source = Path(build).resolve(), Path(source).resolve()
@@ -591,6 +642,8 @@ def main():
                 assert value["native"]["rstp"]["enabled"] and not value["native"]["stp"]["enabled"]
                 report["cases"].append({"name": "kernel_rstp_exclusive_local_snapshot", "status": "pass"})
                 extended(f, report)
+                multicast_groups(f,args.mode,report)
+            multicast_write(f,args.mode,report)
             report["executable_sha256"] = f.attest()
         report["status"] = "pass"
     except BaseException as e:
