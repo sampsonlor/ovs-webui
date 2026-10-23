@@ -428,7 +428,7 @@ def main():
                     from frontend import verify_frontend
                     def exercise(network_metrics):
                         return verify_frontend(repo, fixture, args.browser_node, origin, password, call, get,
-                                               vsctl, units, db_socket, ovs, conf, credentials, network_metrics, eventually)
+                                               vsctl, units, db_socket, ovs, conf, manager_db, credentials, network_metrics, eventually)
             result = verify_safe_apply(call, get, login, vsctl, units, manager_db, web_db,
                                        eventually, fixture, config, cert, port, exercise=exercise)
             result.update({'platform': os.uname().machine, 'schema_fixture': args.schema_version,

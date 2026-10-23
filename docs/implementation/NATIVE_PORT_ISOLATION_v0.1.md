@@ -10,6 +10,11 @@ The legacy `isolation.configure` intent remains unsupported.
 
 The reserved `ovs.port.isolation.write` capability must be assigned explicitly;
 builtin roles and older credential ceilings do not acquire it automatically.
+Use the root-only `--grant-port-isolation-role ROLE_UUID` /
+`--revoke-port-isolation-role ROLE_UUID` offline actions on an existing role.
+They update the role revision and audit the policy transition; repeated
+provisioning is idempotent. HTTP delegation still requires the caller to hold
+every delegated capability and is not a bootstrap route for this reserved grant.
 The root-owned `--local-isolation-ports` flag grants immutable Port management
 IDs independently of VLAN, topology and STP policy. An empty list grants nothing.
 Current configuration read permission is required before provider access and at

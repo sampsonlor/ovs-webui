@@ -5,16 +5,19 @@ package fieldexecution
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"github.com/sampsonlor/ovs-webui/internal/authn"
-	"github.com/sampsonlor/ovs-webui/internal/candidate"
-	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 )
 
 func TestNativePortIsolation(t *testing.T) {
@@ -52,15 +55,14 @@ func TestNativePortIsolation(t *testing.T) {
 		}) == nil
 	})
 	must(t, f.inventory.SetLocalIsolationPorts([]string{binding.ManagementID}))
-	caps := append(append([]string{}, f.login.Claims.Capabilities...), candidate.PortIsolationCapability)
-	raw, err := json.Marshal(caps)
-	must(t, err)
-	must(t, f.store.Write(f.ctx, func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE roles SET capabilities=? WHERE id IN (SELECT role_id FROM principal_roles WHERE principal_id=?)", raw, f.login.Claims.PrincipalID)
-		return err
+	var role string
+	must(t, f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+		return q.QueryRowContext(ctx, "SELECT role_id FROM principal_roles WHERE principal_id=?", f.login.Claims.PrincipalID).Scan(&role)
 	}))
-	f.login, err = f.auth.Authenticate(f.ctx, authn.Login{Provider: "local", Username: "admin", Password: "synthetic-native-field-password"})
+	must(t, f.auth.SetIsolationExecutionRole(f.ctx, role, true))
+	fresh, err := f.auth.Authenticate(f.ctx, authn.Login{Provider: "local", Username: "admin", Password: "synthetic-native-field-password"})
 	must(t, err)
+	f.login = fresh
 	waitFor(t, func() bool {
 		s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{binding})
 		return err == nil && candidate.IsolationEditable(s.Isolations[binding.ManagementID])
@@ -74,6 +76,14 @@ func TestNativePortIsolation(t *testing.T) {
 	in := f.prepareIntents([]map[string]any{{"intent_id": repository.NewID(), "operation": candidate.PortIsolationSet, "object": binding, "protected": true}})
 	id := f.safeApply(in)
 	f.waitSafety(id, "awaiting-confirmation")
+	must(t, f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+		var n int
+		err := q.QueryRowContext(ctx, "SELECT count(*) FROM operation_protections WHERE transaction_id=?", id).Scan(&n)
+		if err == nil && n != 10 {
+			t.Fatal("did not reserve root, Bridge and every Port/Interface", n)
+		}
+		return err
+	}))
 	if f.vs("get", "Port", ports[0], "protected") != "true" || ping(2) || !ping(3) {
 		t.Fatal("native protected peer separation / unprotected communication failed")
 	}
@@ -82,6 +92,24 @@ func TestNativePortIsolation(t *testing.T) {
 	if f.vs("get", "Port", ports[0], "protected") != "false" || !ping(2) || !ping(3) {
 		t.Fatal("exact compensation did not restore native forwarding")
 	}
+	must(t, f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+		for _, op := range []string{"listEvents", "listAudit"} {
+			value, err := evidence.Read(ctx, q, f.login.Claims, op, nil, url.Values{"object_id": {binding.ManagementID}}, make([]byte, 32), time.Now())
+			if err != nil {
+				return err
+			}
+			found := false
+			for _, r := range value.(map[string]any)["items"].([]map[string]any) {
+				if r["transaction_id"] == id {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("native Port lifecycle missing object-scoped evidence", op)
+			}
+		}
+		return nil
+	}))
 	settled := f.vs("get", "Open_vSwitch", ".", "next_cfg")
 	must(t, f.engine.Recover(f.ctx))
 	must(t, f.engine.SafetyTick(f.ctx))
@@ -109,5 +137,18 @@ func TestNativePortIsolation(t *testing.T) {
 	}
 	if f.proxy.sent.Load() != sent+1 {
 		t.Fatal("lost native reply replayed a mutation")
+	}
+	// External changes after this unknown commit cannot be overwritten by frozen
+	// compensation, even though the previous marker is still present.
+	f.vs("set", "Port", ports[0], "protected=false")
+	waitFor(t, func() bool {
+		s, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{binding})
+		return err == nil && !s.Isolations[binding.ManagementID].Protected
+	})
+	if _, err := f.executor.PrepareRollback(f.ctx, p, strings.Repeat("e", 64)); err == nil || !strings.Contains(err.Error(), "ROLLBACK_CONFLICT") {
+		t.Fatal("external field change did not block compensation", err)
+	}
+	if f.vs("get", "Port", ports[0], "protected") != "false" || f.proxy.sent.Load() != sent+1 {
+		t.Fatal("conflicting compensation changed native state")
 	}
 }

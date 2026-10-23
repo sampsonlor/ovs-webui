@@ -56,6 +56,7 @@
     <h2>{item.name}</h2>
     <p>Current configuration: <strong>{isolationLabel(item)}</strong></p>
     <p><Link href={`/ports/${item.management_id}`}>Review Port details</Link></p>
+    <p><Link href={`/operations/events?object_id=${item.management_id}`}>Port events</Link> · <Link href={`/operations/audit?object_id=${item.management_id}`}>Port audit</Link></p>
     {#if !desktop}<p>Review mode. Use a desktop to prepare a change.</p>
     {:else if item.isolation_execution?.available}
       <form onsubmit={stage} aria-label="Prepare native isolation change">

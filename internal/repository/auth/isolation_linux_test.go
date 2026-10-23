@@ -27,16 +27,29 @@ func TestIsolationRequiresExplicitCapabilityCurrentCeilingAndRootAuthority(t *te
 	}
 	_, err := prepare(old)
 	wantCode(t, err, "CAPABILITY_DENIED")
-	setCaps := func(caps []string) {
-		body, _ := json.Marshal(caps)
-		if err := r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, "UPDATE roles SET capabilities=? WHERE id IN (SELECT role_id FROM principal_roles WHERE principal_id=?)", body, old.Claims.PrincipalID)
-			return err
-		}); err != nil {
+	var role string
+	if err := r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error {
+		return q.QueryRowContext(ctx, "SELECT role_id FROM principal_roles WHERE principal_id=?", old.Claims.PrincipalID).Scan(&role)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, r.SetIsolationExecutionRole(testContext, "invalid", true), "INVALID_ROLE")
+	wantCode(t, r.SetIsolationExecutionRole(testContext, repository.NewID(), true), "ROLE_NOT_FOUND")
+	for n := 0; n < 2; n++ {
+		if err := r.SetIsolationExecutionRole(testContext, role, true); err != nil {
 			t.Fatal(err)
 		}
 	}
-	setCaps(append(append([]string{}, old.Claims.Capabilities...), plan.PortIsolationCapability))
+	if err := r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error {
+		var n int
+		err := q.QueryRowContext(ctx, "SELECT count(*) FROM evidence_records WHERE operation=?", "port-isolation-execution-role").Scan(&n)
+		if err == nil && n != 1 {
+			t.Fatal("root policy did not audit exactly one grant", n)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	_, err = prepare(old)
 	wantCode(t, err, "CAPABILITY_DENIED")
 	g := login(t, r, "admin", false)
@@ -62,7 +75,9 @@ func TestIsolationRequiresExplicitCapabilityCurrentCeilingAndRootAuthority(t *te
 	}
 	port.Authority = "local-managed"
 	p.snapshot.Isolations[b.ManagementID] = port
-	setCaps(old.Claims.Capabilities)
+	if err := r.SetIsolationExecutionRole(testContext, role, false); err != nil {
+		t.Fatal(err)
+	}
 	if readPlanValidation(t, r, g.Grant, e, ack.Receipt.Resource.ID).Usable {
 		t.Fatal("current capability revocation retained validation")
 	}

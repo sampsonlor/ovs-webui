@@ -47,6 +47,8 @@ func run() int {
 	initAuthKey := flag.Bool("init-auth-key", false, "Explicitly create a new authentication key and exit; never overwrite")
 	bootstrap := flag.String("bootstrap-admin", "", "Initialize first local administrator; read password from stdin, then exit")
 	grantTreeRole := flag.String("grant-spanning-tree-execution-role", "", "Offline root action: explicitly grant one existing role the independent STP/RSTP write capability, then exit; new login required")
+	grantIsolationRole := flag.String("grant-port-isolation-role", "", "Offline root action: grant one existing role native Port isolation capability, then exit; new login required")
+	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
 	revokeTreeRole := flag.String("revoke-spanning-tree-execution-role", "", "Offline root action: revoke one role's independent STP/RSTP write capability, then exit")
 	secretDir := flag.String("secret-key-directory", "", "Private versioned privileged keys (default: secret-keys beside manager.db)")
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
@@ -90,6 +92,12 @@ func run() int {
 		return 2
 	}
 	actions := 0
+	if *grantIsolationRole != "" {
+		actions++
+	}
+	if *revokeIsolationRole != "" {
+		actions++
+	}
 	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
 		if enabled {
 			actions++
@@ -216,6 +224,21 @@ func run() int {
 			return 1
 		}
 		logger.Info("spanning_tree_role_policy_updated", "enabled", enabled)
+		return 0
+	}
+	if *grantIsolationRole != "" || *revokeIsolationRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantIsolationRole, true
+		if *revokeIsolationRole != "" {
+			id, enabled = *revokeIsolationRole, false
+		}
+		if err := authentication.SetIsolationExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
 		return 0
 	}
 	if *restore {
