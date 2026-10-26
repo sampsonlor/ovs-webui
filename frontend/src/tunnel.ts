@@ -1,3 +1,34 @@
+import type {
+  StaticTunnelObservation,
+  StaticTunnelNativeOptions,
+} from '../../clients/typescript/public-v1.generated';
+
+export function tunnelOption(
+  native:
+    | Pick<
+        StaticTunnelObservation,
+        'configuration' | 'configuration_availability'
+      >
+    | null
+    | undefined,
+  key: keyof StaticTunnelNativeOptions,
+): string {
+  const options = native?.configuration?.options;
+  if (options && Object.hasOwn(options, key)) {
+    const value = options[key];
+    return typeof value === 'string'
+      ? value.trim()
+        ? value
+        : 'Empty native value'
+      : 'Unknown';
+  }
+  return options &&
+    native?.configuration_availability === 'known' &&
+    key !== 'remote_ip'
+    ? 'Native default (unset)'
+    : 'Unknown';
+}
+
 export const tunnelOperations = [
   'tunnel.static.create',
   'tunnel.static.configure',

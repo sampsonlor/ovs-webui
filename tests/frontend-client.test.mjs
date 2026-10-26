@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { API, requestID } from '../frontend/src/api.ts';
 import { Controller } from '../frontend/src/model.ts';
+import { tunnelOption } from '../frontend/src/tunnel.ts';
 import {
   applyReady,
   decisionReady,
@@ -141,6 +142,15 @@ void test('native multicast apply requires its independent capability and curren
 });
 
 await test('static tunnel routes and Safe Apply retain independent capability, scope and current evidence', async () => {
+  const observed = { configuration_availability: 'known', configuration: { native_type: 'geneve', options: { remote_ip: '2001:db8::20', key: '0' } } };
+  assert.equal(tunnelOption(observed, 'key'), '0');
+  assert.equal(tunnelOption(observed, 'local_ip'), 'Native default (unset)');
+  for (const configuration_availability of ['unknown', 'unsupported']) {
+    assert.equal(tunnelOption({ ...observed, configuration_availability }, 'local_ip'), 'Unknown');
+    assert.equal(tunnelOption({ ...observed, configuration_availability, configuration: null }, 'key'), 'Unknown');
+  }
+  assert.equal(tunnelOption(null, 'dst_port'), 'Unknown');
+  assert.equal(tunnelOption({ ...observed, configuration: { ...observed.configuration, options: { key: '' } } }, 'key'), 'Empty native value');
   const draft = { id: resource, revision: 'native-tunnel', state: 'dirty', safe_apply_available: true, intents: [] };
   const validation = { candidate_id: draft.id, candidate_revision: draft.revision, state: 'passed', usable: true, execution_ready: true };
   const allowed = { effective_capabilities: ['configuration.apply', 'ovs.tunnel.static.write'] };

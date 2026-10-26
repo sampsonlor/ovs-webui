@@ -5,7 +5,7 @@
   import { has } from './policy';
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
-  import { tunnelMessage } from './tunnel';
+  import { tunnelMessage, tunnelOption } from './tunnel';
   let {model, expert, desktop}: {model:Model;expert:boolean;desktop:boolean} = $props();
   const creating = $derived(model.path === '/switching/tunnels/new');
   const detail = $derived(!creating && model.path.split('/').length === 4);
@@ -78,7 +78,7 @@
       <p>Native type: <strong>{native.native_type??'Unknown'}</strong> · Configuration: {native.configuration_availability}</p>
       <p>Observation: {typeof source.freshness==='string'?source.freshness:'unknown'} · {typeof source.observed_at==='string'?source.observed_at:'Unknown time'}</p>
       {#if source.freshness!=='fresh'}<p class="notice warning" role="status">Values are last observed. Configuration changes require a fresh native observation.</p>{/if}
-      <dl><dt>Remote IP</dt><dd>{native.configuration?.options.remote_ip??'Unknown'}</dd><dt>Local IP</dt><dd>{native.configuration?.options.local_ip??'Native default (unset)'}</dd><dt>Key / VNI</dt><dd>{native.configuration?.options.key??'Native default (unset)'}</dd><dt>UDP destination port</dt><dd>{native.configuration?.options.dst_port??'Native default (unset)'}</dd></dl>
+      <dl><dt>Remote IP</dt><dd>{tunnelOption(native,'remote_ip')}</dd><dt>Local IP</dt><dd>{tunnelOption(native,'local_ip')}</dd><dt>Key / VNI</dt><dd>{tunnelOption(native,'key')}</dd><dt>UDP destination port</dt><dd>{tunnelOption(native,'dst_port')}</dd></dl>
       <p>{#if native.bridge_ref}<Link href={`/bridges/${native.bridge_ref.id}`}>Review Bridge</Link> · {/if}<Link href={`/ports/${item?.id}`}>Review Port</Link>{#if native.interface_ref} · <Link href={`/interfaces/${native.interface_ref.id}`}>Review Interface</Link>{/if}</p>
       <p><Link href={`/operations/events?object_id=${item?.id}`}>Port events</Link> · <Link href={`/operations/audit?object_id=${item?.id}`}>Port audit</Link></p>
       {#if native.operational}<section class="panel"><h3>Native port status</h3><p>Observed port number: {observed(native.operational.ofport)} · Link: {observed(native.operational.link_state)}</p><p>Native status is a local OVS observation. Review routing and both tunnel endpoints separately.</p></section>{/if}
