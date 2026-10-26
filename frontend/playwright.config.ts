@@ -7,6 +7,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  // Stop a failed run promptly. Qualification still requires every accepted
+  // test name to pass, with no skipped cases, on both architectures.
+  maxFailures: 1,
   timeout: 70000,
   expect: { timeout: 15000 },
   outputDir: '../test-results/frontend',
