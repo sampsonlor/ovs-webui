@@ -328,6 +328,7 @@ add('/inventory/spanning-tree', 'get', 'listSpanningTreeObservations', 'Spanning
 add('/bridges/{bridge_id}/spanning-tree', 'get', 'readSpanningTreeObservation', 'SpanningTree', 'state.read', 43, {kind:'bridge'});
 api.paths['/inventory/spanning-tree'].get['x-service-state'] = 'implemented';
 api.paths['/bridges/{bridge_id}/spanning-tree'].get['x-service-state'] = 'implemented';
+for (const path of ['/tunnels','/tunnels/{tunnel_id}']) api.paths[path].get['x-service-state'] = 'implemented';
 api.paths['/interfaces'].get.parameters.push(
  param('bridge_id', 'query', id),
  param('native_type', 'query', { type: 'string', maxLength: 64 }),

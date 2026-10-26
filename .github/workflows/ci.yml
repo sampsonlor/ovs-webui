@@ -498,6 +498,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch iproute2 iputils-ping
+      - name: Static tunnel current identity and independent authority regression
+        run: |
+          set -o pipefail
+          go test -json -count=1 -run '^TestStaticTunnelKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$' ./internal/repository/auth \
+            | tee test-results/go-static-tunnel-authority.json
       - name: Native static endpoint traffic and durable recovery against three schemas
         run: |
           set -o pipefail

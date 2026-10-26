@@ -8700,7 +8700,7 @@
         "summary": "listTunnels",
         "x-capability": "state.read",
         "x-service-issue": 43,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "tunnel",
         "parameters": [
           {
@@ -8905,7 +8905,7 @@
         "summary": "readTunnel",
         "x-capability": "state.read",
         "x-service-issue": 43,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "tunnel",
         "parameters": [
           {

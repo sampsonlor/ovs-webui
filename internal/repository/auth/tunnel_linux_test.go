@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	plan "github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
@@ -14,6 +15,44 @@ import (
 )
 
 func TestStaticTunnelKeepsExplicitCapabilityCurrentCeilingAndRootAuthority(t *testing.T) {
+	t.Run("read_reference_is_current_port_identity", func(t *testing.T) {
+		r, _ := fixture(t)
+		g := login(t, r, "admin", false)
+		generation, oldGeneration := repository.NewID(), repository.NewID()
+		port, iface, retired, oldPort := repository.NewID(), repository.NewID(), repository.NewID(), repository.NewID()
+		if err := r.store.Write(testContext, func(ctx context.Context, tx *sql.Tx) error {
+			for _, gen := range []string{generation, oldGeneration} {
+				if _, err := tx.ExecContext(ctx, "INSERT INTO generations(id,evidence,created_at) VALUES(?,?,?)", gen, []byte("{}"), r.now().Unix()); err != nil {
+					return err
+				}
+			}
+			if _, err := tx.ExecContext(ctx, "INSERT INTO inventory_state(singleton,generation,state,reason,evidence) VALUES(1,?,'confirmed','synthetic-read-scope',?)", generation, []byte("{}")); err != nil {
+				return err
+			}
+			for _, row := range []struct{ id, table, gen, state string }{{port, "Port", generation, "active"}, {iface, "Interface", generation, "active"}, {retired, "Port", generation, "retired"}, {oldPort, "Port", oldGeneration, "active"}} {
+				if _, err := tx.ExecContext(ctx, "INSERT INTO identities(management_id,generation,table_name,ovs_uuid,state) VALUES(?,?,?,?,?)", row.id, row.gen, row.table, repository.NewID(), row.state); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		check := func(id string, claims authn.Claims) error {
+			return r.store.Read(testContext, func(ctx context.Context, q *sql.Conn) error {
+				return checkRefs(ctx, q, claims, []apitypes.Ref{{Kind: "tunnel", ID: id}})
+			})
+		}
+		if err := check(port, g.Claims); err != nil {
+			t.Fatal("current Port did not resolve through the Tunnel read boundary", err)
+		}
+		for _, id := range []string{iface, retired, oldPort, repository.NewID()} {
+			wantCode(t, check(id, g.Claims), "NOT_FOUND")
+		}
+		wantCode(t, check(port, authn.Claims{Capabilities: []string{"state.read", "inventory.read"}}), "CAPABILITY_DENIED")
+		_, err := r.ReadAuth(testContext, g.Grant, authn.Query{Method: "GET", URI: "/api/v1/tunnels/" + port})
+		wantCode(t, err, "DOMAIN_SERVICE_UNAVAILABLE") // Scope alone cannot invent native data.
+	})
 	r, _ := fixture(t)
 	old := login(t, r, "admin", false)
 	e, p, _ := planSetup(t, r, old)
