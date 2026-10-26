@@ -72,17 +72,17 @@ func TestNativeStaticTunnels(t *testing.T) {
 			waitFor(t, func() bool { _, err := net.InterfaceByName(bridge); return err == nil })
 			f.run("ip", "link", "set", bridge, "up")
 			f.run("ip", "addr", "add", "10.219.55.1/30", "dev", bridge)
-			peerTunnel := func(key string, replace bool) {
+			peerTunnel := func(typ, key string, replace bool) {
 				if replace {
 					f.run("ip", "netns", "exec", peerNS, "ip", "link", "del", "peer-tunnel")
 				}
-				args := []string{"ip", "netns", "exec", peerNS, "ip", "link", "add", "peer-tunnel", "type", row.typ}
-				if row.typ == "gre" {
+				args := []string{"ip", "netns", "exec", peerNS, "ip", "link", "add", "peer-tunnel", "type", typ}
+				if typ == "gre" {
 					args[len(args)-1] = "gretap"
 					args = append(args, "local", remote, "remote", local, "key", key, "dev", peerDevice)
 				} else {
 					args = append(args, "id", key, "remote", local)
-					if row.typ == "vxlan" {
+					if typ == "vxlan" {
 						args = append(args, "local", remote, "dev", peerDevice, "dstport", "4789")
 					} else {
 						args = append(args, "dstport", "6081")
@@ -98,7 +98,7 @@ func TestNativeStaticTunnels(t *testing.T) {
 				f.run("ip", "netns", "exec", peerNS, "ip", "link", "set", "peer-tunnel", "up")
 				f.run("ip", "netns", "exec", peerNS, "ip", "addr", "add", "10.219.55.2/30", "dev", "peer-tunnel")
 			}
-			peerTunnel("1001", false)
+			peerTunnel(row.typ, "1001", false)
 			ping := func() bool {
 				return exec.Command("ping", "-n", "-c", "1", "-W", "1", "-I", bridge, "10.219.55.2").Run() == nil
 			}
@@ -131,12 +131,16 @@ func TestNativeStaticTunnels(t *testing.T) {
 			f.grantStaticTunnel(bridge, name)
 			f.discardPortDraft()
 			nativeKey = "2002"
-			id = f.safeApply(f.prepareTopology(originalPort, candidate.TunnelConfigure, candidate.TopologyRequest{Tunnel: &tunnel.Request{Options: map[string]*string{"key": &nativeKey}}}))
+			changedType := "vxlan"
+			if row.typ == "vxlan" {
+				changedType = "geneve"
+			}
+			id = f.safeApply(f.prepareTopology(originalPort, candidate.TunnelConfigure, candidate.TopologyRequest{Tunnel: &tunnel.Request{Type: changedType, Options: map[string]*string{"key": &nativeKey}}}))
 			f.waitTopology(id, "awaiting-confirmation")
 			// Configuration Applied is not a claim of immediate packet-path
 			// convergence. Independently observe the bounded kernel transition.
 			waitFor(t, func() bool { return !ping() })
-			peerTunnel(nativeKey, true)
+			peerTunnel(changedType, nativeKey, true)
 			waitFor(t, ping)
 			if f.topologyNode("Interface", name).Binding != originalInterface {
 				t.Fatal("configuration edit replaced native identity")
@@ -146,7 +150,7 @@ func TestNativeStaticTunnels(t *testing.T) {
 			if f.vs("get", "Interface", name, "type", "options", "external_ids") != original {
 				t.Fatal("native option group did not recover exactly")
 			}
-			peerTunnel("1001", true)
+			peerTunnel(row.typ, "1001", true)
 			waitFor(t, ping)
 			f.discardPortDraft()
 			id = f.safeApply(f.prepareTopology(originalPort, candidate.TunnelDelete, candidate.TopologyRequest{}))
@@ -194,11 +198,28 @@ func TestNativeStaticTunnels(t *testing.T) {
 			f.discardPortDraft()
 			nativeKey = "3003"
 			in := f.prepareTopology(port, candidate.TunnelConfigure, candidate.TopologyRequest{Tunnel: &tunnel.Request{Options: map[string]*string{"key": &nativeKey}}})
-			plan, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
+			plan, err := f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("c", 64), in.Envelope)
+			must(t, err)
+			f.proxy.hook(func() { f.vs("set", "Interface", "field-p1", "external_ids:late-tunnel=preserve") })
+			outcome := f.executor.Commit(f.ctx, plan, func() error { return nil })
+			if outcome.Commit != "rejected" || f.vs("get", "Interface", name, "type", "options") != originalConfiguration {
+				t.Fatal("late unrelated native dependency bypassed atomic graph guard", outcome)
+			}
+			waitFor(t, func() bool {
+				for _, n := range f.topologySnapshot().Topology.Nodes {
+					if n.Binding.Table == "Interface" && n.Name == "field-p1" {
+						return f.topologySnapshot().Topology.Configurations[n.Binding.ManagementID]["external_ids"].(map[string]any)["late-tunnel"] == "preserve"
+					}
+				}
+				return false
+			})
+			f.discardPortDraft()
+			in = f.prepareTopology(port, candidate.TunnelConfigure, candidate.TopologyRequest{Tunnel: &tunnel.Request{Options: map[string]*string{"key": &nativeKey}}})
+			plan, err = f.executor.Prepare(f.ctx, repository.NewID(), strings.Repeat("d", 64), in.Envelope)
 			must(t, err)
 			f.proxy.dropReply.Store(true)
 			sent := f.proxy.sent.Load()
-			outcome := f.executor.Commit(f.ctx, plan, func() error { return nil })
+			outcome = f.executor.Commit(f.ctx, plan, func() error { return nil })
 			if outcome.Commit != "unknown" || outcome.Target != nil || outcome.Applied == "applied" {
 				t.Fatal("lost native reply invented Applied evidence", outcome)
 			}
@@ -219,7 +240,7 @@ func TestNativeStaticTunnels(t *testing.T) {
 			if f.proxy.sent.Load() != sent+1 || !strings.Contains(f.vs("get", "Interface", name, "options"), "4004") {
 				t.Fatal("conflicting compensation overwrote native state or replayed")
 			}
-			t.Log("native static tunnel create/configure/delete, packet delivery/key change, exact recovery, durable reopen, fresh identity, lost reply/no replay and external conflict passed")
+			t.Log("native static tunnel create/configure/delete, packet delivery/type and key changes, exact recovery, durable reopen, fresh identity, atomic late dependency, lost reply/no replay and external conflict passed")
 		})
 	}
 }

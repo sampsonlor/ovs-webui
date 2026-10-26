@@ -95,7 +95,7 @@ test('native static tunnel review separates configuration, permission, dynamic o
 }) => {
   await login(page, 'browser-tunnel-reader');
   await expect(
-    page.getByRole('heading', { name: 'tunnel-ui-existing', exact: true }),
+    page.getByRole('heading', { name: 'tun-ui-data', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText(
@@ -107,7 +107,7 @@ test('native static tunnel review separates configuration, permission, dynamic o
     page.getByRole('button', { name: 'Stage tunnel change', exact: true }),
   ).toHaveCount(0);
   await screen(page, 'reader-standard');
-  await page.goto(base + '?filter=tunnel-ui-existing&limit=1');
+  await page.goto(base + '?filter=tun-ui-data&limit=1');
   await expect(
     page.getByRole('table', { name: 'Observed tunnel Ports in this page' }),
   ).toContainText('192.0.2.20');
@@ -117,8 +117,8 @@ test('native static tunnel review separates configuration, permission, dynamic o
     page.getByText('No tunnel Ports in this observation.', { exact: true }),
   ).toBeVisible();
   await screen(page, 'empty');
-  await page.goto(base + '?filter=tunnel-ui-flow');
-  await page.getByRole('link', { name: 'tunnel-ui-flow', exact: true }).click();
+  await page.goto(base + '?filter=tun-ui-flow');
+  await page.getByRole('link', { name: 'tun-ui-flow', exact: true }).click();
   await expect(
     page.getByText(
       'This tunnel uses flow-controlled endpoints or keys. Review it through its owning controller; this page keeps it read-only.',
@@ -222,7 +222,7 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
     .selectOption(fixture.tunnelBridge.management_id);
   await page
     .getByLabel('New immutable tunnel name', { exact: true })
-    .selectOption('tunnel-ui-created');
+    .selectOption('tun-ui-new');
   await page.getByLabel('Tunnel type', { exact: true }).selectOption('geneve');
   await page
     .getByLabel('Remote IP address', { exact: true })
@@ -241,19 +241,19 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
     .getByRole('button', { name: 'Stage tunnel change', exact: true })
     .click();
   await apply(page, 'create');
-  expect(vs('get', 'Interface', 'tunnel-ui-created', 'type')).toBe('geneve');
+  expect(vs('get', 'Interface', 'tun-ui-new', 'type')).toBe('geneve');
   await decision(page, 'Confirm configuration', 'confirmed');
   await page.goto(href);
   const original = vs(
     'get',
     'Interface',
-    'tunnel-ui-existing',
+    'tun-ui-data',
     'type',
     'options',
     'external_ids',
   );
-  const oldPort = vs('get', 'Port', 'tunnel-ui-existing', '_uuid');
-  const oldIface = vs('get', 'Interface', 'tunnel-ui-existing', '_uuid');
+  const oldPort = vs('get', 'Port', 'tun-ui-data', '_uuid');
+  const oldIface = vs('get', 'Interface', 'tun-ui-data', '_uuid');
   await page.getByLabel('Key / VNI (optional)', { exact: true }).fill('2002');
   await page
     .getByLabel('I reviewed the endpoints and management connectivity.', {
@@ -264,7 +264,7 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
     .getByRole('button', { name: 'Stage tunnel change', exact: true })
     .click();
   await apply(page, 'configure');
-  expect(vs('get', 'Interface', 'tunnel-ui-existing', 'options:key')).toBe(
+  expect(vs('get', 'Interface', 'tun-ui-data', 'options:key')).toBe(
     '"2002"',
   );
   await decision(page, 'Request rollback', 'rolled-back');
@@ -272,7 +272,7 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
     vs(
       'get',
       'Interface',
-      'tunnel-ui-existing',
+      'tun-ui-data',
       'type',
       'options',
       'external_ids',
@@ -299,15 +299,15 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
   await apply(page, 'delete');
   expect(vs('--if-exists', 'get', 'Port', oldPort, '_uuid')).toBe('');
   await decision(page, 'Request rollback', 'rolled-back');
-  expect(vs('get', 'Port', 'tunnel-ui-existing', '_uuid')).not.toBe(oldPort);
-  expect(vs('get', 'Interface', 'tunnel-ui-existing', '_uuid')).not.toBe(
+  expect(vs('get', 'Port', 'tun-ui-data', '_uuid')).not.toBe(oldPort);
+  expect(vs('get', 'Interface', 'tun-ui-data', '_uuid')).not.toBe(
     oldIface,
   );
-  expect(vs('get', 'Interface', 'tunnel-ui-existing', 'options:key')).toBe(
+  expect(vs('get', 'Interface', 'tun-ui-data', 'options:key')).toBe(
     '"1001"',
   );
   expect(
-    vs('get', 'Interface', 'tunnel-ui-existing', 'external_ids:tunnel-foreign'),
+    vs('get', 'Interface', 'tun-ui-data', 'external_ids:tunnel-foreign'),
   ).toBe('preserve');
   const settled = vs('get', 'Open_vSwitch', '.', 'next_cfg');
   await page
@@ -321,9 +321,9 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
     page.getByRole('button', { name: 'Stage tunnel change', exact: true }),
   ).toHaveCount(0);
   await screen(page, 'retired-identity');
-  await page.goto(base + '?filter=tunnel-ui-existing');
+  await page.goto(base + '?filter=tun-ui-data');
   await page
-    .getByRole('link', { name: 'tunnel-ui-existing', exact: true })
+    .getByRole('link', { name: 'tun-ui-data', exact: true })
     .click();
   await expect(
     page.getByText(

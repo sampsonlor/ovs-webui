@@ -72,14 +72,14 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     vsctl('add-br','br-mcast-ui','--','set','Bridge','br-mcast-ui','datapath_type=system','other_config:multicast-opaque=preserve','--','add-port','br-mcast-ui','mcast-ui-data','--','set','Interface','mcast-ui-data','type=internal')
     multicast = eventually(lambda: next((b for b in get('/bridges?filter=br-mcast-ui')['items'] if b['name']=='br-mcast-ui'),None))
     vsctl('add-br','br-tunnel-ui','--','set','Bridge','br-tunnel-ui','datapath_type=system','other_config:tunnel-foreign=preserve',
-          '--','add-port','br-tunnel-ui','tunnel-ui-existing','--','set','Interface','tunnel-ui-existing','type=vxlan','options:remote_ip=192.0.2.20','options:key=1001','external_ids:tunnel-foreign=preserve')
+          '--','add-port','br-tunnel-ui','tun-ui-data','--','set','Interface','tun-ui-data','type=vxlan','options:remote_ip=192.0.2.20','options:key=1001','external_ids:tunnel-foreign=preserve')
     vsctl('add-br','br-tunnel-flow','--','set','Bridge','br-tunnel-flow','datapath_type=system',
-          '--','add-port','br-tunnel-flow','tunnel-ui-flow','--','set','Interface','tunnel-ui-flow','type=gre','options:remote_ip=flow','options:key=flow')
-    tunnel = eventually(lambda: next((p for p in get('/ports?filter=tunnel-ui-existing')['items'] if p['name']=='tunnel-ui-existing'),None))
+          '--','add-port','br-tunnel-flow','tun-ui-flow','--','set','Interface','tun-ui-flow','type=gre','options:remote_ip=flow','options:key=flow')
+    tunnel = eventually(lambda: next((p for p in get('/ports?filter=tun-ui-data')['items'] if p['name']=='tun-ui-data'),None))
     tunnel_bridge = eventually(lambda: next((b for b in get('/bridges?filter=br-tunnel-ui')['items'] if b['name']=='br-tunnel-ui'),None))
     topology = get('/inventory/topology')
     tunnel_ids = [n['binding']['management_id'] for n in topology['nodes']
-                  if n['name'] in ['br-tunnel-ui','tunnel-ui-existing']]
+                  if n['name'] in ['br-tunnel-ui','tun-ui-data']]
     assert len(tunnel_ids) == 5
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
@@ -94,7 +94,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-multicast-role',roles['NativeMulticast'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-static-tunnel-role',roles['NativeStaticTunnel'])
     unit_path.write_text(unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
-                                              +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tunnel-ui-created'))
+                                              +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
