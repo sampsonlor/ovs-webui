@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
+	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 func TestMirrorSchemaKeepsNativeReferencesDefaultsAndConstraints(t *testing.T) {
@@ -67,6 +70,65 @@ func TestMirrorSchemaKeepsNativeReferencesDefaultsAndConstraints(t *testing.T) {
 			d, err := discover(encoded)
 			if err == nil && d.public.MirrorConfiguration {
 				t.Fatal("restricted or unqualified native Mirror schema admitted writes")
+			}
+		})
+	}
+}
+
+func TestMirrorMonitorKeepsNativeReferencesSeparateFromCoreParents(t *testing.T) {
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		t.Run(version, func(t *testing.T) {
+			d := schema(t, version)
+			root, bridge, port, iface, session := repository.NewID(), repository.NewID(), repository.NewID(), repository.NewID(), repository.NewID()
+			uuid := func(id string) []any { return []any{"uuid", id} }
+			empty := []any{"set", []any{}}
+			initial := map[string]any{
+				"Open_vSwitch": map[string]any{root: map[string]any{"new": map[string]any{"bridges": uuid(bridge)}}},
+				"Bridge":       map[string]any{bridge: map[string]any{"new": map[string]any{"name": "br-span", "ports": uuid(port), "mirrors": uuid(session)}}},
+				"Port":         map[string]any{port: map[string]any{"new": map[string]any{"name": "data", "interfaces": uuid(iface)}}},
+				"Interface":    map[string]any{iface: map[string]any{"new": map[string]any{"name": "data", "type": "internal"}}},
+				"Mirror":       map[string]any{session: map[string]any{"new": map[string]any{"name": "span", "select_all": false, "select_src_port": uuid(port), "select_dst_port": empty, "select_vlan": empty, "output_port": empty, "output_vlan": 200, "snaplen": empty}}},
+			}
+			rows := inventory.Rows{}
+			blob, err := json.Marshal(initial)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := update(d, rows, blob, true); err != nil {
+				t.Fatal(err)
+			}
+			if err := validateRelations(rows); err != nil {
+				t.Fatal("an attached native Mirror or weak selector was treated as an orphan/core parent", err)
+			}
+			// A native external configuration can share a session. Observation
+			// must survive; the independent writer rejects ambiguous ownership.
+			other := repository.NewID()
+			rows["Bridge"][other] = inventory.Row{UUID: other, Values: map[string]any{"name": "br-other", "ports": []any{}, "mirrors": []any{session}}}
+			rows["Open_vSwitch"][root].Values["bridges"] = []any{bridge, other}
+			if err := validateRelations(rows); err != nil {
+				t.Fatal("legal shared external Mirror made all inventory unavailable", err)
+			}
+			for _, column := range []string{"select_src_port", "select_dst_port", "output_port"} {
+				old := rows["Mirror"][session].Values[column]
+				rows["Mirror"][session].Values[column] = []any{repository.NewID()}
+				if err := validateRelations(rows); err == nil || err.Error() != "OVSDB_REFERENCE_MISSING" {
+					t.Fatal("dangling native Mirror Port reference accepted", column, err)
+				}
+				rows["Mirror"][session].Values[column] = old
+			}
+			delete(rows["Bridge"], other)
+			rows["Open_vSwitch"][root].Values["bridges"] = []any{bridge}
+			rows["Bridge"][bridge].Values["mirrors"] = []any{}
+			if err := validateRelations(rows); err == nil || err.Error() != "OVSDB_ORPHAN_OBJECT" {
+				t.Fatal("unattached non-root Mirror accepted", err)
+			}
+			delete(rows["Mirror"], session)
+			if err := validateRelations(rows); err != nil {
+				t.Fatal("complete native GC deletion rejected", err)
+			}
+			rows["Bridge"][bridge].Values["mirrors"] = []any{session}
+			if err := validateRelations(rows); err == nil || err.Error() != "OVSDB_REFERENCE_MISSING" {
+				t.Fatal("dangling strong Bridge Mirror reference accepted", err)
 			}
 		})
 	}

@@ -49,6 +49,15 @@ func TestNativeMirrorSessions(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			f := newFixture(t)
 			f.run("modprobe", "openvswitch")
+			// This fixture's initial field Bridge uses a dummy datapath. Keep
+			// both disposable Bridges on the real kernel datapath so the native
+			// revalidator/wait command has exactly one udpif (its upstream
+			// precondition). No production or other test fixture is changed.
+			f.vs("set", "Bridge", "br-field", "datapath_type=system", "--", "set", "Interface", "field-p1", "type=internal", "--", "set", "Interface", "field-p2", "type=internal")
+			waitFor(t, func() bool {
+				show := f.run("ovs-appctl", "--timeout=3", "-t", filepath.Join(f.root, "switch.ctl"), "dpif/show")
+				return strings.Contains(show, "system@") && !strings.Contains(show, "dummy@")
+			})
 			suffix := repository.NewID()[:6]
 			bridge, name := "brm"+suffix, "span-"+suffix
 			f.vs("add-br", bridge, "--", "set", "Bridge", bridge, "datapath_type=system", "other_config:mirror-foreign=preserve")

@@ -442,6 +442,27 @@ func validateRelations(rows inventory.Rows) error {
 			}
 		}
 	}
+	// Mirror sessions have their own native references. They are not children
+	// in the core Bridge -> Port -> Interface tree. A session may be referenced
+	// by multiple Bridges in externally managed OVS configurations; retain it
+	// for observation, while the Mirror writer requires a unique parent.
+	for _, bridge := range rows["Bridge"] {
+		for _, id := range references(bridge.Values["mirrors"]) {
+			if _, known := rows["Mirror"][id]; !known {
+				return errors.New("OVSDB_REFERENCE_MISSING")
+			}
+			parents[inventory.Key("Mirror", id)] = bridge.UUID
+		}
+	}
+	for _, session := range rows["Mirror"] {
+		for _, column := range []string{"select_src_port", "select_dst_port", "output_port"} {
+			for _, id := range references(session.Values[column]) {
+				if _, known := rows["Port"][id]; !known {
+					return errors.New("OVSDB_REFERENCE_MISSING")
+				}
+			}
+		}
+	}
 	for table, objects := range rows {
 		if table == "Open_vSwitch" || table == "Datapath" {
 			continue
