@@ -19,7 +19,7 @@ import (
 )
 
 var selected = map[string][]string{
-	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths"},
+	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths", "iface_types"},
 	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "mcast_snooping_enable", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "protected", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
@@ -135,6 +135,7 @@ func discover(data []byte) (discovered, error) {
 	d.public.BridgeCreation = bridgeSchemaSupported(d)
 	d.public.InternalPortCreation = internalPortSchemaSupported(d)
 	d.public.GraphDefaults = graphDefaults(d)
+	d.public.TunnelConfiguration = staticTunnelSchemaSupported(d, raw)
 	return d, nil
 }
 

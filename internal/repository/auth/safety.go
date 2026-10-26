@@ -75,7 +75,7 @@ func (r *Repository) safeAuthority(ctx context.Context, q evidence.Query, a exec
 	} // legacy VLAN journals
 	required := []string{"configuration.apply", "configuration.confirm", "configuration.read", "inventory.read"}
 	for _, cap := range strings.Split(fields, ",") {
-		if cap == plan.PortIsolationCapability || cap == plan.BridgeMulticastCapability {
+		if cap == plan.TunnelCapability || cap == plan.PortIsolationCapability || cap == plan.BridgeMulticastCapability {
 			required = append(required, cap)
 			continue
 		}

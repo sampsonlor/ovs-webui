@@ -18,7 +18,7 @@ import (
 const MaxIntents = 32
 const MaxDocument = 40 << 10
 const ValidFor = 300 * time.Second
-const ValidatorVersion = "native-multicast-v1"
+const ValidatorVersion = "native-static-tunnels-v1"
 
 type Binding struct {
 	ManagementID string `json:"management_id"`

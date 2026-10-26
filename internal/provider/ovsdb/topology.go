@@ -196,6 +196,23 @@ func compileTopologyExecution(id, marker string, envelope candidate.Envelope, vi
 		return out, err
 	}
 	n := nativePlan{Operations: append([]map[string]any{rg}, guards...), Evidence: view.Observation.Evidence, CreationMarker: marker, InsertUUIDs: map[int]string{}, TopologyBefore: images, TopologyAfter: desired}
+	if candidate.IsTunnelOperation(i.Operation) {
+		if !d.public.TunnelConfiguration || !view.Candidate.Topology.TunnelSupported {
+			return out, apitypes.Fail(409, "TUNNEL_SCHEMA_UNSUPPORTED")
+		}
+		// Receive-identity admission reads every native Interface. Guard the
+		// complete persistent graph atomically, including unrelated tunnels.
+		fence, err := treeFenceOperations(view, d)
+		if err != nil {
+			return out, err
+		}
+		n.Operations = append(n.Operations, fence[:4]...)
+		types, err := guard(d, "Open_vSwitch", root, []string{"iface_types"}, []any{uuidCondition(root.UUID)})
+		if err != nil {
+			return out, err
+		}
+		n.Operations = append(n.Operations, types)
+	}
 	for _, node := range before {
 		if node.Binding.Table == "Interface" && (node.Type == "system" || node.Type == "") {
 			row := view.Observation.Rows["Interface"][node.Binding.OVSUUID]
@@ -309,6 +326,27 @@ func topologyProof(p execution.Plan, view inventory.ExecutionView, d discovered)
 		return nil, err
 	}
 	ops := []any{}
+	if candidate.IsTunnelOperation(i.Operation) {
+		if !d.public.TunnelConfiguration || !view.Candidate.Topology.TunnelSupported {
+			return nil, errors.New("TUNNEL_RUNTIME_TYPE_UNAVAILABLE")
+		}
+		// Keep unchanged receive-identity dependencies inside the same native
+		// proof transaction. A lagging monitor must not qualify Applied while
+		// an unrelated Interface or native reference changed in the database.
+		fence, err := treeFenceOperations(view, d)
+		if err != nil {
+			return nil, err
+		}
+		for _, op := range fence[:4] {
+			ops = append(ops, op)
+		}
+		row := view.Observation.Rows["Open_vSwitch"][g.Root]
+		types, err := guard(d, "Open_vSwitch", row, []string{"iface_types"}, []any{uuidCondition(g.Root)})
+		if err != nil {
+			return nil, err
+		}
+		ops = append(ops, types)
+	}
 	for _, op := range guards {
 		ops = append(ops, op)
 	}

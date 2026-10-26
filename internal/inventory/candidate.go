@@ -157,6 +157,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 		out.Policy = Digest([]any{out.Policy, s.isolationAuthorityRevision})
 	}
 	projectTopology(v, s.localTopology, s.localTopologyCreates, &out)
+	projectTunnel(v, s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision, &out)
 	projectSpanningTree(v, s.localSpanningTree, &out, bindings)
 	executionScope := false
 	for id, tree := range out.SpanningTrees {

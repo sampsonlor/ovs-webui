@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/tunnel"
 	"slices"
 	"sort"
 	"strconv"
@@ -14,18 +15,19 @@ const MaxTopologyNodes = 32
 // These are semantic graph commands. No caller can supply rows, before-images,
 // replacement identities, field paths or native transactions.
 func IsTopologyOperation(op string) bool {
-	return slices.Contains([]string{"port.create", "bond.create", "port.delete", "bridge.delete-tree", "port.move", "bond.members.set", "interface.ofport.set", "interface.ofport.clear", "interface.patch.connect", "interface.patch.disconnect"}, op)
+	return IsTunnelOperation(op) || slices.Contains([]string{"port.create", "bond.create", "port.delete", "bridge.delete-tree", "port.move", "bond.members.set", "interface.ofport.set", "interface.ofport.clear", "interface.patch.connect", "interface.patch.disconnect"}, op)
 }
 
 type TopologyRequest struct {
-	Name           string    `json:"name,omitempty"`
-	NativeType     string    `json:"native_type,omitempty"`
-	InterfaceNames []string  `json:"interface_names,omitempty"`
-	Sources        []Binding `json:"source_ports,omitempty"`
-	Destination    *Binding  `json:"destination_bridge,omitempty"`
-	Members        []Binding `json:"member_interfaces,omitempty"`
-	Peer           *Binding  `json:"peer,omitempty"`
-	Ofport         int       `json:"ofport_request,omitempty"`
+	Tunnel         *tunnel.Request `json:"tunnel,omitempty"`
+	Name           string          `json:"name,omitempty"`
+	NativeType     string          `json:"native_type,omitempty"`
+	InterfaceNames []string        `json:"interface_names,omitempty"`
+	Sources        []Binding       `json:"source_ports,omitempty"`
+	Destination    *Binding        `json:"destination_bridge,omitempty"`
+	Members        []Binding       `json:"member_interfaces,omitempty"`
+	Peer           *Binding        `json:"peer,omitempty"`
+	Ofport         int             `json:"ofport_request,omitempty"`
 }
 type TopologyNode struct {
 	Summary *TopologyConfigurationSummary `json:"configuration_summary,omitempty"`
@@ -39,28 +41,33 @@ type TopologyNode struct {
 // Explicit IPC types retain native empty sets and zero values without allowing
 // arbitrary nested objects through the strict signed-envelope decoder.
 type TopologyConfigurationSummary struct {
-	VLANMode      *[]string `json:"vlan_mode,omitempty"`
-	Tag           *[]string `json:"tag,omitempty"`
-	Trunks        *[]string `json:"trunks,omitempty"`
-	CVLANs        *[]string `json:"cvlans,omitempty"`
-	LACP          *[]string `json:"lacp,omitempty"`
-	BondMode      *[]string `json:"bond_mode,omitempty"`
-	OfportRequest *[]string `json:"ofport_request,omitempty"`
-	MTURequest    *[]string `json:"mtu_request,omitempty"`
-	PolicingRate  *string   `json:"ingress_policing_rate,omitempty"`
-	PolicingBurst *string   `json:"ingress_policing_burst,omitempty"`
-	PacketRate    *string   `json:"ingress_policing_kpkts_rate,omitempty"`
-	PacketBurst   *string   `json:"ingress_policing_kpkts_burst,omitempty"`
-	Fallback      *string   `json:"lacp-fallback-ab,omitempty"`
-	PatchPeer     *string   `json:"patch_peer,omitempty"`
+	Tunnel        *tunnel.Configuration `json:"tunnel,omitempty"`
+	TunnelReason  string                `json:"tunnel_reason,omitempty"`
+	VLANMode      *[]string             `json:"vlan_mode,omitempty"`
+	Tag           *[]string             `json:"tag,omitempty"`
+	Trunks        *[]string             `json:"trunks,omitempty"`
+	CVLANs        *[]string             `json:"cvlans,omitempty"`
+	LACP          *[]string             `json:"lacp,omitempty"`
+	BondMode      *[]string             `json:"bond_mode,omitempty"`
+	OfportRequest *[]string             `json:"ofport_request,omitempty"`
+	MTURequest    *[]string             `json:"mtu_request,omitempty"`
+	PolicingRate  *string               `json:"ingress_policing_rate,omitempty"`
+	PolicingBurst *string               `json:"ingress_policing_burst,omitempty"`
+	PacketRate    *string               `json:"ingress_policing_kpkts_rate,omitempty"`
+	PacketBurst   *string               `json:"ingress_policing_kpkts_burst,omitempty"`
+	Fallback      *string               `json:"lacp-fallback-ab,omitempty"`
+	PatchPeer     *string               `json:"patch_peer,omitempty"`
 }
 type TopologyChange struct {
-	Allocations    map[string]string `json:"allocations,omitempty"`
-	Request        TopologyRequest   `json:"request"`
-	Root           string            `json:"root_uuid"`
-	RootDependency string            `json:"root_dependency"`
-	Before         []TopologyNode    `json:"before"`
-	After          []TopologyNode    `json:"after"`
+	Tunnel                  *TunnelChange     `json:"tunnel_change,omitempty"`
+	TunnelAuthorityRevision string            `json:"tunnel_authority_revision,omitempty"`
+	TunnelDependency        string            `json:"tunnel_dependency,omitempty"`
+	Allocations             map[string]string `json:"allocations,omitempty"`
+	Request                 TopologyRequest   `json:"request"`
+	Root                    string            `json:"root_uuid"`
+	RootDependency          string            `json:"root_dependency"`
+	Before                  []TopologyNode    `json:"before"`
+	After                   []TopologyNode    `json:"after"`
 	// A deleted UUID is never resurrected, including when restoring a source Port
 	// consumed by an explicitly reviewed Bond membership change.
 	Replacements map[string]Binding `json:"replacements"`
@@ -69,15 +76,19 @@ type TopologyChange struct {
 	Compensating bool               `json:"compensating,omitempty"`
 }
 type TopologySnapshot struct {
-	Allocations          map[string]string
-	Root, RootDependency string
-	Supported, Capacity  bool
-	Nodes                map[string]TopologyNode
-	Configurations       map[string]map[string]any
-	Defaults             map[string]map[string]any
-	Authority            map[string]bool
-	Creates              map[string]bool
-	Retired              map[string]bool
+	TunnelAuthority, TunnelCreates map[string]bool
+	TunnelTypes                    []string
+	TunnelAuthorityRevision        string
+	TunnelSupported                bool
+	Allocations                    map[string]string
+	Root, RootDependency           string
+	Supported, Capacity            bool
+	Nodes                          map[string]TopologyNode
+	Configurations                 map[string]map[string]any
+	Defaults                       map[string]map[string]any
+	Authority                      map[string]bool
+	Creates                        map[string]bool
+	Retired                        map[string]bool
 }
 
 func CloneConfiguration(m map[string]any) map[string]any {
@@ -177,6 +188,17 @@ func topologyProblem(i StoredIntent, s Snapshot) string {
 	if !t.Supported {
 		return "TOPOLOGY_SCHEMA_UNSUPPORTED"
 	}
+	if IsTunnelOperation(i.Operation) {
+		if !t.TunnelSupported || g.Tunnel == nil {
+			return "TUNNEL_SCHEMA_UNSUPPORTED"
+		}
+		if !g.Compensating && !g.Observed && g.TunnelAuthorityRevision != t.TunnelAuthorityRevision {
+			return "TUNNEL_AUTHORITY_REVISION_CHANGED"
+		}
+		if problem := tunnelTopologyProblem(i, t); problem != "" {
+			return problem
+		}
+	}
 	if g.RootDependency != t.RootDependency {
 		return "TOPOLOGY_ROOT_POLICY_CHANGED"
 	}
@@ -236,8 +258,12 @@ func topologyChecks(i StoredIntent, s Snapshot) []Gate {
 	// A rollback uses the authority sealed at admission; generation, images,
 	// root policy, marker and current==our_after are still checked independently.
 	if !i.Topology.Compensating && !i.Topology.Observed {
+		authority, creates := s.Topology.Authority, s.Topology.Creates
+		if IsTunnelOperation(i.Operation) {
+			authority, creates = s.Topology.TunnelAuthority, s.Topology.TunnelCreates
+		}
 		for _, n := range i.Topology.Before {
-			if !s.Topology.Authority[n.Binding.ManagementID] {
+			if !authority[n.Binding.ManagementID] {
 				out = append(out, gate("TOPOLOGY_AUTHORITY_REQUIRED", "blocked", i.ID))
 				break
 			}
@@ -256,7 +282,7 @@ func topologyChecks(i StoredIntent, s Snapshot) []Gate {
 					bridgeID = p.Binding.ManagementID
 				}
 			}
-			if n < 0 || !s.Topology.Creates[bridgeID+":"+i.Topology.After[n].Name] {
+			if n < 0 || !creates[bridgeID+":"+i.Topology.After[n].Name] {
 				out = append(out, gate("TOPOLOGY_CREATION_GRANT_REQUIRED", "blocked", i.ID))
 				break
 			}
@@ -286,7 +312,7 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	in := cmd.Intents[0]
 	r := in.Topology
 	t := s.Topology
-	if !IsTopologyOperation(in.Operation) || r == nil || !apitypes.ManagementID(in.ID) || Digest(in.Value) != Digest(VLAN{}) || in.Policing != nil || in.MTURequest != 0 || in.Mode != "" || in.LACP != "" || in.Fallback != "" || in.Name != "" || in.VLANID != 0 || len(in.Members) != 0 {
+	if !IsTopologyOperation(in.Operation) || r == nil || !apitypes.ManagementID(in.ID) || Digest(in.Value) != Digest(VLAN{}) || in.Multicast != nil || in.Protected != nil || in.SpanningTree != nil || in.Policing != nil || in.MTURequest != 0 || in.Mode != "" || in.LACP != "" || in.Fallback != "" || in.Name != "" || in.VLANID != 0 || len(in.Members) != 0 {
 		return fail("INVALID_TOPOLOGY_INTENT")
 	}
 	if in.Object.Generation != s.Generation || c.Generation != nil && *c.Generation != s.Generation {
@@ -309,6 +335,7 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	configs := map[string]map[string]any{}
 	var problem string
 	allocations := map[string]string{}
+	var tunnelChange *TunnelChange
 	load := func(b Binding) TopologyNode {
 		p, exists := t.Nodes[b.ManagementID]
 		if !exists || p.Binding != b {
@@ -392,6 +419,70 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	// Reject properties from other semantic operations, even on the private IPC.
 	clean := *r
 	switch in.Operation {
+	case TunnelCreate, TunnelConfigure, TunnelDelete:
+		if !t.TunnelSupported || !t.Supported {
+			return fail("TUNNEL_SCHEMA_UNSUPPORTED")
+		}
+		clean.Tunnel = nil
+		var iface TopologyNode
+		if in.Operation == TunnelCreate {
+			clean.Name = ""
+			if n.Binding.Table != "Bridge" || !ValidBridgeName(r.Name) || r.Tunnel == nil {
+				return fail("INVALID_TUNNEL_CREATION")
+			}
+			checkBridge(n)
+			for _, p := range t.Nodes {
+				if p.Name == r.Name {
+					return fail("OBJECT_NAME_IN_USE")
+				}
+			}
+			value, err := tunnel.Merge(tunnel.Configuration{}, *r.Tunnel)
+			if err != nil {
+				return fail(err.Error())
+			}
+			if !slices.Contains(t.TunnelTypes, value.Type) {
+				return fail("TUNNEL_RUNTIME_TYPE_UNAVAILABLE")
+			}
+			iface = add("Interface", r.Name, value.Type, nil)
+			configs[iface.Binding.ManagementID]["options"] = tunnelOptions(value)
+			p := add("Port", r.Name, "", []Binding{iface.Binding})
+			setLinks(n, append(append([]Binding{}, n.Links...), p.Binding))
+			tunnelChange = &TunnelChange{Interface: iface.Binding, After: &value}
+		} else {
+			if n.Binding.Table != "Port" || len(n.Links) != 1 || in.Operation == TunnelConfigure && r.Tunnel == nil || in.Operation == TunnelDelete && r.Tunnel != nil {
+				return fail("INVALID_TUNNEL_REQUEST")
+			}
+			bridge := portBridge(n)
+			iface = load(n.Links[0])
+			value, err := tunnel.Decode(iface.Type, configs[iface.Binding.ManagementID]["options"])
+			if err != nil {
+				return fail(err.Error())
+			}
+			tunnelChange = &TunnelChange{Interface: iface.Binding, Before: &value}
+			if in.Operation == TunnelDelete {
+				removeLink(bridge, n.Binding)
+				remove(n)
+				remove(iface)
+			} else {
+				value, err := tunnel.Merge(value, *r.Tunnel)
+				if err != nil {
+					return fail(err.Error())
+				}
+				if !slices.Contains(t.TunnelTypes, value.Type) {
+					return fail("TUNNEL_RUNTIME_TYPE_UNAVAILABLE")
+				}
+				tunnelChange.After = &value
+				iface.Type = value.Type
+				after[iface.Binding.ManagementID] = iface
+				configs[iface.Binding.ManagementID]["type"] = value.Type
+				configs[iface.Binding.ManagementID]["options"] = tunnelOptions(value)
+			}
+		}
+		if tunnelChange.After != nil {
+			if err := tunnelIdentityAvailable(t, iface.Binding, *tunnelChange.After); err != nil {
+				return fail(err.Error())
+			}
+		}
 	case "port.create", "bond.create":
 		clean.Name = ""
 		clean.NativeType = ""
@@ -701,6 +792,22 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 		after[id] = p
 	}
 	g := &TopologyChange{Allocations: allocations, Request: *r, Root: t.Root, RootDependency: t.RootDependency, Before: topologyNodes(before), After: topologyNodes(after), Replacements: map[string]Binding{}}
+	if tunnelChange != nil {
+		g.Tunnel, g.TunnelAuthorityRevision = tunnelChange, t.TunnelAuthorityRevision
+		if r.Tunnel != nil {
+			copy := *r.Tunnel
+			copy.Options = map[string]*string{}
+			for key, value := range r.Tunnel.Options {
+				if value != nil {
+					text := *value
+					copy.Options[key] = &text
+				} else {
+					copy.Options[key] = nil
+				}
+			}
+			g.Request.Tunnel = &copy
+		}
+	}
 	// Reserve replacements before deletion and compute their complete expected
 	// configuration digest without exposing private unknown fields in the draft.
 	for id, p := range before {
@@ -727,6 +834,9 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 		return slices.IndexFunc(g.Before, func(n TopologyNode) bool { return n.Name == a.Name && n.Binding.Table == a.Binding.Table }) - slices.IndexFunc(g.Before, func(n TopologyNode) bool { return n.Name == b.Name && n.Binding.Table == b.Binding.Table })
 	})
 	i := StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Schema: s.Schema, Dependency: t.RootDependency, Value: normalize(VLAN{}), Before: normalize(VLAN{}), Topology: g}
+	if IsTunnelOperation(i.Operation) {
+		g.TunnelDependency = tunnelDependency(g, t)
+	}
 	for _, check := range topologyChecks(i, s) {
 		if check.State != "allowed" {
 			return fail(check.Code)
@@ -761,6 +871,22 @@ func TopologySummary(table string, cfg map[string]any) *TopologyConfigurationSum
 		if options, ok := cfg["options"].(map[string]any); ok {
 			if v, exists := options["peer"]; exists {
 				out["patch_peer"] = v
+			}
+		}
+	}
+	if table == "Interface" {
+		typ, _ := cfg["type"].(string)
+		if slices.Contains(tunnel.Types, typ) {
+			value, problem := tunnel.Decode(typ, cfg["options"])
+			public := tunnel.Configuration{Type: typ, Options: map[string]string{}}
+			for _, key := range tunnel.Keys {
+				if text, exists := value.Options[key]; exists && len(text) <= 128 {
+					public.Options[key] = text
+				}
+			}
+			out["tunnel"] = public
+			if problem != nil {
+				out["tunnel_reason"] = problem.Error()
 			}
 		}
 	}
@@ -817,6 +943,12 @@ func TopologyConfigurations(i StoredIntent, t TopologySnapshot, original map[str
 			cfg["name"] = n.Name
 			if n.Binding.Table == "Interface" {
 				cfg["type"] = n.Type
+				if IsTunnelOperation(i.Operation) && g.Tunnel != nil && g.Tunnel.Interface == n.Binding && g.Tunnel.After != nil {
+					if tunnel.Validate(*g.Tunnel.After) != nil || g.Tunnel.After.Type != n.Type {
+						return nil, apitypes.Fail(422, "INVALID_TUNNEL_REQUEST")
+					}
+					cfg["options"] = tunnelOptions(*g.Tunnel.After)
+				}
 			}
 			if n.Binding.Table == "Port" || n.Binding.Table == "Bridge" {
 				links := []any{}

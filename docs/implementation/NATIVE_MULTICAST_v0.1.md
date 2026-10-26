@@ -1,6 +1,7 @@
 # Native multicast snooping — implementation and acceptance
 
-Status: implemented on the feature branch, awaiting native acceptance; not deployed.
+Status: accepted on main `73c15dbeeb4180825e7c6720f944c412c13bc24b` through PR #105; not deployed.
+Baseline `phase1-native-multicast-v0.1`: source CI 39921457032 and independent main CI 39926179274 each passed 14/14 with 13 official artifact digests verified. All 96 captures per run were reviewed across 26 annotated sheets; long thumbnails were reviewed for layout/state, not word-by-word reading. Remaining #43 domains stay open.
 Related to #43 / SW-11.
 The accepted STP and native Port isolation baselines remain separate gates.
 
@@ -81,7 +82,7 @@ Unavailable/withheld uses null items; only an observed empty table uses `[]`.
 No previous group table is silently reused as fresh. Bridge configuration
 freshness and native group freshness are shown independently in both modes.
 
-## Required acceptance (not yet passed)
+## Required acceptance (passed for the baseline above)
 
 Local tests cover closed/unset values, independent authority and credential
 ceilings, full-graph dependency conflicts, native plan preservation, strict
@@ -111,8 +112,9 @@ boundaries and a deliberately mismatched build returning Unavailable rather
 than an empty table. Screenshots require actual review after exact source CI.
 
 Full source CI, official artifact digest verification, screenshot review,
-merge, independent main qualification and an annotated accepted baseline are
-all pending. #43 remains open; Tunnel, Mirror, QoS/Queue, exporters and
+merge, independent main qualification and the annotated accepted baseline
+have passed for the exact source/main pair recorded above. #43 remains open;
+Tunnel, Mirror, QoS/Queue, exporters and
 Profile/Drift are still required. #71 remains deferred. No production deployment.
 
 ## Native references
