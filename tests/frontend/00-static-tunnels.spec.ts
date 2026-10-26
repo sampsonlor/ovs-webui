@@ -325,7 +325,19 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
   await expect(
     page.getByRole('button', { name: 'Stage tunnel change', exact: true }),
   ).toHaveCount(0);
+  await expect(page.getByText('Unavailable', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('NOT_FOUND. Refresh to read current evidence.', {
+      exact: true,
+    }),
+  ).toBeVisible();
   await screen(page, 'retired-identity');
+  await expect(
+    page.getByText('NOT_FOUND. Refresh to read current evidence.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+
   await page.goto(base + '?filter=tun-ui-data');
   await page
     .getByRole('link', { name: 'tun-ui-data', exact: true })
