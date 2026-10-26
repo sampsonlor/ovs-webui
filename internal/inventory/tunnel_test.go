@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -107,6 +108,63 @@ func TestStaticTunnelInventoryKeepsRootAuthorityAndPrivateOptionsSeparate(t *tes
 	if err != nil || !strings.Contains(string(mustJSON(t, item)), "TUNNEL_OBSERVATION_STALE") {
 		t.Fatal("stale observation retained configuration action", err)
 	}
+	t.Run("bounded_topology_closes_creation", func(t *testing.T) {
+		s, o, d, p, f := staticTunnelFixture(t)
+		portRow, ifaceRow := o.Rows["Port"][p.OVSUUID], o.Rows["Interface"][f.OVSUUID]
+		for n := 0; n < 6; n++ {
+			pid, iid := repository.NewID(), repository.NewID()
+			name := "bulk" + strconv.Itoa(n)
+			pv, iv := candidate.CloneConfiguration(portRow.Values), candidate.CloneConfiguration(ifaceRow.Values)
+			pv["name"], pv["interfaces"], iv["name"] = name, []any{iid}, name
+			o.Rows["Port"][pid] = Row{UUID: pid, Values: pv, Configuration: candidate.CloneConfiguration(pv)}
+			o.Rows["Interface"][iid] = Row{UUID: iid, Values: iv, Configuration: candidate.CloneConfiguration(iv)}
+			d.Bindings[Key("Port", pid)] = Binding{ManagementID: repository.NewID(), UUID: pid, Table: "Port", State: "active"}
+			d.Bindings[Key("Interface", iid)] = Binding{ManagementID: repository.NewID(), UUID: iid, Table: "Interface", State: "active"}
+			for bid, bridge := range o.Rows["Bridge"] {
+				owner := false
+				for _, id := range refs(bridge.Values["ports"]) {
+					if id == p.OVSUUID {
+						owner = true
+					}
+				}
+				if !owner {
+					continue
+				}
+				values := append(append([]any{}, bridge.Values["ports"].([]any)...), pid)
+				bridge.Values["ports"] = values
+				bridge.Configuration = candidate.CloneConfiguration(bridge.Values)
+				o.Rows["Bridge"][bid] = bridge
+			}
+		}
+		for id, row := range o.Rows["Port"] {
+			trunks := []any{}
+			for v := 1; v <= 1700; v++ {
+				trunks = append(trunks, strconv.Itoa(v))
+			}
+			row.Values["trunks"], row.Values["vlan_mode"] = trunks, []any{"trunk"}
+			row.Configuration = candidate.CloneConfiguration(row.Values)
+			o.Rows["Port"][id] = row
+		}
+		s.install(o, d)
+		ids := []string{}
+		for _, b := range d.Bindings {
+			ids = append(ids, b.ManagementID)
+		}
+		if err := s.SetLocalTunnelObjects(ids); err != nil {
+			t.Fatal(err)
+		}
+		if snapshot, err := s.CandidateSnapshot(context.Background(), nil); err != nil || !snapshot.Topology.TunnelAuthority[p.ManagementID] {
+			t.Fatal("bounded fixture did not retain an eligible native graph", err)
+		}
+		view, err := s.Read(context.Background(), "readInventoryTopology", nil, nil, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := view.(map[string]any)
+		if len(d.Bindings) >= 64 || data["truncated"] != true || data["tunnel_editable"] != false || len(mustJSON(t, view)) > 56<<10 {
+			t.Fatal("byte-bounded native topology retained tunnel creation", data["truncated"], data["tunnel_editable"])
+		}
+	})
 }
 
 func mustJSON(t *testing.T, value any) []byte {

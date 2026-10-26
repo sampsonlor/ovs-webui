@@ -240,6 +240,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			out["nodes"] = nodes
 			out["truncated"] = true
 			out["editable"] = false
+			out["tunnel_editable"] = false
 		}
 		return out, nil
 	}

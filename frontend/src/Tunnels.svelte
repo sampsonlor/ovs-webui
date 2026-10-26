@@ -73,6 +73,7 @@
   {:else if creating || item}
     <Link href="/switching/tunnels">← Tunnels</Link>
     <h2>{creating?'Create static tunnel':typeof item?.name==='string'?item.name:'Tunnel details'}</h2>
+    {#if creating && model.resource.status==='ready' && data?.tunnel_editable!==true}<p role="status">Creation is unavailable. Review a fresh, complete native topology, local management ownership and supported tunnel types before preparing a change.</p>{/if}
     {#if !creating && native}
       <p>Native type: <strong>{native.native_type??'Unknown'}</strong> · Configuration: {native.configuration_availability}</p>
       <p>Observation: {typeof source.freshness==='string'?source.freshness:'unknown'} · {typeof source.observed_at==='string'?source.observed_at:'Unknown time'}</p>
