@@ -283,9 +283,14 @@ test('native static tunnel CRUD uses shared review, exact compensation and fresh
   await page
     .getByRole('button', { name: 'Discard intents…', exact: true })
     .click();
+  const discarded = page.waitForResponse(
+    r => r.request().method() === 'PATCH' && r.url().endsWith('/api/v1/candidate'),
+  );
   await page
     .getByRole('button', { name: 'Confirm discard', exact: true })
     .click();
+  expect((await discarded).status()).toBe(200);
+  await expect(page.getByText('0 staged intents', { exact: true })).toBeVisible();
   await page.goto(href);
   await page
     .getByLabel(
