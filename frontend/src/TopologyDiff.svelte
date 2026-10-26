@@ -13,6 +13,7 @@
   }
   function value(v: unknown): string {
     if (Array.isArray(v)) return v.length ? v.map(value).join(', ') : 'Native default / empty';
+    if(v && typeof v === 'object') return Object.entries(v).map(([key,value_]) => `${key}: ${value(value_)}`).join('; ');
     return v === null || v === undefined ? 'Unknown' : String(v);
   }
 </script>

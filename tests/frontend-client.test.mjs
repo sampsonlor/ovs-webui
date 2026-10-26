@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { API, requestID } from '../frontend/src/api.ts';
 import { Controller } from '../frontend/src/model.ts';
+import { tunnelOption } from '../frontend/src/tunnel.ts';
 import {
   applyReady,
   decisionReady,
@@ -138,6 +139,52 @@ void test('native multicast apply requires its independent capability and curren
   assert.equal(applyReady(c,v,allowed,true),true);
   assert.equal(applyReady(c,v,allowed,false),false);
   assert.equal(applyReady(c,{...v,usable:false},allowed,true),false);
+});
+
+await test('static tunnel routes and Safe Apply retain independent capability, scope and current evidence', async () => {
+  const observed = { configuration_availability: 'known', configuration: { native_type: 'geneve', options: { remote_ip: '2001:db8::20', key: '0' } } };
+  assert.equal(tunnelOption(observed, 'key'), '0');
+  assert.equal(tunnelOption(observed, 'local_ip'), 'Native default (unset)');
+  for (const configuration_availability of ['unknown', 'unsupported']) {
+    assert.equal(tunnelOption({ ...observed, configuration_availability }, 'local_ip'), 'Unknown');
+    assert.equal(tunnelOption({ ...observed, configuration_availability, configuration: null }, 'key'), 'Unknown');
+  }
+  assert.equal(tunnelOption(null, 'dst_port'), 'Unknown');
+  assert.equal(tunnelOption({ ...observed, configuration: { ...observed.configuration, options: { key: '' } } }, 'key'), 'Empty native value');
+  const draft = { id: resource, revision: 'native-tunnel', state: 'dirty', safe_apply_available: true, intents: [] };
+  const validation = { candidate_id: draft.id, candidate_revision: draft.revision, state: 'passed', usable: true, execution_ready: true };
+  const allowed = { effective_capabilities: ['configuration.apply', 'ovs.tunnel.static.write'] };
+  const core = { effective_capabilities: ['configuration.apply', 'ovs.topology.write'] };
+  for (const operation of ['tunnel.static.create', 'tunnel.static.configure', 'tunnel.static.delete']) {
+    const candidate = { ...draft, intents: [{ operation }] };
+    assert.equal(applyReady(candidate, validation, core, true), false);
+    assert.equal(applyReady(candidate, validation, allowed, true), true);
+    assert.equal(applyReady(candidate, validation, allowed, false), false);
+    assert.equal(applyReady(candidate, { ...validation, execution_ready: false }, allowed, true), false);
+    assert.equal(applyReady(candidate, { ...validation, candidate_revision: 'old' }, allowed, true), false);
+  }
+  for (const [path, url] of [
+    ['/switching/tunnels?filter=vxlan&limit=1&cursor=sealed', '/tunnels?filter=vxlan&limit=1&cursor=sealed'],
+    [`/switching/tunnels/${resource}`, `/tunnels/${resource}`],
+    ['/switching/tunnels/new', '/inventory/topology'],
+  ]) {
+    const calls = [];
+    const c = new Controller(new API(async request => {
+      calls.push(request);
+      if (request.endsWith('/session')) return response(session);
+      if (request.endsWith('/workspace')) return response({ candidate: draft });
+      return response({ items: [] });
+    }, storage()), path);
+    await c.refresh();
+    assert.ok(calls.includes('/api/v1' + url));
+  }
+  const denied = new Controller(new API(async request => {
+    assert.ok(!request.includes('/api/v1/tunnels'));
+    return response(request.endsWith('/session') ? { ...session, effective_capabilities: ['inventory.read'] } : { candidate: null });
+  }, storage()), '/switching/tunnels');
+  await denied.refresh();
+  assert.equal(denied.state.resource.status, 'denied');
+  assert.equal(denied.state.resource.value, null);
 });
 
 await test('acknowledged mutation with a delayed old read withholds stale Candidate commands until fresh review', async () => {

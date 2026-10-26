@@ -51,6 +51,8 @@ func run() int {
 	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
 	grantMulticastRole := flag.String("grant-multicast-role", "", "Offline root action: explicitly grant one existing role native multicast capability, then exit; new login required")
 	revokeMulticastRole := flag.String("revoke-multicast-role", "", "Offline root action: revoke one role native multicast capability, then exit")
+	grantTunnelRole := flag.String("grant-static-tunnel-role", "", "Offline root action: grant one existing role native static Tunnel capability, then exit; new login required")
+	revokeTunnelRole := flag.String("revoke-static-tunnel-role", "", "Offline root action: revoke one role native static Tunnel capability, then exit")
 	revokeTreeRole := flag.String("revoke-spanning-tree-execution-role", "", "Offline root action: revoke one role's independent STP/RSTP write capability, then exit")
 	secretDir := flag.String("secret-key-directory", "", "Private versioned privileged keys (default: secret-keys beside manager.db)")
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
@@ -77,6 +79,8 @@ func run() int {
 	treeDatabaseSHA256 := flag.String("spanning-tree-database-sha256", "", "Reviewed SHA256 of the qualified standalone ovsdb-server executable")
 	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
 	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
+	localTunnelObjects := flag.String("local-tunnel-objects", "", "Independent immutable graph IDs permitted for native static Tunnel changes")
+	localTunnelCreates := flag.String("local-tunnel-create-targets", "", "Independent Bridge management-id:new-name grants for new native static Tunnel Port and Interface pairs")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
 	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
 	localMTUInterfaces := flag.String("local-mtu-interfaces", "", "Reviewed Interface management IDs with explicit internal MTU authority; independent of Port grants")
@@ -104,6 +108,12 @@ func run() int {
 		return 2
 	}
 	actions := 0
+	if *grantTunnelRole != "" {
+		actions++
+	}
+	if *revokeTunnelRole != "" {
+		actions++
+	}
 	if *grantMulticastRole != "" {
 		actions++
 	}
@@ -259,6 +269,21 @@ func run() int {
 		}
 		return 0
 	}
+	if *grantTunnelRole != "" || *revokeTunnelRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantTunnelRole, true
+		if *revokeTunnelRole != "" {
+			id, enabled = *revokeTunnelRole, false
+		}
+		if err := authentication.SetStaticTunnelExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		return 0
+	}
 	if *grantMulticastRole != "" || *revokeMulticastRole != "" {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -311,6 +336,21 @@ func run() int {
 			return 1
 		}
 		inventoryService = inventory.New(reg)
+		var tunnelIDs, tunnelTargets []string
+		if *localTunnelObjects != "" {
+			tunnelIDs = strings.Split(*localTunnelObjects, ",")
+		}
+		if *localTunnelCreates != "" {
+			tunnelTargets = strings.Split(*localTunnelCreates, ",")
+		}
+		if err = inventoryService.SetLocalTunnelObjects(tunnelIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_TUNNEL_AUTHORITY")
+			return 2
+		}
+		if err = inventoryService.SetLocalTunnelCreates(tunnelTargets); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_TUNNEL_CREATION_AUTHORITY")
+			return 2
+		}
 		var isolationIDs []string
 		if *localIsolation != "" {
 			isolationIDs = strings.Split(*localIsolation, ",")

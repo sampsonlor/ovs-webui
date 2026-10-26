@@ -558,6 +558,7 @@ type Resource struct {
 	ResourceKind      string                     `json:"resource_kind"`
 	Source            Source                     `json:"source"`
 	AllowedActions    []string                   `json:"allowed_actions"`
+	NativeTunnel      StaticTunnelObservation    `json:"native_tunnel,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1065,14 +1066,15 @@ type InterfaceSpec struct {
 	Options map[string]json.RawMessage `json:"options"`
 }
 type TopologyRequest struct {
-	Name              string          `json:"name,omitempty"`
-	NativeType        string          `json:"native_type,omitempty"`
-	InterfaceNames    []string        `json:"interface_names,omitempty"`
-	SourcePorts       []ObjectBinding `json:"source_ports,omitempty"`
-	DestinationBridge ObjectBinding   `json:"destination_bridge,omitempty"`
-	MemberInterfaces  []ObjectBinding `json:"member_interfaces,omitempty"`
-	Peer              ObjectBinding   `json:"peer,omitempty"`
-	OfportRequest     int64           `json:"ofport_request,omitempty"`
+	Name              string                   `json:"name,omitempty"`
+	NativeType        string                   `json:"native_type,omitempty"`
+	InterfaceNames    []string                 `json:"interface_names,omitempty"`
+	SourcePorts       []ObjectBinding          `json:"source_ports,omitempty"`
+	DestinationBridge ObjectBinding            `json:"destination_bridge,omitempty"`
+	MemberInterfaces  []ObjectBinding          `json:"member_interfaces,omitempty"`
+	Peer              ObjectBinding            `json:"peer,omitempty"`
+	OfportRequest     int64                    `json:"ofport_request,omitempty"`
+	Tunnel            StaticTunnelPatchRequest `json:"tunnel,omitempty"`
 }
 type TopologyNode struct {
 	Binding              ObjectBinding              `json:"binding"`
@@ -1094,14 +1096,17 @@ func (v TopologyNode) MarshalJSON() ([]byte, error) {
 }
 
 type TopologyChange struct {
-	RootUuid       Id                         `json:"root_uuid"`
-	RootDependency Revision                   `json:"root_dependency"`
-	Before         []TopologyNode             `json:"before"`
-	After          []TopologyNode             `json:"after"`
-	Restored       []TopologyNode             `json:"restored"`
-	Replacements   map[string]json.RawMessage `json:"replacements"`
-	Request        TopologyRequest            `json:"request"`
-	ExtraFields    map[string]json.RawMessage `json:"-"`
+	RootUuid                Id                         `json:"root_uuid"`
+	RootDependency          Revision                   `json:"root_dependency"`
+	Before                  []TopologyNode             `json:"before"`
+	After                   []TopologyNode             `json:"after"`
+	Restored                []TopologyNode             `json:"restored"`
+	Replacements            map[string]json.RawMessage `json:"replacements"`
+	Request                 TopologyRequest            `json:"request"`
+	TunnelChange            StaticTunnelChange         `json:"tunnel_change,omitempty"`
+	TunnelAuthorityRevision Revision                   `json:"tunnel_authority_revision,omitempty"`
+	TunnelDependency        Revision                   `json:"tunnel_dependency,omitempty"`
+	ExtraFields             map[string]json.RawMessage `json:"-"`
 }
 
 func (v *TopologyChange) UnmarshalJSON(data []byte) error {
@@ -1161,6 +1166,52 @@ type MulticastGroups struct {
 	Reason       string          `json:"reason"`
 	Items        json.RawMessage `json:"items"`
 	Source       Source          `json:"source"`
+}
+type StaticTunnelOptions struct {
+	RemoteIp json.RawMessage `json:"remote_ip,omitempty"`
+	LocalIp  json.RawMessage `json:"local_ip,omitempty"`
+	Key      json.RawMessage `json:"key,omitempty"`
+	DstPort  json.RawMessage `json:"dst_port,omitempty"`
+}
+type StaticTunnelNativeOptions struct {
+	RemoteIp string `json:"remote_ip,omitempty"`
+	LocalIp  string `json:"local_ip,omitempty"`
+	Key      string `json:"key,omitempty"`
+	DstPort  string `json:"dst_port,omitempty"`
+}
+type StaticTunnelConfiguration struct {
+	NativeType string                    `json:"native_type"`
+	Options    StaticTunnelNativeOptions `json:"options"`
+}
+type StaticTunnelCreateRequest struct {
+	NativeType string              `json:"native_type"`
+	Options    StaticTunnelOptions `json:"options"`
+}
+type StaticTunnelPatchRequest struct {
+	NativeType string              `json:"native_type,omitempty"`
+	Options    StaticTunnelOptions `json:"options"`
+}
+type StaticTunnelChange struct {
+	Interface ObjectBinding   `json:"interface"`
+	Before    json.RawMessage `json:"before"`
+	After     json.RawMessage `json:"after"`
+}
+type StaticTunnelExecution struct {
+	Available  bool   `json:"available"`
+	Reason     string `json:"reason"`
+	Capability string `json:"capability"`
+}
+type StaticTunnelObservation struct {
+	Configuration             json.RawMessage       `json:"configuration"`
+	ConfigurationAvailability string                `json:"configuration_availability"`
+	Reason                    string                `json:"reason"`
+	InterfaceBinding          json.RawMessage       `json:"interface_binding"`
+	InterfaceRef              json.RawMessage       `json:"interface_ref"`
+	BridgeRef                 json.RawMessage       `json:"bridge_ref"`
+	NativeType                json.RawMessage       `json:"native_type"`
+	Operational               json.RawMessage       `json:"operational"`
+	Source                    Source                `json:"source"`
+	Execution                 StaticTunnelExecution `json:"execution"`
 }
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
@@ -1350,6 +1401,24 @@ type BridgeMulticastIntent struct {
 	Operation string           `json:"operation"`
 	Object    ObjectBinding    `json:"object"`
 	Multicast MulticastRequest `json:"multicast"`
+}
+type StaticTunnelCreateIntent struct {
+	IntentId  Id                         `json:"intent_id"`
+	Operation string                     `json:"operation"`
+	Object    ObjectBinding              `json:"object"`
+	Topology  map[string]json.RawMessage `json:"topology"`
+}
+type StaticTunnelConfigureIntent struct {
+	IntentId  Id                         `json:"intent_id"`
+	Operation string                     `json:"operation"`
+	Object    ObjectBinding              `json:"object"`
+	Topology  map[string]json.RawMessage `json:"topology"`
+}
+type StaticTunnelDeleteIntent struct {
+	IntentId  Id                         `json:"intent_id"`
+	Operation string                     `json:"operation"`
+	Object    ObjectBinding              `json:"object"`
+	Topology  map[string]json.RawMessage `json:"topology"`
 }
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`

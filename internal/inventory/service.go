@@ -27,6 +27,9 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	localTunnelObjects             map[string]bool
+	localTunnelCreates             map[string]bool
+	tunnelAuthorityRevision        string
 	multicastGroupObserver         MulticastGroupObserver
 	localMulticast                 map[string]bool
 	multicastAuthorityRevision     string
@@ -139,6 +142,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	localSpanningTree := s.localSpanningTree
 	localIsolation := s.localIsolation
 	localMulticast := s.localMulticast
+	localTunnelObjects, localTunnelCreates, tunnelRevision := s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision
 	localSpanningTreeExecution := s.localSpanningTreeExecution
 	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
 	s.mu.RUnlock()
@@ -172,12 +176,16 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return nil, apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
 	}
 	allowedConfig := slices.Contains(c.Capabilities, "configuration.read")
+	if (op == "listTunnels" || op == "readTunnel") && !allowedConfig {
+		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
+	}
 	if op == "readInventoryTopology" {
 		if !allowedConfig {
 			return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		snapshot := candidate.Snapshot{Generation: v.decision.Generation}
 		projectTopology(v, localTopology, localTopologyCreates, &snapshot)
+		projectTunnel(v, localTunnelObjects, localTunnelCreates, tunnelRevision, &snapshot)
 		nodes := []candidate.TopologyNode{}
 		authority := map[string]bool{}
 		for id, n := range snapshot.Topology.Nodes {
@@ -213,6 +221,10 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		out["reason"] = reason
 		out["editable"] = can
 		out["creation_targets"] = localTopologyCreates
+		out["tunnel_authority"] = snapshot.Topology.TunnelAuthority
+		out["tunnel_creation_targets"] = localTunnelCreates
+		out["tunnel_runtime_types"] = snapshot.Topology.TunnelTypes
+		out["tunnel_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.TunnelSupported && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.TunnelCapability)
 		out["bridge_create_names"] = localBridgeNames
 		out["review_policy"] = "High risk: review management connectivity and sole uplinks. New changes require desktop, current root object/name grants, native schema and Safe Apply. Foreign references, unsupported domains and host network dependencies block execution."
 		for {
@@ -228,11 +240,25 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			out["nodes"] = nodes
 			out["truncated"] = true
 			out["editable"] = false
+			out["tunnel_editable"] = false
 		}
 		return out, nil
 	}
 	// SetLocalVLANPorts replaces the map; published observations are immutable.
+	var tunnelSnapshot *candidate.Snapshot
+	getTunnel := func() candidate.TopologySnapshot {
+		if tunnelSnapshot == nil {
+			snapshot := candidate.Snapshot{Generation: v.decision.Generation}
+			projectTopology(v, localTopology, localTopologyCreates, &snapshot)
+			projectTunnel(v, localTunnelObjects, localTunnelCreates, tunnelRevision, &snapshot)
+			tunnelSnapshot = &snapshot
+		}
+		return tunnelSnapshot.Topology
+	}
 	project := func(b Binding, kind string) (map[string]any, error) {
+		if kind == "tunnel" && (b.Table != "Port" || !portHasTunnel(v, v.observation.Rows["Port"][b.UUID])) {
+			return nil, apitypes.Fail(404, "NOT_FOUND")
+		}
 		if kind == "spanning_tree" {
 			item, err := spanningTreeResource(v, b, fresh, allowedConfig, op == "readSpanningTreeObservation")
 			if err == nil && op == "readSpanningTreeObservation" {
@@ -242,6 +268,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			return item, err
 		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err == nil && kind == "tunnel" {
+			item["native_tunnel"] = tunnelObservation(v, b, fresh, c, getTunnel())
+		}
 		if err == nil && b.Table == "Bridge" {
 			reason, authority := "CONFIGURATION_WITHHELD", "withheld"
 			item["multicast_config"] = nil
@@ -375,7 +404,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return item, nil
 	}
 	if len(path) > 0 {
-		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree"}[op]
+		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel"}[op]
 		for _, b := range v.decision.Bindings {
 			for _, id := range path {
 				if b.ManagementID == id && kindFor(b.Table) == tableKind(kind) {
@@ -434,7 +463,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		cur = old
 	}
 	items := []map[string]any{}
-	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree"}[op]
+	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel"}[op]
 	ids := []string{}
 	bindings := map[string]Binding{}
 	if op == "readInventorySchema" {
@@ -449,6 +478,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 				continue
 			}
 			row := v.observation.Rows[b.Table][b.UUID]
+			if kind == "tunnel" && !portHasTunnel(v, row) {
+				continue
+			}
 			if kind == "bond" && len(refs(row.Values["interfaces"])) < 2 {
 				continue
 			}
@@ -595,7 +627,7 @@ func tableKind(k string) string {
 	if k == "spanning_tree" {
 		return "bridge"
 	}
-	if k == "bond" {
+	if k == "bond" || k == "tunnel" {
 		return "port"
 	}
 	return k

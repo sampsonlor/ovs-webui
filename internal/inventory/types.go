@@ -53,6 +53,7 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
+	TunnelConfiguration  bool                      `json:"-"`
 	GraphDefaults        map[string]map[string]any `json:"-"`
 	Name                 string                    `json:"name"`
 	Version              string                    `json:"version"`
@@ -129,7 +130,7 @@ type Reader interface {
 
 func Operation(id string) bool {
 	switch id {
-	case "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
+	case "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
 		return true
 	}
 	return false

@@ -68,7 +68,7 @@ func validateCapabilities(values []string) error {
 // The reserved execution capability can be explicitly assigned to a role, but
 // is not added to builtin templates during this read-only prerequisite.
 func knownCapability(c string) bool {
-	return c == "ovs.bridge.multicast.write" || c == "ovs.port.isolation.write" || c == SpanningTreeExecutionCapability || slices.Contains(allCapabilities(), c)
+	return c == "ovs.tunnel.static.write" || c == "ovs.bridge.multicast.write" || c == "ovs.port.isolation.write" || c == SpanningTreeExecutionCapability || slices.Contains(allCapabilities(), c)
 }
 func subset(values, ceiling []string) bool {
 	for _, c := range values {
@@ -238,9 +238,14 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			if err := require(c, "role.read", false, 0); err != nil {
 				return err
 			}
-		case "bridge", "port", "interface", "bond":
+		case "bridge", "port", "interface", "bond", "tunnel":
 			if err := require(c, "inventory.read", false, 0); err != nil {
 				return err
+			}
+			if ref.Kind == "tunnel" {
+				if err := require(c, "configuration.read", false, 0); err != nil {
+					return err
+				}
 			}
 			var state string
 			if err := q.QueryRowContext(ctx, "SELECT state FROM inventory_state WHERE singleton=1").Scan(&state); err != nil {
@@ -249,7 +254,10 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			if state != "confirmed" {
 				return apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
 			}
-			table := map[string]string{"bridge": "Bridge", "port": "Port", "interface": "Interface", "bond": "Port"}[ref.Kind]
+			// Tunnel is a native Port identity, never an independent object or a
+			// name alias. The inventory service validates its current Interface
+			// type; this read check does not confer tunnel execution authority.
+			table := map[string]string{"bridge": "Bridge", "port": "Port", "interface": "Interface", "bond": "Port", "tunnel": "Port"}[ref.Kind]
 			var count int
 			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM identities i JOIN inventory_state s ON s.generation=i.generation WHERE i.management_id=? AND i.table_name=? AND i.state='active'", ref.ID, table).Scan(&count); err != nil {
 				return err
