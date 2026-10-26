@@ -19,6 +19,7 @@ import (
 )
 
 var selected = map[string][]string{
+	"Mirror":       {"name", "select_all", "select_src_port", "select_dst_port", "select_vlan", "output_port", "output_vlan", "snaplen", "statistics", "external_ids"},
 	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths", "iface_types"},
 	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "mcast_snooping_enable", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
@@ -136,6 +137,8 @@ func discover(data []byte) (discovered, error) {
 	d.public.InternalPortCreation = internalPortSchemaSupported(d)
 	d.public.GraphDefaults = graphDefaults(d)
 	d.public.TunnelConfiguration = staticTunnelSchemaSupported(d, raw)
+	d.public.MirrorConfiguration = mirrorSchemaSupported(d, raw)
+	d.public.MirrorDefaults = mirrorDefaults(d)
 	return d, nil
 }
 

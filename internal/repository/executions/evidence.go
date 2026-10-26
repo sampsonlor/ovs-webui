@@ -22,7 +22,7 @@ func interfaceEvidenceObjects(r execution.Record) []apitypes.Ref {
 		}
 		if i.Topology != nil {
 			for _, n := range append(append([]candidate.TopologyNode{}, i.Topology.Before...), i.Topology.After...) {
-				ref := apitypes.Ref{Kind: map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface"}[n.Binding.Table], ID: n.Binding.ManagementID}
+				ref := apitypes.Ref{Kind: map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface", "Mirror": "mirror"}[n.Binding.Table], ID: n.Binding.ManagementID}
 				duplicate := false
 				for _, p := range refs {
 					if p == ref {

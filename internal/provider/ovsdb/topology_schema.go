@@ -11,7 +11,7 @@ func graphConfigurationColumn(table, name string, c *native.ColumnSchema) bool {
 	if c == nil || c.Ephemeral() || bridgeStatusColumn(table, name) {
 		return false
 	}
-	if !slices.Contains([]string{"Open_vSwitch", "Bridge", "Port", "Interface"}, table) {
+	if !slices.Contains([]string{"Open_vSwitch", "Bridge", "Port", "Interface", "Mirror"}, table) {
 		return false
 	}
 	// OVS persists this daemon-reported active-member MAC. It is runtime status,

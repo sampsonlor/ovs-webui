@@ -158,6 +158,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	}
 	projectTopology(v, s.localTopology, s.localTopologyCreates, &out)
 	projectTunnel(v, s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision, &out)
+	projectMirror(v, s.localMirrorObjects, s.localMirrorCreates, s.mirrorAuthorityRevision, &out)
 	projectSpanningTree(v, s.localSpanningTree, &out, bindings)
 	executionScope := false
 	for id, tree := range out.SpanningTrees {

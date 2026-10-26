@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.31.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed."
+    "version": "1.32.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted."
   },
   "servers": [
     {
@@ -9087,7 +9087,7 @@
         "summary": "listMirrors",
         "x-capability": "state.read",
         "x-service-issue": 43,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "mirror",
         "parameters": [
           {
@@ -9292,7 +9292,7 @@
         "summary": "readMirror",
         "x-capability": "state.read",
         "x-service-issue": 43,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "mirror",
         "parameters": [
           {
@@ -30423,6 +30423,9 @@
           "native_tunnel": {
             "$ref": "#/components/schemas/StaticTunnelObservation"
           },
+          "native_mirror": {
+            "$ref": "#/components/schemas/MirrorObservation"
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -31982,7 +31985,7 @@
         "type": "object",
         "properties": {
           "binding": {
-            "$ref": "#/components/schemas/ObjectBinding"
+            "$ref": "#/components/schemas/NativeGraphBinding"
           },
           "name": {
             "type": "string",
@@ -32054,11 +32057,18 @@
           "replacements": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/ObjectBinding"
+              "$ref": "#/components/schemas/NativeGraphBinding"
             }
           },
           "request": {
-            "$ref": "#/components/schemas/TopologyRequest"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TopologyRequest"
+              },
+              {
+                "$ref": "#/components/schemas/MirrorTopologyRequest"
+              }
+            ]
           },
           "tunnel_change": {
             "$ref": "#/components/schemas/StaticTunnelChange"
@@ -32067,6 +32077,15 @@
             "$ref": "#/components/schemas/Revision"
           },
           "tunnel_dependency": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "mirror_change": {
+            "$ref": "#/components/schemas/MirrorChange"
+          },
+          "mirror_authority_revision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "mirror_dependency": {
             "$ref": "#/components/schemas/Revision"
           }
         },
@@ -32675,6 +32694,308 @@
           "bridge_ref",
           "native_type",
           "operational",
+          "source",
+          "execution"
+        ],
+        "additionalProperties": false
+      },
+      "MirrorObjectBinding": {
+        "type": "object",
+        "properties": {
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "table": {
+            "type": "string",
+            "const": "Mirror"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "management_id",
+          "ovs_uuid",
+          "table",
+          "instance_generation"
+        ],
+        "additionalProperties": false
+      },
+      "NativeGraphBinding": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          {
+            "$ref": "#/components/schemas/MirrorObjectBinding"
+          }
+        ]
+      },
+      "MirrorConfiguration": {
+        "type": "object",
+        "properties": {
+          "select_all": {
+            "type": "boolean"
+          },
+          "source_port_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "minItems": 0,
+            "maxItems": 32,
+            "uniqueItems": true
+          },
+          "destination_port_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "minItems": 0,
+            "maxItems": 32,
+            "uniqueItems": true
+          },
+          "select_vlans": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 4,
+              "pattern": "^(0|[1-9][0-9]{0,3})$"
+            },
+            "minItems": 0,
+            "maxItems": 256,
+            "uniqueItems": true
+          },
+          "output_port_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_vlan": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4,
+                "pattern": "^[1-9][0-9]{0,3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snaplen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5,
+                "pattern": "^[1-9][0-9]{0,4}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "select_all",
+          "source_port_ids",
+          "destination_port_ids",
+          "select_vlans",
+          "output_port_id",
+          "output_vlan",
+          "snaplen"
+        ],
+        "additionalProperties": false,
+        "description": "Native source and destination Port selection are independent directions. select_all preserves an independent VLAN filter; 0 denotes untagged traffic. Exactly one output Port or RSPAN VLAN is required. Native ranges, current same-Bridge Port bindings, reserved output conflicts and graph eligibility are checked by the service. snaplen null preserves native unset. Copy configuration and counters do not establish packet delivery."
+      },
+      "MirrorTopologyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "mirror": {
+            "$ref": "#/components/schemas/MirrorConfiguration"
+          }
+        }
+      },
+      "MirrorChange": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "$ref": "#/components/schemas/MirrorObjectBinding"
+          },
+          "bridge": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MirrorConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MirrorConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "object",
+          "bridge",
+          "before",
+          "after"
+        ],
+        "additionalProperties": false
+      },
+      "MirrorExecution": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "capability": {
+            "type": "string",
+            "const": "ovs.mirror.write"
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "capability"
+        ],
+        "additionalProperties": false
+      },
+      "MirrorPort": {
+        "type": "object",
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "output_eligible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "binding",
+          "name",
+          "editable",
+          "output_eligible"
+        ],
+        "additionalProperties": false
+      },
+      "MirrorObservation": {
+        "type": "object",
+        "properties": {
+          "configuration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MirrorConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "configuration_availability": {
+            "type": "string",
+            "enum": [
+              "known",
+              "unknown",
+              "unsupported"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "bridge_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ports": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MirrorPort"
+                },
+                "minItems": 0,
+                "maxItems": 32
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ports_truncated": {
+            "type": "boolean"
+          },
+          "port_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4096
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "execution": {
+            "$ref": "#/components/schemas/MirrorExecution"
+          }
+        },
+        "required": [
+          "configuration",
+          "configuration_availability",
+          "reason",
+          "bridge_ref",
+          "ports",
+          "ports_truncated",
+          "port_count",
           "source",
           "execution"
         ],
@@ -33781,6 +34102,111 @@
         "additionalProperties": false,
         "description": "Native static VXLAN/Geneve/GRE only, under independent ovs.tunnel.static.write and immutable root object/name grants. No flow endpoints/keys, controller-owned or unqualified advanced combinations. Shared Candidate, exact persistent graph CAS, runtime type admission, immutable receive-identity checks, durable reservations, Safe Apply and fresh-identity deletion compensation. No underlay, host addressing or OpenFlow provisioning."
       },
+      "NativeMirrorCreateIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "mirror.session.create"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "topology": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "mirror": {
+                "$ref": "#/components/schemas/MirrorConfiguration"
+              }
+            },
+            "required": [
+              "name",
+              "mirror"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "topology"
+        ],
+        "additionalProperties": false,
+        "description": "Native Mirror lifecycle under independent ovs.mirror.write, immutable root object/name grants, sealed source/destination/VLAN/output selectors and whole five-table native CAS. Shared Candidate, durable Safe Apply and exact guarded compensation; deleted sessions recover with fresh identities. Advanced filters, external control and unqualified graph combinations stay read-only. Legacy mirror.configure is unsupported."
+      },
+      "NativeMirrorConfigureIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "mirror.session.configure"
+          },
+          "object": {
+            "$ref": "#/components/schemas/MirrorObjectBinding"
+          },
+          "topology": {
+            "type": "object",
+            "properties": {
+              "mirror": {
+                "$ref": "#/components/schemas/MirrorConfiguration"
+              }
+            },
+            "required": [
+              "mirror"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "topology"
+        ],
+        "additionalProperties": false,
+        "description": "Native Mirror lifecycle under independent ovs.mirror.write, immutable root object/name grants, sealed source/destination/VLAN/output selectors and whole five-table native CAS. Shared Candidate, durable Safe Apply and exact guarded compensation; deleted sessions recover with fresh identities. Advanced filters, external control and unqualified graph combinations stay read-only. Legacy mirror.configure is unsupported."
+      },
+      "NativeMirrorDeleteIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "mirror.session.delete"
+          },
+          "object": {
+            "$ref": "#/components/schemas/MirrorObjectBinding"
+          },
+          "topology": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "topology"
+        ],
+        "additionalProperties": false,
+        "description": "Native Mirror lifecycle under independent ovs.mirror.write, immutable root object/name grants, sealed source/destination/VLAN/output selectors and whole five-table native CAS. Shared Candidate, durable Safe Apply and exact guarded compensation; deleted sessions recover with fresh identities. Advanced filters, external control and unqualified graph combinations stay read-only. Legacy mirror.configure is unsupported."
+      },
       "SpanningTreePrepareRequest": {
         "type": "object",
         "properties": {
@@ -34622,6 +35048,15 @@
           },
           {
             "$ref": "#/components/schemas/StaticTunnelDeleteIntent"
+          },
+          {
+            "$ref": "#/components/schemas/NativeMirrorCreateIntent"
+          },
+          {
+            "$ref": "#/components/schemas/NativeMirrorConfigureIntent"
+          },
+          {
+            "$ref": "#/components/schemas/NativeMirrorDeleteIntent"
           }
         ]
       },

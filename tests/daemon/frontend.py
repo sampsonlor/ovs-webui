@@ -26,6 +26,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     assert code == 202
     code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeStaticTunnel','capabilities':network_role['capabilities']})
     assert code == 202
+    code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeMirror','capabilities':network_role['capabilities']})
+    assert code == 202
     roles.update({role['name']: role['id'] for role in get('/roles')['items']})
     accounts = {}
     # The deadline scenario has its own principal so rapid test logins/step-ups
@@ -42,6 +44,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-isolation', 'NativeIsolation'), ('browser-isolation-reader', 'Reader'),
                        ('browser-multicast', 'NativeMulticast'), ('browser-multicast-reader', 'Reader'),
                        ('browser-multicast-observer', 'InterfaceObserver'),
+                       ('browser-mirror', 'NativeMirror'), ('browser-mirror-reader', 'Reader'),
+                       ('browser-mirror-observer', 'InterfaceObserver'),
                        ('browser-tunnel', 'NativeStaticTunnel'), ('browser-tunnel-reader', 'NetworkAdmin'),
                        ('browser-tunnel-observer', 'InterfaceObserver'),
                        ('browser-mtu-reader', 'Reader'),
@@ -77,7 +81,19 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
           '--','add-port','br-tunnel-flow','tun-ui-flow','--','set','Interface','tun-ui-flow','type=gre','options:remote_ip=flow','options:key=flow')
     tunnel = eventually(lambda: next((p for p in get('/ports?filter=tun-ui-data')['items'] if p['name']=='tun-ui-data'),None))
     tunnel_bridge = eventually(lambda: next((b for b in get('/bridges?filter=br-tunnel-ui')['items'] if b['name']=='br-tunnel-ui'),None))
+    vsctl('add-br','br-mirror-ui','--','set','Bridge','br-mirror-ui','datapath_type=system',
+          '--','add-port','br-mirror-ui','mi-ui-src','--','set','Interface','mi-ui-src','type=internal',
+          '--','add-port','br-mirror-ui','mi-ui-dst','--','set','Interface','mi-ui-dst','type=internal',
+          '--','add-port','br-mirror-ui','mi-ui-out','--','set','Interface','mi-ui-out','type=internal')
+    vsctl('--','--id=@src','get','Port','mi-ui-src','--','--id=@out','get','Port','mi-ui-out',
+          '--','--id=@m','create','Mirror','name=mi-ui-data','select_src_port=@src','output_port=@out','external_ids:mirror-foreign=preserve',
+          '--','set','Bridge','br-mirror-ui','mirrors=@m')
+    mirror = eventually(lambda: next((m for m in get('/mirrors?filter=mi-ui-data')['items'] if m['name']=='mi-ui-data'),None))
+    mirror_bridge = eventually(lambda: next((b for b in get('/bridges?filter=br-mirror-ui')['items'] if b['name']=='br-mirror-ui'),None))
     topology = get('/inventory/topology')
+    assert topology['truncated'] is False, 'formal fixture must preserve the existing complete topology view budget'
+    mirror_ids = [n['binding']['management_id'] for n in topology['nodes'] if n['name'] in ['br-mirror-ui','mi-ui-src','mi-ui-dst','mi-ui-out','mi-ui-data']]
+    assert len(mirror_ids) == 10
     tunnel_ids = [n['binding']['management_id'] for n in topology['nodes']
                   if n['name'] in ['br-tunnel-ui','tun-ui-data']]
     assert len(tunnel_ids) == 5
@@ -93,15 +109,17 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-port-isolation-role',roles['NativeIsolation'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-multicast-role',roles['NativeMulticast'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-static-tunnel-role',roles['NativeStaticTunnel'])
+    run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-mirror-role',roles['NativeMirror'])
     unit_path.write_text(unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
-                                              +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'))
+                                              +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
+                                              +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
     eventually(lambda: call('/inventory')[0] == 200)
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
                 'ovsDirectory': str(ovs), 'database': str(conf), 'isolation': isolation, 'multicast': multicast,
-                'tunnel': tunnel, 'tunnelBridge': tunnel_bridge}
+                'tunnel': tunnel, 'tunnelBridge': tunnel_bridge, 'mirror': mirror, 'mirrorBridge': mirror_bridge}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
@@ -124,3 +142,4 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-mcast-ui')
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tunnel-ui')
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tunnel-flow')
+        vsctl('--no-wait', '--if-exists', 'del-br', 'br-mirror-ui')

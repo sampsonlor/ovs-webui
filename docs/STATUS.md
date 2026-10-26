@@ -4,6 +4,19 @@
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点 v0.2](reviews/P1_IA_COVERAGE_v0.2.md)和各批记录。
 
+## 2026-10-26 原生配置域进展
+
+#23 的 STP/RSTP、native Isolation、Multicast 和静态 Tunnel 子域已分别验收。
+静态 Tunnel 最终基线为 `phase1-native-static-tunnels-v0.1` / main `eab6059`；
+源与 main 各 16 项 CI、15 份官方 artifact 摘要及 140 张实际截图复核通过，见
+[实现与验收记录](implementation/NATIVE_STATIC_TUNNELS_v0.1.md)。
+
+本批继续 #43 的 [native Mirror sessions](implementation/NATIVE_MIRRORS_v0.1.md)：
+独立权限、原生 Mirror 对象与选择器、共享 Candidate/Safe Apply、精确恢复及正式
+Svelte 页面已实现；双架构完整 CI 和源/main 截图仍是独立验收条件，不能以本地
+交叉编译替代。QoS/Queue、sFlow/NetFlow/IPFIX、Profile/Drift 仍待后续完成。
+#43 保持 Open，#71 继续延期；未部署，Project 看板状态不在此声明。
+
 ## 基线和来源
 
 | 文档 | 当前依据 |

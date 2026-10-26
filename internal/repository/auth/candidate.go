@@ -102,7 +102,7 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		return out, apitypes.Fail(410, "REQUEST_EPOCH_CHANGED")
 	}
 	treeDraft := hasTreeCapability(plan.Capabilities(in.Envelope.Candidate)) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool {
-		return plan.IsTunnelOperation(i.Operation) || plan.IsSpanningTreeOperation(i.Operation) || i.Operation == plan.PortIsolationSet || i.Operation == plan.BridgeMulticastSet
+		return plan.IsMirrorOperation(i.Operation) || plan.IsTunnelOperation(i.Operation) || plan.IsSpanningTreeOperation(i.Operation) || i.Operation == plan.PortIsolationSet || i.Operation == plan.BridgeMulticastSet
 	})
 	if treeDraft && !slices.Contains(c.Capabilities, "configuration.read") {
 		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
@@ -120,6 +120,9 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 	}
 	if slices.Contains(plan.Capabilities(in.Envelope.Candidate), plan.TunnelCapability) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool { return plan.IsTunnelOperation(i.Operation) }) {
 		treeCapability = plan.TunnelCapability
+	}
+	if slices.Contains(plan.Capabilities(in.Envelope.Candidate), plan.MirrorCapability) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool { return plan.IsMirrorOperation(i.Operation) }) {
+		treeCapability = plan.MirrorCapability
 	}
 	if treeStage && (!slices.Contains(c.Capabilities, "configuration.read") || !slices.Contains(c.Capabilities, treeCapability)) {
 		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
@@ -465,5 +468,5 @@ func (r *Repository) ValidateCandidate(ctx context.Context, credential string, i
 var _ plan.Manager = (*Repository)(nil)
 
 func hasTreeCapability(caps []string) bool {
-	return slices.Contains(caps, plan.TunnelCapability) || slices.Contains(caps, plan.BridgeMulticastCapability) || slices.Contains(caps, plan.PortIsolationCapability) || slices.Contains(caps, plan.SpanningTreePrepareCapability) || slices.Contains(caps, plan.SpanningTreeWriteCapability)
+	return slices.Contains(caps, plan.MirrorCapability) || slices.Contains(caps, plan.TunnelCapability) || slices.Contains(caps, plan.BridgeMulticastCapability) || slices.Contains(caps, plan.PortIsolationCapability) || slices.Contains(caps, plan.SpanningTreePrepareCapability) || slices.Contains(caps, plan.SpanningTreeWriteCapability)
 }
