@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,12 +65,25 @@ func (e *Executor) prepareMirrorRuntime(ctx context.Context, p execution.Plan, o
 	if proof == "" || original == nil && (reviewed == "" || !strings.HasPrefix(proof, reviewed+"/")) || original != nil && proof != original.MirrorAuthority {
 		return execution.Plan{}, apitypes.Fail(409, "MIRROR_RUNTIME_UNQUALIFIED")
 	}
-	copy := *o
-	n.MirrorBuild, n.MirrorAuthority = &copy, proof
-	p.Native, err = json.Marshal(n)
-	if err != nil || len(p.Native) > execution.MaxPlanBytes {
+	return pinMirrorRuntime(p, *o, proof)
+}
+
+// Native predicates include exact signed 64-bit limits. Preserve JSON numbers
+// while adding the runtime pin; a float64 round trip changes the counter guard
+// to an out-of-range integer and causes the actual OVS transaction to reject.
+func pinMirrorRuntime(p execution.Plan, options MirrorExecutionOptions, proof string) (execution.Plan, error) {
+	var n nativePlan
+	decoder := json.NewDecoder(bytes.NewReader(p.Native))
+	decoder.UseNumber()
+	if decoder.Decode(&n) != nil {
+		return execution.Plan{}, apitypes.Fail(503, "EXECUTION_PLAN_INVALID")
+	}
+	n.MirrorBuild, n.MirrorAuthority = &options, proof
+	data, err := json.Marshal(n)
+	if err != nil || len(data) > execution.MaxPlanBytes {
 		return execution.Plan{}, apitypes.Fail(429, "EXECUTION_PLAN_BUDGET")
 	}
+	p.Native = data
 	return p, nil
 }
 

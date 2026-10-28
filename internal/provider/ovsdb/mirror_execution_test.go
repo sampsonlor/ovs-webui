@@ -1,8 +1,11 @@
 package ovsdb
 
 import (
+	"bytes"
 	"encoding/json"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -64,8 +67,17 @@ func TestMirrorNativePlanFencesEverySessionAndExactIncomingReferences(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
+			pinned, err := pinMirrorRuntime(plan, MirrorExecutionOptions{}, "synthetic-qualified-source")
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Exercise the same pinning used by real preparation. OVS counters
+			// and integer predicates must retain exact int64 wire values.
+			if !bytes.Contains(pinned.Native, []byte(strconv.FormatInt(math.MaxInt64, 10))) || bytes.Contains(pinned.Native, []byte("9223372036854776000")) {
+				t.Fatal("runtime pin rounded the native signed counter bound")
+			}
 			var native nativePlan
-			if json.Unmarshal(plan.Native, &native) != nil {
+			if json.Unmarshal(pinned.Native, &native) != nil {
 				t.Fatal("invalid native plan")
 			}
 			whole := map[string]bool{}
