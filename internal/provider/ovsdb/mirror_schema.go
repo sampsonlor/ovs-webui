@@ -28,13 +28,13 @@ func mirrorReference(c *native.ColumnSchema, raw any, table, strength string, ma
 	}
 	m, ok := raw.(map[string]any)
 	key, keyOK := m["key"].(map[string]any)
-	if !ok || !keyOK || len(m) != 3 || m["min"] != json.Number("0") || key["type"] != "uuid" || key["refTable"] != table {
+	if !ok || !keyOK || !(len(m) == 3 && m["max"] != nil || len(m) == 2 && m["max"] == nil) || m["min"] != json.Number("0") || key["type"] != "uuid" || key["refTable"] != table {
 		return false
 	}
-	if len(key) != 3 && !(len(key) == 2 && strength == "strong") || key["refType"] != nil && key["refType"] != strength {
+	if !(len(key) == 3 && key["refType"] == strength || len(key) == 2 && strength == "strong" && key["refType"] == nil) {
 		return false
 	}
-	return max == native.Unlimited && m["max"] == "unlimited" || max != native.Unlimited && m["max"] == json.Number("1")
+	return max == native.Unlimited && m["max"] == "unlimited" || max == 1 && (m["max"] == nil || m["max"] == json.Number("1"))
 }
 
 func mirrorInteger(c *native.ColumnSchema, raw any, min, max, count int) bool {
@@ -45,6 +45,16 @@ func mirrorInteger(c *native.ColumnSchema, raw any, min, max, count int) bool {
 	// constraints must not disappear when qualifying a new native writer.
 	want := map[string]any{"key": map[string]any{"type": "integer", "minInteger": min, "maxInteger": max}, "min": 0, "max": count}
 	a, _ := json.Marshal(want)
+	// get_schema omits max=1, the RFC 7047 default. Retain every other
+	// descriptor key so unknown constraints cannot disappear during comparison.
+	if fields, ok := raw.(map[string]any); ok && fields["max"] == nil {
+		copy := map[string]any{}
+		for key, value := range fields {
+			copy[key] = value
+		}
+		copy["max"] = 1
+		raw = copy
+	}
 	b, _ := json.Marshal(raw)
 	return bytes.Equal(a, b)
 }
@@ -89,7 +99,7 @@ func mirrorSchemaSupported(d discovered, raw map[string]any) bool {
 	}
 	if c := t.Columns["filter"]; c != nil {
 		wire, ok := multicastRawColumnType(raw, "Mirror", "filter").(map[string]any)
-		if c.Type != native.TypeSet || c.TypeObj == nil || c.TypeObj.Min() != 0 || c.TypeObj.Max() != 1 || !ok || len(wire) != 3 || wire["min"] != json.Number("0") || wire["max"] != json.Number("1") || !mirrorFreeAtom(wire["key"], "string") {
+		if c.Type != native.TypeSet || c.TypeObj == nil || c.TypeObj.Min() != 0 || c.TypeObj.Max() != 1 || !ok || !(len(wire) == 3 && wire["max"] != nil || len(wire) == 2 && wire["max"] == nil) || wire["min"] != json.Number("0") || wire["max"] != nil && wire["max"] != json.Number("1") || !mirrorFreeAtom(wire["key"], "string") {
 			return false
 		}
 	}

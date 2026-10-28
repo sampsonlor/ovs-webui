@@ -73,6 +73,7 @@
     {#if typeof data?.next_cursor==='string'}<Link href={next(data.next_cursor)}>Next page →</Link>{/if}
   {:else if creating || item}
     <Link href="/switching/mirrors">← Mirrors</Link><h2>{creating?'Create Mirror session':typeof item?.name==='string'?item.name:'Mirror details'}</h2>
+    {#if creating}<p>This selector lists locally provisioned Mirror Bridges and their observed Ports. Validation checks the complete native dependency graph.</p>{/if}
     {#if creating && model.resource.status==='ready' && data?.mirror_editable!==true}<p role="status">Creation is unavailable. Review a fresh, complete Bridge configuration and local management ownership.</p>{/if}
     {#if !creating && native}
       <p>Configuration: {native.configuration_availability} · Observation: {item?.state}</p>

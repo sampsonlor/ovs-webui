@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +35,14 @@ func (f *fixture) grantNativeMirror(bridge, name string) candidate.Binding {
 	}
 	must(f.t, f.inventory.SetLocalMirrorObjects(ids))
 	must(f.t, f.inventory.SetLocalMirrorCreates([]string{b.ManagementID + ":" + name}))
+	if s := f.topologySnapshot(); !s.Topology.MirrorSupported || !s.Topology.MirrorAuthority[b.ManagementID] {
+		// Report only public schema descriptors and qualification booleans,
+		// never private observed row values, credentials or recovery images.
+		var native map[string]any
+		must(f.t, json.Unmarshal([]byte(f.run("ovsdb-client", "get-schema", "unix:"+f.dbSocket, "Open_vSwitch")), &native))
+		columns := native["tables"].(map[string]any)["Mirror"].(map[string]any)["columns"]
+		f.t.Logf("Mirror qualification: core=%t mirror=%t defaults=%d bridge=%t native_columns=%v", s.Topology.Supported, s.Topology.MirrorSupported, len(s.Topology.MirrorDefaults), s.Topology.MirrorAuthority[b.ManagementID], columns)
+	}
 	waitFor(f.t, func() bool {
 		s := f.topologySnapshot()
 		return s.Topology.MirrorSupported && s.Topology.MirrorAuthority[b.ManagementID] && f.vs("get", "Open_vSwitch", ".", "next_cfg") == f.vs("get", "Open_vSwitch", ".", "cur_cfg")

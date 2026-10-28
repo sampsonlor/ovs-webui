@@ -22,8 +22,12 @@ configuration, counters and local Applied proof do not establish receiver delive
 Standard/Expert share permissions. Tablet and mobile support review and existing
 transactions; new changes require desktop. Empty results, permission denial,
 unknown counters/configuration, stale observations, unsupported native filters,
-retired identities and incomplete Port choices remain explicit. A topology view
-over 64 nodes or 56 KiB closes creation; detail choices are bounded to 32 Ports.
+retired identities and incomplete Port choices remain explicit. The creation
+selector reads `inventory/topology?domain=mirror`: only root-provisioned creation
+Bridges and their observed Port/Interface/Mirror graph. Server validation still
+reads and guards the full native dependency graph. A topology view over 64 nodes
+or the existing authenticated 48 KiB response ceiling closes creation; detail
+choices are bounded to 32 Ports.
 The existing 32-object transaction and IPC/plan/snapshot budgets still apply.
 
 ## Independent authority and qualified native graph

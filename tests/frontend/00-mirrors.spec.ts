@@ -204,4 +204,12 @@ test('native Mirror CRUD shares review, preserves native selectors and recovers 
   await expect(page.getByText('Current local ownership of the session, Bridge and affected Ports is required before preparing a change.',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Stage Mirror change',exact:true})).toHaveCount(0);
   await screen(page,'fresh-identity-requires-grant');
+  // Remove only this disposable fixture after all Mirror evidence is captured.
+  // Existing topology scenarios keep their original complete-review budget.
+  vs('--if-exists','del-br','br-mirror-ui');
+  await expect.poll(async()=>{
+    const response=await page.context().request.get(fixture.origin+'/api/v1/mirrors?filter=mi-ui-');
+    expect(response.status()).toBe(200);
+    return (await response.json()).items.length;
+  }).toBe(0);
 });

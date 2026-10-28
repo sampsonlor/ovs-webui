@@ -191,9 +191,16 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		projectTopology(v, localTopology, localTopologyCreates, &snapshot)
 		projectTunnel(v, localTunnelObjects, localTunnelCreates, tunnelRevision, &snapshot)
 		projectMirror(v, localMirrorObjects, localMirrorCreates, mirrorRevision, &snapshot)
+		var mirrorSelection map[string]bool
+		if q.Get("domain") == "mirror" {
+			mirrorSelection = mirrorCreationSelection(snapshot.Topology)
+		}
 		nodes := []candidate.TopologyNode{}
 		authority := map[string]bool{}
 		for id, n := range snapshot.Topology.Nodes {
+			if mirrorSelection != nil && !mirrorSelection[id] {
+				continue
+			}
 			nodes = append(nodes, n)
 			authority[id] = snapshot.Topology.Authority[id]
 		}
@@ -230,14 +237,35 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		out["tunnel_creation_targets"] = localTunnelCreates
 		out["tunnel_runtime_types"] = snapshot.Topology.TunnelTypes
 		out["tunnel_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.TunnelSupported && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.TunnelCapability)
-		out["mirror_authority"] = snapshot.Topology.MirrorAuthority
+		mirrorAuthority := map[string]bool{}
+		for _, node := range nodes {
+			if snapshot.Topology.MirrorAuthority[node.Binding.ManagementID] {
+				mirrorAuthority[node.Binding.ManagementID] = true
+			}
+		}
+		out["mirror_authority"] = mirrorAuthority
 		out["mirror_creation_targets"] = localMirrorCreates
 		out["mirror_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.MirrorSupported && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.MirrorCapability)
+		if mirrorSelection != nil {
+			out["scope"] = "Locally provisioned Mirror Bridges and their observed Port/Interface/Mirror graph; server validation retains the whole native graph."
+			bounded := func(values map[string]bool) map[string]bool {
+				out := map[string]bool{}
+				for _, n := range nodes {
+					if values[n.Binding.ManagementID] {
+						out[n.Binding.ManagementID] = true
+					}
+				}
+				return out
+			}
+			out["mirror_authority"] = bounded(snapshot.Topology.MirrorAuthority)
+			out["tunnel_authority"] = bounded(snapshot.Topology.TunnelAuthority)
+		}
 		out["bridge_create_names"] = localBridgeNames
 		out["review_policy"] = "High risk: review management connectivity and sole uplinks. New changes require desktop, current root object/name grants, native schema and Safe Apply. Foreign references, unsupported domains and host network dependencies block execution."
 		for {
 			body, err := json.Marshal(out)
-			if err == nil && len(body) <= 56<<10 {
+			// The authenticated reader's existing response ceiling is 48 KiB.
+			if err == nil && len(body) <= 48<<10 {
 				break
 			}
 			if len(nodes) == 0 {

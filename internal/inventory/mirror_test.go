@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -188,6 +189,9 @@ func TestMirrorIncompleteTopologyAndPortChoicesCloseEditing(t *testing.T) {
 			if err := s.SetLocalMirrorObjects(ids); err != nil {
 				t.Fatal(err)
 			}
+			if err := s.SetLocalMirrorCreates([]string{bridge + ":span-new"}); err != nil {
+				t.Fatal(err)
+			}
 			s.install(o, d)
 			if scenario == "node_budget" || scenario == "byte_budget" {
 				snapshot, err := s.CandidateSnapshot(context.Background(), nil)
@@ -199,8 +203,27 @@ func TestMirrorIncompleteTopologyAndPortChoicesCloseEditing(t *testing.T) {
 					t.Fatal(err)
 				}
 				data := view.(map[string]any)
-				if data["truncated"] != true || data["mirror_editable"] != false || len(mustJSON(t, view)) > 56<<10 || scenario == "byte_budget" && len(d.Bindings) >= 64 {
+				if data["truncated"] != true || data["mirror_editable"] != false || len(mustJSON(t, view)) > 48<<10 || scenario == "byte_budget" && len(d.Bindings) >= 64 {
 					t.Fatal("incomplete topology retained Mirror creation", scenario)
+				}
+				if scenario == "node_budget" {
+					scoped, err := s.Read(context.Background(), "readInventoryTopology", nil, url.Values{"domain": {"mirror"}}, claims)
+					if err != nil {
+						t.Fatal(err)
+					}
+					selected := scoped.(map[string]any)
+					if selected["truncated"] != false || selected["mirror_editable"] != true || len(mustJSON(t, scoped)) > 48<<10 {
+						t.Fatal("bounded provisioned Mirror graph could not be reviewed")
+					}
+					for _, node := range selected["nodes"].([]candidate.TopologyNode) {
+						if strings.HasPrefix(node.Name, "unrelated-") {
+							t.Fatal("unrelated inventory consumed the scoped selector budget")
+						}
+					}
+					full, err := s.CandidateSnapshot(context.Background(), nil)
+					if err != nil || len(full.Topology.Nodes) < 65 {
+						t.Fatal("public selector scope discarded private safety dependencies", err)
+					}
 				}
 				return
 			}

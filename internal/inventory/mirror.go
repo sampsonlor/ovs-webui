@@ -59,6 +59,34 @@ func mirrorConfiguration(v *view, row Row) (mirror.Configuration, error) {
 	})
 }
 
+// Limit the public creation selector to explicitly provisioned Bridges. This
+// never changes the complete private snapshot used for validation/execution.
+func mirrorCreationSelection(t candidate.TopologySnapshot) map[string]bool {
+	selected := map[string]bool{}
+	for target, allowed := range t.MirrorCreates {
+		id, _, _ := strings.Cut(target, ":")
+		bridge, known := t.Nodes[id]
+		if !allowed || !known || bridge.Binding.Table != "Bridge" {
+			continue
+		}
+		selected[id] = true
+		for _, binding := range bridge.Links {
+			selected[binding.ManagementID] = true
+			for _, child := range t.Nodes[binding.ManagementID].Links {
+				selected[child.ManagementID] = true
+			}
+		}
+		for _, value := range refs(t.Configurations[id]["mirrors"]) {
+			for mid, node := range t.Nodes {
+				if node.Binding.Table == "Mirror" && node.Binding.OVSUUID == value {
+					selected[mid] = true
+				}
+			}
+		}
+	}
+	return selected
+}
+
 func projectMirror(v *view, allow, creates map[string]bool, revision string, out *candidate.Snapshot) {
 	t := &out.Topology
 	t.MirrorSupported = t.Supported && v.observation.Schema.MirrorConfiguration

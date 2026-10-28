@@ -4674,7 +4674,19 @@
         "x-service-issue": 42,
         "x-service-state": "service-pending",
         "x-resource-kind": "",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mirror"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Authoritative representation.",
@@ -4836,7 +4848,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Bounded native topology review. Optional domain=mirror limits the public selector to locally provisioned Mirror creation Bridges and their Port/Interface/Mirror graph; server validation and native CAS retain the complete private dependency graph. Truncation closes creation."
       }
     },
     "/inventory/schema": {

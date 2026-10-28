@@ -199,7 +199,7 @@ await test('Mirror routes and Safe Apply require independent current capability 
     assert.equal(applyReady(candidate,{...validation,execution_ready:false},allowed,true),false);
     assert.equal(applyReady(candidate,{...validation,candidate_revision:'old'},allowed,true),false);
   }
-  for(const [path,url] of [['/switching/mirrors?filter=span&limit=1&cursor=sealed','/mirrors?filter=span&limit=1&cursor=sealed'],[`/switching/mirrors/${resource}`,`/mirrors/${resource}`],['/switching/mirrors/new','/inventory/topology']]) {
+  for(const [path,url] of [['/switching/mirrors?filter=span&limit=1&cursor=sealed','/mirrors?filter=span&limit=1&cursor=sealed'],[`/switching/mirrors/${resource}`,`/mirrors/${resource}`],['/switching/mirrors/new','/inventory/topology?domain=mirror']]) {
     const calls=[];
     const c=new Controller(new API(async request=>{calls.push(request);if(request.endsWith('/session'))return response(session);if(request.endsWith('/workspace'))return response({candidate:draft});return response({items:[]});},storage()),path);
     await c.refresh();assert.ok(calls.includes('/api/v1'+url));

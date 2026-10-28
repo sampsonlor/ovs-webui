@@ -81,6 +81,11 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
           '--','add-port','br-tunnel-flow','tun-ui-flow','--','set','Interface','tun-ui-flow','type=gre','options:remote_ip=flow','options:key=flow')
     tunnel = eventually(lambda: next((p for p in get('/ports?filter=tun-ui-data')['items'] if p['name']=='tun-ui-data'),None))
     tunnel_bridge = eventually(lambda: next((b for b in get('/bridges?filter=br-tunnel-ui')['items'] if b['name']=='br-tunnel-ui'),None))
+    topology = get('/inventory/topology')
+    assert topology['truncated'] is False, 'existing formal topology fixture must stay complete'
+    tunnel_ids = [n['binding']['management_id'] for n in topology['nodes']
+                  if n['name'] in ['br-tunnel-ui','tun-ui-data']]
+    assert len(tunnel_ids) == 5
     vsctl('add-br','br-mirror-ui','--','set','Bridge','br-mirror-ui','datapath_type=system',
           '--','add-port','br-mirror-ui','mi-ui-src','--','set','Interface','mi-ui-src','type=internal',
           '--','add-port','br-mirror-ui','mi-ui-dst','--','set','Interface','mi-ui-dst','type=internal',
@@ -90,13 +95,15 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
           '--','set','Bridge','br-mirror-ui','mirrors=@m')
     mirror = eventually(lambda: next((m for m in get('/mirrors?filter=mi-ui-data')['items'] if m['name']=='mi-ui-data'),None))
     mirror_bridge = eventually(lambda: next((b for b in get('/bridges?filter=br-mirror-ui')['items'] if b['name']=='br-mirror-ui'),None))
-    topology = get('/inventory/topology')
-    assert topology['truncated'] is False, 'formal fixture must preserve the existing complete topology view budget'
-    mirror_ids = [n['binding']['management_id'] for n in topology['nodes'] if n['name'] in ['br-mirror-ui','mi-ui-src','mi-ui-dst','mi-ui-out','mi-ui-data']]
+    # Read exact immutable native references rather than widening the shared
+    # topology response budget to accommodate unrelated test scenarios.
+    mirror_graph = get('/bridges/'+mirror_bridge['management_id'])
+    mirror_ids = [mirror['management_id'], mirror_bridge['management_id']]
+    for ref in mirror_graph['port_refs']:
+        port = get('/ports/'+ref['id'])
+        mirror_ids.append(port['id'])
+        mirror_ids.extend(ref['id'] for ref in port['interface_refs'])
     assert len(mirror_ids) == 10
-    tunnel_ids = [n['binding']['management_id'] for n in topology['nodes']
-                  if n['name'] in ['br-tunnel-ui','tun-ui-data']]
-    assert len(tunnel_ids) == 5
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'

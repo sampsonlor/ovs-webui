@@ -24,6 +24,25 @@ func TestMirrorSchemaKeepsNativeReferencesDefaultsAndConstraints(t *testing.T) {
 			if filter != (version != "3.3.9") {
 				t.Fatal("advanced column was guessed from a different schema")
 			}
+			blob, err := os.ReadFile("testdata/vswitch-" + version + ".ovsschema")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(blob, &raw); err != nil {
+				t.Fatal(err)
+			}
+			columns := raw["tables"].(map[string]any)["Mirror"].(map[string]any)["columns"].(map[string]any)
+			for _, name := range []string{"output_port", "output_vlan", "snaplen", "filter"} {
+				if column, exists := columns[name]; exists {
+					delete(column.(map[string]any)["type"].(map[string]any), "max")
+				}
+			}
+			canonical, _ := json.Marshal(raw)
+			got, err := discover(canonical)
+			if err != nil || !got.public.MirrorConfiguration {
+				t.Fatal("canonical get_schema default max=1 rejected", err)
+			}
 		})
 	}
 	data, err := os.ReadFile("testdata/vswitch-3.7.1.ovsschema")

@@ -311,6 +311,8 @@ add('/contract', 'get', 'readContract', 'ContractInfo', '', 33, { public: true }
 add('/runtime', 'get', 'readRuntime', 'Runtime', '', 31, { public: true });
 add('/inventory', 'get', 'readInventory', 'Resource', 'inventory.read', 36);
 add('/inventory/topology', 'get', 'readInventoryTopology', 'Resource', 'inventory.read', 42);
+api.paths['/inventory/topology'].get.parameters.push(param('domain', 'query', choices('mirror')));
+api.paths['/inventory/topology'].get.description='Bounded native topology review. Optional domain=mirror limits the public selector to locally provisioned Mirror creation Bridges and their Port/Interface/Mirror graph; server validation and native CAS retain the complete private dependency graph. Truncation closes creation.';
 add('/inventory/schema', 'get', 'readInventorySchema', 'ResourcePage', 'inventory.read', 36, { page: true });
 const evidenceFilters = [param('correlation_id', 'query', id), param('object_id', 'query', id), param('job_id', 'query', id), param('origin', 'query', choices('Manager', 'External', 'Unknown'))];
 for (const [path, kind, capability] of [['events', 'event', 'event.read'], ['audit', 'audit', 'audit.read']]) {
