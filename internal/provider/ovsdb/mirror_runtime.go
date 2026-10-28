@@ -15,6 +15,15 @@ import (
 
 // Independent root process configuration. No public request can select a path,
 // profile, executable, peer, manifest or native control method.
+type mirrorPreparationFailure struct{ cause error }
+
+func (e *mirrorPreparationFailure) Error() string {
+	return "MIRROR_RUNTIME_UNQUALIFIED: " + e.cause.Error()
+}
+func (e *mirrorPreparationFailure) Unwrap() error {
+	return apitypes.Fail(409, "MIRROR_RUNTIME_UNQUALIFIED")
+}
+
 type MirrorExecutionOptions struct {
 	ControlSocket  string `json:"control_socket"`
 	Executable     string `json:"executable"`
@@ -49,7 +58,10 @@ func (e *Executor) prepareMirrorRuntime(ctx context.Context, p execution.Plan, o
 		return execution.Plan{}, apitypes.Fail(409, "MIRROR_RUNTIME_UNQUALIFIED")
 	}
 	proof, err := e.provider.mirrorRuntime(ctx, o, n.Evidence, true)
-	if err != nil || proof == "" || original == nil && (reviewed == "" || !strings.HasPrefix(proof, reviewed+"/")) || original != nil && proof != original.MirrorAuthority {
+	if err != nil {
+		return execution.Plan{}, &mirrorPreparationFailure{cause: err}
+	}
+	if proof == "" || original == nil && (reviewed == "" || !strings.HasPrefix(proof, reviewed+"/")) || original != nil && proof != original.MirrorAuthority {
 		return execution.Plan{}, apitypes.Fail(409, "MIRROR_RUNTIME_UNQUALIFIED")
 	}
 	copy := *o

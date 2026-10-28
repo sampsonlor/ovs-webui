@@ -20,7 +20,7 @@ import (
 // No trust cache or fallback to an executable name/version is used.
 func (p *Provider) mirrorRuntime(ctx context.Context, o *MirrorExecutionOptions, evidence inventory.Evidence, source bool) (string, error) {
 	if o == nil {
-		return "", errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+		return "", errors.New("MIRROR_RUNTIME_NOT_CONFIGURED")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -28,18 +28,18 @@ func (p *Provider) mirrorRuntime(ctx context.Context, o *MirrorExecutionOptions,
 	defer release()
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", o.ControlSocket)
 	if err != nil {
-		return "", err
+		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	deadline, _ := ctx.Deadline()
 	if conn.SetDeadline(deadline) != nil {
-		return "", witnessUnproven
+		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
 	daemon, _, err := peer(conn, o.PeerUID)
 	if err != nil {
-		return "", err
+		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
 	build := SpanningTreeWitnessBuild{Executable: o.Executable, Manifest: o.Manifest, ManifestDigest: o.ManifestDigest}
 	qualify := func(m witnessBuildManifest) (string, bool) {
@@ -47,19 +47,19 @@ func (p *Provider) mirrorRuntime(ctx context.Context, o *MirrorExecutionOptions,
 	}
 	a, _, err := attestNativeBuild(ctx, conn, o.PeerUID, build, qualify)
 	if err != nil {
-		return "", err
+		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
 	association := ""
 	if source {
 		association, err = spanningTreeSource(ctx, conn, o.PeerUID, p.options, evidence, o.Executable)
 		if err != nil {
-			return "", err
+			return "", errors.New("MIRROR_DATABASE_SOURCE_UNPROVEN")
 		}
 	}
 	b, _, err := attestNativeBuild(ctx, conn, o.PeerUID, build, qualify)
 	current, _, peerErr := peer(conn, o.PeerUID)
 	if err != nil || peerErr != nil || current != daemon || a != b || ctx.Err() != nil {
-		return "", witnessUnproven
+		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
 	review := candidate.Digest([]any{daemon, a, evidence.Endpoint, evidence.Peer, evidence.Boot, evidence.Root, evidence.Schema, evidence.File.Device, evidence.File.Inode})
 	if source {

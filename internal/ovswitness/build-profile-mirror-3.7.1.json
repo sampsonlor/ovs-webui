@@ -22,8 +22,8 @@
     "internal/provider/ovsdb/testdata/vswitch-3.7.1.ovsschema": "35663bcb750d28f743d95039bde4eed1eee3324791a8981cde31c7e1829b2232",
     "internal/ovswitness/testdata/server-schema-8.8.0.json": "e829d0193b25e01986bbc163445eb71e5d5eee43b7741aceaeaac5b3e6a22f2e",
     "extensions/ovs-mirror-delete/3.7.1/mirror-delete-revalidation.patch": "8550308973e7372717948948e1d35c30d9d4df1d784387e00abc517f6b86e68a",
-    "extensions/ovs-mirror-delete/3.7.1/upstream.json": "f84ce320d36d741b7757e476e35dfb97a7c8f0fd2faafbba80a67c0c8b7ac4d9",
-    "extensions/ovs-mirror-delete/3.7.1/build-profile.json": "e559c47dfe317ea34a1f2e67f4b934c426fcc29fb6dc9ec1a6c672aefbfc2fa3"
+    "extensions/ovs-mirror-delete/3.7.1/upstream.json": "d183b697297ad4ab7fe1e710ebdea4b67b8c95d90085934576b796e3a407731e",
+    "extensions/ovs-mirror-delete/3.7.1/build-profile.json": "e88e21508a74e1a1f3281783f50745a326b3cbce205facf1c5c0acc2203cd088"
   },
   "format": "ovs-webui.stp-build-profile.v1",
   "libs": "-lm",
@@ -39,5 +39,5 @@
     }
   },
   "parent_profile_sha256": "fbedf05c151cc59d4b08ee96c9c969eefcff882dafeaefb5b592317672068a3a",
-  "native_mirror_profile_sha256": "e559c47dfe317ea34a1f2e67f4b934c426fcc29fb6dc9ec1a6c672aefbfc2fa3"
+  "native_mirror_profile_sha256": "e88e21508a74e1a1f3281783f50745a326b3cbce205facf1c5c0acc2203cd088"
 }

@@ -23,10 +23,11 @@
   ],
   "witness_base_profile_sha256": "fbedf05c151cc59d4b08ee96c9c969eefcff882dafeaefb5b592317672068a3a",
   "allowed_database_schemas": [
-    "6de4988b011d7465a20b72924e3ef3d864d56ea9c40b8376a635c9028c2c1268"
+    "ddaa17754ddeeab85df98c65f34fd28da02e0e34b83b22c6ee59dfb04dad5479"
   ],
   "witness_inputs": {
-    "configure.ac": "6496f185d5c86c98ed19e3570dddf288098ddc7e40d6a47fc985fe1e6301ae00",
-    "ofproto/ofproto-dpif.c": "b2ccc04ba97c60afdddf37a0ef5751c7801e962966f95133289407ff42011eed"
-  }
+    "configure.ac": "e9c0711049e64842aebcc0b057cf793f7ced640b82e8ffd3355607614e400f34",
+    "ofproto/ofproto-dpif.c": "e691a178cfabedf17d243288fd44e34a6865aee7eefac19ad60317f428fc944a"
+  },
+  "schema_digest_encoding": "inventory.Digest of exact raw get_schema JSON; separate from the STP native-codec digest"
 }

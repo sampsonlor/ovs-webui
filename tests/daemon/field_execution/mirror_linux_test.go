@@ -41,7 +41,7 @@ func (f *fixture) grantNativeMirror(bridge, name string) candidate.Binding {
 		var native map[string]any
 		must(f.t, json.Unmarshal([]byte(f.run("ovsdb-client", "get-schema", "unix:"+f.dbSocket, "Open_vSwitch")), &native))
 		columns := native["tables"].(map[string]any)["Mirror"].(map[string]any)["columns"]
-		f.t.Logf("Mirror qualification: core=%t mirror=%t defaults=%d bridge=%t native_columns=%v", s.Topology.Supported, s.Topology.MirrorSupported, len(s.Topology.MirrorDefaults), s.Topology.MirrorAuthority[b.ManagementID], columns)
+		f.t.Logf("Mirror qualification: core=%t mirror=%t defaults=%d bridge=%t runtime=%s native_columns=%v", s.Topology.Supported, s.Topology.MirrorSupported, len(s.Topology.MirrorDefaults), s.Topology.MirrorAuthority[b.ManagementID], s.Topology.MirrorRuntimeFailure, columns)
 	}
 	waitFor(f.t, func() bool {
 		s := f.topologySnapshot()

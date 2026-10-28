@@ -8,7 +8,7 @@
   },
   "patch_sha256": "9b5c423d757341a6e06d34a8124e7297751e51dadb78ea8c010879739dc4536f",
   "witness_inputs": {
-    "configure.ac": "e3329e3c23f9b98053bac2f02b94ab44cfa1ad43feb8ede27c27f87ea81ffbfd",
-    "ofproto/ofproto-dpif.c": "d45e3d68960246ae40ca1953f94039a1085e846895141c78c7cb08c0fd11ace7"
+    "configure.ac": "1881572e8f1384e478e6b50da8b0da1fe528954a5badbbb9ab8df98edbdba42b",
+    "ofproto/ofproto-dpif.c": "b58cae3354f435e588a627145b3b7d0e57c3426b7df0ef14940df473b82ce934"
   }
 }

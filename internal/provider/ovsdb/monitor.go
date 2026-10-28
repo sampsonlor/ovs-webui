@@ -116,8 +116,12 @@ func (p *Provider) session(ctx context.Context, s Sink) error {
 			return errors.New("OVSDB_SNAPSHOT_INVALID")
 		}
 		e := evidence(p.options, d, rows, identity, pid, prior, continuous)
-		mirrorBuild, _ := p.mirrorRuntime(ctx, p.mirror, e, false)
-		if err = s.Publish(ctx, inventory.Observation{Schema: d.public, Rows: copyRows, Evidence: e, MirrorRuntime: mirrorBuild}); err != nil {
+		mirrorBuild, mirrorErr := p.mirrorRuntime(ctx, p.mirror, e, false)
+		mirrorFailure := ""
+		if mirrorErr != nil {
+			mirrorFailure = mirrorErr.Error()
+		}
+		if err = s.Publish(ctx, inventory.Observation{Schema: d.public, Rows: copyRows, Evidence: e, MirrorRuntime: mirrorBuild, MirrorRuntimeFailure: mirrorFailure}); err != nil {
 			return err
 		}
 		prior = e

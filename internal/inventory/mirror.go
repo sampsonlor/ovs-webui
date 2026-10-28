@@ -94,6 +94,7 @@ func projectMirror(v *view, allow, creates map[string]bool, revision string, out
 		t.MirrorSupported = false
 	}
 	t.MirrorRuntime = v.observation.MirrorRuntime
+	t.MirrorRuntimeFailure = v.observation.MirrorRuntimeFailure
 	t.MirrorDefaults = candidate.CloneConfiguration(v.observation.Schema.MirrorDefaults)
 	t.MirrorAuthorityRevision = revision
 	t.MirrorAuthority, t.MirrorCreates = map[string]bool{}, map[string]bool{}
