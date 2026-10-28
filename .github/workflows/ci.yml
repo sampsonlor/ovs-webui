@@ -189,7 +189,7 @@ jobs:
       - name: Install ephemeral OVS test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y openvswitch-switch
+          sudo apt-get install --no-install-recommends -y openvswitch-switch build-essential autoconf automake libtool pkg-config libssl-dev python3-six
       - name: Native spanning-tree independent authority and daemon database source
         run: |
           set -o pipefail
@@ -218,8 +218,12 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativePortIsolation$' -test.v -test.timeout=120s \
               | go tool test2json -p "native-port-isolation-$schema" | tee "test-results/go-port-isolation-$schema.json"
           done
+      - name: Build separately qualified Mirror runtime for formal browser acceptance
+        env:
+          MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash tests/ovs_mirror/build.sh
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
-        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
+        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --mirror-bin-dir outputs/ovs-mirror-ci/fixed --browser-node "$(command -v node)"
       - name: Native multicast listener forwarding and guarded compensation matrix
         run: |
           set -o pipefail
@@ -377,6 +381,7 @@ jobs:
         with:
           name: go-runtime-${{ matrix.arch }}
           path: |
+            test-results/mirror-build/
             test-results/go-tests.json
             test-results/go-safe-admission.json
             test-results/go-policing-*.json
@@ -558,20 +563,39 @@ jobs:
       - name: Install isolated OVS and packet test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y openvswitch-switch iproute2 iputils-ping
+          sudo apt-get install --no-install-recommends -y openvswitch-switch iproute2 iputils-ping build-essential autoconf automake libtool pkg-config libssl-dev python3-six
       - name: Mirror current identity and independent authority regression
         run: |
           set -o pipefail
           go test -json -count=1 -run '^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$' ./internal/repository/auth \
             | tee test-results/go-mirror-authority.json
-      - name: Native Mirror selector traffic and durable recovery against three schemas
+      - name: Unfixed distro cached-copy reproduction and manager write denial
         run: |
           set -o pipefail
+          ovs-vswitchd --version
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            namespace="ovs-mi-old-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            sudo ip netns add "$namespace"
+            trap 'sudo ip netns del "$namespace"' EXIT
+            sudo -- env OVS_MIRROR_NATIVE_TEST=1 OVS_MIRROR_REPRODUCE_UNFIXED=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              ip netns exec "$namespace" outputs/runtime/mirror.test -test.run '^TestNativeMirrorSessions$' -test.v -test.timeout=240s \
+              | go tool test2json -p "unfixed-mirror-$schema" | tee "test-results/go-mirror-unfixed-$schema.json"
+            sudo ip netns del "$namespace"
+            trap - EXIT
+          done
+      - name: Build optional pinned native Mirror correction
+        env:
+          MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash tests/ovs_mirror/build.sh
+      - name: Fixed Mirror selector traffic and durable recovery against three schemas
+        run: |
+          set -o pipefail
+          profile=$(sha256sum extensions/ovs-mirror-delete/3.3.9/build-profile.json | cut -d' ' -f1)
           for schema in 3.3.9 3.7.1 4.0.0; do
             namespace="ovs-mi-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             sudo ip netns add "$namespace"
             trap 'sudo ip netns del "$namespace"' EXIT
-            sudo -- env OVS_MIRROR_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+            sudo -- env PATH="$PWD/outputs/ovs-mirror-ci/bin:$PATH" OVS_MIRROR_NATIVE_TEST=1 OVS_MIRROR_BUILD_PROFILE="$profile" OVS_MIRROR_BUILD_VARIANT=fixed OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
               ip netns exec "$namespace" outputs/runtime/mirror.test -test.run '^TestNativeMirrorSessions$' -test.v -test.timeout=240s \
               | go tool test2json -p "native-mirror-$schema" | tee "test-results/go-mirror-$schema.json"
             sudo ip netns del "$namespace"
@@ -582,7 +606,9 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: native-mirrors-${{ matrix.arch }}
-          path: test-results/go-mirror-*.json
+          path: |
+            test-results/go-mirror-*.json
+            test-results/mirror-build/
           if-no-files-found: error
           retention-days: 7
 

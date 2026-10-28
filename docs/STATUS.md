@@ -4,7 +4,7 @@
 
 **Phase 1 包括正式后端、完整前端和端到端验收，目前尚未完成。** P0/P1/P2 是原型批次编号，不能把正式后端整体推迟到产品 Phase 2。当前设计入口是[实现设计](implementation/PHASE1_IMPLEMENTATION_DESIGN_v0.1.md)、[58 项 Scope / 53 页映射](implementation/PHASE1_SCOPE_TRACEABILITY_v0.1.md)与[设计审阅记录](reviews/PHASE1_DESIGN_v0.1.md)。已接受的原型证据见[六批整合 v0.2](reviews/INTEGRATION_v0.2.md)、[批准 IA 覆盖盘点 v0.2](reviews/P1_IA_COVERAGE_v0.2.md)和各批记录。
 
-## 2026-10-26 原生配置域进展
+## 2026-10-28 原生配置域进展
 
 #23 的 STP/RSTP、native Isolation、Multicast 和静态 Tunnel 子域已分别验收。
 静态 Tunnel 最终基线为 `phase1-native-static-tunnels-v0.1` / main `eab6059`；
@@ -15,6 +15,12 @@
 独立权限、原生 Mirror 对象与选择器、共享 Candidate/Safe Apply、精确恢复及正式
 Svelte 页面已实现；双架构完整 CI 和源/main 截图仍是独立验收条件，不能以本地
 交叉编译替代。QoS/Queue、sFlow/NetFlow/IPFIX、Profile/Drift 仍待后续完成。
+Mirror 源 `ce31eeb` 的 [CI 40628786740](https://github.com/sampsonlor/ovs-webui/actions/runs/40628786740)
+未通过：双架构删除后的实际报文检查仍收到旧镜像副本；正式浏览器步骤通过不能
+覆盖该失败。OVS 注销路径缺少流缓存重验证请求，已准备
+[三个固定版本的最小补丁与准入测试方案](../extensions/ovs-mirror-delete/README.md)，
+用户已批准路线；可选修复与独立运行构建准入已接入，完整原生验证待完成。另保留 arm64 race 测试超时记录，不调整已有
+认证门禁、超时或重试，也不恢复 #71 的调查。PR #108 保持 Draft，未合并或打标。
 #43 保持 Open，#71 继续延期；未部署，Project 看板状态不在此声明。
 
 ## 基线和来源

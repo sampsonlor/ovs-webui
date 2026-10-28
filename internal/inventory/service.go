@@ -84,9 +84,9 @@ func (s *Service) Publish(ctx context.Context, o Observation) error {
 }
 func (s *Service) install(o Observation, d Decision) {
 	digest := Digest(struct {
-		Rows                      Rows
-		Schema, Generation, State string
-	}{o.Rows, o.Schema.Digest, d.Generation, d.State})
+		Rows                                     Rows
+		Schema, Generation, State, MirrorRuntime string
+	}{o.Rows, o.Schema.Digest, d.Generation, d.State, o.MirrorRuntime})
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v := &view{observation: o, decision: d, id: repository.NewID(), digest: digest, sequence: 1}
@@ -245,7 +245,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		}
 		out["mirror_authority"] = mirrorAuthority
 		out["mirror_creation_targets"] = localMirrorCreates
-		out["mirror_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.MirrorSupported && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.MirrorCapability)
+		out["mirror_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.MirrorSupported && snapshot.Topology.MirrorRuntime != "" && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.MirrorCapability)
 		if mirrorSelection != nil {
 			out["scope"] = "Locally provisioned Mirror Bridges and their observed Port/Interface/Mirror graph; server validation retains the whole native graph."
 			bounded := func(values map[string]bool) map[string]bool {

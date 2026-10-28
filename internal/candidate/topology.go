@@ -82,6 +82,7 @@ type TopologyChange struct {
 	Compensating bool               `json:"compensating,omitempty"`
 }
 type TopologySnapshot struct {
+	MirrorRuntime                  string
 	MirrorAuthority, MirrorCreates map[string]bool
 	MirrorAuthorityRevision        string
 	MirrorSupported                bool

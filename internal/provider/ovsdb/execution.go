@@ -31,6 +31,8 @@ func (p *Provider) Executor(s *inventory.Service) *Executor {
 }
 
 type nativePlan struct {
+	MirrorBuild          *MirrorExecutionOptions   `json:"mirror_build,omitempty"`
+	MirrorAuthority      string                    `json:"mirror_authority,omitempty"`
 	TopologyDevices      map[string]string         `json:"topology_devices,omitempty"`
 	TopologyBefore       map[string]map[string]any `json:"topology_before,omitempty"`
 	TopologyAfter        map[string]map[string]any `json:"topology_after,omitempty"`
@@ -270,6 +272,10 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if err != nil {
 		return execution.Plan{}, err
 	}
+	compiled, err = e.prepareMirrorRuntime(ctx, compiled, nil, view.Candidate.Topology.MirrorRuntime)
+	if err != nil {
+		return execution.Plan{}, err
+	}
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
@@ -495,6 +501,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = treeDispatchReason(err)
 		return notSent
 	}
+	if e.mirrorDispatchCheck(ctx, p, n) != nil {
+		notSent.Reason = "mirror-runtime-unqualified"
+		return notSent
+	}
 	if beforeSend == nil || beforeSend() != nil {
 		notSent.Reason = "dispatch-admission-denied"
 		return notSent
@@ -504,6 +514,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 	}
 	if topologyHostIdentityCheck(p.Envelope.Candidate, n) != nil {
 		notSent.Reason = "topology-host-identity-changed"
+		return notSent
+	}
+	if e.mirrorDispatchCheck(ctx, p, n) != nil {
+		notSent.Reason = "mirror-runtime-unqualified"
 		return notSent
 	}
 	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
@@ -754,6 +768,11 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 				}
 			}
 		}
+	}
+	if e.mirrorAppliedProof(ctx, p, view) != nil {
+		out.Applied = "unknown"
+		out.Reason = "mirror-runtime-unqualified"
+		return out
 	}
 	if err = e.verifyApplied(ctx, p, view, &out); err != nil {
 		out.Applied = "unknown"

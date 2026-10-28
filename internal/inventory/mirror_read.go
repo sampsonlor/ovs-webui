@@ -54,6 +54,8 @@ func mirrorObservation(v *view, b Binding, fresh string, claims authn.Claims, t 
 		reason = "MIRROR_PORT_DETAIL_TRUNCATED"
 	case !t.MirrorSupported:
 		reason = "MIRROR_SCHEMA_OR_GRAPH_UNSUPPORTED"
+	case t.MirrorRuntime == "":
+		reason = "MIRROR_RUNTIME_UNQUALIFIED"
 	case !t.MirrorAuthority[b.ManagementID] || !t.MirrorAuthority[bb.ManagementID]:
 		reason = "MIRROR_AUTHORITY_OR_GRAPH_REQUIRED"
 	case !slices.Contains(claims.Capabilities, "workspace.write") || !slices.Contains(claims.Capabilities, candidate.MirrorCapability):

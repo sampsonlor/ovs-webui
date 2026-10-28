@@ -1,5 +1,6 @@
 """Real Svelte browser acceptance inside the disposable Go/OVS VM fixture."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import secrets
@@ -117,7 +118,10 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-multicast-role',roles['NativeMulticast'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-static-tunnel-role',roles['NativeStaticTunnel'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-mirror-role',roles['NativeMirror'])
-    unit_path.write_text(unit_original.replace(needle, needle + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
+    mirror_pin=ovs/'mirror-build.json'
+    assert mirror_pin.is_file(), 'formal Mirror writes require the separately fixed OVS build'
+    mirror_flags=' --mirror-runtime-socket='+str(ovs/'switch.ctl')+' --mirror-runtime-executable='+str(ovs/'bin/ovs-vswitchd')+' --mirror-runtime-manifest='+str(mirror_pin)+' --mirror-runtime-manifest-sha256='+hashlib.sha256(mirror_pin.read_bytes()).hexdigest()
+    unit_path.write_text(unit_original.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'))
     run('systemctl','daemon-reload')

@@ -44,6 +44,7 @@ import (
 var key = bytes.Repeat([]byte{9}, 32)
 
 type faultProxy struct {
+	markerOnly  bool
 	listener    net.Listener
 	target      string
 	sent        atomic.Int32
@@ -113,6 +114,9 @@ func (p *faultProxy) serve(c net.Conn) {
 					mutation = mutation || op.Op == "update" || op.Op == "mutate" || op.Op == "insert" || op.Op == "delete"
 				}
 			}
+			if p.markerOnly && !bytes.Contains(b, []byte("ovs-webui.bridge-commit")) {
+				mutation = false
+			}
 			if mutation {
 				transaction.Store(true)
 				p.sent.Add(1)
@@ -163,6 +167,7 @@ func (p *faultProxy) close() {
 func (p *faultProxy) hook(f func()) { p.mu.Lock(); p.before = f; p.mu.Unlock() }
 
 type fixture struct {
+	mirrorBuildRevoked                bool
 	t                                 *testing.T
 	root, conf, dbSocket, proxySocket string
 	proxy                             *faultProxy
@@ -277,13 +282,20 @@ func newFixtureWithVLANLimit(t *testing.T, vlanLimit string) *fixture {
 	if vlanLimit != "" {
 		f.vs("set", "Open_vSwitch", ".", "other_config:vlan-limit="+vlanLimit)
 	}
-	f.run("ovs-vswitchd", "--enable-dummy", "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"), "--detach", "--no-chdir", "unix:"+f.dbSocket)
+	switchDatabase := f.dbSocket
+	if os.Getenv("OVS_MIRROR_NATIVE_TEST") == "1" {
+		f.startMirrorRelay()
+		switchDatabase = f.proxySocket
+	}
+	f.run("ovs-vswitchd", "--enable-dummy", "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"), "--detach", "--no-chdir", "unix:"+switchDatabase)
 	f.vs("add-br", "br-field", "--", "set", "Bridge", "br-field", "datapath_type=dummy", "--", "add-port", "br-field", "field-p1", "--", "set", "Interface", "field-p1", "type=dummy", "--", "set", "Port", "field-p1", "vlan_mode=access", "tag=10", "--", "add-port", "br-field", "field-p2", "--", "set", "Interface", "field-p2", "type=dummy", "--", "set", "Port", "field-p2", "vlan_mode=access", "tag=10")
 	// The trusted test proxy holds the actual DB file. Production still verifies
 	// SO_PEERCRED, process-start and file binding without any test bypass.
 	f.file, err = os.Open(f.conf)
 	must(t, err)
-	f.proxy = newProxy(t, f.proxySocket, f.dbSocket)
+	if f.proxy == nil {
+		f.proxy = newProxy(t, f.proxySocket, f.dbSocket)
+	}
 	managerDir, webDir := filepath.Join(root, "manager"), filepath.Join(root, "web")
 	must(t, os.Mkdir(managerDir, 0700))
 	must(t, os.Mkdir(webDir, 0700))
@@ -312,6 +324,9 @@ func (f *fixture) startMonitor() {
 	f.auth.WithInventory(f.inventory)
 	f.provider, err = ovsdb.New(ovsdb.Options{Socket: f.proxySocket, DatabaseFile: f.conf, PeerUID: uint32(os.Geteuid())})
 	must(f.t, err)
+	if os.Getenv("OVS_MIRROR_NATIVE_TEST") == "1" {
+		f.configureMirrorBuild()
+	}
 	f.ctx, f.cancel = context.WithCancel(context.Background())
 	f.monitorDone = make(chan struct{})
 	go func() { defer close(f.monitorDone); f.provider.Run(f.ctx, f.inventory) }()

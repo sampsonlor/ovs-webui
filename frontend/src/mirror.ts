@@ -4,6 +4,7 @@ export function isMirrorOperation(operation?: string) {
 }
 export function mirrorMessage(code?: string) {
   const messages: Record<string,string> = {
+    MIRROR_RUNTIME_UNQUALIFIED:'Mirror changes require a verified OVS build that safely clears cached mirror actions after deletion.',
     CAPABILITY_DENIED:'Your current permissions allow review but do not allow Mirror changes.',
     MIRROR_NATIVE_IMAGE_UNKNOWN:'The complete native Mirror configuration could not be read.',
     MIRROR_CONFIGURATION_UNKNOWN:'The complete native Mirror configuration could not be read.',

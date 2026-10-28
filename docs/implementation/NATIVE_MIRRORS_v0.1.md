@@ -4,6 +4,17 @@ This implements P1-SW-07 / SW-13 as a first-class native Mirror object. Acceptan
 requires the exact source CI, actual screenshots and an independent main run.
 This document alone does not establish acceptance or complete #43 / Phase 1.
 
+Current disposition (2026-10-28): source `ce31eeb`, CI run `40628786740`, is
+rejected. Both native architectures and the actual pinned OVS builds still
+deliver old Mirror copies after deletion, including retained snaplen/RSPAN
+effects, despite empty Bridge.mirrors and settled configuration counters.
+The pinned unregister implementation does not request cached-flow revalidation.
+The [minimal correction and build-admission proposal](../../extensions/ovs-mirror-delete/README.md)
+was approved by the user on 2026-10-28. Optional correction and independent
+build admission are implemented; full native qualification remains pending. Formal UI
+steps passed, but no UI result overrides this native failure. PR #108 stays
+Draft and no Mirror baseline or production deployment is accepted.
+
 ## Scope and shared workflow
 
 `/switching/mirrors` provides native session lists, immutable detail links and
@@ -35,7 +46,8 @@ The existing 32-object transaction and IPC/plan/snapshot budgets still apply.
 `ovs.mirror.write` is a reserved account capability provisioned by the offline
 root actions `--grant-mirror-role` / `--revoke-mirror-role`. Existing credential
 ceilings and current role revocation remain enforced. Core topology or Tunnel
-authority does not confer Mirror authority.
+authority does not confer Mirror authority. New writes also require the separate
+verified runtime build described in the correction/admission document.
 
 `--local-mirror-objects` grants exact current management IDs (maximum 256).
 `--local-mirror-create-targets` grants exact Bridge-management-ID:session-name
@@ -90,9 +102,11 @@ replies, no replay and external conflicts. Packet sockets and a native
 revalidator-cycle barrier run only in disposable test namespaces; they add no
 production packet-delivery guarantee.
 
-Separate amd64/arm64 jobs use distro OVS with three schema fixtures. Attested
-actual OVS 3.3.9/3.7.1/4.0.0 builds run the same cases against their own schemas in
-default/enabled/ASan-UBSan variants. These evidence types are reported separately.
+Separate amd64/arm64 jobs retain unfixed distro counterexamples with three
+schema fixtures, then run the full matrix with the qualified fixed 3.3.9 runtime
+and those exact schemas. Actual pinned OVS 3.3.9/3.7.1/4.0.0 enabled/ASan-UBSan
+builds run the full matrix against their own schemas; defaults reproduce the
+unfixed residual and deny manager writes. These evidence kinds remain separate.
 Two formal real-service browser cases add 21 screenshots per architecture and
 retain the existing tests, deadlines and retries. All prior native, auth,
 recovery and browser gates remain required. #71 stays deferred; no deployment.

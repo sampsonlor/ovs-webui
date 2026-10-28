@@ -1,0 +1,24 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -225,2 +225,13 @@
+
++AC_ARG_ENABLE([ovs-webui-mirror-fix],
++  [AS_HELP_STRING([--enable-ovs-webui-mirror-fix],
++                  [revalidate cached flows after Mirror deletion (default: no)])],
++  [], [enable_ovs_webui_mirror_fix=no])
++AS_CASE([$enable_ovs_webui_mirror_fix], [yes|no], [],
++        [AC_MSG_ERROR([invalid ovs-webui-mirror-fix option])])
++AS_IF([test "$enable_ovs_webui_mirror_fix" = yes], [
++  AC_DEFINE([ENABLE_OVS_WEBUI_MIRROR_FIX], [1],
++            [Revalidate cached actions when a native Mirror is unregistered])
++])
++
+ AC_OUTPUT
+--- a/ofproto/ofproto-dpif.c
++++ b/ofproto/ofproto-dpif.c
+@@ -3666,2 +3666,5 @@
+         mirror_destroy(ofproto->mbridge, aux);
++#ifdef ENABLE_OVS_WEBUI_MIRROR_FIX
++        ofproto->backer->need_revalidate = REV_RECONFIGURE;
++#endif
+         return 0;

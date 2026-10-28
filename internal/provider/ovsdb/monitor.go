@@ -22,7 +22,10 @@ type Sink interface {
 	Publish(context.Context, inventory.Observation) error
 	Unavailable(string)
 }
-type Provider struct{ options Options }
+type Provider struct {
+	options Options
+	mirror  *MirrorExecutionOptions
+}
 
 func New(o Options) (*Provider, error) {
 	if err := validateOptions(o); err != nil {
@@ -113,7 +116,8 @@ func (p *Provider) session(ctx context.Context, s Sink) error {
 			return errors.New("OVSDB_SNAPSHOT_INVALID")
 		}
 		e := evidence(p.options, d, rows, identity, pid, prior, continuous)
-		if err = s.Publish(ctx, inventory.Observation{Schema: d.public, Rows: copyRows, Evidence: e}); err != nil {
+		mirrorBuild, _ := p.mirrorRuntime(ctx, p.mirror, e, false)
+		if err = s.Publish(ctx, inventory.Observation{Schema: d.public, Rows: copyRows, Evidence: e, MirrorRuntime: mirrorBuild}); err != nil {
 			return err
 		}
 		prior = e

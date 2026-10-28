@@ -81,6 +81,10 @@ func run() int {
 	treeDatabaseSHA256 := flag.String("spanning-tree-database-sha256", "", "Reviewed SHA256 of the qualified standalone ovsdb-server executable")
 	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
 	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
+	mirrorControl := flag.String("mirror-runtime-socket", "", "Explicit local ovs-vswitchd control socket for native Mirror build qualification")
+	mirrorExecutable := flag.String("mirror-runtime-executable", "", "Root-owned qualified fixed Mirror ovs-vswitchd executable")
+	mirrorManifest := flag.String("mirror-runtime-manifest", "", "Root-owned exact fixed Mirror build manifest")
+	mirrorManifestDigest := flag.String("mirror-runtime-manifest-sha256", "", "Reviewed SHA256 of the exact fixed Mirror build manifest")
 	localMirrorObjects := flag.String("local-mirror-objects", "", "Independent immutable graph IDs permitted for native Mirror changes")
 	localMirrorCreates := flag.String("local-mirror-create-targets", "", "Independent Bridge management-id:new-name grants for native Mirror sessions")
 	localTunnelObjects := flag.String("local-tunnel-objects", "", "Independent immutable graph IDs permitted for native static Tunnel changes")
@@ -109,6 +113,11 @@ func run() int {
 	treeConfigured := *localSpanningTreeExecution != "" || *treeControl != "" || *treeExecutable != "" || *treeManifest != "" || *treeManifestDigest != "" || *treeDatabaseExecutable != "" || *treeDatabaseSHA256 != ""
 	if treeConfigured && (*localSpanningTreeExecution == "" || *treeControl == "" || *treeExecutable == "" || *treeManifest == "" || *treeManifestDigest == "" || *treeDatabaseExecutable == "" || *treeDatabaseSHA256 == "") {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_SPANNING_TREE_WITNESS_CONFIGURATION")
+		return 2
+	}
+	mirrorConfigured := *mirrorControl != "" || *mirrorExecutable != "" || *mirrorManifest != "" || *mirrorManifestDigest != ""
+	if mirrorConfigured && (*mirrorControl == "" || *mirrorExecutable == "" || *mirrorManifest == "" || *mirrorManifestDigest == "") {
+		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_MIRROR_RUNTIME_CONFIGURATION")
 		return 2
 	}
 	actions := 0
@@ -534,6 +543,12 @@ func run() int {
 		if err != nil {
 			logger.Error("inventory_start_failed", "code", "OVSDB_ENDPOINT_INVALID")
 			return 2
+		}
+		if mirrorConfigured {
+			if err = provider.ConfigureMirrorExecution(ovsprovider.MirrorExecutionOptions{ControlSocket: *mirrorControl, Executable: *mirrorExecutable, Manifest: *mirrorManifest, ManifestDigest: *mirrorManifestDigest, PeerUID: uint32(*ovsUID)}); err != nil {
+				logger.Error("service_start_failed", "code", "INVALID_MIRROR_RUNTIME_CONFIGURATION")
+				return 2
+			}
 		}
 		providerCtx, cancelProvider := context.WithCancel(ctx)
 		defer cancelProvider()

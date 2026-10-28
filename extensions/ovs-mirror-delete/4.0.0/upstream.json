@@ -1,0 +1,14 @@
+{
+  "version": "4.0.0",
+  "commit": "b89dc80f0143f5bf3f58c48d54e82cc7f8d29da8",
+  "archive_sha256": "b51a8497fa4b93bf446345d87f4806c394bb5babcdb512aa62112aa6fff61dbd",
+  "inputs": {
+    "configure.ac": "26e1b1636ee85c8d1df499a1e66b677aa1f850bb1361d180ac48f740834b5632",
+    "ofproto/ofproto-dpif.c": "245e1f5db18702ec1f12314467caeebfb32dc868f351d1a63f6b0b6fb5ee176b"
+  },
+  "patch_sha256": "dc0680e487daba52c87d0d560773d505262681ba353d961e2a362ef5eb80334b",
+  "witness_inputs": {
+    "configure.ac": "56ad8c36b9a17087cddc27c6d0666aa994d13148b5e99b129d9d18762a53794d",
+    "ofproto/ofproto-dpif.c": "3f42a46da1fd875cdd8fe78e59f4c9ba6fe85d05d9ffe4f6975ff7c2198bcaca"
+  }
+}

@@ -17,6 +17,7 @@ import (
 func nativeMirrorFixture(t *testing.T) (*Service, Observation, Decision, candidate.Binding, string, string) {
 	t.Helper()
 	s, o, d, port, _ := staticTunnelFixture(t)
+	o.MirrorRuntime = strings.Repeat("a", 64)
 	o.Schema.MirrorConfiguration = true
 	o.Schema.MirrorDefaults = map[string]any{"name": "", "select_all": false, "select_src_port": []any{}, "select_dst_port": []any{}, "select_vlan": []any{}, "output_port": []any{}, "output_vlan": []any{}, "snaplen": []any{}, "filter": []any{}, "external_ids": map[string]any{}}
 	uuid, id := repository.NewID(), repository.NewID()
@@ -125,6 +126,39 @@ func TestMirrorInventoryKeepsIndependentAuthorityPrivateFiltersAndObservationSta
 	}
 	if _, err := s.Read(context.Background(), "listMirrors", nil, nil, authn.Claims{Capabilities: []string{"inventory.read"}}); err == nil {
 		t.Fatal("Mirror selectors leaked without configuration permission")
+	}
+}
+
+func TestMirrorRuntimeQualificationIsIndependentAndClosesNewWrites(t *testing.T) {
+	s, o, d, _, id, bridge := nativeMirrorFixture(t)
+	ids := []string{}
+	for _, b := range d.Bindings {
+		ids = append(ids, b.ManagementID)
+	}
+	if err := s.SetLocalMirrorObjects(ids); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.CandidateSnapshot(context.Background(), nil)
+	if err != nil || !before.Topology.MirrorAuthority[id] {
+		t.Fatal("qualified fixture", err)
+	}
+	o.MirrorRuntime = ""
+	s.install(o, d)
+	after, err := s.CandidateSnapshot(context.Background(), nil)
+	if err != nil || !after.Topology.MirrorSupported || after.Topology.MirrorAuthority[id] || after.Topology.MirrorAuthority[bridge] || before.Policy == after.Policy {
+		t.Fatal("schema/grants qualified an unproven build", err)
+	}
+	claims := authn.Claims{Capabilities: []string{"inventory.read", "configuration.read", "workspace.write", candidate.MirrorCapability}}
+	value, err := s.Read(context.Background(), "readMirror", map[string]string{"mirror_id": id}, nil, claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := value.(map[string]any)["native_mirror"].(map[string]any)
+	if m["configuration_availability"] != "known" || m["execution"].(map[string]any)["reason"] != "MIRROR_RUNTIME_UNQUALIFIED" {
+		t.Fatal("unqualified runtime erased observation or exposed writes")
+	}
+	if strings.Contains(string(mustJSON(t, value)), before.Topology.MirrorRuntime) {
+		t.Fatal("private build identity leaked")
 	}
 }
 

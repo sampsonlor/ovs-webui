@@ -101,9 +101,11 @@ type Evidence struct {
 	Continuous bool        `json:"continuous"`
 }
 type Observation struct {
-	Schema   Schema
-	Rows     Rows
-	Evidence Evidence
+	// Private current native build qualification, never projected as a path/hash.
+	MirrorRuntime string `json:"-"`
+	Schema        Schema
+	Rows          Rows
+	Evidence      Evidence
 }
 type Binding struct {
 	ManagementID   string `json:"management_id"`

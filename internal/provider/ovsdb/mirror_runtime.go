@@ -1,0 +1,94 @@
+package ovsdb
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"path/filepath"
+	"strings"
+
+	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/execution"
+	"github.com/sampsonlor/ovs-webui/internal/inventory"
+)
+
+// Independent root process configuration. No public request can select a path,
+// profile, executable, peer, manifest or native control method.
+type MirrorExecutionOptions struct {
+	ControlSocket  string `json:"control_socket"`
+	Executable     string `json:"executable"`
+	Manifest       string `json:"manifest"`
+	ManifestDigest string `json:"manifest_sha256"`
+	PeerUID        uint32 `json:"peer_uid"`
+}
+
+func (p *Provider) ConfigureMirrorExecution(o MirrorExecutionOptions) error {
+	if p == nil || p.mirror != nil || !filepath.IsAbs(o.ControlSocket) || len(o.ControlSocket) > 100 || !filepath.IsAbs(o.Executable) || !filepath.IsAbs(o.Manifest) || strings.ContainsAny(o.ControlSocket+o.Executable+o.Manifest, "\x00\r\n") || len(o.ManifestDigest) != 64 || strings.Trim(o.ManifestDigest, "0123456789abcdef") != "" || o.PeerUID == ^uint32(0) {
+		return errors.New("INVALID_MIRROR_RUNTIME_CONFIGURATION")
+	}
+	copy := o
+	p.mirror = &copy
+	return nil
+}
+
+func isMirrorCandidate(c candidate.Candidate) bool {
+	return len(c.Intents) == 1 && candidate.IsMirrorOperation(c.Intents[0].Operation)
+}
+
+func (e *Executor) prepareMirrorRuntime(ctx context.Context, p execution.Plan, original *nativePlan, reviewed string) (execution.Plan, error) {
+	if !isMirrorCandidate(p.Envelope.Candidate) {
+		return p, nil
+	}
+	o := e.provider.mirror
+	if original != nil {
+		o = original.MirrorBuild
+	}
+	var n nativePlan
+	if o == nil || json.Unmarshal(p.Native, &n) != nil {
+		return execution.Plan{}, apitypes.Fail(409, "MIRROR_RUNTIME_UNQUALIFIED")
+	}
+	proof, err := e.provider.mirrorRuntime(ctx, o, n.Evidence, true)
+	if err != nil || proof == "" || original == nil && (reviewed == "" || !strings.HasPrefix(proof, reviewed+"/")) || original != nil && proof != original.MirrorAuthority {
+		return execution.Plan{}, apitypes.Fail(409, "MIRROR_RUNTIME_UNQUALIFIED")
+	}
+	copy := *o
+	n.MirrorBuild, n.MirrorAuthority = &copy, proof
+	p.Native, err = json.Marshal(n)
+	if err != nil || len(p.Native) > execution.MaxPlanBytes {
+		return execution.Plan{}, apitypes.Fail(429, "EXECUTION_PLAN_BUDGET")
+	}
+	return p, nil
+}
+
+func (e *Executor) mirrorDispatchCheck(ctx context.Context, p execution.Plan, n nativePlan) error {
+	if !isMirrorCandidate(p.Envelope.Candidate) {
+		return nil
+	}
+	// Recovery uses only its durable admitted pin. New admission also requires
+	// the current root configuration; removing it cannot admit another write.
+	i := p.Envelope.Candidate.Intents[0]
+	if i.Topology == nil || n.MirrorBuild == nil || n.MirrorAuthority == "" || !i.Topology.Compensating && (e.provider.mirror == nil || candidate.Digest(e.provider.mirror) != candidate.Digest(n.MirrorBuild)) {
+		return errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+	}
+	proof, err := e.provider.mirrorRuntime(ctx, n.MirrorBuild, n.Evidence, true)
+	if err != nil || proof != n.MirrorAuthority {
+		return errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+	}
+	return nil
+}
+
+func (e *Executor) mirrorAppliedProof(ctx context.Context, p execution.Plan, v inventory.ExecutionView) error {
+	if !isMirrorCandidate(p.Envelope.Candidate) {
+		return nil
+	}
+	var n nativePlan
+	if json.Unmarshal(p.Native, &n) != nil || n.MirrorBuild == nil || n.MirrorAuthority == "" {
+		return errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+	}
+	proof, err := e.provider.mirrorRuntime(ctx, n.MirrorBuild, v.Observation.Evidence, true)
+	if err != nil || proof != n.MirrorAuthority {
+		return errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+	}
+	return nil
+}

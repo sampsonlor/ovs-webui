@@ -161,6 +161,7 @@ else:print('0,-1',flush=True)
 				}
 			}
 			phase := "before-create"
+			freshFlow := false
 			probe := func(from, to int, want bool, wantSnap int, wantVLAN int) {
 				// Test-fixture barrier only: the first cycle may already be running
 				// with an older revalidation sequence. Two successive barriers cover
@@ -172,9 +173,9 @@ else:print('0,-1',flush=True)
 				token := repository.NewID()
 				receive := capture(2, token)
 				f.run("ip", "netns", "exec", namespaces[from], "python3", "-c", `import socket,sys
-dev,src,dst,token=sys.argv[1:]
-s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fromhex('02000066000'+dst+'02000066000'+src+'88b5')+token.encode()+b'x'*64;s.send(frame)
-`, peers[from], strconv.Itoa(from+1), strconv.Itoa(to+1), token)
+dev,src,dst,token,fresh=sys.argv[1:]
+s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));mac=('0200006600f'+src) if fresh=='true' else ('02000066000'+src);frame=bytes.fromhex('02000066000'+dst+mac+'88b5')+token.encode()+b'x'*64;s.send(frame)
+`, peers[from], strconv.Itoa(from+1), strconv.Itoa(to+1), token, strconv.FormatBool(freshFlow))
 				length, vlan := receive()
 				if (length > 0) != want || wantSnap > 0 && length != wantSnap || wantVLAN >= 0 && vlan != wantVLAN {
 					t.Fatalf("native copy mismatch scenario=%s phase=%s from=%d to=%d length=%d vlan=%d want=%v snap=%d vlan=%d native_mirrors=%s counters=%s", scenario, phase, from, to, length, vlan, want, wantSnap, wantVLAN, f.vs("get", "Bridge", bridge, "mirrors"), f.vs("get", "Open_vSwitch", ".", "next_cfg", "cur_cfg"))
@@ -189,6 +190,71 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			fresh, err := f.auth.Authenticate(f.ctx, authn.Login{Provider: "local", Username: "admin", Password: "synthetic-native-field-password"})
 			must(t, err)
 			f.login = fresh
+			if os.Getenv("OVS_MIRROR_REPRODUCE_UNFIXED") == "1" {
+				b := f.topologyNode("Bridge", bridge).Binding
+				ids := []string{}
+				for id := range f.topologySnapshot().Topology.Nodes {
+					ids = append(ids, id)
+				}
+				must(t, f.inventory.SetLocalMirrorObjects(ids))
+				must(t, f.inventory.SetLocalMirrorCreates([]string{b.ManagementID + ":" + name}))
+				s := f.topologySnapshot()
+				if s.Topology.MirrorRuntime != "" || s.Topology.MirrorAuthority[b.ManagementID] {
+					t.Fatal("unfixed build inherited write authority")
+				}
+				src, out := f.topologyNode("Port", ports[0]).Binding, f.topologyNode("Port", ports[2]).Binding
+				cfg := mirror.Configuration{SourcePorts: []string{src.ManagementID}, DestinationPorts: []string{}, VLANs: []string{"100"}, OutputPort: &out.ManagementID}
+				env := candidate.Envelope{Owner: repository.NewID(), Candidate: candidate.Candidate{ID: repository.NewID(), Revision: repository.NewID(), Intents: []candidate.StoredIntent{}}}
+				_, err := candidate.Prepare(env, candidate.Command{Operation: "stage", Intents: []candidate.Intent{{ID: repository.NewID(), Object: b, Operation: candidate.MirrorCreate, Topology: &candidate.TopologyRequest{Name: name, Mirror: &cfg}}}}, s)
+				if err == nil {
+					t.Fatal("unfixed runtime admitted a new Mirror intent")
+				}
+				args := []string{"--", "--id=@src", "get", "Port", ports[0], "--", "--id=@out", "get", "Port", ports[2], "--", "--id=@m", "create", "Mirror", "name=" + name, "select_vlan=100"}
+				switch scenario {
+				case "destination_direction":
+					args = append(args, "select_dst_port=@src")
+				case "all_ports_vlan_filter":
+					args = append(args, "select_all=true")
+				default:
+					args = append(args, "select_src_port=@src")
+				}
+				if scenario == "rspan_vlan" {
+					args = append(args, "output_vlan=200")
+				} else {
+					args = append(args, "output_port=@out")
+				}
+				if scenario == "snaplen" {
+					args = append(args, "snaplen=32")
+				}
+				args = append(args, "--", "set", "Bridge", bridge, "mirrors=@m", "--", "set", "Open_vSwitch", ".", "next_cfg=1")
+				f.vs(args...)
+				waitFor(t, func() bool { return f.vs("get", "Open_vSwitch", ".", "cur_cfg") == "1" })
+				from, to, snap, vlan := 0, 1, 0, -1
+				if scenario == "destination_direction" {
+					from, to = 1, 0
+				}
+				if scenario == "snaplen" {
+					snap = 32
+				}
+				if scenario == "rspan_vlan" {
+					vlan = 200
+				}
+				phase = "unfixed-created"
+				probe(from, to, true, snap, vlan)
+				f.vs("clear", "Bridge", bridge, "mirrors", "--", "set", "Open_vSwitch", ".", "next_cfg=2")
+				waitFor(t, func() bool { return f.vs("get", "Open_vSwitch", ".", "cur_cfg") == "2" })
+				phase = "unfixed-deleted-cached-flow"
+				probe(from, to, true, snap, vlan)
+				t.Logf("Unfixed cached flow diagnostic (isolated fixture only): %s", f.run("ovs-appctl", "--timeout=3", "-t", filepath.Join(f.root, "switch.ctl"), "dpif/dump-flows", bridge))
+				freshFlow = true
+				phase = "unfixed-deleted-fresh-source"
+				probe(from, to, false, 0, -1)
+				if f.proxy.sent.Load() != 0 {
+					t.Fatal("unqualified manager dispatched native mutation")
+				}
+				t.Log("Unfixed residual reproduced; fresh flow no longer mirrors; manager writer remained unavailable")
+				return
+			}
 			binding := f.grantNativeMirror(bridge, name)
 			source, output := f.topologyNode("Port", ports[0]).Binding, f.topologyNode("Port", ports[2]).Binding
 			config := mirror.Configuration{SourcePorts: []string{source.ManagementID}, DestinationPorts: []string{}, VLANs: []string{"100"}, OutputPort: &output.ManagementID}
@@ -263,6 +329,9 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 				probe(0, 1, false, 0, -1)
 			}
 			before := f.proxy.sent.Load()
+			must(t, f.inventory.SetLocalMirrorObjects(nil))
+			must(t, f.inventory.SetLocalMirrorCreates(nil))
+			f.mirrorBuildRevoked = true
 			f.cancel()
 			<-f.monitorDone
 			f.cancel = nil
@@ -273,7 +342,9 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			f.auth, err = auth.New(f.store, key)
 			must(t, err)
 			f.startMonitor()
-			f.grantNativeMirror(bridge, name)
+			if f.topologySnapshot().Topology.MirrorRuntime != "" {
+				t.Fatal("new write admission survived removed root build configuration")
+			}
 			f.workspace, err = web.NewWorkspace(f.webStore, f.auth)
 			must(t, err)
 			offset.Store(int64(121 * time.Second))
@@ -295,6 +366,11 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 				t.Fatal("terminal Mirror recovery replayed")
 			}
 			offset.Store(0)
+			f.cancel()
+			<-f.monitorDone
+			f.mirrorBuildRevoked = false
+			f.startMonitor()
+			f.configureSafety(&offset)
 			f.grantNativeMirror(bridge, name)
 			f.discardPortDraft()
 			in := f.prepareTopology(restored, candidate.MirrorConfigure, candidate.TopologyRequest{Mirror: &changed})
@@ -336,6 +412,7 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			if f.proxy.sent.Load() != sent+1 {
 				t.Fatal("lost Mirror reply was replayed")
 			}
+			f.checkMirrorRuntimeRejections(restored, changed)
 		})
 	}
 }

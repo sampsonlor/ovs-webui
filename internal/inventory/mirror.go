@@ -93,6 +93,7 @@ func projectMirror(v *view, allow, creates map[string]bool, revision string, out
 	if _, observed := v.observation.Rows["Mirror"]; !observed || len(v.observation.Schema.MirrorDefaults) < 9 {
 		t.MirrorSupported = false
 	}
+	t.MirrorRuntime = v.observation.MirrorRuntime
 	t.MirrorDefaults = candidate.CloneConfiguration(v.observation.Schema.MirrorDefaults)
 	t.MirrorAuthorityRevision = revision
 	t.MirrorAuthority, t.MirrorCreates = map[string]bool{}, map[string]bool{}
@@ -119,9 +120,9 @@ func projectMirror(v *view, allow, creates map[string]bool, revision string, out
 		t.Configurations[b.ManagementID] = candidate.CloneConfiguration(row.Configuration)
 	}
 	for id, n := range t.Nodes {
-		t.MirrorAuthority[id] = t.MirrorSupported && allow[id] && mirrorNodeEligible(v, n.Binding.Table, n.Binding.OVSUUID)
+		t.MirrorAuthority[id] = t.MirrorSupported && t.MirrorRuntime != "" && allow[id] && mirrorNodeEligible(v, n.Binding.Table, n.Binding.OVSUUID)
 	}
-	out.Policy = Digest([]any{out.Policy, allow, creates, revision})
+	out.Policy = Digest([]any{out.Policy, allow, creates, revision, t.MirrorRuntime})
 	out.Revision = Digest([]any{out.Revision, t.Nodes, t.MirrorAuthority})
 }
 

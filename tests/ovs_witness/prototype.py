@@ -17,7 +17,7 @@ import uuid
 VERSION = os.environ["OVS_WITNESS_VERSION"]
 assert VERSION in ["3.3.9", "3.7.1", "4.0.0"]
 EXTENSION = Path("extensions/ovs-witness") / VERSION
-PROFILE = Path("internal/ovswitness") / ("build-profile.json" if VERSION == "3.3.9" else "build-profile-" + VERSION + ".json")
+PROFILE = Path("internal/ovswitness") / ("build-profile-mirror-" + VERSION + ".json")
 
 def control(path, method, args):
     with socket.socket(socket.AF_UNIX) as sock:
@@ -178,6 +178,11 @@ def mirror_write(f, mode, report):
     out = Path('outputs/ovs-witness-ci').resolve()
     env = dict(f.env, PATH=str(f.bin)+os.pathsep+os.environ['PATH'], OVS_MIRROR_NATIVE_TEST='1',
                OVS_EXECUTION_SCHEMA=str(f.source/'vswitchd/vswitch.ovsschema'))
+    if mode == 'default':
+        env['OVS_MIRROR_REPRODUCE_UNFIXED']='1'
+    else:
+        env['OVS_MIRROR_BUILD_PROFILE']=hashlib.sha256((Path('extensions/ovs-mirror-delete')/VERSION/'build-profile.json').read_bytes()).hexdigest()
+        env['OVS_MIRROR_BUILD_VARIANT']='witness-'+mode
     writer_ns = 'ow-mi-'+uuid.uuid4().hex[:8]
     subprocess.run(['ip', 'netns', 'add', writer_ns], check=True, timeout=5)
     prefix = Path('test-results/ovs-witness/mirror-execution-'+mode)
@@ -207,7 +212,7 @@ def mirror_write(f, mode, report):
     passed = sorted(e['Test'].split('/', 1)[1] for e in events
                     if e.get('Action') == 'pass' and e.get('Test', '').startswith('TestNativeMirrorSessions/'))
     assert passed == expected and not any(e.get('Action') in ['fail', 'skip'] for e in events), passed
-    report['mirror_execution'] = {'status': 'pass', 'runtime': VERSION, 'cases': passed,
+    report['mirror_reproduction' if mode=='default' else 'mirror_execution'] = {'status': 'pass', 'runtime': VERSION, 'cases': passed, 'kind':'unfixed-cached-residual-and-write-denial' if mode=='default' else 'qualified-fixed-full-recovery',
                                         'schema': str(f.source/'vswitchd/vswitch.ovsschema'),
                                         'executables': f.manifest, 'datapath_isolation': 'separate-network-namespace'}
 

@@ -1,13 +1,14 @@
 package ovswitness
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 )
 
-//go:embed build-profile.json build-profile-3.7.1.json build-profile-4.0.0.json
+//go:embed build-profile.json build-profile-3.7.1.json build-profile-4.0.0.json build-profile-mirror-*.json
 var buildProfiles embed.FS
 
 // QualifiedBuildProfile pins reviewed source/patch/registry bytes and the two
@@ -31,6 +32,7 @@ func BuildProfile(version string) (QualifiedBuildProfile, bool) {
 		return QualifiedBuildProfile{}, false
 	}
 	data, err := buildProfiles.ReadFile(name)
+	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 	var p struct {
 		Schema string `json:"database_schema_digest"`
 	}
@@ -48,6 +50,16 @@ func LookupBuildProfile(digest string) (QualifiedBuildProfile, bool) {
 		p, ok := BuildProfile(version)
 		if ok && p.Digest == digest {
 			return p, true
+		}
+	}
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		data, err := buildProfiles.ReadFile("build-profile-mirror-" + version + ".json")
+		var p struct {
+			Schema string `json:"database_schema_digest"`
+		}
+		h := sha256.Sum256(data)
+		if err == nil && hex.EncodeToString(h[:]) == digest && json.Unmarshal(data, &p) == nil && hex64(p.Schema) {
+			return QualifiedBuildProfile{Version: version, Digest: digest, Schema: p.Schema}, true
 		}
 	}
 	return QualifiedBuildProfile{}, false

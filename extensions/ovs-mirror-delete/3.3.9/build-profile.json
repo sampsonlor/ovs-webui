@@ -1,0 +1,33 @@
+{
+  "format": "ovs-webui.mirror-build-profile.v1",
+  "runtime": "3.3.9",
+  "upstream_commit": "1a3fefbcd0b0f70ced621b92e286fef3dffaac09",
+  "archive_sha256": "64e2d425eb34cafc405b641ca6ecacf2453ee37b9aa50b4b17dfb88aa9e7a52e",
+  "inputs": {
+    "configure.ac": "5b1e86c7074b861dd01e3c2ecabbded4829423efcffe91327732b5670bab5d07",
+    "ofproto/ofproto-dpif.c": "c2b26c21dddfd5cc9eb59eb7fe5c31f1a0b4f3f81e17a514209cc170325d9214"
+  },
+  "patch_sha256": "9b5c423d757341a6e06d34a8124e7297751e51dadb78ea8c010879739dc4536f",
+  "configure": [
+    "--enable-ssl",
+    "--disable-libcapng",
+    "--disable-shared",
+    "--enable-static",
+    "--enable-ovs-webui-mirror-fix"
+  ],
+  "cflags": "-O1 -g -Werror",
+  "variants": [
+    "fixed",
+    "witness-enabled",
+    "witness-sanitized"
+  ],
+  "witness_base_profile_sha256": "3e01c525aae8a6d7d14c550782ca5c7c651be99b803de58aad68c38a0befd255",
+  "allowed_database_schemas": [
+    "6de4988b011d7465a20b72924e3ef3d864d56ea9c40b8376a635c9028c2c1268",
+    "7f80147dcd380ce8534ae2db44f6250bc6d39736cf00aa950385e266f690dd49"
+  ],
+  "witness_inputs": {
+    "configure.ac": "e3329e3c23f9b98053bac2f02b94ab44cfa1ad43feb8ede27c27f87ea81ffbfd",
+    "ofproto/ofproto-dpif.c": "d45e3d68960246ae40ca1953f94039a1085e846895141c78c7cb08c0fd11ace7"
+  }
+}
