@@ -162,10 +162,12 @@ else:print('0,-1',flush=True)
 			}
 			phase := "before-create"
 			probe := func(from, to int, want bool, wantSnap int, wantVLAN int) {
-				// Test-fixture barrier only: wait for a real revalidator cycle after
-				// native configuration settles, then independently sample packets.
+				// Test-fixture barrier only: the first cycle may already be running
+				// with an older revalidation sequence. Two successive barriers cover
+				// a complete cycle started after the settled native configuration.
 				// This is not a production Applied or delivery guarantee.
 				// Upstream: ofproto/ofproto-dpif-upcall.c (v3.3.9), revalidator/wait.
+				f.run("ovs-appctl", "--timeout=3", "-t", filepath.Join(f.root, "switch.ctl"), "revalidator/wait")
 				f.run("ovs-appctl", "--timeout=3", "-t", filepath.Join(f.root, "switch.ctl"), "revalidator/wait")
 				token := repository.NewID()
 				receive := capture(2, token)
@@ -175,7 +177,7 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 `, peers[from], strconv.Itoa(from+1), strconv.Itoa(to+1), token)
 				length, vlan := receive()
 				if (length > 0) != want || wantSnap > 0 && length != wantSnap || wantVLAN >= 0 && vlan != wantVLAN {
-					t.Fatalf("native copy mismatch scenario=%s phase=%s from=%d to=%d length=%d vlan=%d want=%v snap=%d vlan=%d", scenario, phase, from, to, length, vlan, want, wantSnap, wantVLAN)
+					t.Fatalf("native copy mismatch scenario=%s phase=%s from=%d to=%d length=%d vlan=%d want=%v snap=%d vlan=%d native_mirrors=%s counters=%s", scenario, phase, from, to, length, vlan, want, wantSnap, wantVLAN, f.vs("get", "Bridge", bridge, "mirrors"), f.vs("get", "Open_vSwitch", ".", "next_cfg", "cur_cfg"))
 				}
 			}
 			probe(0, 1, false, 0, -1)
@@ -255,7 +257,11 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			if f.vs("get", "Bridge", bridge, "mirrors") != "[]" {
 				t.Fatal("deleted Mirror retained strong Bridge reference")
 			}
-			probe(0, 1, false, 0, -1)
+			if scenario == "destination_direction" {
+				probe(1, 0, false, 0, -1)
+			} else {
+				probe(0, 1, false, 0, -1)
+			}
 			before := f.proxy.sent.Load()
 			f.cancel()
 			<-f.monitorDone

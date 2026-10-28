@@ -152,7 +152,7 @@ test('native Mirror CRUD shares review, preserves native selectors and recovers 
   await apply(page,'create');
   expect(vs('get','Mirror','mi-ui-new','select_all')).toBe('true');
   expect(vs('get','Mirror','mi-ui-new','select_vlan')).toBe('[100]');
-  expect(vs('get','Mirror','mi-ui-new','output_vlan')).toBe('[200]');
+  expect(vs('get','Mirror','mi-ui-new','output_vlan')).toBe('200');
   await decision(page,'Confirm configuration','confirmed');
   await page.goto(href);
   await expect(page.getByRole('button',{name:'Stage Mirror change',exact:true})).toBeVisible();
@@ -169,7 +169,7 @@ test('native Mirror CRUD shares review, preserves native selectors and recovers 
   await page.getByRole('button',{name:'Stage Mirror change',exact:true}).click();
   await apply(page,'configure');
   expect(vs('get','Mirror','mi-ui-data','select_src_port')).toBe('[]');
-  expect(vs('get','Mirror','mi-ui-data','output_vlan')).toBe('[200]');
+  expect(vs('get','Mirror','mi-ui-data','output_vlan')).toBe('200');
   await decision(page,'Request rollback','rolled-back');
   expect(vs('get','Mirror','mi-ui-data',...columns)).toBe(original);
   await screen(page,'configuration-recovered');
