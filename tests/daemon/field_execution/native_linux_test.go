@@ -43,17 +43,23 @@ import (
 
 var key = bytes.Repeat([]byte{9}, 32)
 
+type rejectedNativeOperation struct {
+	Operation json.RawMessage
+	Code      string
+}
+
 type faultProxy struct {
-	markerOnly  bool
-	listener    net.Listener
-	target      string
-	sent        atomic.Int32
-	dropReply   atomic.Bool
-	dropRequest atomic.Bool
-	mu          sync.Mutex
-	before      func()
-	connections map[net.Conn]bool
-	wg          sync.WaitGroup
+	lastRejected atomic.Value
+	markerOnly   bool
+	listener     net.Listener
+	target       string
+	sent         atomic.Int32
+	dropReply    atomic.Bool
+	dropRequest  atomic.Bool
+	mu           sync.Mutex
+	before       func()
+	connections  map[net.Conn]bool
+	wg           sync.WaitGroup
 }
 
 func newProxy(t *testing.T, path, target string) *faultProxy {
@@ -90,6 +96,7 @@ func (p *faultProxy) serve(c net.Conn) {
 	}
 	defer u.Close()
 	var transaction atomic.Bool
+	var operations atomic.Value
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -118,6 +125,7 @@ func (p *faultProxy) serve(c net.Conn) {
 				mutation = false
 			}
 			if mutation {
+				operations.Store(r.Params[1:])
 				transaction.Store(true)
 				p.sent.Add(1)
 				p.mu.Lock()
@@ -142,8 +150,24 @@ func (p *faultProxy) serve(c net.Conn) {
 		if d.Decode(&b) != nil {
 			break
 		}
-		var r struct{ ID json.RawMessage }
+		var r struct {
+			ID     json.RawMessage
+			Result []map[string]json.RawMessage
+		}
 		_ = json.Unmarshal(b, &r)
+		if transaction.Load() && string(r.ID) == "2" {
+			if value := operations.Load(); value != nil {
+				ops := value.([]json.RawMessage)
+				for index, result := range r.Result {
+					if len(result["error"]) > 0 && index < len(ops) {
+						var code string
+						_ = json.Unmarshal(result["error"], &code)
+						p.lastRejected.Store(rejectedNativeOperation{Operation: ops[index], Code: code})
+						break
+					}
+				}
+			}
+		}
 		if transaction.Load() && string(r.ID) == "2" && p.dropReply.CompareAndSwap(true, false) {
 			break
 		}

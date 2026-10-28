@@ -52,6 +52,12 @@ schema. No control RPC is sent. Checks have a two-second bound and no trust cach
 Dispatch repeats the check after the admission callback, before the sole native
 mutation send. Configuration counters still do not prove receiver delivery.
 
+Strict process inspection requires the optional process-read capability shown in
+`packaging/examples/ovs-mgrd-mirror.conf.example`. The default service omits
+`CAP_SYS_PTRACE`; installing an optional drop-in requires deployment review
+because this capability permits more than reading OVS. CI opts in only within
+its disposable fixture and restores the original unit afterward.
+
 Without qualification, observations remain available and new Mirror writes are
 unavailable. The durable admitted plan retains its original build pin for
 compensation; removing new admission/root grants does not discard that pin.
