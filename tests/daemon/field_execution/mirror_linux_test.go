@@ -88,7 +88,11 @@ func TestNativeMirrorSessions(t *testing.T) {
 					f.vs("set", "Port", p, "vlan_mode=access", "tag=100")
 					f.run("ip", "netns", "exec", ns, "ip", "addr", "add", "198.19.166."+strconv.Itoa(n+1)+"/24", "dev", peer)
 				} else {
-					f.vs("set", "Port", p, "vlan_mode=trunk", "trunks=100,200")
+					// Exclude ordinary VLAN 100 forwarding, including unknown-
+					// unicast flooding after native configuration flushes the FDB.
+					// An output-Port Mirror bypasses normal VLAN membership;
+					// RSPAN copies leave only on the explicitly allowed VLAN 200.
+					f.vs("set", "Port", p, "vlan_mode=trunk", "trunks=200")
 				}
 				namespaces, ports, peers = append(namespaces, ns), append(ports, p), append(peers, peer)
 			}
@@ -156,6 +160,7 @@ else:print('0,-1',flush=True)
 					return length, vlan
 				}
 			}
+			phase := "before-create"
 			probe := func(from, to int, want bool, wantSnap int, wantVLAN int) {
 				// Test-fixture barrier only: wait for a real revalidator cycle after
 				// native configuration settles, then independently sample packets.
@@ -170,7 +175,7 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 `, peers[from], strconv.Itoa(from+1), strconv.Itoa(to+1), token)
 				length, vlan := receive()
 				if (length > 0) != want || wantSnap > 0 && length != wantSnap || wantVLAN >= 0 && vlan != wantVLAN {
-					t.Fatalf("native copy mismatch scenario=%s from=%d to=%d length=%d vlan=%d want=%v snap=%d vlan=%d", scenario, from, to, length, vlan, want, wantSnap, wantVLAN)
+					t.Fatalf("native copy mismatch scenario=%s phase=%s from=%d to=%d length=%d vlan=%d want=%v snap=%d vlan=%d", scenario, phase, from, to, length, vlan, want, wantSnap, wantVLAN)
 				}
 			}
 			probe(0, 1, false, 0, -1)
@@ -203,6 +208,7 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			f.configureSafety(&offset)
 			id := f.safeApply(f.prepareTopology(binding, candidate.MirrorCreate, candidate.TopologyRequest{Name: name, Mirror: &config}))
 			f.waitTopology(id, "awaiting-confirmation")
+			phase = "created"
 			probeCurrent := func() {
 				snap, vlan := 0, -1
 				if scenario == "snaplen" {
@@ -232,10 +238,12 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			changed.VLANs = []string{"101"}
 			id = f.safeApply(f.prepareTopology(object, candidate.MirrorConfigure, candidate.TopologyRequest{Mirror: &changed}))
 			f.waitTopology(id, "awaiting-confirmation")
+			phase = "vlan-filter-changed"
 			probe(0, 1, false, 0, -1)
 			probe(1, 0, false, 0, -1)
 			f.decide(id, "rollback")
 			f.waitTopology(id, "rolled-back")
+			phase = "configuration-restored"
 			if f.topologyNode("Mirror", name).Binding != object || f.vs("get", "Mirror", name, "select_all", "select_src_port", "select_dst_port", "select_vlan", "output_port", "output_vlan", "snaplen", "external_ids") != original {
 				t.Fatal("Mirror edit changed identity or raw originals")
 			}
@@ -243,6 +251,7 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			f.discardPortDraft()
 			id = f.safeApply(f.prepareTopology(object, candidate.MirrorDelete, candidate.TopologyRequest{}))
 			f.waitTopology(id, "awaiting-confirmation")
+			phase = "deleted"
 			if f.vs("get", "Bridge", bridge, "mirrors") != "[]" {
 				t.Fatal("deleted Mirror retained strong Bridge reference")
 			}
@@ -264,6 +273,7 @@ s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW);s.bind((dev,0));frame=bytes.fr
 			offset.Store(int64(121 * time.Second))
 			f.configureSafety(&offset)
 			f.waitTopology(id, "rolled-back")
+			phase = "deletion-restored"
 			restored := f.topologyNode("Mirror", name).Binding
 			if restored.ManagementID == object.ManagementID || restored.OVSUUID == object.OVSUUID || f.proxy.sent.Load() != before+1 {
 				t.Fatal("Mirror recovery reused identity or mutation")
