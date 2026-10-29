@@ -95,6 +95,9 @@ The new five-case actual-build Mirror matrix has a 360-second Go test budget
 and a 390-second enclosing process budget, based on measured sanitizer overhead.
 Existing native matrices, two-second source/build checks, authentication and
 Safe Apply/recovery deadlines are unchanged; all five cases remain required.
+The new Mirror authority race regression runs in its own 180-second group;
+every existing authentication test stays in its original group and retains
+that group's 180-second budget. The aggregate report includes every test once.
 
 The full matrix retains direction/VLAN/snaplen/RSPAN assertions, exact edit
 compensation, deletion no-copy, manager reopen/deadline recovery with current

@@ -339,9 +339,10 @@ jobs:
           go mod verify
           mkdir -p test-results
           # Keep production Argon2id cost and the existing per-group deadline.
-          # The growing auth package exceeded 180s cumulatively on arm64. Three
-          # complementary name filters run every auth test exactly once; other
-          # packages retain the complete normal suite, with no global skip.
+          # The growing auth package exceeded 180s cumulatively on arm64. The
+          # three complementary filters retain every existing auth test; the new
+          # Mirror authority regression runs in its own group, exactly once.
+          # Other packages retain the complete normal suite, with no global skip.
           auth_package=$(go list ./internal/repository/auth)
           mapfile -t all_packages <<< "$(go list ./...)"
           runtime_packages=()
@@ -350,9 +351,11 @@ jobs:
           done
           go test -json -race -count=1 -timeout=180s "${runtime_packages[@]}" | tee test-results/go-tests.json
           auth_services='^(TestFormalValidation|TestShared|TestRunningCancellation|TestEvidence|TestLegacy|TestExecution|TestTLS|TestVerifiedAuth)'
-          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply" "$auth_package" | tee -a test-results/go-tests.json
+          mirror_authority='^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$'
+          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply|$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run "$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
           # Force the worker-held-lock admission regression repeatedly without
           # increasing timeouts or counting these runs as unique suite tests.
           go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
