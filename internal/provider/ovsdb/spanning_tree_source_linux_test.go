@@ -114,8 +114,8 @@ func TestSpanningTreeSourceDiagRejectsMalformedAndInterruptedEvidence(t *testing
 			case "after-done":
 				b = append(append([]byte{}, done...), valid...)
 			}
-			if _, err := parseUnixPeers(b, map[uint32]uint32{}); err == nil {
-				t.Fatal("malformed evidence accepted")
+			if _, err := parseUnixPeers(b, map[uint32]uint32{}); err == nil || !errors.Is(err, sourceUnproven) {
+				t.Fatal("malformed evidence accepted or coarse refusal identity changed")
 			}
 		})
 	}
@@ -164,6 +164,47 @@ func TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers(t *testing.T) {
 	if _, err := unixSocketPeers(ctx); err == nil {
 		t.Fatal("cancelled dump accepted")
 	}
+	t.Run("bounded_churn_diagnostics_keep_refusal_and_fresh_peer_proof", func(t *testing.T) {
+		churn, cancelChurn := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		defer cancelChurn()
+		stopped := make(chan struct{})
+		go func() {
+			defer close(stopped)
+			for churn.Err() == nil {
+				pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+				if err != nil {
+					return
+				}
+				_ = unix.Close(pair[0])
+				_ = unix.Close(pair[1])
+			}
+		}()
+		counts := map[string]int{}
+		for churn.Err() == nil {
+			_, err := unixSocketPeers(churn)
+			code := "complete"
+			if err != nil {
+				if !errors.Is(err, sourceUnproven) {
+					cancelChurn()
+					<-stopped
+					t.Fatal("diagnostic lost fail-closed identity")
+				}
+				code = err.Error()
+			}
+			counts[code]++
+		}
+		cancelChurn()
+		<-stopped
+		for code, count := range counts {
+			t.Logf("isolated Unix socket churn code=%s inspections=%d", code, count)
+		}
+		fresh, finish := context.WithTimeout(context.Background(), time.Second)
+		defer finish()
+		observed, err := unixSocketPeers(fresh)
+		if err != nil || observed[a] != b || observed[b] != a {
+			t.Fatal("fresh peer proof failed after isolated churn stopped", err)
+		}
+	})
 }
 
 func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *testing.T) {
