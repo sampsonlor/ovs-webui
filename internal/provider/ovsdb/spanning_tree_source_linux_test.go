@@ -167,6 +167,47 @@ func TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers(t *testing.T) {
 }
 
 func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *testing.T) {
+	t.Run("mirror_observation_reuses_live_transport_without_control_rpc_or_trust_cache", func(t *testing.T) {
+		accepted := make(chan net.Conn, 2)
+		stop := make(chan struct{})
+		control := controlServer(t, func(c net.Conn) { accepted <- c; <-stop })
+		t.Cleanup(func() { close(stop) })
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		holder := &mirrorObservationConnection{}
+		defer holder.close()
+		conn, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var server net.Conn
+		select {
+		case server = <-accepted:
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		for k := 0; k < 8; k++ {
+			current, err := holder.get(ctx, control.Socket, control.PeerUID)
+			if err != nil || current != conn {
+				t.Fatal("healthy observation churned control transport", err)
+			}
+		}
+		_ = server.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+		if _, err := server.Read(make([]byte, 1)); !os.IsTimeout(err) {
+			t.Fatal("transport observation sent control bytes", err)
+		}
+		_ = server.Close()
+		if _, err := holder.get(ctx, control.Socket, control.PeerUID); err == nil || holder.conn != nil {
+			t.Fatal("closed peer accepted or reconnected inside failed observation")
+		}
+		next, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil || next == conn {
+			t.Fatal("explicit next observation did not open a fresh transport", err)
+		}
+		if _, err := holder.get(ctx, control.Socket, ^uint32(0)); err == nil || holder.conn != nil {
+			t.Fatal("reused transport skipped current peer credential check")
+		}
+	})
 	t.Run("mirror_dispatch_retains_its_own_probes_across_both_fresh_checks", func(t *testing.T) {
 		ctx, finish := mirrorAttemptContext(context.Background(), true)
 		defer finish()

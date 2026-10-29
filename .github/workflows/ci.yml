@@ -569,6 +569,8 @@ jobs:
           set -o pipefail
           go test -json -count=1 -run '^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$' ./internal/repository/auth \
             | tee test-results/go-mirror-authority.json
+          go test -race -json -count=1 -run '^(TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess|TestMirrorNativePlanFencesEverySessionAndExactIncomingReferences)$' ./internal/provider/ovsdb \
+            | tee test-results/go-mirror-observation.json
       - name: Unfixed distro cached-copy reproduction and manager write denial
         run: |
           set -o pipefail
@@ -678,7 +680,17 @@ jobs:
   gate:
     name: CI Gate
     if: always()
-    needs: [quality, integration, browser, go-runtime, native-topology, native-static-tunnels, native-mirrors, ovs-witness]
+    needs:
+      [
+        quality,
+        integration,
+        browser,
+        go-runtime,
+        native-topology,
+        native-static-tunnels,
+        native-mirrors,
+        ovs-witness,
+      ]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:

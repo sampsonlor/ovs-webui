@@ -191,8 +191,8 @@ def mirror_write(f, mode, report):
         # explicit kernel test. Both daemons come from these attested binaries.
         result = subprocess.run([str(out/'test2json'), '-t', '-p', 'witness/mirror-execution',
                                  'ip', 'netns', 'exec', writer_ns, str(out/'multicast-execution.test'),
-                                 '-test.v=test2json', '-test.run=^TestNativeMirrorSessions$', '-test.timeout=240s'],
-                                env=env, capture_output=True, timeout=270)
+                                 '-test.v=test2json', '-test.run=^TestNativeMirrorSessions$', '-test.timeout=360s'],
+                                env=env, capture_output=True, timeout=390)
     except subprocess.TimeoutExpired as failure:
         prefix.with_suffix('.json').write_bytes(failure.stdout or b'')
         prefix.with_suffix('.stderr').write_bytes(failure.stderr or b'')
@@ -214,7 +214,7 @@ def mirror_write(f, mode, report):
     assert passed == expected and not any(e.get('Action') in ['fail', 'skip'] for e in events), passed
     report['mirror_reproduction' if mode=='default' else 'mirror_execution'] = {'status': 'pass', 'runtime': VERSION, 'cases': passed, 'kind':'unfixed-cached-residual-and-write-denial' if mode=='default' else 'qualified-fixed-full-recovery',
                                         'schema': str(f.source/'vswitchd/vswitch.ovsschema'),
-                                        'executables': f.manifest, 'datapath_isolation': 'separate-network-namespace'}
+                                        'executables': f.manifest, 'datapath_isolation': 'separate-network-namespace', 'go_test_budget_seconds':360, 'process_budget_seconds':390}
 
 
 class Fixture:

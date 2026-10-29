@@ -23,6 +23,7 @@ import (
 )
 
 var sourceUnproven = errors.New("SPANNING_TREE_SOURCE_UNPROVEN")
+var sourceDiagInterrupted = errors.New("SPANNING_TREE_SOURCE_DIAG_INTERRUPTED")
 
 // ReadBoundSpanningTreeRuntime is a private, read-only source prerequisite.
 // It checks a pinned control incarnation, a root-owned executable and an actual
@@ -124,6 +125,9 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 	}
 	links, err := unixSocketPeers(ctx)
 	if err != nil {
+		if errors.Is(err, sourceDiagInterrupted) {
+			return "", err
+		}
 		return "", errors.New("SPANNING_TREE_SOURCE_DIAG_UNPROVEN")
 	}
 	var connection string
@@ -281,8 +285,11 @@ func parseUnixPeers(data []byte, out map[uint32]uint32) (bool, error) {
 			return false, sourceUnproven
 		}
 		n := int(order.Uint32(data))
-		if n < 16 || n > len(data) || (n+3)&^3 > len(data) || order.Uint32(data[8:]) != 1 || order.Uint16(data[6:])&unix.NLM_F_DUMP_INTR != 0 {
+		if n < 16 || n > len(data) || (n+3)&^3 > len(data) || order.Uint32(data[8:]) != 1 {
 			return false, sourceUnproven
+		}
+		if order.Uint16(data[6:])&unix.NLM_F_DUMP_INTR != 0 {
+			return false, sourceDiagInterrupted
 		}
 		kind := order.Uint16(data[4:])
 		body := data[16:n]

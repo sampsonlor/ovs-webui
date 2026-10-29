@@ -103,6 +103,8 @@ func (p *Provider) session(ctx context.Context, s Sink) error {
 		return err
 	}
 	continuous := false
+	observeMirror, closeMirrorObservation := p.mirrorObservation()
+	defer closeMirrorObservation()
 	publish := func() error {
 		if err := validateRelations(rows); err != nil {
 			return err
@@ -118,7 +120,7 @@ func (p *Provider) session(ctx context.Context, s Sink) error {
 			return errors.New("OVSDB_SNAPSHOT_INVALID")
 		}
 		e := evidence(p.options, d, rows, identity, pid, prior, continuous)
-		mirrorBuild, mirrorErr := p.mirrorRuntime(ctx, p.mirror, e, false)
+		mirrorBuild, mirrorErr := observeMirror(ctx, e)
 		mirrorFailure := ""
 		if mirrorErr != nil {
 			mirrorFailure = mirrorErr.Error()

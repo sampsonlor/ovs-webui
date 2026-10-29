@@ -43,6 +43,10 @@ func (p *Provider) mirrorRuntime(ctx context.Context, o *MirrorExecutionOptions,
 	if retainTreeSourceConnection(ctx, conn) != nil {
 		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
+	return p.mirrorRuntimeConnection(ctx, o, evidence, conn, source)
+}
+
+func (p *Provider) mirrorRuntimeConnection(ctx context.Context, o *MirrorExecutionOptions, evidence inventory.Evidence, conn net.Conn, source bool) (string, error) {
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	deadline, _ := ctx.Deadline()

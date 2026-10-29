@@ -105,6 +105,9 @@ func (f *fixture) checkMirrorRuntimeRejections(object candidate.Binding, desired
 	if out.Commit != "rejected" || out.Reason != "mirror-runtime-unqualified" || f.proxy.sent.Load() != sent || f.vs("get", "Mirror", object.OVSUUID, "select_vlan") != before {
 		f.t.Fatal("late build revocation dispatched or invented a mutation", out)
 	}
+	// A retained observation socket must not retain build trust. The next
+	// actual monitor publication must withdraw new-write availability too.
+	waitFor(f.t, func() bool { return f.topologySnapshot().Topology.MirrorRuntime == "" })
 }
 
 func (f *fixture) configureMirrorBuild() {

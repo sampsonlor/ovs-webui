@@ -50,6 +50,10 @@ mode and stable inode/timestamps, and binds the actual Unix peer process to the
 configured executable. Preparation, dispatch and Applied proof also verify the
 actual established connection to the exact observed DB peer, file, root and
 schema. No control RPC is sent. Checks have a two-second bound and no trust cache.
+Each inventory monitor retains one live control transport to avoid creating its
+own socket-dump churn; every observation still rehashes both current files and
+rechecks the original peer incarnation. A failed observation closes it and
+withdraws admission, without reconnecting within that observation.
 Dispatch repeats the check after the admission callback, before the sole native
 mutation send. Denial logs use fixed internal reason codes through the shared
 redaction boundary, with no private paths, configuration values or source IDs.
@@ -78,6 +82,11 @@ matrix with those three explicit schema combinations on both architectures.
 Actual pinned 3.3.9/3.7.1/4.0.0 builds run the full matrix in enabled and sanitized
 variants; default variants retain the unfixed counterexample. These evidence
 kinds are distinct and are never added together as successful recovery cases.
+
+The new five-case actual-build Mirror matrix has a 360-second Go test budget
+and a 390-second enclosing process budget, based on measured sanitizer overhead.
+Existing native matrices, two-second source/build checks, authentication and
+Safe Apply/recovery deadlines are unchanged; all five cases remain required.
 
 The full matrix retains direction/VLAN/snaplen/RSPAN assertions, exact edit
 compensation, deletion no-copy, manager reopen/deadline recovery with current
