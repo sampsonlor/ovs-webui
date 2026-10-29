@@ -1,0 +1,8 @@
+{
+  "status": "historical-one-line-proposal; current optional correction is pinned by upstream.json",
+  "version": "4.0.0",
+  "commit": "b89dc80f0143f5bf3f58c48d54e82cc7f8d29da8",
+  "source": "ofproto/ofproto-dpif.c",
+  "input_sha256": "245e1f5db18702ec1f12314467caeebfb32dc868f351d1a63f6b0b6fb5ee176b",
+  "patch_sha256": "7d921a0ea4c754d387e426ab20f29f9da89a7dc0f42e01dea6aae787fed6b75e"
+}

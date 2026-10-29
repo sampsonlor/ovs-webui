@@ -19,6 +19,7 @@
   import Isolation from './Isolation.svelte';
  import Multicast from './Multicast.svelte';
   import Tunnels from './Tunnels.svelte';
+  import Mirrors from './Mirrors.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -173,6 +174,7 @@
         <Link href="/switching/spanning-tree" current={path.startsWith('/switching/spanning-tree')}>STP / RSTP</Link>
         <Link href="/switching/multicast" current={path.startsWith('/switching/multicast')}>Multicast</Link>
         <Link href="/switching/tunnels" current={path.startsWith('/switching/tunnels')}>Tunnels</Link>
+        <Link href="/switching/mirrors" current={path.startsWith('/switching/mirrors')}>Mirrors</Link>
         <Link href="/switching/isolation" current={path.startsWith('/switching/isolation')}>Port isolation</Link>
         {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
@@ -457,6 +459,8 @@
           {/if}
         {:else if path === '/switching/spanning-tree' || path.startsWith('/switching/spanning-tree/')}
           <SpanningTree model={$model} {expert} {desktop} />
+        {:else if path === '/switching/mirrors' || path.startsWith('/switching/mirrors/')}
+          <Mirrors model={$model} {expert} {desktop}/>
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}

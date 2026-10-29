@@ -24,6 +24,13 @@ import (
 
 var sourceUnproven = errors.New("SPANNING_TREE_SOURCE_UNPROVEN")
 
+type sourceDiagFailure string
+
+func (e sourceDiagFailure) Error() string { return string(e) }
+func (e sourceDiagFailure) Unwrap() error { return sourceUnproven }
+
+var sourceDiagInterrupted = sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_INTERRUPTED")
+
 // ReadBoundSpanningTreeRuntime is a private, read-only source prerequisite.
 // It checks a pinned control incarnation, a root-owned executable and an actual
 // established Unix connection to the configured DB peer, both before and after
@@ -124,19 +131,17 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 	}
 	links, err := unixSocketPeers(ctx)
 	if err != nil {
+		var diagnosis sourceDiagFailure
+		if errors.As(err, &diagnosis) {
+			return "", err
+		}
 		return "", errors.New("SPANNING_TREE_SOURCE_DIAG_UNPROVEN")
 	}
-	var connection string
-	for inode := range a {
-		other := links[inode]
-		if other != 0 && b[other] && links[other] == inode {
-			if connection != "" {
-				return "", sourceUnproven
-			}
-			connection = fmt.Sprintf("%d:%d", inode, other)
-		}
+	connection, err := sourceSocketConnection(a, b, links)
+	if err != nil {
+		return "", err
 	}
-	if connection == "" || ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return "", errors.New("SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN")
 	}
 	// Recheck process incarnations after proc/diag collection. Socket replacement
@@ -147,6 +152,25 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 		return "", sourceUnproven
 	}
 	return fmt.Sprintf("%s/%s/%d:%d/%d:%d/%s", daemon, dbPeer, trusted.Dev, trusted.Ino, w.Device, w.Inode, connection), nil
+}
+
+// Only a reciprocal nonzero pair owned by the two sampled processes can
+// establish source authority. An unresolved/closed peer never participates.
+func sourceSocketConnection(a, b map[uint32]bool, links map[uint32]uint32) (string, error) {
+	var connection string
+	for inode := range a {
+		other := links[inode]
+		if other != 0 && b[other] && links[other] == inode {
+			if connection != "" {
+				return "", sourceUnproven
+			}
+			connection = fmt.Sprintf("%d:%d", inode, other)
+		}
+	}
+	if connection == "" {
+		return "", errors.New("SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN")
+	}
+	return connection, nil
 }
 
 // A single purpose-built read transaction. The discovery request/call helper
@@ -228,11 +252,11 @@ func processSocketInodes(pid int) (map[uint32]bool, error) {
 func unixSocketPeers(ctx context.Context) (map[uint32]uint32, error) {
 	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_CLOEXEC, unix.NETLINK_SOCK_DIAG)
 	if err != nil {
-		return nil, sourceUnproven
+		return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_SOCKET")
 	}
 	defer unix.Close(fd)
 	if unix.Bind(fd, &unix.SockaddrNetlink{Family: unix.AF_NETLINK}) != nil || unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &unix.Timeval{Usec: 100000}) != nil {
-		return nil, sourceUnproven
+		return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_INITIALIZATION")
 	}
 	order := binary.NativeEndian
 	request := make([]byte, 40) // nlmsghdr + unix_diag_req
@@ -245,7 +269,7 @@ func unixSocketPeers(ctx context.Context) (map[uint32]uint32, error) {
 	order.PutUint32(request[28:], 4)    // UDIAG_SHOW_PEER
 	order.PutUint64(request[32:], ^uint64(0))
 	if unix.Sendto(fd, request, 0, &unix.SockaddrNetlink{Family: unix.AF_NETLINK}) != nil {
-		return nil, sourceUnproven
+		return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_SEND")
 	}
 	out := map[uint32]uint32{}
 	buffer := make([]byte, 64<<10)
@@ -257,7 +281,17 @@ func unixSocketPeers(ctx context.Context) (map[uint32]uint32, error) {
 		}
 		sender, ok := from.(*unix.SockaddrNetlink)
 		if err != nil || !ok || sender.Pid != 0 || flags&unix.MSG_TRUNC != 0 || n == 0 {
-			return nil, sourceUnproven
+			code := "SPANNING_TREE_SOURCE_DIAG_RECEIVE"
+			if ctx.Err() != nil {
+				code = "SPANNING_TREE_SOURCE_DIAG_CONTEXT_EXPIRED"
+			} else if !ok || sender.Pid != 0 {
+				code = "SPANNING_TREE_SOURCE_DIAG_SENDER"
+			} else if flags&unix.MSG_TRUNC != 0 {
+				code = "SPANNING_TREE_SOURCE_DIAG_TRUNCATED"
+			} else if n == 0 {
+				code = "SPANNING_TREE_SOURCE_DIAG_EMPTY"
+			}
+			return nil, sourceDiagFailure(code)
 		}
 		total += n
 		done, err := parseUnixPeers(buffer[:n], out)
@@ -266,30 +300,45 @@ func unixSocketPeers(ctx context.Context) (map[uint32]uint32, error) {
 		}
 		if done {
 			if ctx.Err() != nil || len(out) > 4096 {
-				return nil, sourceUnproven
+				if ctx.Err() != nil {
+					return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_CONTEXT_EXPIRED")
+				}
+				return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_BUDGET")
 			}
 			return out, nil
 		}
 	}
-	return nil, sourceUnproven
+	if ctx.Err() != nil {
+		return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_CONTEXT_EXPIRED")
+	}
+	if !time.Now().Before(deadline) {
+		return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_DEADLINE")
+	}
+	return nil, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_BUDGET")
 }
 
 func parseUnixPeers(data []byte, out map[uint32]uint32) (bool, error) {
 	order := binary.NativeEndian
 	for len(data) > 0 {
 		if len(data) < 16 {
-			return false, sourceUnproven
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_HEADER")
 		}
 		n := int(order.Uint32(data))
-		if n < 16 || n > len(data) || (n+3)&^3 > len(data) || order.Uint32(data[8:]) != 1 || order.Uint16(data[6:])&unix.NLM_F_DUMP_INTR != 0 {
-			return false, sourceUnproven
+		if n < 16 || n > len(data) || (n+3)&^3 > len(data) || order.Uint32(data[8:]) != 1 {
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_HEADER")
+		}
+		if order.Uint16(data[6:])&unix.NLM_F_DUMP_INTR != 0 {
+			return false, sourceDiagInterrupted
 		}
 		kind := order.Uint16(data[4:])
 		body := data[16:n]
 		data = data[(n+3)&^3:]
+		if kind == unix.NLMSG_ERROR {
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_KERNEL")
+		}
 		if kind == unix.NLMSG_DONE {
 			if len(data) != 0 || len(body) != 4 || order.Uint32(body) != 0 {
-				return false, sourceUnproven
+				return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_DONE")
 			}
 			return true, nil
 		}
@@ -298,38 +347,40 @@ func parseUnixPeers(data []byte, out map[uint32]uint32) (bool, error) {
 			if kind == 20 && len(body) >= 16 && body[0] == unix.AF_UNIX && body[2] == 1 {
 				continue
 			}
-			return false, sourceUnproven
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_SOCKET_STATE")
 		}
 		inode := order.Uint32(body[4:])
 		if inode == 0 {
-			return false, sourceUnproven
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_INODE")
 		}
 		peer := uint32(0)
+		peerSeen := false
 		for attrs := body[16:]; len(attrs) > 0; {
 			if len(attrs) < 4 {
-				return false, sourceUnproven
+				return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_ATTRIBUTE")
 			}
 			size := int(order.Uint16(attrs))
 			if size < 4 || size > len(attrs) || (size+3)&^3 > len(attrs) {
-				return false, sourceUnproven
+				return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_ATTRIBUTE")
 			}
 			if order.Uint16(attrs[2:]) == 2 { // UNIX_DIAG_PEER
-				if size != 8 || peer != 0 {
-					return false, sourceUnproven
+				if size != 8 || peerSeen {
+					return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_PEER_ATTRIBUTE")
 				}
+				peerSeen = true
+				// Linux sk_diag_dump_peer() can report sock_i_ino(peer)==0
+				// after the peer's file detaches. Preserve that valid kernel
+				// state as unavailable; source matching still requires !=0.
 				peer = order.Uint32(attrs[4:])
-				if peer == 0 {
-					return false, sourceUnproven
-				}
 			}
 			attrs = attrs[(size+3)&^3:]
 		}
 		if _, duplicate := out[inode]; duplicate {
-			return false, sourceUnproven
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_DUPLICATE_INODE")
 		}
 		out[inode] = peer
 		if len(out) > 4096 {
-			return false, sourceUnproven
+			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_BUDGET")
 		}
 	}
 	return false, nil

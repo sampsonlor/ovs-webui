@@ -1,0 +1,43 @@
+{
+  "abi": "ovs-webui.stp-witness.v1",
+  "archive_sha256": "d2496304f92f4a423534424a92579db8656aec1780590de8bf0deb8f7e8a7e9f",
+  "cflags": "-O1 -g -Werror",
+  "configure": [
+    "--enable-ssl",
+    "--disable-libcapng",
+    "--disable-shared",
+    "--enable-static",
+    "--enable-ovs-webui-witness",
+    "--enable-ovs-webui-mirror-fix"
+  ],
+  "database_schema_digest": "6de4988b011d7465a20b72924e3ef3d864d56ea9c40b8376a635c9028c2c1268",
+  "files": {
+    "extensions/ovs-witness/3.7.1/input-columns.json": "63972314f39dc94a50533b494507765730ad234aa822d3170b65396408b2c094",
+    "extensions/ovs-witness/3.7.1/overlay/lib/ovs-webui-witness.h": "30371af9050ea9ced9ad0bedb8fd8cdb5467304278b630b4a83275143323953d",
+    "extensions/ovs-witness/3.7.1/overlay/vswitchd/ovs-webui-input-columns.inc": "15476ec57a4bb8790223fef0ccf3199225f381d31620cebfeb3fb52dccc675d5",
+    "extensions/ovs-witness/3.7.1/overlay/vswitchd/ovs-webui-witness.inc": "8e80a8f288c36f89de4e26d71d99dd72689d158776ded673129c2b87c06d33c7",
+    "extensions/ovs-witness/3.7.1/witness.patch": "1e6b19f613bc1847f128d1f86b2930965d6cb5cccb0c2ab3bfde16a9f9e603d4",
+    "internal/ovswitness/input-types.json": "db5dd71a3525823a4e51a593a575a7b8af279bb4a0f125c4a96339f693ff1a11",
+    "internal/ovswitness/witness.schema.json": "9ee748bf6fcb391ada36b9e02dd0c7cf9f5bc3d359e6a5e63ef611e9650a875f",
+    "internal/provider/ovsdb/testdata/vswitch-3.7.1.ovsschema": "35663bcb750d28f743d95039bde4eed1eee3324791a8981cde31c7e1829b2232",
+    "internal/ovswitness/testdata/server-schema-8.8.0.json": "e829d0193b25e01986bbc163445eb71e5d5eee43b7741aceaeaac5b3e6a22f2e",
+    "extensions/ovs-mirror-delete/3.7.1/mirror-delete-revalidation.patch": "8550308973e7372717948948e1d35c30d9d4df1d784387e00abc517f6b86e68a",
+    "extensions/ovs-mirror-delete/3.7.1/upstream.json": "d183b697297ad4ab7fe1e710ebdea4b67b8c95d90085934576b796e3a407731e",
+    "extensions/ovs-mirror-delete/3.7.1/build-profile.json": "e88e21508a74e1a1f3281783f50745a326b3cbce205facf1c5c0acc2203cd088"
+  },
+  "format": "ovs-webui.stp-build-profile.v1",
+  "libs": "-lm",
+  "runtime": "3.7.1",
+  "schema_encoding": "libovsdb-native-codec: actual OVS 3.7.1 get_schema (amd64 and arm64); source encoding pinned separately",
+  "source_schema_digest": "1645da15cf12514325617b47c5b50a0d15d0b078dd401d7b5bfa0479d375ae49",
+  "upstream_commit": "7921d9c6924b8934ea1de9481891ac1172649280",
+  "variants": {
+    "enabled": {},
+    "sanitized": {
+      "cflags": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+      "ldflags": "-fsanitize=address,undefined"
+    }
+  },
+  "parent_profile_sha256": "fbedf05c151cc59d4b08ee96c9c969eefcff882dafeaefb5b592317672068a3a",
+  "native_mirror_profile_sha256": "e88e21508a74e1a1f3281783f50745a326b3cbce205facf1c5c0acc2203cd088"
+}

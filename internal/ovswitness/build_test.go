@@ -104,3 +104,37 @@ func TestWitnessBuildProfilesAreClosedAndSchemaBound(t *testing.T) {
 		t.Fatal("independent source and schema pins lost")
 	}
 }
+
+func TestAdditionalMirrorProfilesPreserveAcceptedWitnessParents(t *testing.T) {
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		data, err := buildProfiles.ReadFile("build-profile-mirror-" + version + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var p struct {
+			Parent string            `json:"parent_profile_sha256"`
+			Schema string            `json:"database_schema_digest"`
+			Files  map[string]string `json:"files"`
+		}
+		parent, ok := BuildProfile(version)
+		if json.Unmarshal(data, &p) != nil || !ok || p.Parent != parent.Digest || p.Schema != parent.Schema {
+			t.Fatal("accepted profile was replaced", version)
+		}
+		h := sha256.Sum256(data)
+		digest := hex.EncodeToString(h[:])
+		combined, ok := LookupBuildProfile(digest)
+		if !ok || combined.Schema != parent.Schema || combined.Version != version {
+			t.Fatal("combined profile missing")
+		}
+		for name, want := range p.Files {
+			data, err := os.ReadFile(filepath.Join("../..", filepath.FromSlash(name)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := sha256.Sum256([]byte(strings.ReplaceAll(string(data), "\r\n", "\n")))
+			if hex.EncodeToString(h[:]) != want {
+				t.Fatal("combined source drift", name)
+			}
+		}
+	}
+}

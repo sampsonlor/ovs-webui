@@ -4,6 +4,7 @@ package fieldexecution
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
@@ -99,6 +100,7 @@ func (f *fixture) waitTopology(id, state string) safety.Record {
 			return
 		}
 		f.t.Logf("topology state=%s reason=%s commit=%s applied=%s outcome=%s", s.State, s.Reason, r.Outcome.Commit, r.Outcome.Applied, r.Outcome.Reason)
+		f.logRejectedNativeColumns()
 		observed := r.Plan.Envelope.Candidate
 		observed.Intents = append([]candidate.StoredIntent{}, observed.Intents...)
 		for k := range observed.Intents {
@@ -529,3 +531,96 @@ func TestNativeTopologyFields(t *testing.T) {
 
 // JSON here is test evidence, not a substitute for three independently executed
 // schema transactions or real system-device/management-path observations.
+
+// Report only native operation/column names from the disposable fixture. Private
+// row values and source paths never enter retained CI diagnostics.
+func (f *fixture) logRejectedNativeColumns() {
+	value := f.proxy.lastRejected.Load()
+	if value == nil {
+		return
+	}
+	rejected := value.(rejectedNativeOperation)
+	var op struct {
+		Op      string           `json:"op"`
+		Table   string           `json:"table"`
+		Where   []any            `json:"where"`
+		Columns []string         `json:"columns"`
+		Rows    []map[string]any `json:"rows"`
+	}
+	if json.Unmarshal(rejected.Operation, &op) != nil {
+		return
+	}
+	f.t.Logf("native rejected operation=%s table=%s code=%s", op.Op, op.Table, rejected.Code)
+	if op.Op != "wait" {
+		return
+	}
+	query, _ := json.Marshal([]any{"Open_vSwitch", map[string]any{"op": "select", "table": op.Table, "where": op.Where, "columns": op.Columns}})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	data, err := exec.CommandContext(ctx, "ovsdb-client", "transact", "unix:"+f.dbSocket, string(query)).Output()
+	var response []struct {
+		Rows []map[string]any `json:"rows"`
+	}
+	if err != nil || json.Unmarshal(data, &response) != nil || len(response) != 1 {
+		return
+	}
+	canonical := func(v any) string { b, _ := json.Marshal(normalizeNativeDiagnostic(v)); return string(b) }
+	byID := map[string]map[string]any{}
+	for _, row := range response[0].Rows {
+		byID[canonical(row["_uuid"])] = row
+	}
+	changed := map[string]bool{}
+	missing := 0
+	for _, expected := range op.Rows {
+		current, ok := byID[canonical(expected["_uuid"])]
+		if !ok {
+			missing++
+			continue
+		}
+		for _, column := range op.Columns {
+			if canonical(expected[column]) != canonical(current[column]) {
+				changed[column] = true
+			}
+		}
+	}
+	columns := []string{}
+	for column := range changed {
+		columns = append(columns, column)
+	}
+	slices.Sort(columns)
+	f.t.Logf("native rejected wait expected_rows=%d current_rows=%d missing_rows=%d changed_columns=%v", len(op.Rows), len(response[0].Rows), missing, columns)
+}
+func normalizeNativeDiagnostic(value any) any {
+	switch v := value.(type) {
+	case []any:
+		if len(v) == 2 && (v[0] == "set" || v[0] == "map") {
+			if members, ok := v[1].([]any); ok {
+				out := make([]any, 0, len(members))
+				for _, member := range members {
+					out = append(out, normalizeNativeDiagnostic(member))
+				}
+				slices.SortFunc(out, func(a, b any) int {
+					left, _ := json.Marshal(a)
+					right, _ := json.Marshal(b)
+					return strings.Compare(string(left), string(right))
+				})
+				if v[0] == "set" && len(out) == 1 {
+					return out[0]
+				}
+				return []any{v[0], out}
+			}
+		}
+		out := make([]any, 0, len(v))
+		for _, member := range v {
+			out = append(out, normalizeNativeDiagnostic(member))
+		}
+		return out
+	case map[string]any:
+		out := map[string]any{}
+		for key, member := range v {
+			out[key] = normalizeNativeDiagnostic(member)
+		}
+		return out
+	}
+	return value
+}

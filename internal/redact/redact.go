@@ -15,6 +15,7 @@ const Marker = "[REDACTED]"
 var eventCode = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,96}$`)
 
 var messages = map[string]bool{
+	"mirror_runtime_denied":         true,
 	"invalid_process_configuration": true, "auth_key_initialization_failed": true, "auth_key_initialized": true,
 	"database_initialization_failed": true, "database_initialized": true, "storage_degraded": true,
 	"authentication_degraded": true, "bootstrap_failed": true, "local_administrator_initialized": true,

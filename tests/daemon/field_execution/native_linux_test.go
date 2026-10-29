@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -32,6 +33,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/provider/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
+	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
 	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
@@ -43,16 +45,23 @@ import (
 
 var key = bytes.Repeat([]byte{9}, 32)
 
+type rejectedNativeOperation struct {
+	Operation json.RawMessage
+	Code      string
+}
+
 type faultProxy struct {
-	listener    net.Listener
-	target      string
-	sent        atomic.Int32
-	dropReply   atomic.Bool
-	dropRequest atomic.Bool
-	mu          sync.Mutex
-	before      func()
-	connections map[net.Conn]bool
-	wg          sync.WaitGroup
+	lastRejected atomic.Value
+	markerOnly   atomic.Bool
+	listener     net.Listener
+	target       string
+	sent         atomic.Int32
+	dropReply    atomic.Bool
+	dropRequest  atomic.Bool
+	mu           sync.Mutex
+	before       func()
+	connections  map[net.Conn]bool
+	wg           sync.WaitGroup
 }
 
 func newProxy(t *testing.T, path, target string) *faultProxy {
@@ -89,6 +98,7 @@ func (p *faultProxy) serve(c net.Conn) {
 	}
 	defer u.Close()
 	var transaction atomic.Bool
+	var operations atomic.Value
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -113,7 +123,11 @@ func (p *faultProxy) serve(c net.Conn) {
 					mutation = mutation || op.Op == "update" || op.Op == "mutate" || op.Op == "insert" || op.Op == "delete"
 				}
 			}
+			if p.markerOnly.Load() && !bytes.Contains(b, []byte("ovs-webui.bridge-commit")) {
+				mutation = false
+			}
 			if mutation {
+				operations.Store(r.Params[1:])
 				transaction.Store(true)
 				p.sent.Add(1)
 				p.mu.Lock()
@@ -138,8 +152,24 @@ func (p *faultProxy) serve(c net.Conn) {
 		if d.Decode(&b) != nil {
 			break
 		}
-		var r struct{ ID json.RawMessage }
+		var r struct {
+			ID     json.RawMessage
+			Result []map[string]json.RawMessage
+		}
 		_ = json.Unmarshal(b, &r)
+		if transaction.Load() && string(r.ID) == "2" {
+			if value := operations.Load(); value != nil {
+				ops := value.([]json.RawMessage)
+				for index, result := range r.Result {
+					if len(result["error"]) > 0 && index < len(ops) {
+						var code string
+						_ = json.Unmarshal(result["error"], &code)
+						p.lastRejected.Store(rejectedNativeOperation{Operation: ops[index], Code: code})
+						break
+					}
+				}
+			}
+		}
 		if transaction.Load() && string(r.ID) == "2" && p.dropReply.CompareAndSwap(true, false) {
 			break
 		}
@@ -163,6 +193,7 @@ func (p *faultProxy) close() {
 func (p *faultProxy) hook(f func()) { p.mu.Lock(); p.before = f; p.mu.Unlock() }
 
 type fixture struct {
+	mirrorBuildRevoked                bool
 	t                                 *testing.T
 	root, conf, dbSocket, proxySocket string
 	proxy                             *faultProxy
@@ -277,13 +308,20 @@ func newFixtureWithVLANLimit(t *testing.T, vlanLimit string) *fixture {
 	if vlanLimit != "" {
 		f.vs("set", "Open_vSwitch", ".", "other_config:vlan-limit="+vlanLimit)
 	}
-	f.run("ovs-vswitchd", "--enable-dummy", "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"), "--detach", "--no-chdir", "unix:"+f.dbSocket)
+	switchDatabase := f.dbSocket
+	if os.Getenv("OVS_MIRROR_NATIVE_TEST") == "1" {
+		f.startMirrorRelay()
+		switchDatabase = f.proxySocket
+	}
+	f.run("ovs-vswitchd", "--enable-dummy", "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"), "--detach", "--no-chdir", "unix:"+switchDatabase)
 	f.vs("add-br", "br-field", "--", "set", "Bridge", "br-field", "datapath_type=dummy", "--", "add-port", "br-field", "field-p1", "--", "set", "Interface", "field-p1", "type=dummy", "--", "set", "Port", "field-p1", "vlan_mode=access", "tag=10", "--", "add-port", "br-field", "field-p2", "--", "set", "Interface", "field-p2", "type=dummy", "--", "set", "Port", "field-p2", "vlan_mode=access", "tag=10")
 	// The trusted test proxy holds the actual DB file. Production still verifies
 	// SO_PEERCRED, process-start and file binding without any test bypass.
 	f.file, err = os.Open(f.conf)
 	must(t, err)
-	f.proxy = newProxy(t, f.proxySocket, f.dbSocket)
+	if f.proxy == nil {
+		f.proxy = newProxy(t, f.proxySocket, f.dbSocket)
+	}
 	managerDir, webDir := filepath.Join(root, "manager"), filepath.Join(root, "web")
 	must(t, os.Mkdir(managerDir, 0700))
 	must(t, os.Mkdir(webDir, 0700))
@@ -310,8 +348,11 @@ func (f *fixture) startMonitor() {
 	must(f.t, err)
 	f.inventory = inventory.New(r)
 	f.auth.WithInventory(f.inventory)
-	f.provider, err = ovsdb.New(ovsdb.Options{Socket: f.proxySocket, DatabaseFile: f.conf, PeerUID: uint32(os.Geteuid())})
+	f.provider, err = ovsdb.New(ovsdb.Options{Socket: f.proxySocket, DatabaseFile: f.conf, PeerUID: uint32(os.Geteuid()), Logger: slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd-test")})
 	must(f.t, err)
+	if os.Getenv("OVS_MIRROR_NATIVE_TEST") == "1" {
+		f.configureMirrorBuild()
+	}
 	f.ctx, f.cancel = context.WithCancel(context.Background())
 	f.monitorDone = make(chan struct{})
 	go func() { defer close(f.monitorDone); f.provider.Run(f.ctx, f.inventory) }()

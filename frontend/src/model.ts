@@ -93,6 +93,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     port: '/ports',
     bridge: '/bridges',
     interface: '/interfaces',
+    mirror: '/switching/mirrors',
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -361,6 +362,9 @@ export class Controller {
               audit: 'audit.read',
             } as Record<string, string>
           )[parts[1]] ?? 'unavailable';
+      } else if (path === '/switching/mirrors' || path.startsWith('/switching/mirrors/')) {
+        resourceURL = path === '/switching/mirrors/new' ? '/inventory/topology?domain=mirror' : parts.length===2 ? '/mirrors'+query : `/mirrors/${encodeURIComponent(parts[2])}`;
+        capability = 'configuration.read';
       } else if (path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')) {
         resourceURL = path === '/switching/tunnels/new' ? '/inventory/topology' : parts.length===2 ? '/tunnels'+query : `/tunnels/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';

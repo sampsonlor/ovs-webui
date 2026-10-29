@@ -1,0 +1,14 @@
+{
+  "version": "3.7.1",
+  "commit": "7921d9c6924b8934ea1de9481891ac1172649280",
+  "archive_sha256": "d2496304f92f4a423534424a92579db8656aec1780590de8bf0deb8f7e8a7e9f",
+  "inputs": {
+    "configure.ac": "671b11b3d6a7498c79b86c3d170b2ee2de0a7edcc23bc983f69aa4d9f2a841fc",
+    "ofproto/ofproto-dpif.c": "9080c2542e3640a880c748848eed9639a0ccc31fc5437be21117e44cdbd87a2a"
+  },
+  "patch_sha256": "8550308973e7372717948948e1d35c30d9d4df1d784387e00abc517f6b86e68a",
+  "witness_inputs": {
+    "configure.ac": "e9c0711049e64842aebcc0b057cf793f7ced640b82e8ffd3355607614e400f34",
+    "ofproto/ofproto-dpif.c": "e691a178cfabedf17d243288fd44e34a6865aee7eefac19ad60317f428fc944a"
+  }
+}

@@ -559,6 +559,7 @@ type Resource struct {
 	Source            Source                     `json:"source"`
 	AllowedActions    []string                   `json:"allowed_actions"`
 	NativeTunnel      StaticTunnelObservation    `json:"native_tunnel,omitempty"`
+	NativeMirror      MirrorObservation          `json:"native_mirror,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1077,7 +1078,7 @@ type TopologyRequest struct {
 	Tunnel            StaticTunnelPatchRequest `json:"tunnel,omitempty"`
 }
 type TopologyNode struct {
-	Binding              ObjectBinding              `json:"binding"`
+	Binding              NativeGraphBinding         `json:"binding"`
 	Name                 string                     `json:"name"`
 	NativeType           string                     `json:"native_type"`
 	Links                []ObjectBinding            `json:"links"`
@@ -1102,10 +1103,13 @@ type TopologyChange struct {
 	After                   []TopologyNode             `json:"after"`
 	Restored                []TopologyNode             `json:"restored"`
 	Replacements            map[string]json.RawMessage `json:"replacements"`
-	Request                 TopologyRequest            `json:"request"`
+	Request                 json.RawMessage            `json:"request"`
 	TunnelChange            StaticTunnelChange         `json:"tunnel_change,omitempty"`
 	TunnelAuthorityRevision Revision                   `json:"tunnel_authority_revision,omitempty"`
 	TunnelDependency        Revision                   `json:"tunnel_dependency,omitempty"`
+	MirrorChange            MirrorChange               `json:"mirror_change,omitempty"`
+	MirrorAuthorityRevision Revision                   `json:"mirror_authority_revision,omitempty"`
+	MirrorDependency        Revision                   `json:"mirror_dependency,omitempty"`
 	ExtraFields             map[string]json.RawMessage `json:"-"`
 }
 
@@ -1212,6 +1216,54 @@ type StaticTunnelObservation struct {
 	Operational               json.RawMessage       `json:"operational"`
 	Source                    Source                `json:"source"`
 	Execution                 StaticTunnelExecution `json:"execution"`
+}
+type MirrorObjectBinding struct {
+	ManagementId       Id     `json:"management_id"`
+	OvsUuid            string `json:"ovs_uuid"`
+	Table              string `json:"table"`
+	InstanceGeneration Id     `json:"instance_generation"`
+}
+type NativeGraphBinding = json.RawMessage
+type MirrorConfiguration struct {
+	SelectAll          bool            `json:"select_all"`
+	SourcePortIds      []Id            `json:"source_port_ids"`
+	DestinationPortIds []Id            `json:"destination_port_ids"`
+	SelectVlans        []string        `json:"select_vlans"`
+	OutputPortId       json.RawMessage `json:"output_port_id"`
+	OutputVlan         json.RawMessage `json:"output_vlan"`
+	Snaplen            json.RawMessage `json:"snaplen"`
+}
+type MirrorTopologyRequest struct {
+	Name   string              `json:"name,omitempty"`
+	Mirror MirrorConfiguration `json:"mirror,omitempty"`
+}
+type MirrorChange struct {
+	Object MirrorObjectBinding `json:"object"`
+	Bridge ObjectBinding       `json:"bridge"`
+	Before json.RawMessage     `json:"before"`
+	After  json.RawMessage     `json:"after"`
+}
+type MirrorExecution struct {
+	Available  bool   `json:"available"`
+	Reason     string `json:"reason"`
+	Capability string `json:"capability"`
+}
+type MirrorPort struct {
+	Binding        ObjectBinding `json:"binding"`
+	Name           string        `json:"name"`
+	Editable       bool          `json:"editable"`
+	OutputEligible bool          `json:"output_eligible"`
+}
+type MirrorObservation struct {
+	Configuration             json.RawMessage `json:"configuration"`
+	ConfigurationAvailability string          `json:"configuration_availability"`
+	Reason                    string          `json:"reason"`
+	BridgeRef                 json.RawMessage `json:"bridge_ref"`
+	Ports                     json.RawMessage `json:"ports"`
+	PortsTruncated            bool            `json:"ports_truncated"`
+	PortCount                 json.RawMessage `json:"port_count"`
+	Source                    Source          `json:"source"`
+	Execution                 MirrorExecution `json:"execution"`
 }
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
@@ -1418,6 +1470,24 @@ type StaticTunnelDeleteIntent struct {
 	IntentId  Id                         `json:"intent_id"`
 	Operation string                     `json:"operation"`
 	Object    ObjectBinding              `json:"object"`
+	Topology  map[string]json.RawMessage `json:"topology"`
+}
+type NativeMirrorCreateIntent struct {
+	IntentId  Id                         `json:"intent_id"`
+	Operation string                     `json:"operation"`
+	Object    ObjectBinding              `json:"object"`
+	Topology  map[string]json.RawMessage `json:"topology"`
+}
+type NativeMirrorConfigureIntent struct {
+	IntentId  Id                         `json:"intent_id"`
+	Operation string                     `json:"operation"`
+	Object    MirrorObjectBinding        `json:"object"`
+	Topology  map[string]json.RawMessage `json:"topology"`
+}
+type NativeMirrorDeleteIntent struct {
+	IntentId  Id                         `json:"intent_id"`
+	Operation string                     `json:"operation"`
+	Object    MirrorObjectBinding        `json:"object"`
 	Topology  map[string]json.RawMessage `json:"topology"`
 }
 type SpanningTreePrepareRequest struct {

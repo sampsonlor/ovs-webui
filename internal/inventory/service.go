@@ -27,6 +27,9 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	localMirrorObjects             map[string]bool
+	localMirrorCreates             map[string]bool
+	mirrorAuthorityRevision        string
 	localTunnelObjects             map[string]bool
 	localTunnelCreates             map[string]bool
 	tunnelAuthorityRevision        string
@@ -81,9 +84,9 @@ func (s *Service) Publish(ctx context.Context, o Observation) error {
 }
 func (s *Service) install(o Observation, d Decision) {
 	digest := Digest(struct {
-		Rows                      Rows
-		Schema, Generation, State string
-	}{o.Rows, o.Schema.Digest, d.Generation, d.State})
+		Rows                                     Rows
+		Schema, Generation, State, MirrorRuntime string
+	}{o.Rows, o.Schema.Digest, d.Generation, d.State, o.MirrorRuntime})
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v := &view{observation: o, decision: d, id: repository.NewID(), digest: digest, sequence: 1}
@@ -143,6 +146,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	localIsolation := s.localIsolation
 	localMulticast := s.localMulticast
 	localTunnelObjects, localTunnelCreates, tunnelRevision := s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision
+	localMirrorObjects, localMirrorCreates, mirrorRevision := s.localMirrorObjects, s.localMirrorCreates, s.mirrorAuthorityRevision
 	localSpanningTreeExecution := s.localSpanningTreeExecution
 	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
 	s.mu.RUnlock()
@@ -176,7 +180,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return nil, apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
 	}
 	allowedConfig := slices.Contains(c.Capabilities, "configuration.read")
-	if (op == "listTunnels" || op == "readTunnel") && !allowedConfig {
+	if slices.Contains([]string{"listTunnels", "readTunnel", "listMirrors", "readMirror"}, op) && !allowedConfig {
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	if op == "readInventoryTopology" {
@@ -186,9 +190,17 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		snapshot := candidate.Snapshot{Generation: v.decision.Generation}
 		projectTopology(v, localTopology, localTopologyCreates, &snapshot)
 		projectTunnel(v, localTunnelObjects, localTunnelCreates, tunnelRevision, &snapshot)
+		projectMirror(v, localMirrorObjects, localMirrorCreates, mirrorRevision, &snapshot)
+		var mirrorSelection map[string]bool
+		if q.Get("domain") == "mirror" {
+			mirrorSelection = mirrorCreationSelection(snapshot.Topology)
+		}
 		nodes := []candidate.TopologyNode{}
 		authority := map[string]bool{}
 		for id, n := range snapshot.Topology.Nodes {
+			if mirrorSelection != nil && !mirrorSelection[id] {
+				continue
+			}
 			nodes = append(nodes, n)
 			authority[id] = snapshot.Topology.Authority[id]
 		}
@@ -225,11 +237,35 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		out["tunnel_creation_targets"] = localTunnelCreates
 		out["tunnel_runtime_types"] = snapshot.Topology.TunnelTypes
 		out["tunnel_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.TunnelSupported && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.TunnelCapability)
+		mirrorAuthority := map[string]bool{}
+		for _, node := range nodes {
+			if snapshot.Topology.MirrorAuthority[node.Binding.ManagementID] {
+				mirrorAuthority[node.Binding.ManagementID] = true
+			}
+		}
+		out["mirror_authority"] = mirrorAuthority
+		out["mirror_creation_targets"] = localMirrorCreates
+		out["mirror_editable"] = fresh == "fresh" && !truncated && snapshot.Topology.MirrorSupported && snapshot.Topology.MirrorRuntime != "" && slices.Contains(c.Capabilities, "workspace.write") && slices.Contains(c.Capabilities, candidate.MirrorCapability)
+		if mirrorSelection != nil {
+			out["scope"] = "Locally provisioned Mirror Bridges and their observed Port/Interface/Mirror graph; server validation retains the whole native graph."
+			bounded := func(values map[string]bool) map[string]bool {
+				out := map[string]bool{}
+				for _, n := range nodes {
+					if values[n.Binding.ManagementID] {
+						out[n.Binding.ManagementID] = true
+					}
+				}
+				return out
+			}
+			out["mirror_authority"] = bounded(snapshot.Topology.MirrorAuthority)
+			out["tunnel_authority"] = bounded(snapshot.Topology.TunnelAuthority)
+		}
 		out["bridge_create_names"] = localBridgeNames
 		out["review_policy"] = "High risk: review management connectivity and sole uplinks. New changes require desktop, current root object/name grants, native schema and Safe Apply. Foreign references, unsupported domains and host network dependencies block execution."
 		for {
 			body, err := json.Marshal(out)
-			if err == nil && len(body) <= 56<<10 {
+			// The authenticated reader's existing response ceiling is 48 KiB.
+			if err == nil && len(body) <= 48<<10 {
 				break
 			}
 			if len(nodes) == 0 {
@@ -241,6 +277,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			out["truncated"] = true
 			out["editable"] = false
 			out["tunnel_editable"] = false
+			out["mirror_editable"] = false
 		}
 		return out, nil
 	}
@@ -254,6 +291,16 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			tunnelSnapshot = &snapshot
 		}
 		return tunnelSnapshot.Topology
+	}
+	var mirrorSnapshot *candidate.Snapshot
+	getMirror := func() candidate.TopologySnapshot {
+		if mirrorSnapshot == nil {
+			snapshot := candidate.Snapshot{Generation: v.decision.Generation}
+			projectTopology(v, localTopology, localTopologyCreates, &snapshot)
+			projectMirror(v, localMirrorObjects, localMirrorCreates, mirrorRevision, &snapshot)
+			mirrorSnapshot = &snapshot
+		}
+		return mirrorSnapshot.Topology
 	}
 	project := func(b Binding, kind string) (map[string]any, error) {
 		if kind == "tunnel" && (b.Table != "Port" || !portHasTunnel(v, v.observation.Rows["Port"][b.UUID])) {
@@ -270,6 +317,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		item, err := resource(v, b, fresh, allowedConfig, kind)
 		if err == nil && kind == "tunnel" {
 			item["native_tunnel"] = tunnelObservation(v, b, fresh, c, getTunnel())
+		}
+		if err == nil && kind == "mirror" {
+			item["native_mirror"] = mirrorObservation(v, b, fresh, c, getMirror())
 		}
 		if err == nil && b.Table == "Bridge" {
 			reason, authority := "CONFIGURATION_WITHHELD", "withheld"
@@ -404,7 +454,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return item, nil
 	}
 	if len(path) > 0 {
-		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel"}[op]
+		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel", "readMirror": "mirror"}[op]
 		for _, b := range v.decision.Bindings {
 			for _, id := range path {
 				if b.ManagementID == id && kindFor(b.Table) == tableKind(kind) {
@@ -463,7 +513,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		cur = old
 	}
 	items := []map[string]any{}
-	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel"}[op]
+	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel", "listMirrors": "mirror"}[op]
 	ids := []string{}
 	bindings := map[string]Binding{}
 	if op == "readInventorySchema" {
@@ -621,7 +671,7 @@ func base(id, kind, fresh string, v *view) map[string]any {
 	return map[string]any{"id": id, "resource_kind": kind, "state": fresh, "sequence": seq, "source": source(v, fresh, "ovsdb"), "allowed_actions": []string{}}
 }
 func kindFor(t string) string {
-	return map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface"}[t]
+	return map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface", "Mirror": "mirror"}[t]
 }
 func tableKind(k string) string {
 	if k == "spanning_tree" {
@@ -688,6 +738,9 @@ func parent(v *view, table, column, uuid string) (Row, bool) {
 }
 
 func operational(table, column string) bool {
+	if table == "Mirror" && column == "statistics" {
+		return true
+	}
 	if (table == "Bridge" || table == "Port") && (column == "status" || column == "rstp_status") {
 		return true
 	}

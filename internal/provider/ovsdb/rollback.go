@@ -76,7 +76,11 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 		if err != nil {
 			return execution.Plan{}, err
 		}
-		return prepareTopologyHost(compiled, view, &n)
+		compiled, err = prepareTopologyHost(compiled, view, &n)
+		if err != nil {
+			return execution.Plan{}, err
+		}
+		return e.prepareMirrorRuntime(ctx, compiled, &n, "")
 	}
 	if _, ok := internalPortIntent(envelope.Candidate); ok {
 		if bridgeHostCheck(envelope.Candidate) != nil {

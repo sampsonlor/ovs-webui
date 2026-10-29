@@ -10,6 +10,7 @@
   import { isolationMessage } from './isolation';
  import { multicastMessage } from './multicast';
   import { isTunnelOperation, tunnelMessage } from './tunnel';
+  import { isMirrorOperation, mirrorMessage } from './mirror';
   let {
     model,
     expert,
@@ -19,18 +20,20 @@
   }: { model: Model; expert: boolean; desktop: boolean; mobile: boolean; tick: number } =
     $props();
   const c = $derived(model.workspace.value?.candidate ?? null);
+  const mirror = $derived(c?.intents.some(i => isMirrorOperation(i.operation)) ?? false);
   const tunnel = $derived(c?.intents.some(i => isTunnelOperation(i.operation)) ?? false);
-  const topology = $derived(tunnel || (c?.intents.some(i => ['port.create','bond.create','port.delete','bridge.delete-tree','port.move','bond.members.set','interface.ofport.set','interface.ofport.clear','interface.patch.connect','interface.patch.disconnect'].includes(i.operation)) ?? false));
+  const topology = $derived(mirror || tunnel || (c?.intents.some(i => ['port.create','bond.create','port.delete','bridge.delete-tree','port.move','bond.members.set','interface.ofport.set','interface.ofport.clear','interface.patch.connect','interface.patch.disconnect'].includes(i.operation)) ?? false));
   const spanningTree = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.prepare')??false);
   const spanningTreeExecution = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.configure')??false);
   const multicast=$derived(c?.intents.some(i=>i.operation==='bridge.multicast.configure')??false);
  const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
   const v = $derived(model.validation.value);
+  const mirrorValidation = $derived(v?.diff.some(f=>isMirrorOperation(f.operation))??false);
   const tunnelValidation = $derived(v?.diff.some(f=>isTunnelOperation(f.operation))??false);
   const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare' || f.operation === 'bridge.spanning-tree.configure') ?? false);
   const multicastValidation=$derived(v?.diff.some(f=>f.operation==='bridge.multicast.configure')??false);
  const isolationValidation = $derived(v?.diff.some(f=>f.operation==='port.isolation.set')??false);
-  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(tunnelValidation || treeValidation || isolationValidation || multicastValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
+  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);
   const blocked = $derived(model.busy || !!model.pending || !model.sessionReady);
   const page = $derived(model.path.split('/')[2]);
@@ -105,8 +108,8 @@
         Revision {c.revision} · generation {c.instance_generation ?? 'Unknown'}
       </p>{/if}
     {#each c.checks ?? [] as gate}<div class="notice warning">
-        <strong>{tunnel ? tunnelMessage(gate.code) : multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if tunnel || spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <strong>{mirror ? mirrorMessage(gate.code) : tunnel ? tunnelMessage(gate.code) : multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if mirror || tunnel || spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     {#if c.diff_truncated}<p class="notice warning">
         Review is incomplete. Applying this Candidate is blocked.
@@ -222,8 +225,8 @@
         class="notice"
         class:warning={gate.state !== 'allowed'}
       >
-        <Status value={gate.state} /> <strong>{tunnelValidation ? tunnelMessage(gate.code) : multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if tunnelValidation || treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <Status value={gate.state} /> <strong>{mirrorValidation ? mirrorMessage(gate.code) : tunnelValidation ? tunnelMessage(gate.code) : multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     <Diff fields={v.diff} {expert} />
     {#if expert}<details>

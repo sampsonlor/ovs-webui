@@ -28,13 +28,15 @@ mkdir "$out/source"
 tar -xzf "$out/upstream.tar.gz" --strip-components=1 -C "$out/source"
 python3 "$extension/apply.py" "$out/source" "$out/upstream.tar.gz"
 python3 tests/ovs_witness/check_registry.py "$out/source"
+python3 extensions/ovs-mirror-delete/apply.py "$version" "$out/source" "$out/upstream.tar.gz" --with-witness
+python3 tests/ovs_mirror/check_profiles.py
 cd "$out/source"
 ./boot.sh > "$repo/test-results/ovs-witness/bootstrap.log" 2>&1
 for mode in enabled sanitized default; do
   mkdir "$out/$mode"
   cd "$out/$mode"
   flags=()
-  if [ "$mode" != default ]; then flags+=(--enable-ovs-webui-witness); fi
+  if [ "$mode" != default ]; then flags+=(--enable-ovs-webui-witness --enable-ovs-webui-mirror-fix); fi
   cflags='-O1 -g -Werror'
   ldflags=''
   if [ "$mode" = sanitized ]; then

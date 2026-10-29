@@ -196,6 +196,13 @@ func compileTopologyExecution(id, marker string, envelope candidate.Envelope, vi
 		return out, err
 	}
 	n := nativePlan{Operations: append([]map[string]any{rg}, guards...), Evidence: view.Observation.Evidence, CreationMarker: marker, InsertUUIDs: map[int]string{}, TopologyBefore: images, TopologyAfter: desired}
+	if candidate.IsMirrorOperation(i.Operation) {
+		fence, err := mirrorFenceOperations(view, d)
+		if err != nil {
+			return out, err
+		}
+		n.Operations = append(n.Operations, fence...)
+	}
 	if candidate.IsTunnelOperation(i.Operation) {
 		if !d.public.TunnelConfiguration || !view.Candidate.Topology.TunnelSupported {
 			return out, apitypes.Fail(409, "TUNNEL_SCHEMA_UNSUPPORTED")
@@ -223,7 +230,15 @@ func compileTopologyExecution(id, marker string, envelope candidate.Envelope, vi
 			n.Operations = append(n.Operations, binding)
 		}
 	}
-	n.Operations = append(n.Operations, topologyReferences(d, before, view.Candidate.Topology.Nodes)...)
+	if candidate.IsMirrorOperation(i.Operation) {
+		refs, err := mirrorReferenceOperations(d, before, view)
+		if err != nil {
+			return out, err
+		}
+		n.Operations = append(n.Operations, refs...)
+	} else {
+		n.Operations = append(n.Operations, topologyReferences(d, before, view.Candidate.Topology.Nodes)...)
+	}
 	for id := range g.Allocations {
 		binding := view.Candidate.Topology.Nodes[id].Binding
 		row := view.Observation.Rows["Interface"][binding.OVSUUID]
@@ -326,6 +341,15 @@ func topologyProof(p execution.Plan, view inventory.ExecutionView, d discovered)
 		return nil, err
 	}
 	ops := []any{}
+	if candidate.IsMirrorOperation(i.Operation) {
+		fence, err := mirrorFenceOperations(view, d)
+		if err != nil {
+			return nil, err
+		}
+		for _, op := range fence {
+			ops = append(ops, op)
+		}
+	}
 	if candidate.IsTunnelOperation(i.Operation) {
 		if !d.public.TunnelConfiguration || !view.Candidate.Topology.TunnelSupported {
 			return nil, errors.New("TUNNEL_RUNTIME_TYPE_UNAVAILABLE")
@@ -350,7 +374,14 @@ func topologyProof(p execution.Plan, view inventory.ExecutionView, d discovered)
 	for _, op := range guards {
 		ops = append(ops, op)
 	}
-	for _, op := range topologyReferences(d, after, view.Candidate.Topology.Nodes) {
+	references := topologyReferences(d, after, view.Candidate.Topology.Nodes)
+	if candidate.IsMirrorOperation(i.Operation) {
+		references, err = mirrorReferenceOperations(d, after, view)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, op := range references {
 		ops = append(ops, op)
 	}
 	for _, old := range before {

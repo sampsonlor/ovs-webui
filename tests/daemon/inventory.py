@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--policing-only', action='store_true')
     parser.add_argument('--browser-node')
     parser.add_argument('--witness-bin-dir')
+    parser.add_argument('--mirror-bin-dir')
     parser.add_argument('--frontend-spanning-execution', action='store_true')
     args = parser.parse_args()
     assert os.geteuid() == 0 and Path('/run/systemd/system').is_dir()
@@ -70,9 +71,11 @@ def main():
     ovs = fixture / 'ovs'
     ovs.mkdir(mode=0o700)
     ovs_env = dict(os.environ, OVS_RUNDIR=str(ovs), OVS_LOGDIR=str(ovs), OVS_DBDIR=str(ovs))
-    if args.witness_bin_dir:
-        assert args.schema_version == '3.3.9' and args.frontend_browser and args.frontend_spanning_execution
-        native_build = Path(args.witness_bin_dir).resolve()
+    if args.witness_bin_dir or args.mirror_bin_dir:
+        assert not (args.witness_bin_dir and args.mirror_bin_dir)
+        assert args.schema_version == '3.3.9' and args.frontend_browser
+        assert not args.witness_bin_dir or args.frontend_spanning_execution
+        native_build = Path(args.witness_bin_dir or args.mirror_bin_dir).resolve()
         binary_dir = ovs / 'bin'
         binary_dir.mkdir(mode=0o700)
         for binary in ['ovs-vswitchd', 'ovsdb-server', 'ovsdb-tool', 'ovs-vsctl', 'ovsdb-client', 'ovs-appctl']:
@@ -81,12 +84,19 @@ def main():
             (binary_dir / binary).chmod(0o755)
         ovs_env['PATH'] = str(binary_dir) + ':' + os.environ['PATH']
         os.environ['PATH'] = ovs_env['PATH']
-        profile = repo / 'internal/ovswitness/build-profile.json'
-        manifest = {'format':'ovs-webui.stp-build.v1', 'profile_sha256':hashlib.sha256(profile.read_bytes()).hexdigest(),
-                    'architecture':{'x86_64':'amd64','aarch64':'arm64'}[os.uname().machine], 'variant':'enabled',
-                    'executable_sha256':hashlib.sha256((binary_dir / 'ovs-vswitchd').read_bytes()).hexdigest()}
-        (ovs / 'witness-build.json').write_text(json.dumps(manifest)+'\n')
-        (ovs / 'witness-build.json').chmod(0o600)
+        if args.witness_bin_dir:
+            profile = repo / 'internal/ovswitness/build-profile-mirror-3.3.9.json'
+            manifest = {'format':'ovs-webui.stp-build.v1', 'profile_sha256':hashlib.sha256(profile.read_bytes()).hexdigest(),
+                        'architecture':{'x86_64':'amd64','aarch64':'arm64'}[os.uname().machine], 'variant':'enabled',
+                        'executable_sha256':hashlib.sha256((binary_dir / 'ovs-vswitchd').read_bytes()).hexdigest()}
+            (ovs / 'witness-build.json').write_text(json.dumps(manifest)+'\n')
+            (ovs / 'witness-build.json').chmod(0o600)
+        if args.mirror_bin_dir:
+            profile=repo/'extensions/ovs-mirror-delete/3.3.9/build-profile.json'
+            manifest={'format':'ovs-webui.mirror-build.v1','profile_sha256':hashlib.sha256(profile.read_bytes()).hexdigest(),
+                      'architecture':{'x86_64':'amd64','aarch64':'arm64'}[os.uname().machine],'variant':'fixed',
+                      'executable_sha256':hashlib.sha256((binary_dir/'ovs-vswitchd').read_bytes()).hexdigest()}
+            (ovs/'mirror-build.json').write_text(json.dumps(manifest)+'\n');(ovs/'mirror-build.json').chmod(0o600)
     assert not args.frontend_spanning_execution or args.witness_bin_dir
     conf, db_socket = ovs / 'conf.db', ovs / 'db.sock'
 

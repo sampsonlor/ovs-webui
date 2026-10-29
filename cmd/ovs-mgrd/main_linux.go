@@ -51,6 +51,8 @@ func run() int {
 	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
 	grantMulticastRole := flag.String("grant-multicast-role", "", "Offline root action: explicitly grant one existing role native multicast capability, then exit; new login required")
 	revokeMulticastRole := flag.String("revoke-multicast-role", "", "Offline root action: revoke one role native multicast capability, then exit")
+	grantMirrorRole := flag.String("grant-mirror-role", "", "Offline root action: grant one existing role native Mirror capability, then exit; new login required")
+	revokeMirrorRole := flag.String("revoke-mirror-role", "", "Offline root action: revoke one role native Mirror capability, then exit")
 	grantTunnelRole := flag.String("grant-static-tunnel-role", "", "Offline root action: grant one existing role native static Tunnel capability, then exit; new login required")
 	revokeTunnelRole := flag.String("revoke-static-tunnel-role", "", "Offline root action: revoke one role native static Tunnel capability, then exit")
 	revokeTreeRole := flag.String("revoke-spanning-tree-execution-role", "", "Offline root action: revoke one role's independent STP/RSTP write capability, then exit")
@@ -79,6 +81,12 @@ func run() int {
 	treeDatabaseSHA256 := flag.String("spanning-tree-database-sha256", "", "Reviewed SHA256 of the qualified standalone ovsdb-server executable")
 	localTopology := flag.String("local-topology-objects", "", "Reviewed immutable graph object IDs with topology authority; every touched existing object requires a grant")
 	localTopologyCreates := flag.String("local-topology-create-targets", "", "Reviewed Bridge management-id:new-name grants for each new Port and Interface")
+	mirrorControl := flag.String("mirror-runtime-socket", "", "Explicit local ovs-vswitchd control socket for native Mirror build qualification")
+	mirrorExecutable := flag.String("mirror-runtime-executable", "", "Root-owned qualified fixed Mirror ovs-vswitchd executable")
+	mirrorManifest := flag.String("mirror-runtime-manifest", "", "Root-owned exact fixed Mirror build manifest")
+	mirrorManifestDigest := flag.String("mirror-runtime-manifest-sha256", "", "Reviewed SHA256 of the exact fixed Mirror build manifest")
+	localMirrorObjects := flag.String("local-mirror-objects", "", "Independent immutable graph IDs permitted for native Mirror changes")
+	localMirrorCreates := flag.String("local-mirror-create-targets", "", "Independent Bridge management-id:new-name grants for native Mirror sessions")
 	localTunnelObjects := flag.String("local-tunnel-objects", "", "Independent immutable graph IDs permitted for native static Tunnel changes")
 	localTunnelCreates := flag.String("local-tunnel-create-targets", "", "Independent Bridge management-id:new-name grants for new native static Tunnel Port and Interface pairs")
 	localVLANPorts := flag.String("local-vlan-ports", "", "Reviewed comma-separated Port management IDs with local VLAN authority; default unknown, no write access implied")
@@ -107,7 +115,18 @@ func run() int {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_SPANNING_TREE_WITNESS_CONFIGURATION")
 		return 2
 	}
+	mirrorConfigured := *mirrorControl != "" || *mirrorExecutable != "" || *mirrorManifest != "" || *mirrorManifestDigest != ""
+	if mirrorConfigured && (*mirrorControl == "" || *mirrorExecutable == "" || *mirrorManifest == "" || *mirrorManifestDigest == "") {
+		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_MIRROR_RUNTIME_CONFIGURATION")
+		return 2
+	}
 	actions := 0
+	if *grantMirrorRole != "" {
+		actions++
+	}
+	if *revokeMirrorRole != "" {
+		actions++
+	}
 	if *grantTunnelRole != "" {
 		actions++
 	}
@@ -269,6 +288,21 @@ func run() int {
 		}
 		return 0
 	}
+	if *grantMirrorRole != "" || *revokeMirrorRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantMirrorRole, true
+		if *revokeMirrorRole != "" {
+			id, enabled = *revokeMirrorRole, false
+		}
+		if err := authentication.SetMirrorExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		return 0
+	}
 	if *grantTunnelRole != "" || *revokeTunnelRole != "" {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -336,6 +370,21 @@ func run() int {
 			return 1
 		}
 		inventoryService = inventory.New(reg)
+		var mirrorIDs, mirrorTargets []string
+		if *localMirrorObjects != "" {
+			mirrorIDs = strings.Split(*localMirrorObjects, ",")
+		}
+		if *localMirrorCreates != "" {
+			mirrorTargets = strings.Split(*localMirrorCreates, ",")
+		}
+		if err = inventoryService.SetLocalMirrorObjects(mirrorIDs); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_MIRROR_AUTHORITY")
+			return 2
+		}
+		if err = inventoryService.SetLocalMirrorCreates(mirrorTargets); err != nil {
+			logger.Error("inventory_start_failed", "code", "INVALID_MIRROR_CREATION_AUTHORITY")
+			return 2
+		}
 		var tunnelIDs, tunnelTargets []string
 		if *localTunnelObjects != "" {
 			tunnelIDs = strings.Split(*localTunnelObjects, ",")
@@ -490,10 +539,16 @@ func run() int {
 			logger.Error("inventory_start_failed", "code", "OVSDB_PEER_INVALID")
 			return 2
 		}
-		provider, err := ovsprovider.New(ovsprovider.Options{Socket: *ovsSocket, DatabaseFile: *ovsFile, PeerUID: uint32(*ovsUID)})
+		provider, err := ovsprovider.New(ovsprovider.Options{Socket: *ovsSocket, DatabaseFile: *ovsFile, PeerUID: uint32(*ovsUID), Logger: logger})
 		if err != nil {
 			logger.Error("inventory_start_failed", "code", "OVSDB_ENDPOINT_INVALID")
 			return 2
+		}
+		if mirrorConfigured {
+			if err = provider.ConfigureMirrorExecution(ovsprovider.MirrorExecutionOptions{ControlSocket: *mirrorControl, Executable: *mirrorExecutable, Manifest: *mirrorManifest, ManifestDigest: *mirrorManifestDigest, PeerUID: uint32(*ovsUID)}); err != nil {
+				logger.Error("service_start_failed", "code", "INVALID_MIRROR_RUNTIME_CONFIGURATION")
+				return 2
+			}
 		}
 		providerCtx, cancelProvider := context.WithCancel(ctx)
 		defer cancelProvider()

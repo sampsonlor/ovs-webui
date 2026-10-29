@@ -11,7 +11,7 @@ out = Path(sys.argv[1])
 version = os.environ["OVS_WITNESS_VERSION"]
 assert version in ["3.3.9", "3.7.1", "4.0.0"]
 extension = Path("extensions/ovs-witness") / version
-profile_path = Path("internal/ovswitness") / ("build-profile.json" if version == "3.3.9" else "build-profile-" + version + ".json")
+profile_path = Path("internal/ovswitness") / ("build-profile-mirror-" + version + ".json")
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 result = {
     "status": "isolated-prototype-not-a-production-release",
@@ -21,6 +21,10 @@ result = {
     "architecture": os.uname().machine,
     "witness_abi": "ovs-webui.stp-witness.v1",
     "patch_sha256": sha(extension / "witness.patch"),
+    "mirror_patch_sha256": sha(Path("extensions/ovs-mirror-delete") / version / "mirror-delete-revalidation.patch"),
+    "mirror_build_profile_sha256": sha(Path("extensions/ovs-mirror-delete") / version / "build-profile.json"),
+    "mirror_fixed_variants": ["enabled", "sanitized"],
+    "mirror_unfixed_counterexample_variant": "default",
     "build_profile_sha256": sha(profile_path),
     "overlay_sha256": {str(p.relative_to(extension)): sha(p) for p in sorted((extension / "overlay").rglob("*")) if p.is_file()},
     "executables": {mode: sha(out / mode / "vswitchd/ovs-vswitchd") for mode in ["default", "enabled", "sanitized"]},

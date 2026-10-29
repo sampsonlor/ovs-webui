@@ -1,0 +1,7 @@
+# OPTIONAL, NOT INSTALLED: process inspection for strict Mirror build/source proof.
+# Deployment review must explicitly accept this capability, which permits more
+# than reading the OVS processes. The default service intentionally omits it.
+# Exact build/manifest pins and independent account/object/name grants are also
+# required; this example alone grants neither trust nor write authorization.
+[Service]
+CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE

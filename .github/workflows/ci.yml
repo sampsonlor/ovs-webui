@@ -189,7 +189,7 @@ jobs:
       - name: Install ephemeral OVS test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y openvswitch-switch
+          sudo apt-get install --no-install-recommends -y openvswitch-switch build-essential autoconf automake libtool pkg-config libssl-dev python3-six
       - name: Native spanning-tree independent authority and daemon database source
         run: |
           set -o pipefail
@@ -218,8 +218,12 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativePortIsolation$' -test.v -test.timeout=120s \
               | go tool test2json -p "native-port-isolation-$schema" | tee "test-results/go-port-isolation-$schema.json"
           done
+      - name: Build separately qualified Mirror runtime for formal browser acceptance
+        env:
+          MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash tests/ovs_mirror/build.sh
       - name: Embedded Svelte browser against real Go services and kernel OVS safety
-        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --browser-node "$(command -v node)"
+        run: sudo -- env PLAYWRIGHT_BROWSERS_PATH=/tmp/ovs-frontend-browsers python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser --mirror-bin-dir outputs/ovs-mirror-ci/fixed --browser-node "$(command -v node)"
       - name: Native multicast listener forwarding and guarded compensation matrix
         run: |
           set -o pipefail
@@ -335,9 +339,10 @@ jobs:
           go mod verify
           mkdir -p test-results
           # Keep production Argon2id cost and the existing per-group deadline.
-          # The growing auth package exceeded 180s cumulatively on arm64. Three
-          # complementary name filters run every auth test exactly once; other
-          # packages retain the complete normal suite, with no global skip.
+          # The growing auth package exceeded 180s cumulatively on arm64. The
+          # three complementary filters retain every existing auth test; the new
+          # Mirror authority regression runs in its own group, exactly once.
+          # Other packages retain the complete normal suite, with no global skip.
           auth_package=$(go list ./internal/repository/auth)
           mapfile -t all_packages <<< "$(go list ./...)"
           runtime_packages=()
@@ -346,9 +351,11 @@ jobs:
           done
           go test -json -race -count=1 -timeout=180s "${runtime_packages[@]}" | tee test-results/go-tests.json
           auth_services='^(TestFormalValidation|TestShared|TestRunningCancellation|TestEvidence|TestLegacy|TestExecution|TestTLS|TestVerifiedAuth)'
-          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply" "$auth_package" | tee -a test-results/go-tests.json
+          mirror_authority='^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$'
+          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply|$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run "$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
           # Force the worker-held-lock admission regression repeatedly without
           # increasing timeouts or counting these runs as unique suite tests.
           go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
@@ -377,6 +384,7 @@ jobs:
         with:
           name: go-runtime-${{ matrix.arch }}
           path: |
+            test-results/mirror-build/
             test-results/go-tests.json
             test-results/go-safe-admission.json
             test-results/go-policing-*.json
@@ -525,6 +533,90 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  native-mirrors:
+    name: Native Mirror sessions (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build native Mirror test binary
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(go env GOARCH)" = "$EXPECTED_ARCH"
+          mkdir -p outputs/runtime test-results
+          go test -c -o outputs/runtime/mirror.test ./tests/daemon/field_execution
+      - name: Install isolated OVS and packet test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y openvswitch-switch iproute2 iputils-ping build-essential autoconf automake libtool pkg-config libssl-dev python3-six
+      - name: Mirror current identity and independent authority regression
+        run: |
+          set -o pipefail
+          go test -json -count=1 -run '^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$' ./internal/repository/auth \
+            | tee test-results/go-mirror-authority.json
+          CGO_ENABLED=1 go test -race -json -count=1 -run '^(TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess|TestSpanningTreeSourceDiagRejectsMalformedAndInterruptedEvidence|TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers|TestMirrorNativePlanFencesEverySessionAndExactIncomingReferences)$' ./internal/provider/ovsdb \
+            | tee test-results/go-mirror-observation.json
+      - name: Unfixed distro cached-copy reproduction and manager write denial
+        run: |
+          set -o pipefail
+          ovs-vswitchd --version
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            namespace="ovs-mi-old-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            sudo ip netns add "$namespace"
+            trap 'sudo ip netns del "$namespace"' EXIT
+            sudo -- env OVS_MIRROR_NATIVE_TEST=1 OVS_MIRROR_REPRODUCE_UNFIXED=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              ip netns exec "$namespace" outputs/runtime/mirror.test -test.run '^TestNativeMirrorSessions$' -test.v -test.timeout=240s \
+              | go tool test2json -p "unfixed-mirror-$schema" | tee "test-results/go-mirror-unfixed-$schema.json"
+            sudo ip netns del "$namespace"
+            trap - EXIT
+          done
+      - name: Build optional pinned native Mirror correction
+        env:
+          MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash tests/ovs_mirror/build.sh
+      - name: Fixed Mirror selector traffic and durable recovery against three schemas
+        run: |
+          set -o pipefail
+          profile=$(sha256sum extensions/ovs-mirror-delete/3.3.9/build-profile.json | cut -d' ' -f1)
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            namespace="ovs-mi-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            sudo ip netns add "$namespace"
+            trap 'sudo ip netns del "$namespace"' EXIT
+            sudo -- env PATH="$PWD/outputs/ovs-mirror-ci/bin:$PATH" OVS_MIRROR_NATIVE_TEST=1 OVS_MIRROR_BUILD_PROFILE="$profile" OVS_MIRROR_BUILD_VARIANT=fixed OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              ip netns exec "$namespace" outputs/runtime/mirror.test -test.run '^TestNativeMirrorSessions$' -test.v -test.timeout=240s \
+              | go tool test2json -p "native-mirror-$schema" | tee "test-results/go-mirror-$schema.json"
+            sudo ip netns del "$namespace"
+            trap - EXIT
+          done
+      - name: Retain Mirror packet and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-mirrors-${{ matrix.arch }}
+          path: |
+            test-results/go-mirror-*.json
+            test-results/mirror-build/
+          if-no-files-found: error
+          retention-days: 7
+
   ovs-witness:
     name: OVS ${{ matrix.version }} read-only witness (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -591,7 +683,17 @@ jobs:
   gate:
     name: CI Gate
     if: always()
-    needs: [quality, integration, browser, go-runtime, native-topology, native-static-tunnels, ovs-witness]
+    needs:
+      [
+        quality,
+        integration,
+        browser,
+        go-runtime,
+        native-topology,
+        native-static-tunnels,
+        native-mirrors,
+        ovs-witness,
+      ]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -602,6 +704,7 @@ jobs:
           BROWSER_RESULT: ${{ needs.browser.result }}
           GO_RUNTIME_RESULT: ${{ needs.go-runtime.result }}
           NATIVE_TOPOLOGY_RESULT: ${{ needs.native-topology.result }}
+          NATIVE_MIRRORS_RESULT: ${{ needs.native-mirrors.result }}
           NATIVE_STATIC_TUNNELS_RESULT: ${{ needs.native-static-tunnels.result }}
           OVS_WITNESS_RESULT: ${{ needs.ovs-witness.result }}
         run: |
@@ -611,4 +714,5 @@ jobs:
           test "$GO_RUNTIME_RESULT" = success
           test "$NATIVE_TOPOLOGY_RESULT" = success
           test "$NATIVE_STATIC_TUNNELS_RESULT" = success
+          test "$NATIVE_MIRRORS_RESULT" = success
           test "$OVS_WITNESS_RESULT" = success

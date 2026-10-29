@@ -1,8 +1,16 @@
 # Native static tunnels v0.1
 
-Status: implementation and local regression checks in progress. Native CI and
-browser evidence must qualify the exact source revision before acceptance.
-This document does not declare a completed Phase 1 or close #43.
+Accepted baseline: `phase1-native-static-tunnels-v0.1`, main `eab6059`,
+[PR #106](https://github.com/sampsonlor/ovs-webui/pull/106) and
+[PR #107](https://github.com/sampsonlor/ovs-webui/pull/107). Final source
+[CI 40268581444](https://github.com/sampsonlor/ovs-webui/actions/runs/40268581444)
+and independent main
+[CI 40272133255](https://github.com/sampsonlor/ovs-webui/actions/runs/40272133255)
+each passed all 16 jobs, 15 official artifact digests and actual review of
+140 captures. The source and main share the same code tree. Earlier main
+captures that showed a loading retired-identity page were rejected; PR #107
+requires visible Unavailable / NOT_FOUND before that capture on both architectures.
+This completes the static Tunnel subdomain; #43 and Phase 1 remain open.
 
 ## Scope and workflow
 

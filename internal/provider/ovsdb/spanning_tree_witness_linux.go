@@ -115,6 +115,15 @@ func witnessSameFile(a, b unix.Stat_t) bool {
 }
 
 func attestWitnessBuild(ctx context.Context, conn net.Conn, uid uint32, pin SpanningTreeWitnessBuild) (string, string, error) {
+	return attestNativeBuild(ctx, conn, uid, pin, func(m witnessBuildManifest) (string, bool) {
+		profile, ok := ovswitness.LookupBuildProfile(m.Profile)
+		return profile.Schema, ok && m.Format == "ovs-webui.stp-build.v1" && witnessArchitecture(m.Arch, runtime.GOARCH) && (m.Variant == "enabled" || m.Variant == "sanitized") && witnessHex(m.Executable)
+	})
+}
+
+// Each caller supplies a closed compiled profile/format/variant policy. The
+// existing STP policy remains independent of the optional Mirror correction.
+func attestNativeBuild(ctx context.Context, conn net.Conn, uid uint32, pin SpanningTreeWitnessBuild, qualify func(witnessBuildManifest) (string, bool)) (string, string, error) {
 	if !filepath.IsAbs(pin.Executable) || !filepath.IsAbs(pin.Manifest) || strings.ContainsAny(pin.Executable+pin.Manifest, "\x00\r\n") || !witnessHex(pin.ManifestDigest) {
 		return "", "", witnessUnproven
 	}
@@ -136,10 +145,10 @@ func attestWitnessBuild(ctx context.Context, conn net.Conn, uid uint32, pin Span
 	data, err := io.ReadAll(io.LimitReader(f, 4097))
 	actualHash := sha256.Sum256(data)
 	var manifest witnessBuildManifest
-	if err != nil || len(data) > 4096 || hex.EncodeToString(actualHash[:]) != pin.ManifestDigest || ipc.DecodeStrict(data, &manifest) != nil || manifest.Format != "ovs-webui.stp-build.v1" || !witnessArchitecture(manifest.Arch, runtime.GOARCH) || manifest.Variant != "enabled" && manifest.Variant != "sanitized" || !witnessHex(manifest.Executable) {
+	if err != nil || len(data) > 4096 || hex.EncodeToString(actualHash[:]) != pin.ManifestDigest || ipc.DecodeStrict(data, &manifest) != nil {
 		return "", "", witnessUnproven
 	}
-	profile, ok := ovswitness.LookupBuildProfile(manifest.Profile)
+	schema, ok := qualify(manifest)
 	if !ok {
 		return "", "", witnessUnproven
 	}
@@ -160,7 +169,7 @@ func attestWitnessBuild(ctx context.Context, conn net.Conn, uid uint32, pin Span
 	stable := func(s unix.Stat_t) string {
 		return fmt.Sprintf("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d", s.Dev, s.Ino, s.Size, s.Mode, s.Uid, s.Gid, s.Mtim.Sec, s.Mtim.Nsec, s.Ctim.Sec, s.Ctim.Nsec)
 	}
-	return hash + "/" + stable(identity) + "/" + exeHash + "/" + stable(exe), profile.Schema, nil
+	return hash + "/" + stable(identity) + "/" + exeHash + "/" + stable(exe), schema, nil
 }
 
 // ReadBoundSpanningTreeWitness has exactly one fixed UUID/nonce method. It

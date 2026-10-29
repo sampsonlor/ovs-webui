@@ -187,6 +187,27 @@ await test('static tunnel routes and Safe Apply retain independent capability, s
   assert.equal(denied.state.resource.value, null);
 });
 
+await test('Mirror routes and Safe Apply require independent current capability and configuration read', async () => {
+  const draft={id:resource,revision:'native-mirror',state:'dirty',safe_apply_available:true,intents:[]};
+  const validation={candidate_id:draft.id,candidate_revision:draft.revision,state:'passed',usable:true,execution_ready:true};
+  const allowed={effective_capabilities:['configuration.apply','ovs.mirror.write']};
+  for(const operation of ['mirror.session.create','mirror.session.configure','mirror.session.delete']) {
+    const candidate={...draft,intents:[{operation}]};
+    for(const capability of ['ovs.topology.write','ovs.tunnel.static.write','ovs.bridge.multicast.write']) assert.equal(applyReady(candidate,validation,{effective_capabilities:['configuration.apply',capability]},true),false);
+    assert.equal(applyReady(candidate,validation,allowed,true),true);
+    assert.equal(applyReady(candidate,validation,allowed,false),false);
+    assert.equal(applyReady(candidate,{...validation,execution_ready:false},allowed,true),false);
+    assert.equal(applyReady(candidate,{...validation,candidate_revision:'old'},allowed,true),false);
+  }
+  for(const [path,url] of [['/switching/mirrors?filter=span&limit=1&cursor=sealed','/mirrors?filter=span&limit=1&cursor=sealed'],[`/switching/mirrors/${resource}`,`/mirrors/${resource}`],['/switching/mirrors/new','/inventory/topology?domain=mirror']]) {
+    const calls=[];
+    const c=new Controller(new API(async request=>{calls.push(request);if(request.endsWith('/session'))return response(session);if(request.endsWith('/workspace'))return response({candidate:draft});return response({items:[]});},storage()),path);
+    await c.refresh();assert.ok(calls.includes('/api/v1'+url));
+  }
+  const denied=new Controller(new API(async request=>{assert.ok(!request.includes('/api/v1/mirrors'));return response(request.endsWith('/session')?{...session,effective_capabilities:['inventory.read']}:{candidate:null});},storage()),'/switching/mirrors');
+  await denied.refresh();assert.equal(denied.state.resource.status,'denied');assert.equal(denied.state.resource.value,null);
+});
+
 await test('acknowledged mutation with a delayed old read withholds stale Candidate commands until fresh review', async () => {
   const oldCandidate={id:resource,revision:'before',state:'dirty',intents:[]};
   const newCandidate={...oldCandidate,revision:'after'};

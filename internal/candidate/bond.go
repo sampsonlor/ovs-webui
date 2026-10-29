@@ -42,6 +42,9 @@ func Capabilities(c Candidate) []string {
 		if IsTopologyOperation(i.Operation) {
 			cap = "ovs.topology.write"
 		}
+		if IsMirrorOperation(i.Operation) {
+			cap = MirrorCapability
+		}
 		if IsTunnelOperation(i.Operation) {
 			cap = TunnelCapability
 		}

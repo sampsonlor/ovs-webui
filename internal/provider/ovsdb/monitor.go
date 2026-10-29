@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"strconv"
 	"time"
@@ -13,6 +14,7 @@ import (
 )
 
 type Options struct {
+	Logger       *slog.Logger `json:"-"`
 	Socket       string
 	DatabaseFile string
 	PeerUID      uint32
@@ -22,7 +24,10 @@ type Sink interface {
 	Publish(context.Context, inventory.Observation) error
 	Unavailable(string)
 }
-type Provider struct{ options Options }
+type Provider struct {
+	options Options
+	mirror  *MirrorExecutionOptions
+}
 
 func New(o Options) (*Provider, error) {
 	if err := validateOptions(o); err != nil {
@@ -98,6 +103,8 @@ func (p *Provider) session(ctx context.Context, s Sink) error {
 		return err
 	}
 	continuous := false
+	observeMirror, closeMirrorObservation := p.mirrorObservation()
+	defer closeMirrorObservation()
 	publish := func() error {
 		if err := validateRelations(rows); err != nil {
 			return err
@@ -113,7 +120,12 @@ func (p *Provider) session(ctx context.Context, s Sink) error {
 			return errors.New("OVSDB_SNAPSHOT_INVALID")
 		}
 		e := evidence(p.options, d, rows, identity, pid, prior, continuous)
-		if err = s.Publish(ctx, inventory.Observation{Schema: d.public, Rows: copyRows, Evidence: e}); err != nil {
+		mirrorBuild, mirrorErr := observeMirror(ctx, e)
+		mirrorFailure := ""
+		if mirrorErr != nil {
+			mirrorFailure = mirrorErr.Error()
+		}
+		if err = s.Publish(ctx, inventory.Observation{Schema: d.public, Rows: copyRows, Evidence: e, MirrorRuntime: mirrorBuild, MirrorRuntimeFailure: mirrorFailure}); err != nil {
 			return err
 		}
 		prior = e

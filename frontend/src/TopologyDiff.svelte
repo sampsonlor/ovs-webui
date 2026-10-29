@@ -16,6 +16,14 @@
     if(v && typeof v === 'object') return Object.entries(v).map(([key,value_]) => `${key}: ${value(value_)}`).join('; ');
     return v === null || v === undefined ? 'Unknown' : String(v);
   }
+  function mirrorSummary(value:unknown, all:TopologyNode[]) {
+    if(!value || typeof value!=='object')return 'Unknown native selectors';
+    const c=value as Record<string,unknown>;
+    const port=(id:unknown)=>typeof id==='string'?(all.find(n=>n.binding.table==='Port' && n.binding.management_id===id)?.name??'Unavailable Port'):'Unknown';
+    const selected=(ids:unknown)=>Array.isArray(ids)?ids.length?ids.map(port).join(', '):'None':'Unknown';
+    const vlans=Array.isArray(c.select_vlans)?c.select_vlans.length?c.select_vlans.join(', '):'All VLANs':'Unknown';
+    return `Entering: ${c.select_all===true?'All Bridge Ports':selected(c.source_port_ids)}; leaving: ${c.select_all===true?'All Bridge Ports':selected(c.destination_port_ids)}; VLAN filter: ${vlans}; output: ${c.output_port_id?port(c.output_port_id):c.output_vlan?`RSPAN VLAN ${c.output_vlan}`:'Unknown'}; snap length: ${c.snaplen===null?'Native default (unset)':typeof c.snaplen==='string'?c.snaplen+' bytes':'Unknown'}`;
+  }
 </script>
 
 <section class="panel" aria-label="Native topology Diff">
@@ -33,7 +41,7 @@
             {@const n = side.find(p => p.binding.management_id === object.binding.management_id)}
             <td>{#if n}<p>{n.binding.table === 'Port' && n.links.length > 1 ? 'Bond Port' : n.binding.table}{n.native_type ? ` · ${n.native_type}` : ''}</p>
               {#if n.links.length}<p>Members: {membership(n, side)}</p>{/if}
-              {#if n.configuration_summary}<dl>{#each Object.entries(n.configuration_summary) as [key, v]}<dt>{key}</dt><dd>{value(v)}</dd>{/each}</dl>{/if}
+              {#if n.configuration_summary}<dl>{#each Object.entries(n.configuration_summary) as [key, v]}<dt>{key==='mirror'?'Mirror selectors and output':key}</dt><dd>{key==='mirror'?mirrorSummary(v,side):value(v)}</dd>{/each}</dl>{/if}
               {#if expert}<small class="mono">Configuration digest: {n.configuration_digest}</small>{/if}
             {:else}<span>Not present</span>{/if}</td>
           {/each}

@@ -3,6 +3,7 @@ package candidate
 import (
 	"encoding/json"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/mirror"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/tunnel"
 	"slices"
@@ -15,19 +16,20 @@ const MaxTopologyNodes = 32
 // These are semantic graph commands. No caller can supply rows, before-images,
 // replacement identities, field paths or native transactions.
 func IsTopologyOperation(op string) bool {
-	return IsTunnelOperation(op) || slices.Contains([]string{"port.create", "bond.create", "port.delete", "bridge.delete-tree", "port.move", "bond.members.set", "interface.ofport.set", "interface.ofport.clear", "interface.patch.connect", "interface.patch.disconnect"}, op)
+	return IsMirrorOperation(op) || IsTunnelOperation(op) || slices.Contains([]string{"port.create", "bond.create", "port.delete", "bridge.delete-tree", "port.move", "bond.members.set", "interface.ofport.set", "interface.ofport.clear", "interface.patch.connect", "interface.patch.disconnect"}, op)
 }
 
 type TopologyRequest struct {
-	Tunnel         *tunnel.Request `json:"tunnel,omitempty"`
-	Name           string          `json:"name,omitempty"`
-	NativeType     string          `json:"native_type,omitempty"`
-	InterfaceNames []string        `json:"interface_names,omitempty"`
-	Sources        []Binding       `json:"source_ports,omitempty"`
-	Destination    *Binding        `json:"destination_bridge,omitempty"`
-	Members        []Binding       `json:"member_interfaces,omitempty"`
-	Peer           *Binding        `json:"peer,omitempty"`
-	Ofport         int             `json:"ofport_request,omitempty"`
+	Mirror         *mirror.Configuration `json:"mirror,omitempty"`
+	Tunnel         *tunnel.Request       `json:"tunnel,omitempty"`
+	Name           string                `json:"name,omitempty"`
+	NativeType     string                `json:"native_type,omitempty"`
+	InterfaceNames []string              `json:"interface_names,omitempty"`
+	Sources        []Binding             `json:"source_ports,omitempty"`
+	Destination    *Binding              `json:"destination_bridge,omitempty"`
+	Members        []Binding             `json:"member_interfaces,omitempty"`
+	Peer           *Binding              `json:"peer,omitempty"`
+	Ofport         int                   `json:"ofport_request,omitempty"`
 }
 type TopologyNode struct {
 	Summary *TopologyConfigurationSummary `json:"configuration_summary,omitempty"`
@@ -41,6 +43,7 @@ type TopologyNode struct {
 // Explicit IPC types retain native empty sets and zero values without allowing
 // arbitrary nested objects through the strict signed-envelope decoder.
 type TopologyConfigurationSummary struct {
+	Mirror        *mirror.Configuration `json:"mirror,omitempty"`
 	Tunnel        *tunnel.Configuration `json:"tunnel,omitempty"`
 	TunnelReason  string                `json:"tunnel_reason,omitempty"`
 	VLANMode      *[]string             `json:"vlan_mode,omitempty"`
@@ -59,6 +62,9 @@ type TopologyConfigurationSummary struct {
 	PatchPeer     *string               `json:"patch_peer,omitempty"`
 }
 type TopologyChange struct {
+	Mirror                  *MirrorChange     `json:"mirror_change,omitempty"`
+	MirrorAuthorityRevision string            `json:"mirror_authority_revision,omitempty"`
+	MirrorDependency        string            `json:"mirror_dependency,omitempty"`
 	Tunnel                  *TunnelChange     `json:"tunnel_change,omitempty"`
 	TunnelAuthorityRevision string            `json:"tunnel_authority_revision,omitempty"`
 	TunnelDependency        string            `json:"tunnel_dependency,omitempty"`
@@ -76,6 +82,12 @@ type TopologyChange struct {
 	Compensating bool               `json:"compensating,omitempty"`
 }
 type TopologySnapshot struct {
+	MirrorRuntimeFailure           string
+	MirrorRuntime                  string
+	MirrorAuthority, MirrorCreates map[string]bool
+	MirrorAuthorityRevision        string
+	MirrorSupported                bool
+	MirrorDefaults                 map[string]any
 	TunnelAuthority, TunnelCreates map[string]bool
 	TunnelTypes                    []string
 	TunnelAuthorityRevision        string
@@ -188,6 +200,11 @@ func topologyProblem(i StoredIntent, s Snapshot) string {
 	if !t.Supported {
 		return "TOPOLOGY_SCHEMA_UNSUPPORTED"
 	}
+	if IsMirrorOperation(i.Operation) {
+		if problem := mirrorTopologyProblem(i, t); problem != "" {
+			return problem
+		}
+	}
 	if IsTunnelOperation(i.Operation) {
 		if !t.TunnelSupported || g.Tunnel == nil {
 			return "TUNNEL_SCHEMA_UNSUPPORTED"
@@ -259,6 +276,9 @@ func topologyChecks(i StoredIntent, s Snapshot) []Gate {
 	// root policy, marker and current==our_after are still checked independently.
 	if !i.Topology.Compensating && !i.Topology.Observed {
 		authority, creates := s.Topology.Authority, s.Topology.Creates
+		if IsMirrorOperation(i.Operation) {
+			authority, creates = s.Topology.MirrorAuthority, s.Topology.MirrorCreates
+		}
 		if IsTunnelOperation(i.Operation) {
 			authority, creates = s.Topology.TunnelAuthority, s.Topology.TunnelCreates
 		}
@@ -271,6 +291,9 @@ func topologyChecks(i StoredIntent, s Snapshot) []Gate {
 		for _, b := range TopologyCreations(i, false) {
 			n := slices.IndexFunc(i.Topology.After, func(n TopologyNode) bool { return n.Binding == b })
 			bridgeID := ""
+			if IsMirrorOperation(i.Operation) && i.Topology.Mirror != nil {
+				bridgeID = i.Topology.Mirror.Bridge.ManagementID
+			}
 			child := b
 			for _, p := range i.Topology.After {
 				if p.Binding.Table == "Port" && slices.Contains(p.Links, b) {
@@ -305,6 +328,9 @@ func topologyDiff(i StoredIntent, s Snapshot) Diff {
 	return Diff{Object: i.Object, Field: "native_topology", Before: g.Before, After: g.After, Current: current, Authority: "ovsdb-configuration", Operation: i.Operation, IntentID: i.ID, Conflict: topologyProblem(i, s) != ""}
 }
 func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
+	if len(cmd.Intents) == 1 && IsMirrorOperation(cmd.Intents[0].Operation) {
+		return stageMirror(c, cmd, s)
+	}
 	fail := func(code string) (Candidate, error) { return c, apitypes.Fail(409, code) }
 	if len(cmd.Intents) != 1 || len(c.Intents) > 1 {
 		return fail("TOPOLOGY_SINGLE_INTENT_REQUIRED")
@@ -312,7 +338,7 @@ func stageTopology(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	in := cmd.Intents[0]
 	r := in.Topology
 	t := s.Topology
-	if !IsTopologyOperation(in.Operation) || r == nil || !apitypes.ManagementID(in.ID) || Digest(in.Value) != Digest(VLAN{}) || in.Multicast != nil || in.Protected != nil || in.SpanningTree != nil || in.Policing != nil || in.MTURequest != 0 || in.Mode != "" || in.LACP != "" || in.Fallback != "" || in.Name != "" || in.VLANID != 0 || len(in.Members) != 0 {
+	if !IsTopologyOperation(in.Operation) || r == nil || r.Mirror != nil || !apitypes.ManagementID(in.ID) || Digest(in.Value) != Digest(VLAN{}) || in.Multicast != nil || in.Protected != nil || in.SpanningTree != nil || in.Policing != nil || in.MTURequest != 0 || in.Mode != "" || in.LACP != "" || in.Fallback != "" || in.Name != "" || in.VLANID != 0 || len(in.Members) != 0 {
 		return fail("INVALID_TOPOLOGY_INTENT")
 	}
 	if in.Object.Generation != s.Generation || c.Generation != nil && *c.Generation != s.Generation {
@@ -930,6 +956,9 @@ func TopologyConfigurations(i StoredIntent, t TopologySnapshot, original map[str
 			cfg = CloneConfiguration(t.Configurations[n.Binding.ManagementID])
 			if len(cfg) == 0 {
 				cfg = CloneConfiguration(t.Defaults[n.Binding.Table])
+				if n.Binding.Table == "Mirror" && IsMirrorOperation(i.Operation) {
+					cfg = CloneConfiguration(t.MirrorDefaults)
+				}
 				if i.Operation == "bond.members.set" && n.Binding.Table == "Port" {
 					cfg = CloneConfiguration(t.Configurations[i.Object.ManagementID])
 					cfg["bond_mode"] = []any{}
@@ -960,6 +989,11 @@ func TopologyConfigurations(i StoredIntent, t TopologySnapshot, original map[str
 					col = "interfaces"
 				}
 				cfg[col] = links
+			}
+			if IsMirrorOperation(i.Operation) {
+				if err := mirrorConfigureImages(i, t, n, cfg); err != nil {
+					return nil, err
+				}
 			}
 			if i.Operation == "bond.create" && n.Binding.Table == "Port" {
 				cfg["bond_mode"] = []any{"active-backup"}
@@ -1025,7 +1059,7 @@ func RemapConfiguration(cfg map[string]any, replacements map[string]Binding) map
 		return v
 	}
 	out := CloneConfiguration(cfg)
-	for _, column := range []string{"ports", "interfaces"} {
+	for _, column := range []string{"ports", "interfaces", "mirrors"} {
 		if v, ok := out[column]; ok {
 			out[column] = remap(v)
 		}

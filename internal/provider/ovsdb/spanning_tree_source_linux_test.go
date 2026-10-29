@@ -84,7 +84,35 @@ func TestSpanningTreeSourceDiagRejectsMalformedAndInterruptedEvidence(t *testing
 	if complete, err := parseUnixPeers(append(append([]byte{}, valid...), done...), out); err != nil || !complete || !reflect.DeepEqual(out, map[uint32]uint32{11: 12}) {
 		t.Fatal(out, complete, err)
 	}
-	for _, scenario := range []string{"header", "length", "sequence", "interrupted", "kernel-error", "done-error", "truncated-body", "attribute", "duplicate-attribute", "duplicate-inode", "zero-peer", "after-done"} {
+	t.Run("kernel_zero_peer_is_unavailable_and_never_source_authority", func(t *testing.T) {
+		zero := append([]byte{}, valid...)
+		binary.NativeEndian.PutUint32(zero[36:], 0)
+		observed := map[uint32]uint32{}
+		complete, err := parseUnixPeers(append(zero, done...), observed)
+		if err != nil || !complete || !reflect.DeepEqual(observed, map[uint32]uint32{11: 0}) {
+			t.Fatal("valid closed kernel peer treated as corrupt", err)
+		}
+		a, b := map[uint32]bool{11: true}, map[uint32]bool{12: true}
+		observed[12] = 11
+		if _, err := sourceSocketConnection(a, b, observed); err == nil {
+			t.Fatal("zero peer supplied source authority")
+		}
+		observed[11], observed[12], observed[13] = 12, 11, 0
+		a[13] = true
+		if value, err := sourceSocketConnection(a, b, observed); err != nil || value != "11:12" {
+			t.Fatal("unrelated unavailable peer hid the actual reciprocal source", err)
+		}
+		observed[12] = 0
+		if _, err := sourceSocketConnection(a, b, observed); err == nil {
+			t.Fatal("one-way source supplied authority")
+		}
+		observed[12], observed[13], observed[14] = 11, 14, 13
+		b[14] = true
+		if _, err := sourceSocketConnection(a, b, observed); err == nil {
+			t.Fatal("ambiguous source supplied authority")
+		}
+	})
+	for _, scenario := range []string{"header", "length", "sequence", "interrupted", "kernel-error", "done-error", "truncated-body", "attribute", "duplicate-attribute", "duplicate-zero-attribute", "duplicate-inode", "after-done"} {
 		t.Run(scenario, func(t *testing.T) {
 			b := append([]byte{}, valid...)
 			switch scenario {
@@ -109,13 +137,15 @@ func TestSpanningTreeSourceDiagRejectsMalformedAndInterruptedEvidence(t *testing
 				b = diagPacket(20, append(append([]byte{}, body...), body[16:]...))
 			case "duplicate-inode":
 				b = append(b, valid...)
-			case "zero-peer":
-				binary.NativeEndian.PutUint32(b[36:], 0)
+			case "duplicate-zero-attribute":
+				first := append([]byte{}, body...)
+				binary.NativeEndian.PutUint32(first[20:], 0)
+				b = diagPacket(20, append(first, body[16:]...))
 			case "after-done":
 				b = append(append([]byte{}, done...), valid...)
 			}
-			if _, err := parseUnixPeers(b, map[uint32]uint32{}); err == nil {
-				t.Fatal("malformed evidence accepted")
+			if _, err := parseUnixPeers(b, map[uint32]uint32{}); err == nil || !errors.Is(err, sourceUnproven) {
+				t.Fatal("malformed evidence accepted or coarse refusal identity changed")
 			}
 		})
 	}
@@ -164,9 +194,139 @@ func TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers(t *testing.T) {
 	if _, err := unixSocketPeers(ctx); err == nil {
 		t.Fatal("cancelled dump accepted")
 	}
+	t.Run("bounded_churn_diagnostics_keep_refusal_and_fresh_peer_proof", func(t *testing.T) {
+		churn, cancelChurn := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		defer cancelChurn()
+		stopped := make(chan struct{})
+		go func() {
+			defer close(stopped)
+			for churn.Err() == nil {
+				pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+				if err != nil {
+					return
+				}
+				_ = unix.Close(pair[0])
+				_ = unix.Close(pair[1])
+			}
+		}()
+		counts := map[string]int{}
+		for churn.Err() == nil {
+			_, err := unixSocketPeers(churn)
+			code := "complete"
+			if err != nil {
+				if !errors.Is(err, sourceUnproven) {
+					cancelChurn()
+					<-stopped
+					t.Fatal("diagnostic lost fail-closed identity")
+				}
+				code = err.Error()
+			}
+			counts[code]++
+		}
+		cancelChurn()
+		<-stopped
+		for code, count := range counts {
+			t.Logf("isolated Unix socket churn code=%s inspections=%d", code, count)
+		}
+		fresh, finish := context.WithTimeout(context.Background(), time.Second)
+		defer finish()
+		observed, err := unixSocketPeers(fresh)
+		if err != nil || observed[a] != b || observed[b] != a {
+			t.Fatal("fresh peer proof failed after isolated churn stopped", err)
+		}
+	})
 }
 
 func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *testing.T) {
+	t.Run("mirror_observation_rejects_listener_replacement_even_with_the_same_peer_pid", func(t *testing.T) {
+		stop := make(chan struct{})
+		control := controlServer(t, func(c net.Conn) { <-stop })
+		t.Cleanup(func() { close(stop) })
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		holder := &mirrorObservationConnection{}
+		defer holder.close()
+		original, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Rename(control.Socket, control.Socket+".old"); err != nil {
+			t.Fatal(err)
+		}
+		replacement, err := net.Listen("unix", control.Socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = replacement.Close() })
+		if _, err = holder.get(ctx, control.Socket, control.PeerUID); err == nil || holder.conn != nil {
+			t.Fatal("rebound pathname inherited cached transport availability")
+		}
+		current, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil || current == original {
+			t.Fatal("next explicit observation did not bind the replacement listener", err)
+		}
+	})
+	t.Run("mirror_observation_reuses_live_transport_without_control_rpc_or_trust_cache", func(t *testing.T) {
+		accepted := make(chan net.Conn, 2)
+		stop := make(chan struct{})
+		control := controlServer(t, func(c net.Conn) { accepted <- c; <-stop })
+		t.Cleanup(func() { close(stop) })
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		holder := &mirrorObservationConnection{}
+		defer holder.close()
+		conn, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var server net.Conn
+		select {
+		case server = <-accepted:
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		for k := 0; k < 8; k++ {
+			current, err := holder.get(ctx, control.Socket, control.PeerUID)
+			if err != nil || current != conn {
+				t.Fatal("healthy observation churned control transport", err)
+			}
+		}
+		_ = server.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+		if _, err := server.Read(make([]byte, 1)); !os.IsTimeout(err) {
+			t.Fatal("transport observation sent control bytes", err)
+		}
+		_ = server.Close()
+		if _, err := holder.get(ctx, control.Socket, control.PeerUID); err == nil || holder.conn != nil {
+			t.Fatal("closed peer accepted or reconnected inside failed observation")
+		}
+		next, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil || next == conn {
+			t.Fatal("explicit next observation did not open a fresh transport", err)
+		}
+		if _, err := holder.get(ctx, control.Socket, ^uint32(0)); err == nil || holder.conn != nil {
+			t.Fatal("reused transport skipped current peer credential check")
+		}
+	})
+	t.Run("mirror_dispatch_retains_its_own_probes_across_both_fresh_checks", func(t *testing.T) {
+		ctx, finish := mirrorAttemptContext(context.Background(), true)
+		defer finish()
+		nested, release := treeSourceContext(ctx)
+		client, server := net.Pipe()
+		defer server.Close()
+		if err := retainTreeSourceConnection(nested, client); err != nil {
+			t.Fatal(err)
+		}
+		release()
+		_ = server.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+		if _, err := server.Read(make([]byte, 1)); err == nil || errors.Is(err, io.EOF) {
+			t.Fatal("first check closed a probe before final admission", err)
+		}
+		finish()
+		_ = server.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := server.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+			t.Fatal("finished Mirror dispatch retained a probe", err)
+		}
+	})
 	t.Run("own_probe_connections_survive_nested_checks_and_close_with_attempt", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
