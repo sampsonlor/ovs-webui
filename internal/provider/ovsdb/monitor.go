@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"strconv"
 	"time"
@@ -13,6 +14,7 @@ import (
 )
 
 type Options struct {
+	Logger       *slog.Logger `json:"-"`
 	Socket       string
 	DatabaseFile string
 	PeerUID      uint32

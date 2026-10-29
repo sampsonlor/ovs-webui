@@ -503,7 +503,8 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = treeDispatchReason(err)
 		return notSent
 	}
-	if e.mirrorDispatchCheck(ctx, p, n) != nil {
+	if err := e.mirrorDispatchCheck(ctx, p, n); err != nil {
+		e.logMirrorDenial(ctx, "mirror-before-admission", err)
 		notSent.Reason = "mirror-runtime-unqualified"
 		return notSent
 	}
@@ -518,7 +519,8 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = "topology-host-identity-changed"
 		return notSent
 	}
-	if e.mirrorDispatchCheck(ctx, p, n) != nil {
+	if err := e.mirrorDispatchCheck(ctx, p, n); err != nil {
+		e.logMirrorDenial(ctx, "mirror-final-admission", err)
 		notSent.Reason = "mirror-runtime-unqualified"
 		return notSent
 	}

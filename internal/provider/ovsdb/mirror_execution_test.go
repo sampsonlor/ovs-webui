@@ -2,7 +2,10 @@ package ovsdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"math"
 	"slices"
 	"strconv"
@@ -12,10 +15,28 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/mirror"
+	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 )
 
 func TestMirrorNativePlanFencesEverySessionAndExactIncomingReferences(t *testing.T) {
+	t.Run("private_denial_diagnostics_have_closed_codes", func(t *testing.T) {
+		var out bytes.Buffer
+		logger := slog.New(redact.New(slog.NewJSONHandler(&out, nil)))
+		e := &Executor{provider: &Provider{options: Options{Logger: logger}}}
+		for _, tc := range []struct{ cause, code string }{
+			{"SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN", "SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN"},
+			{"MIRROR_RUNTIME_IDENTITY_CHANGED", "MIRROR_RUNTIME_IDENTITY_CHANGED"},
+			{"/synthetic/private-source: unexpected error", "MIRROR_RUNTIME_UNQUALIFIED"},
+		} {
+			out.Reset()
+			e.logMirrorDenial(context.Background(), "mirror-final-admission", errors.New(tc.cause))
+			var record map[string]any
+			if json.Unmarshal(out.Bytes(), &record) != nil || record["msg"] != "mirror_runtime_denied" || record["code"] != tc.code || record["scope"] != "mirror-final-admission" || bytes.Contains(out.Bytes(), []byte("/synthetic/")) {
+				t.Fatal("private denial diagnostic escaped its vocabulary")
+			}
+		}
+	})
 	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		t.Run(version, func(t *testing.T) {
 			d, v := treeFenceFixture(t, version)

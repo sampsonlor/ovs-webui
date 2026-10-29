@@ -65,7 +65,7 @@ func (p *Provider) mirrorRuntime(ctx context.Context, o *MirrorExecutionOptions,
 	if source {
 		association, err = spanningTreeSource(ctx, conn, o.PeerUID, p.options, evidence, o.Executable)
 		if err != nil {
-			return "", errors.New("MIRROR_DATABASE_SOURCE_UNPROVEN")
+			return "", err
 		}
 	}
 	b, _, err := attestNativeBuild(ctx, conn, o.PeerUID, build, qualify)

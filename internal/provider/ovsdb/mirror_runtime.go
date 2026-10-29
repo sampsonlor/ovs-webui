@@ -95,13 +95,33 @@ func (e *Executor) mirrorDispatchCheck(ctx context.Context, p execution.Plan, n 
 	// the current root configuration; removing it cannot admit another write.
 	i := p.Envelope.Candidate.Intents[0]
 	if i.Topology == nil || n.MirrorBuild == nil || n.MirrorAuthority == "" || !i.Topology.Compensating && (e.provider.mirror == nil || candidate.Digest(e.provider.mirror) != candidate.Digest(n.MirrorBuild)) {
-		return errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+		return errors.New("MIRROR_CURRENT_ADMISSION_REVOKED")
 	}
 	proof, err := e.provider.mirrorRuntime(ctx, n.MirrorBuild, n.Evidence, true)
-	if err != nil || proof != n.MirrorAuthority {
-		return errors.New("MIRROR_RUNTIME_UNQUALIFIED")
+	if err != nil {
+		return err
+	}
+	if proof != n.MirrorAuthority {
+		return errors.New("MIRROR_RUNTIME_IDENTITY_CHANGED")
 	}
 	return nil
+}
+
+// Closed internal diagnostics explain a refused attempt without publishing
+// private source identities, row values, filenames or driver error text.
+func (e *Executor) logMirrorDenial(ctx context.Context, scope string, err error) {
+	if e.provider.options.Logger == nil {
+		return
+	}
+	code := "MIRROR_RUNTIME_UNQUALIFIED"
+	switch err.Error() {
+	case "MIRROR_CURRENT_ADMISSION_REVOKED", "MIRROR_RUNTIME_IDENTITY_CHANGED", "MIRROR_RUNTIME_NOT_CONFIGURED", "MIRROR_CONTROL_OR_BUILD_UNPROVEN",
+		"SPANNING_TREE_SOURCE_UNPROVEN", "SPANNING_TREE_SOURCE_EVIDENCE_UNPROVEN", "SPANNING_TREE_SOURCE_CONTROL_UNPROVEN", "SPANNING_TREE_SOURCE_EXECUTABLE_UNPROVEN",
+		"SPANNING_TREE_SOURCE_DATABASE_UNAVAILABLE", "SPANNING_TREE_SOURCE_DATABASE_PEER_UNPROVEN", "SPANNING_TREE_SOURCE_SCHEMA_UNPROVEN", "SPANNING_TREE_SOURCE_ROOT_UNPROVEN",
+		"SPANNING_TREE_SOURCE_FILE_UNPROVEN", "SPANNING_TREE_SOURCE_DIAG_UNPROVEN", "SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN", "SPANNING_TREE_SOURCE_PROCESS_FDS_UNPROVEN":
+		code = err.Error()
+	}
+	e.provider.options.Logger.WarnContext(ctx, "mirror_runtime_denied", "code", code, "scope", scope)
 }
 
 func (e *Executor) mirrorAppliedProof(ctx context.Context, p execution.Plan, v inventory.ExecutionView) error {

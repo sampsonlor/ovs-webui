@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -32,6 +33,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/provider/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/publicapi"
+	"github.com/sampsonlor/ovs-webui/internal/redact"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/auth"
 	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
@@ -346,7 +348,7 @@ func (f *fixture) startMonitor() {
 	must(f.t, err)
 	f.inventory = inventory.New(r)
 	f.auth.WithInventory(f.inventory)
-	f.provider, err = ovsdb.New(ovsdb.Options{Socket: f.proxySocket, DatabaseFile: f.conf, PeerUID: uint32(os.Geteuid())})
+	f.provider, err = ovsdb.New(ovsdb.Options{Socket: f.proxySocket, DatabaseFile: f.conf, PeerUID: uint32(os.Geteuid()), Logger: slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd-test")})
 	must(f.t, err)
 	if os.Getenv("OVS_MIRROR_NATIVE_TEST") == "1" {
 		f.configureMirrorBuild()

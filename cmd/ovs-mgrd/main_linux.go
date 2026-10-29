@@ -539,7 +539,7 @@ func run() int {
 			logger.Error("inventory_start_failed", "code", "OVSDB_PEER_INVALID")
 			return 2
 		}
-		provider, err := ovsprovider.New(ovsprovider.Options{Socket: *ovsSocket, DatabaseFile: *ovsFile, PeerUID: uint32(*ovsUID)})
+		provider, err := ovsprovider.New(ovsprovider.Options{Socket: *ovsSocket, DatabaseFile: *ovsFile, PeerUID: uint32(*ovsUID), Logger: logger})
 		if err != nil {
 			logger.Error("inventory_start_failed", "code", "OVSDB_ENDPOINT_INVALID")
 			return 2

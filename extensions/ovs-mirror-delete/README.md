@@ -1,8 +1,9 @@
 # Optional native Mirror unregister correction
 
 The user approved this route on 2026-10-28. The optional correction and build
-admission are implemented; source/main native qualification remains pending.
-No production deployment or Mirror acceptance follows from this document.
+admission are implemented. Acceptance requires complete source and independent
+main native qualification, recorded separately in the accepted baseline and #43.
+This document alone does not establish Mirror acceptance or production deployment.
 
 ## Native behavior and scope
 
@@ -50,7 +51,9 @@ configured executable. Preparation, dispatch and Applied proof also verify the
 actual established connection to the exact observed DB peer, file, root and
 schema. No control RPC is sent. Checks have a two-second bound and no trust cache.
 Dispatch repeats the check after the admission callback, before the sole native
-mutation send. Configuration counters still do not prove receiver delivery.
+mutation send. Denial logs use fixed internal reason codes through the shared
+redaction boundary, with no private paths, configuration values or source IDs.
+Configuration counters still do not prove receiver delivery.
 
 Strict process inspection requires the optional process-read capability shown in
 `packaging/examples/ovs-mgrd-mirror.conf.example`. The default service omits
