@@ -167,6 +167,26 @@ func TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers(t *testing.T) {
 }
 
 func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *testing.T) {
+	t.Run("mirror_dispatch_retains_its_own_probes_across_both_fresh_checks", func(t *testing.T) {
+		ctx, finish := mirrorAttemptContext(context.Background(), true)
+		defer finish()
+		nested, release := treeSourceContext(ctx)
+		client, server := net.Pipe()
+		defer server.Close()
+		if err := retainTreeSourceConnection(nested, client); err != nil {
+			t.Fatal(err)
+		}
+		release()
+		_ = server.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+		if _, err := server.Read(make([]byte, 1)); err == nil || errors.Is(err, io.EOF) {
+			t.Fatal("first check closed a probe before final admission", err)
+		}
+		finish()
+		_ = server.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := server.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+			t.Fatal("finished Mirror dispatch retained a probe", err)
+		}
+	})
 	t.Run("own_probe_connections_survive_nested_checks_and_close_with_attempt", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

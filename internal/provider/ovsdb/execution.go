@@ -443,6 +443,8 @@ func compileExecution(id, marker string, envelope candidate.Envelope, view inven
 }
 
 func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func() error) execution.Outcome {
+	ctx, finishMirror := mirrorAttemptContext(ctx, isMirrorCandidate(p.Envelope.Candidate))
+	defer finishMirror()
 	notSent := execution.Outcome{Commit: "rejected", Applied: "not-applied", Reason: "preflight-expired"}
 	if time.Since(p.Prepared) < 0 || time.Since(p.Prepared) > execution.PreflightFor || ctx.Err() != nil {
 		return notSent

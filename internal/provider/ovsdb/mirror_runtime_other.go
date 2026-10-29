@@ -11,3 +11,7 @@ import (
 func (p *Provider) mirrorRuntime(context.Context, *MirrorExecutionOptions, inventory.Evidence, bool) (string, error) {
 	return "", errors.New("MIRROR_RUNTIME_UNQUALIFIED")
 }
+
+func mirrorAttemptContext(ctx context.Context, _ bool) (context.Context, func()) {
+	return ctx, func() {}
+}

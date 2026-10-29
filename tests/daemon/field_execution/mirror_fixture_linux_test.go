@@ -27,7 +27,7 @@ func (f *fixture) startMirrorRelay() {
 	f.t.Helper()
 	upstream := filepath.Join(f.root, "fault-upstream.sock")
 	f.proxy = newProxy(f.t, upstream, f.dbSocket)
-	f.proxy.markerOnly = true
+	f.proxy.markerOnly.Store(true)
 	script := `import os,socket,sys,threading
 path,target,db=sys.argv[1:]
 held=open(db,'rb')

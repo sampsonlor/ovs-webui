@@ -50,7 +50,7 @@ type rejectedNativeOperation struct {
 
 type faultProxy struct {
 	lastRejected atomic.Value
-	markerOnly   bool
+	markerOnly   atomic.Bool
 	listener     net.Listener
 	target       string
 	sent         atomic.Int32
@@ -121,7 +121,7 @@ func (p *faultProxy) serve(c net.Conn) {
 					mutation = mutation || op.Op == "update" || op.Op == "mutate" || op.Op == "insert" || op.Op == "delete"
 				}
 			}
-			if p.markerOnly && !bytes.Contains(b, []byte("ovs-webui.bridge-commit")) {
+			if p.markerOnly.Load() && !bytes.Contains(b, []byte("ovs-webui.bridge-commit")) {
 				mutation = false
 			}
 			if mutation {

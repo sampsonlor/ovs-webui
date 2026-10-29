@@ -14,6 +14,16 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/mirror"
 )
 
+// Dispatch performs two fresh checks around admission. Hold its own read-only
+// probe sockets through both checks so asynchronously closing accepted FDs do
+// not invalidate the next strict /proc inspection. No trust is reused.
+func mirrorAttemptContext(ctx context.Context, enabled bool) (context.Context, func()) {
+	if !enabled {
+		return ctx, func() {}
+	}
+	return treeSourceContext(ctx)
+}
+
 // No control RPC is sent. SO_PEERCRED binds the opened control connection to
 // the root-owned executable. Admission/dispatch/Applied additionally prove its
 // actual established connection to this exact observed DB/file/root/schema.
@@ -30,7 +40,9 @@ func (p *Provider) mirrorRuntime(ctx context.Context, o *MirrorExecutionOptions,
 	if err != nil {
 		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
 	}
-	defer conn.Close()
+	if retainTreeSourceConnection(ctx, conn) != nil {
+		return "", errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN")
+	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	deadline, _ := ctx.Deadline()
