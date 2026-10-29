@@ -137,17 +137,11 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 		}
 		return "", errors.New("SPANNING_TREE_SOURCE_DIAG_UNPROVEN")
 	}
-	var connection string
-	for inode := range a {
-		other := links[inode]
-		if other != 0 && b[other] && links[other] == inode {
-			if connection != "" {
-				return "", sourceUnproven
-			}
-			connection = fmt.Sprintf("%d:%d", inode, other)
-		}
+	connection, err := sourceSocketConnection(a, b, links)
+	if err != nil {
+		return "", err
 	}
-	if connection == "" || ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return "", errors.New("SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN")
 	}
 	// Recheck process incarnations after proc/diag collection. Socket replacement
@@ -158,6 +152,25 @@ func spanningTreeSource(ctx context.Context, control net.Conn, uid uint32, datab
 		return "", sourceUnproven
 	}
 	return fmt.Sprintf("%s/%s/%d:%d/%d:%d/%s", daemon, dbPeer, trusted.Dev, trusted.Ino, w.Device, w.Inode, connection), nil
+}
+
+// Only a reciprocal nonzero pair owned by the two sampled processes can
+// establish source authority. An unresolved/closed peer never participates.
+func sourceSocketConnection(a, b map[uint32]bool, links map[uint32]uint32) (string, error) {
+	var connection string
+	for inode := range a {
+		other := links[inode]
+		if other != 0 && b[other] && links[other] == inode {
+			if connection != "" {
+				return "", sourceUnproven
+			}
+			connection = fmt.Sprintf("%d:%d", inode, other)
+		}
+	}
+	if connection == "" {
+		return "", errors.New("SPANNING_TREE_SOURCE_CONNECTION_UNPROVEN")
+	}
+	return connection, nil
 }
 
 // A single purpose-built read transaction. The discovery request/call helper
@@ -341,6 +354,7 @@ func parseUnixPeers(data []byte, out map[uint32]uint32) (bool, error) {
 			return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_INODE")
 		}
 		peer := uint32(0)
+		peerSeen := false
 		for attrs := body[16:]; len(attrs) > 0; {
 			if len(attrs) < 4 {
 				return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_ATTRIBUTE")
@@ -350,13 +364,14 @@ func parseUnixPeers(data []byte, out map[uint32]uint32) (bool, error) {
 				return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_ATTRIBUTE")
 			}
 			if order.Uint16(attrs[2:]) == 2 { // UNIX_DIAG_PEER
-				if size != 8 || peer != 0 {
+				if size != 8 || peerSeen {
 					return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_PEER_ATTRIBUTE")
 				}
+				peerSeen = true
+				// Linux sk_diag_dump_peer() can report sock_i_ino(peer)==0
+				// after the peer's file detaches. Preserve that valid kernel
+				// state as unavailable; source matching still requires !=0.
 				peer = order.Uint32(attrs[4:])
-				if peer == 0 {
-					return false, sourceDiagFailure("SPANNING_TREE_SOURCE_DIAG_ZERO_PEER")
-				}
 			}
 			attrs = attrs[(size+3)&^3:]
 		}

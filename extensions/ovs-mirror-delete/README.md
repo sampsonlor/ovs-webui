@@ -73,6 +73,13 @@ Recovery still requires the same actual qualified source, identity and guarded
 native after-image. Replacing the binary/manifest or losing source proof blocks
 rather than replays recovery.
 
+Linux may return `UNIX_DIAG_PEER=0` after a peer's file detaches; the kernel
+still emits the attribute. It is preserved as an unavailable peer, never a
+source identity. Source proof continues to require one nonzero reciprocal pair
+owned by the sampled daemon and database processes. Duplicate attributes,
+including a zero-valued first duplicate, remain invalid. See the pinned
+[kernel diagnostic implementation](https://github.com/torvalds/linux/blob/v6.8/net/unix/diag.c).
+
 ## Isolated proof
 
 The distro fixture retains five unfixed cached-flow reproductions for each of

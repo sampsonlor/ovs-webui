@@ -84,7 +84,35 @@ func TestSpanningTreeSourceDiagRejectsMalformedAndInterruptedEvidence(t *testing
 	if complete, err := parseUnixPeers(append(append([]byte{}, valid...), done...), out); err != nil || !complete || !reflect.DeepEqual(out, map[uint32]uint32{11: 12}) {
 		t.Fatal(out, complete, err)
 	}
-	for _, scenario := range []string{"header", "length", "sequence", "interrupted", "kernel-error", "done-error", "truncated-body", "attribute", "duplicate-attribute", "duplicate-inode", "zero-peer", "after-done"} {
+	t.Run("kernel_zero_peer_is_unavailable_and_never_source_authority", func(t *testing.T) {
+		zero := append([]byte{}, valid...)
+		binary.NativeEndian.PutUint32(zero[36:], 0)
+		observed := map[uint32]uint32{}
+		complete, err := parseUnixPeers(append(zero, done...), observed)
+		if err != nil || !complete || !reflect.DeepEqual(observed, map[uint32]uint32{11: 0}) {
+			t.Fatal("valid closed kernel peer treated as corrupt", err)
+		}
+		a, b := map[uint32]bool{11: true}, map[uint32]bool{12: true}
+		observed[12] = 11
+		if _, err := sourceSocketConnection(a, b, observed); err == nil {
+			t.Fatal("zero peer supplied source authority")
+		}
+		observed[11], observed[12], observed[13] = 12, 11, 0
+		a[13] = true
+		if value, err := sourceSocketConnection(a, b, observed); err != nil || value != "11:12" {
+			t.Fatal("unrelated unavailable peer hid the actual reciprocal source", err)
+		}
+		observed[12] = 0
+		if _, err := sourceSocketConnection(a, b, observed); err == nil {
+			t.Fatal("one-way source supplied authority")
+		}
+		observed[12], observed[13], observed[14] = 11, 14, 13
+		b[14] = true
+		if _, err := sourceSocketConnection(a, b, observed); err == nil {
+			t.Fatal("ambiguous source supplied authority")
+		}
+	})
+	for _, scenario := range []string{"header", "length", "sequence", "interrupted", "kernel-error", "done-error", "truncated-body", "attribute", "duplicate-attribute", "duplicate-zero-attribute", "duplicate-inode", "after-done"} {
 		t.Run(scenario, func(t *testing.T) {
 			b := append([]byte{}, valid...)
 			switch scenario {
@@ -109,8 +137,10 @@ func TestSpanningTreeSourceDiagRejectsMalformedAndInterruptedEvidence(t *testing
 				b = diagPacket(20, append(append([]byte{}, body...), body[16:]...))
 			case "duplicate-inode":
 				b = append(b, valid...)
-			case "zero-peer":
-				binary.NativeEndian.PutUint32(b[36:], 0)
+			case "duplicate-zero-attribute":
+				first := append([]byte{}, body...)
+				binary.NativeEndian.PutUint32(first[20:], 0)
+				b = diagPacket(20, append(first, body[16:]...))
 			case "after-done":
 				b = append(append([]byte{}, done...), valid...)
 			}
