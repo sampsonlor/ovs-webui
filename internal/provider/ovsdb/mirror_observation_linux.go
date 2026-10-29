@@ -20,6 +20,7 @@ import (
 type mirrorObservationConnection struct {
 	conn   net.Conn
 	daemon string
+	named  unix.Stat_t
 }
 
 func (o *mirrorObservationConnection) close() {
@@ -28,10 +29,18 @@ func (o *mirrorObservationConnection) close() {
 	}
 	o.conn = nil
 	o.daemon = ""
+	o.named = unix.Stat_t{}
 }
 func (o *mirrorObservationConnection) get(ctx context.Context, path string, uid uint32) (net.Conn, error) {
 	failure := func() (net.Conn, error) { o.close(); return nil, errors.New("MIRROR_CONTROL_OR_BUILD_UNPROVEN") }
 	if ctx.Err() != nil {
+		return failure()
+	}
+	var named unix.Stat_t
+	if unix.Stat(path, &named) != nil || named.Mode&unix.S_IFMT != unix.S_IFSOCK {
+		return failure()
+	}
+	if o.conn != nil && !witnessSameFile(o.named, named) {
 		return failure()
 	}
 	if o.conn == nil {
@@ -40,6 +49,7 @@ func (o *mirrorObservationConnection) get(ctx context.Context, path string, uid 
 			return failure()
 		}
 		o.conn = conn
+		o.named = named
 		o.daemon, _, err = peer(conn, uid)
 		if err != nil {
 			return failure()
@@ -63,6 +73,10 @@ func (o *mirrorObservationConnection) get(ctx context.Context, path string, uid 
 		n, _, err := unix.Recvfrom(int(fd), data[:], unix.MSG_PEEK|unix.MSG_DONTWAIT)
 		alive = n > 0 || err == unix.EAGAIN || err == unix.EWOULDBLOCK
 	}) != nil || !alive || ctx.Err() != nil {
+		return failure()
+	}
+	var after unix.Stat_t
+	if unix.Stat(path, &after) != nil || !witnessSameFile(o.named, after) {
 		return failure()
 	}
 	return o.conn, nil

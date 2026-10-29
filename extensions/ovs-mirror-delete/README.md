@@ -52,7 +52,8 @@ actual established connection to the exact observed DB peer, file, root and
 schema. No control RPC is sent. Checks have a two-second bound and no trust cache.
 Each inventory monitor retains one live control transport to avoid creating its
 own socket-dump churn; every observation still rehashes both current files and
-rechecks the original peer incarnation. A failed observation closes it and
+rechecks the original peer incarnation and current socket pathname identity.
+A failed observation closes it and
 withdraws admission, without reconnecting within that observation.
 Dispatch repeats the check after the admission callback, before the sole native
 mutation send. Denial logs use fixed internal reason codes through the shared

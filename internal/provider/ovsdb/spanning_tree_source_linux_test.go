@@ -167,6 +167,34 @@ func TestSpanningTreeSourceDiagObservesActualConnectedUnixPeers(t *testing.T) {
 }
 
 func TestSpanningTreeBoundSourceRequiresAdmissionBeforeAnyProviderAccess(t *testing.T) {
+	t.Run("mirror_observation_rejects_listener_replacement_even_with_the_same_peer_pid", func(t *testing.T) {
+		stop := make(chan struct{})
+		control := controlServer(t, func(c net.Conn) { <-stop })
+		t.Cleanup(func() { close(stop) })
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		holder := &mirrorObservationConnection{}
+		defer holder.close()
+		original, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Rename(control.Socket, control.Socket+".old"); err != nil {
+			t.Fatal(err)
+		}
+		replacement, err := net.Listen("unix", control.Socket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = replacement.Close() })
+		if _, err = holder.get(ctx, control.Socket, control.PeerUID); err == nil || holder.conn != nil {
+			t.Fatal("rebound pathname inherited cached transport availability")
+		}
+		current, err := holder.get(ctx, control.Socket, control.PeerUID)
+		if err != nil || current == original {
+			t.Fatal("next explicit observation did not bind the replacement listener", err)
+		}
+	})
 	t.Run("mirror_observation_reuses_live_transport_without_control_rpc_or_trust_cache", func(t *testing.T) {
 		accepted := make(chan net.Conn, 2)
 		stop := make(chan struct{})
