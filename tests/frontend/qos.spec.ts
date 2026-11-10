@@ -20,7 +20,7 @@ const vsctl = (...args: string[]) =>
   ).trim();
 
 async function login(page: Page, user: string) {
-  await page.goto(href);
+  expect((await page.goto(href))?.status()).toBe(200);
   await page.getByLabel('Username', { exact: true }).fill(user);
   await page
     .getByLabel('Password', { exact: true })
@@ -133,7 +133,9 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
     await expect(
       queues.getByRole('columnheader', { name: 'Management ID' }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Dark theme', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Toggle color theme', exact: true })
+      .click();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(queues).toBeVisible();
     expect(
