@@ -102,6 +102,8 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
       list.getByRole('row').filter({ hasText: 'linux-sfq' }),
     ).toContainText('Unbound');
     await shared.getByRole('link').click();
+    const qosID = new URL(page.url()).pathname.split('/').at(-1);
+    expect(qosID).toMatch(/^[0-9a-f-]{36}$/);
     const queues = page.getByRole('table', {
       name: 'Queue numbers within this QoS configuration',
     });
@@ -127,7 +129,15 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
       fullPage: true,
     });
     await page.getByRole('link', { name: ports[0], exact: true }).click();
-    await page.getByRole('link', { name: 'Review bound QoS' }).click();
+    const portQoS = page.getByRole('link', { name: 'Review bound QoS' });
+    await expect(portQoS).toBeVisible();
+    const portID = new URL(page.url()).pathname.split('/').at(-1);
+    expect(
+      (
+        await page.request.get(`${fixture.origin}/api/v1/qos/${portID}`)
+      ).status(),
+    ).toBe(404);
+    await portQoS.click();
     await expect(queues).toBeVisible();
     await page.getByRole('button', { name: 'Expert', exact: true }).click();
     await expect(
@@ -149,6 +159,11 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
     const restricted = await browser.newPage({ ignoreHTTPSErrors: true });
     try {
       await login(restricted, 'browser-qos-observer');
+      expect(
+        (
+          await restricted.request.get(`${fixture.origin}/api/v1/qos/${qosID}`)
+        ).status(),
+      ).toBe(403);
       await expect(
         restricted.getByText('Permission denied', { exact: true }),
       ).toBeVisible();

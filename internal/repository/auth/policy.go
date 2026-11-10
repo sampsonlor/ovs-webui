@@ -238,11 +238,11 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			if err := require(c, "role.read", false, 0); err != nil {
 				return err
 			}
-		case "bridge", "port", "interface", "bond", "tunnel", "mirror":
+		case "bridge", "port", "interface", "bond", "tunnel", "mirror", "qos":
 			if err := require(c, "inventory.read", false, 0); err != nil {
 				return err
 			}
-			if ref.Kind == "tunnel" || ref.Kind == "mirror" {
+			if ref.Kind == "tunnel" || ref.Kind == "mirror" || ref.Kind == "qos" {
 				if err := require(c, "configuration.read", false, 0); err != nil {
 					return err
 				}
@@ -257,7 +257,7 @@ func checkRefs(ctx context.Context, q querier, c authn.Claims, refs []apitypes.R
 			// Tunnel is a native Port identity, never an independent object or a
 			// name alias. The inventory service validates its current Interface
 			// type; this read check does not confer tunnel execution authority.
-			table := map[string]string{"bridge": "Bridge", "port": "Port", "interface": "Interface", "bond": "Port", "tunnel": "Port", "mirror": "Mirror"}[ref.Kind]
+			table := map[string]string{"bridge": "Bridge", "port": "Port", "interface": "Interface", "bond": "Port", "tunnel": "Port", "mirror": "Mirror", "qos": "QoS"}[ref.Kind]
 			var count int
 			if err := q.QueryRowContext(ctx, "SELECT count(*) FROM identities i JOIN inventory_state s ON s.generation=i.generation WHERE i.management_id=? AND i.table_name=? AND i.state='active'", ref.ID, table).Scan(&count); err != nil {
 				return err
