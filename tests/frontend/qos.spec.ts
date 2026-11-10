@@ -139,7 +139,7 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
     ).toBe(404);
     await portQoS.click();
     await expect(queues).toBeVisible();
-    await page.getByRole('button', { name: 'Expert', exact: true }).click();
+    await page.getByRole('button', { name: 'Standard', exact: true }).click();
     await expect(
       queues.getByRole('columnheader', { name: 'Management ID' }),
     ).toBeVisible();
