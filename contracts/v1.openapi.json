@@ -9487,7 +9487,7 @@
         "summary": "listQos",
         "x-capability": "state.read",
         "x-service-issue": 43,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "qos",
         "parameters": [
           {
@@ -9683,7 +9683,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping."
       }
     },
     "/qos/{qos_id}": {
@@ -9692,7 +9693,7 @@
         "summary": "readQos",
         "x-capability": "state.read",
         "x-service-issue": 43,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "qos",
         "parameters": [
           {
@@ -9865,7 +9866,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping."
       }
     },
     "/isolation": {
@@ -29051,6 +29053,36 @@
           "isolation_execution": {
             "$ref": "#/components/schemas/IsolationExecution"
           },
+          "qos_binding": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "bound",
+                  "unbound",
+                  "unknown",
+                  "withheld",
+                  "unsupported"
+                ]
+              },
+              "qos_ref": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ResourceRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "state",
+              "qos_ref"
+            ],
+            "additionalProperties": false
+          },
           "spanning_tree": {
             "$ref": "#/components/schemas/SpanningTreePortObservation"
           }
@@ -30438,6 +30470,9 @@
           },
           "native_mirror": {
             "$ref": "#/components/schemas/MirrorObservation"
+          },
+          "native_qos": {
+            "$ref": "#/components/schemas/QoSObservation"
           },
           "related_object_refs": {
             "type": "array",
@@ -33013,6 +33048,200 @@
           "execution"
         ],
         "additionalProperties": false
+      },
+      "QoSRate": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "unset",
+              "unknown",
+              "not-applicable"
+            ]
+          },
+          "bps": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "bps"
+        ],
+        "additionalProperties": false
+      },
+      "QoSQueue": {
+        "type": "object",
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "queue_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "min_rate": {
+            "$ref": "#/components/schemas/QoSRate"
+          },
+          "max_rate": {
+            "$ref": "#/components/schemas/QoSRate"
+          },
+          "dscp": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 63
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dscp_state": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "unset",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "queue_id",
+          "queue_ref",
+          "min_rate",
+          "max_rate",
+          "dscp",
+          "dscp_state"
+        ],
+        "additionalProperties": false
+      },
+      "QoSPort": {
+        "type": "object",
+        "properties": {
+          "port_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "port_ref",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "QoSObservation": {
+        "type": "object",
+        "properties": {
+          "discipline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_rate": {
+            "$ref": "#/components/schemas/QoSRate"
+          },
+          "binding_state": {
+            "type": "string",
+            "enum": [
+              "unbound",
+              "bound",
+              "shared",
+              "unknown"
+            ]
+          },
+          "port_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2048
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ports": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QoSPort"
+                },
+                "minItems": 0,
+                "maxItems": 32
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ports_truncated": {
+            "type": "boolean"
+          },
+          "queue_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queues": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QoSQueue"
+                },
+                "minItems": 0,
+                "maxItems": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "discipline",
+          "max_rate",
+          "binding_state",
+          "port_count",
+          "ports",
+          "ports_truncated",
+          "queue_count",
+          "queues"
+        ],
+        "additionalProperties": false,
+        "description": "Observed native configuration only. Null counts denote unknown coverage, zero denotes a known empty relationship. List results omit detail arrays. Scheduler installation, statistics and queue use require independent runtime evidence."
       },
       "BridgeCreateIntent": {
         "type": "object",

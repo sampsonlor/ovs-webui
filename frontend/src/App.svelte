@@ -20,6 +20,7 @@
  import Multicast from './Multicast.svelte';
   import Tunnels from './Tunnels.svelte';
   import Mirrors from './Mirrors.svelte';
+  import QoS from './QoS.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -175,6 +176,7 @@
         <Link href="/switching/multicast" current={path.startsWith('/switching/multicast')}>Multicast</Link>
         <Link href="/switching/tunnels" current={path.startsWith('/switching/tunnels')}>Tunnels</Link>
         <Link href="/switching/mirrors" current={path.startsWith('/switching/mirrors')}>Mirrors</Link>
+        <Link href="/switching/qos" current={path.startsWith('/switching/qos')}>QoS &amp; Queues</Link>
         <Link href="/switching/isolation" current={path.startsWith('/switching/isolation')}>Port isolation</Link>
         {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
@@ -405,6 +407,9 @@
                   </div>
                 </div>
                 <p><Link href={`/switching/spanning-tree/${port.bridge_ref.id}`}>Review Bridge STP / RSTP</Link></p>
+                {#if port.qos_binding?.qos_ref}
+                  <p><Link href={`/switching/qos/${port.qos_binding.qos_ref.id}`}>Review bound QoS</Link></p>
+                {/if}
               </section>
               <div class="columns">
                 <section class="panel">
@@ -461,6 +466,8 @@
           <SpanningTree model={$model} {expert} {desktop} />
         {:else if path === '/switching/mirrors' || path.startsWith('/switching/mirrors/')}
           <Mirrors model={$model} {expert} {desktop}/>
+        {:else if path === '/switching/qos' || path.startsWith('/switching/qos/')}
+          <QoS model={$model} {expert} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}

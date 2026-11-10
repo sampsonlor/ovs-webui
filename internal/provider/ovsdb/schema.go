@@ -19,6 +19,8 @@ import (
 )
 
 var selected = map[string][]string{
+	"QoS":          {"type", "queues", "other_config"},
+	"Queue":        {"dscp", "other_config"},
 	"Mirror":       {"name", "select_all", "select_src_port", "select_dst_port", "select_vlan", "output_port", "output_vlan", "snaplen", "statistics", "external_ids"},
 	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths", "iface_types"},
 	"Datapath":     {"capabilities"},
@@ -60,6 +62,7 @@ func discover(data []byte) (discovered, error) {
 			}
 		}
 	}
+	d.public.QoSConfiguration = qosReadSchema(d, raw)
 	for t, table := range d.native.Tables {
 		if len(table.Columns) > 256 {
 			return d, errors.New("OVSDB_SCHEMA_BUDGET")
@@ -79,6 +82,9 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			if t == "QoS" || t == "Queue" {
+				c.Monitored = c.Monitored && d.public.QoSConfiguration
+			}
 			if t == "Bridge" && name == "mcast_snooping_enable" {
 				c.MulticastCompatible = isolationConstraint(col)
 				c.Monitored = c.Monitored && c.MulticastCompatible
@@ -127,7 +133,7 @@ func discover(data []byte) (discovered, error) {
 		}
 		sort.Slice(tt.Columns, func(i, j int) bool { return tt.Columns[i].Name < tt.Columns[j].Name })
 		d.public.Tables = append(d.public.Tables, tt)
-		if _, ok := selected[t]; ok {
+		if _, ok := selected[t]; ok && (t != "QoS" && t != "Queue" || d.public.QoSConfiguration) {
 			sort.Strings(names)
 			d.requests[t] = []any{map[string]any{"columns": names, "select": map[string]bool{"initial": true, "insert": true, "delete": true, "modify": true}}}
 		}
@@ -288,7 +294,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					if !monitoredColumn(d, table, name) && !graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
 						return errors.New("OVSDB_UNREQUESTED_COLUMN")
 					}
-					n, err := normalize(value, d.native.Tables[table].Columns[name])
+					n, err := normalizeInventoryColumn(table, value, d.native.Tables[table].Columns[name])
 					if err != nil {
 						return err
 					}
@@ -325,7 +331,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 				if !monitoredColumn(d, table, name) && !graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
 					return errors.New("OVSDB_UNREQUESTED_COLUMN")
 				}
-				n, err := normalize(v, d.native.Tables[table].Columns[name])
+				n, err := normalizeInventoryColumn(table, v, d.native.Tables[table].Columns[name])
 				if err != nil {
 					return err
 				}
@@ -353,6 +359,9 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 	return nil
 }
 func sanitize(table, name string, n any) any {
+	if (table == "QoS" || table == "Queue") && name == "other_config" {
+		return sanitizeQoSOptions(n)
+	}
 	if keys := spanningTreeMapKeys(table, name); keys != nil {
 		safe := map[string]any{}
 		m, _ := n.(map[string]any)
@@ -464,7 +473,9 @@ func validateRelations(rows inventory.Rows) error {
 		}
 	}
 	for table, objects := range rows {
-		if table == "Open_vSwitch" || table == "Datapath" {
+		// Native QoS and Queue are root tables without a name column. Unbound
+		// records are legitimate, and Port or Queue sharing is observable.
+		if table == "Open_vSwitch" || table == "Datapath" || table == "QoS" || table == "Queue" {
 			continue
 		}
 		for uuid, row := range objects {

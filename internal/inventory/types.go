@@ -53,6 +53,7 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
+	QoSConfiguration     bool                      `json:"-"`
 	MirrorConfiguration  bool                      `json:"-"`
 	MirrorDefaults       map[string]any            `json:"-"`
 	TunnelConfiguration  bool                      `json:"-"`
@@ -135,7 +136,7 @@ type Reader interface {
 
 func Operation(id string) bool {
 	switch id {
-	case "listMirrors", "readMirror", "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
+	case "listQos", "readQos", "listMirrors", "readMirror", "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
 		return true
 	}
 	return false

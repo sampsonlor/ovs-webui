@@ -94,6 +94,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     bridge: '/bridges',
     interface: '/interfaces',
     mirror: '/switching/mirrors',
+    qos: '/switching/qos',
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -367,6 +368,9 @@ export class Controller {
         capability = 'configuration.read';
       } else if (path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')) {
         resourceURL = path === '/switching/tunnels/new' ? '/inventory/topology' : parts.length===2 ? '/tunnels'+query : `/tunnels/${encodeURIComponent(parts[2])}`;
+        capability = 'configuration.read';
+      } else if (path === '/switching/qos' || path.startsWith('/switching/qos/')) {
+        resourceURL = parts.length === 2 ? '/qos' + query : `/qos/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';
       } else if (path === '/switching/topology') {
         resourceURL = '/inventory/topology';

@@ -180,8 +180,16 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return nil, apitypes.Fail(503, "INSTANCE_RECONCILIATION_REQUIRED")
 	}
 	allowedConfig := slices.Contains(c.Capabilities, "configuration.read")
-	if slices.Contains([]string{"listTunnels", "readTunnel", "listMirrors", "readMirror"}, op) && !allowedConfig {
+	qos := op == "listQos" || op == "readQos"
+	if (qos || slices.Contains([]string{"listTunnels", "readTunnel", "listMirrors", "readMirror"}, op)) && !allowedConfig {
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
+	}
+	var qosPorts qosBindings
+	if qos {
+		if !v.observation.Schema.QoSConfiguration {
+			return nil, apitypes.Fail(503, "QOS_SCHEMA_UNSUPPORTED")
+		}
+		qosPorts = indexQoSPorts(v)
 	}
 	if op == "readInventoryTopology" {
 		if !allowedConfig {
@@ -303,6 +311,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return mirrorSnapshot.Topology
 	}
 	project := func(b Binding, kind string) (map[string]any, error) {
+		if kind == "qos" {
+			return qosResource(v, b, fresh, qosPorts, op == "readQos")
+		}
 		if kind == "tunnel" && (b.Table != "Port" || !portHasTunnel(v, v.observation.Rows["Port"][b.UUID])) {
 			return nil, apitypes.Fail(404, "NOT_FOUND")
 		}
@@ -315,6 +326,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			return item, err
 		}
 		item, err := resource(v, b, fresh, allowedConfig, kind)
+		if err == nil && op == "readPort" {
+			item["qos_binding"] = portQoSBinding(v, v.observation.Rows["Port"][b.UUID], allowedConfig)
+		}
 		if err == nil && kind == "tunnel" {
 			item["native_tunnel"] = tunnelObservation(v, b, fresh, c, getTunnel())
 		}
@@ -454,7 +468,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return item, nil
 	}
 	if len(path) > 0 {
-		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel", "readMirror": "mirror"}[op]
+		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel", "readMirror": "mirror", "readQos": "qos"}[op]
 		for _, b := range v.decision.Bindings {
 			for _, id := range path {
 				if b.ManagementID == id && kindFor(b.Table) == tableKind(kind) {
@@ -513,7 +527,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		cur = old
 	}
 	items := []map[string]any{}
-	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel", "listMirrors": "mirror"}[op]
+	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel", "listMirrors": "mirror", "listQos": "qos"}[op]
 	ids := []string{}
 	bindings := map[string]Binding{}
 	if op == "readInventorySchema" {
@@ -534,7 +548,11 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			if kind == "bond" && len(refs(row.Values["interfaces"])) < 2 {
 				continue
 			}
-			if !strings.Contains(strings.ToLower(textValue(row.Values["name"])), strings.ToLower(filter)) {
+			name := textValue(row.Values["name"])
+			if qos {
+				name = textValue(row.Values["type"]) + " " + b.ManagementID
+			}
+			if !strings.Contains(strings.ToLower(name), strings.ToLower(filter)) {
 				continue
 			}
 			if op == "listInterfaces" {
@@ -671,7 +689,7 @@ func base(id, kind, fresh string, v *view) map[string]any {
 	return map[string]any{"id": id, "resource_kind": kind, "state": fresh, "sequence": seq, "source": source(v, fresh, "ovsdb"), "allowed_actions": []string{}}
 }
 func kindFor(t string) string {
-	return map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface", "Mirror": "mirror"}[t]
+	return map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface", "Mirror": "mirror", "QoS": "qos"}[t]
 }
 func tableKind(k string) string {
 	if k == "spanning_tree" {

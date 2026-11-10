@@ -27,8 +27,10 @@ func TestActualSchemaVersionsAndMetadata(t *testing.T) {
 	for _, v := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		t.Run(v, func(t *testing.T) {
 			d := schema(t, v)
-			if len(d.requests) != 6 || d.requests["Open_vSwitch"] == nil || d.requests["Datapath"] == nil || d.requests["Bridge"] == nil || d.requests["Port"] == nil || d.requests["Interface"] == nil || d.requests["Mirror"] == nil {
-				t.Fatal("monitor coverage")
+			for _, table := range []string{"Open_vSwitch", "Datapath", "Bridge", "Port", "Interface", "Mirror", "QoS", "Queue"} {
+				if d.requests[table] == nil {
+					t.Fatal("monitor missing", table)
+				}
 			}
 			found := false
 			for _, table := range d.public.Tables {
