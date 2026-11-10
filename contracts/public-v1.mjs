@@ -189,6 +189,18 @@ s.MirrorExecution=closed({available:bool,reason:{type:'string',maxLength:128},ca
 s.MirrorPort=closed({binding:object,name:{type:'string',maxLength:128},editable:bool,output_eligible:bool});
 s.MirrorObservation=closed({configuration:nullable(ref('MirrorConfiguration')),configuration_availability:choices('known','unknown','unsupported'),reason:{type:'string',maxLength:128},bridge_ref:nullable(ref('ResourceRef')),ports:nullable(array(ref('MirrorPort'),32)),ports_truncated:bool,port_count:nullable(integer(0,4096)),source:ref('Source'),execution:ref('MirrorExecution')});
 s.Resource.properties.native_mirror=ref('MirrorObservation');
+s.QoSRate=closed({state:choices('configured','unset','unknown','not-applicable'),bps:nullable({type:'string',pattern:'^[0-9]+$',maxLength:20})});
+s.QoSQueue=closed({queue_id:integer(0,4294967295),queue_ref:ref('ResourceRef'),min_rate:ref('QoSRate'),max_rate:ref('QoSRate'),dscp:nullable(integer(0,63)),dscp_state:choices('configured','unset','unknown')});
+s.QoSPort=closed({port_ref:ref('ResourceRef'),name:string()});
+s.QoSObservation=closed({
+ discipline:nullable({type:'string',maxLength:128}), max_rate:ref('QoSRate'),
+ binding_state:choices('unbound','bound','shared','unknown'), port_count:nullable(integer(0,2048)),
+ ports:nullable(array(ref('QoSPort'),32)), ports_truncated:bool,
+ queue_count:nullable(integer(0,128)), queues:nullable(array(ref('QoSQueue'),128)),
+});
+s.QoSObservation.description='Observed native configuration only. Null counts denote unknown coverage, zero denotes a known empty relationship. List results omit detail arrays. Scheduler installation, statistics and queue use require independent runtime evidence.';
+s.Resource.properties.native_qos=ref('QoSObservation');
+s.Port.properties.qos_binding=closed({state:choices('bound','unbound','unknown','withheld','unsupported'),qos_ref:nullable(ref('ResourceRef'))});
 api.info.description += ' Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted.';
 Object.assign(s, intentSchemas);
 s.SpanningTreePrepareRequest = closed({protocol:choices('disabled','stp','rstp'),parameters:{type:'object',additionalProperties:false,properties:Object.fromEntries(['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'].map(k=>[k,nullable({type:'string',minLength:1,maxLength:128,pattern:'^[0-9]+$'})]))}});
@@ -356,6 +368,10 @@ api.paths['/inventory/spanning-tree'].get['x-service-state'] = 'implemented';
 api.paths['/bridges/{bridge_id}/spanning-tree'].get['x-service-state'] = 'implemented';
 for (const path of ['/tunnels','/tunnels/{tunnel_id}']) api.paths[path].get['x-service-state'] = 'implemented';
 for (const path of ['/mirrors','/mirrors/{mirror_id}']) api.paths[path].get['x-service-state'] = 'implemented';
+for (const path of ['/qos','/qos/{qos_id}']) {
+ api.paths[path].get['x-service-state'] = 'implemented';
+ api.paths[path].get.description = 'Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping.';
+}
 api.paths['/interfaces'].get.parameters.push(
  param('bridge_id', 'query', id),
  param('native_type', 'query', { type: 'string', maxLength: 64 }),

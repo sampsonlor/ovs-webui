@@ -157,6 +157,7 @@ type Port struct {
 	QinqEditable       bool                        `json:"qinq_editable,omitempty"`
 	QinqEthertype      json.RawMessage             `json:"qinq_ethertype,omitempty"`
 	IsolationExecution IsolationExecution          `json:"isolation_execution,omitempty"`
+	QosBinding         map[string]json.RawMessage  `json:"qos_binding,omitempty"`
 	SpanningTree       SpanningTreePortObservation `json:"spanning_tree,omitempty"`
 	ExtraFields        map[string]json.RawMessage  `json:"-"`
 }
@@ -560,6 +561,7 @@ type Resource struct {
 	AllowedActions    []string                   `json:"allowed_actions"`
 	NativeTunnel      StaticTunnelObservation    `json:"native_tunnel,omitempty"`
 	NativeMirror      MirrorObservation          `json:"native_mirror,omitempty"`
+	NativeQos         QoSObservation             `json:"native_qos,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1264,6 +1266,32 @@ type MirrorObservation struct {
 	PortCount                 json.RawMessage `json:"port_count"`
 	Source                    Source          `json:"source"`
 	Execution                 MirrorExecution `json:"execution"`
+}
+type QoSRate struct {
+	State string          `json:"state"`
+	Bps   json.RawMessage `json:"bps"`
+}
+type QoSQueue struct {
+	QueueId   int64           `json:"queue_id"`
+	QueueRef  ResourceRef     `json:"queue_ref"`
+	MinRate   QoSRate         `json:"min_rate"`
+	MaxRate   QoSRate         `json:"max_rate"`
+	Dscp      json.RawMessage `json:"dscp"`
+	DscpState string          `json:"dscp_state"`
+}
+type QoSPort struct {
+	PortRef ResourceRef `json:"port_ref"`
+	Name    string      `json:"name"`
+}
+type QoSObservation struct {
+	Discipline     json.RawMessage `json:"discipline"`
+	MaxRate        QoSRate         `json:"max_rate"`
+	BindingState   string          `json:"binding_state"`
+	PortCount      json.RawMessage `json:"port_count"`
+	Ports          json.RawMessage `json:"ports"`
+	PortsTruncated bool            `json:"ports_truncated"`
+	QueueCount     json.RawMessage `json:"queue_count"`
+	Queues         json.RawMessage `json:"queues"`
 }
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
