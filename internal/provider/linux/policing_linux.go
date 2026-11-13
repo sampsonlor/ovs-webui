@@ -71,15 +71,11 @@ type tcSocket struct {
 }
 
 func collectPolicing(ctx context.Context, req inventory.DeviceRequest) (inventory.PolicingSample, error) {
-	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_CLOEXEC|unix.SOCK_NONBLOCK, unix.NETLINK_ROUTE)
+	s, err := openTCSocket()
 	if err != nil {
 		return inventory.PolicingSample{}, err
 	}
-	defer unix.Close(fd)
-	if err := unix.Bind(fd, &unix.SockaddrNetlink{Family: unix.AF_NETLINK}); err != nil {
-		return inventory.PolicingSample{}, err
-	}
-	s := tcSocket{fd: fd}
+	defer unix.Close(s.fd)
 	if err := s.binding(ctx, req); err != nil {
 		return inventory.PolicingSample{}, err
 	}
@@ -131,6 +127,18 @@ func collectPolicing(ctx context.Context, req inventory.DeviceRequest) (inventor
 	sample.ConfigurationDigest = inventory.Digest(profile)
 	sample.ObservedAt = time.Now().UTC()
 	return sample, nil
+}
+
+func openTCSocket() (tcSocket, error) {
+	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_CLOEXEC|unix.SOCK_NONBLOCK, unix.NETLINK_ROUTE)
+	if err != nil {
+		return tcSocket{}, err
+	}
+	if err := unix.Bind(fd, &unix.SockaddrNetlink{Family: unix.AF_NETLINK}); err != nil {
+		unix.Close(fd)
+		return tcSocket{}, err
+	}
+	return tcSocket{fd: fd}, nil
 }
 
 func (s *tcSocket) binding(ctx context.Context, req inventory.DeviceRequest) error {

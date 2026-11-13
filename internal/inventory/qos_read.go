@@ -26,6 +26,7 @@ type qosQueue struct {
 type qosPort struct {
 	Ref  apitypes.Ref `json:"port_ref"`
 	Name string       `json:"name"`
+	uuid string
 }
 
 type qosBindings struct {
@@ -61,7 +62,7 @@ func indexQoSPorts(v *view) qosBindings {
 			out.complete = false
 			continue
 		}
-		out.ports[id] = append(out.ports[id], qosPort{Ref: apitypes.Ref{Kind: "port", ID: binding.ManagementID}, Name: textValue(row.Values["name"])})
+		out.ports[id] = append(out.ports[id], qosPort{Ref: apitypes.Ref{Kind: "port", ID: binding.ManagementID}, Name: textValue(row.Values["name"]), uuid: row.UUID})
 	}
 	return out
 }

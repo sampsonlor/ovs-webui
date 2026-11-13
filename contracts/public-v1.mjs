@@ -200,6 +200,15 @@ s.QoSObservation=closed({
 });
 s.QoSObservation.description='Observed native configuration only. Null counts denote unknown coverage, zero denotes a known empty relationship. List results omit detail arrays. Scheduler installation, statistics and queue use require independent runtime evidence.';
 s.Resource.properties.native_qos=ref('QoSObservation');
+const qosCounter=nullable({type:'string',pattern:'^(0|[1-9][0-9]*)$',maxLength:20});
+s.LinuxQoSQueue=closed({queue_id:integer(0,61439),bytes:qosCounter,packets:qosCounter,drops:qosCounter});
+s.LinuxQoSObservation=closed({
+ scheduler:choices('observed','not-observed','different','unavailable'), reason:{type:'string',maxLength:128},
+ root_kind:nullable(string(31)), port_ref:nullable(ref('ResourceRef')),
+ queues:array(ref('LinuxQoSQueue'),32), source:ref('Source'),
+});
+s.LinuxQoSObservation.description='Detail-only bounded Linux egress observation. Queue counters are cumulative software class statistics from the associated single Port. Null counters mean unreported. A matching scheduler layout does not establish configuration ownership or traffic delivery.';
+s.Resource.properties.linux_qos=ref('LinuxQoSObservation');
 s.Port.properties.qos_binding=closed({state:choices('bound','unbound','unknown','withheld','unsupported'),qos_ref:nullable(ref('ResourceRef'))});
 api.info.description += ' Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted.';
 Object.assign(s, intentSchemas);
@@ -372,6 +381,7 @@ for (const path of ['/qos','/qos/{qos_id}']) {
  api.paths[path].get['x-service-state'] = 'implemented';
  api.paths[path].get.description = 'Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping.';
 }
+api.paths['/qos/{qos_id}'].get.description += ' The detail response also samples the associated Linux root scheduler and supported HTB/HFSC Queue classes when the current Port and Interface identities can be verified.';
 api.paths['/interfaces'].get.parameters.push(
  param('bridge_id', 'query', id),
  param('native_type', 'query', { type: 'string', maxLength: 64 }),

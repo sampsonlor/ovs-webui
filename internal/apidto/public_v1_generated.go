@@ -562,6 +562,7 @@ type Resource struct {
 	NativeTunnel      StaticTunnelObservation    `json:"native_tunnel,omitempty"`
 	NativeMirror      MirrorObservation          `json:"native_mirror,omitempty"`
 	NativeQos         QoSObservation             `json:"native_qos,omitempty"`
+	LinuxQos          LinuxQoSObservation        `json:"linux_qos,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1292,6 +1293,20 @@ type QoSObservation struct {
 	PortsTruncated bool            `json:"ports_truncated"`
 	QueueCount     json.RawMessage `json:"queue_count"`
 	Queues         json.RawMessage `json:"queues"`
+}
+type LinuxQoSQueue struct {
+	QueueId int64           `json:"queue_id"`
+	Bytes   json.RawMessage `json:"bytes"`
+	Packets json.RawMessage `json:"packets"`
+	Drops   json.RawMessage `json:"drops"`
+}
+type LinuxQoSObservation struct {
+	Scheduler string          `json:"scheduler"`
+	Reason    string          `json:"reason"`
+	RootKind  json.RawMessage `json:"root_kind"`
+	PortRef   json.RawMessage `json:"port_ref"`
+	Queues    []LinuxQoSQueue `json:"queues"`
+	Source    Source          `json:"source"`
 }
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
