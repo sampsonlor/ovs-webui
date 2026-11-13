@@ -378,11 +378,9 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
       name: 'Installed Linux Queue rates',
     });
     await expect(
-      installedTable
-        .getByRole('row')
-        .filter({
-          has: page.getByRole('rowheader', { name: '7', exact: true }),
-        }),
+      installedTable.getByRole('row').filter({
+        has: page.getByRole('rowheader', { name: '7', exact: true }),
+      }),
     ).toContainText('3000000 bit/s');
     await page.screenshot({
       path: 'test-results/frontend-evidence/qos-runtime-htb.png',
@@ -485,10 +483,16 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
     await expectRates('12000000', '2000000', '4000000');
     setRates(8000000, 1000000, 3000000);
     await expectRates('8000000', '1000000', '3000000');
-    const hfscBefore = (await read())?.queues.find(
-      (q) => q.queue_id === 7,
-    )?.packets;
-    expect(hfscBefore).toMatch(/^\d+$/);
+    let hfscBefore: string | null | undefined;
+    await expect
+      .poll(async () => {
+        const current = await read();
+        hfscBefore = current?.queues.find((q) => q.queue_id === 7)?.packets;
+        return current?.installed_rates?.maximum_bps === '8000000'
+          ? hfscBefore
+          : undefined;
+      })
+      .toMatch(/^\d+$/);
     command(
       'ip',
       'netns',
@@ -517,11 +521,9 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
       page.getByText('Observed · hfsc', { exact: true }),
     ).toBeVisible();
     await expect(
-      installedTable
-        .getByRole('row')
-        .filter({
-          has: page.getByRole('rowheader', { name: '7', exact: true }),
-        }),
+      installedTable.getByRole('row').filter({
+        has: page.getByRole('rowheader', { name: '7', exact: true }),
+      }),
     ).toContainText('1000000 bit/s');
     await page.screenshot({
       path: 'test-results/frontend-evidence/qos-runtime-hfsc.png',
