@@ -27,12 +27,24 @@ type QoSQueueCounters struct {
 	Drops   *string `json:"drops"`
 }
 
+type QoSInstalledQueueRate struct {
+	QueueID    uint32 `json:"queue_id"`
+	MinimumBPS string `json:"minimum_bps"`
+	MaximumBPS string `json:"maximum_bps"`
+}
+
+type QoSInstalledRates struct {
+	MaximumBPS string                  `json:"maximum_bps"`
+	Queues     []QoSInstalledQueueRate `json:"queues"`
+}
+
 type QoSRuntimeSample struct {
 	Scheduler  string
 	RootKind   string
 	Reason     string
 	ObservedAt time.Time
 	Queues     []QoSQueueCounters
+	Rates      *QoSInstalledRates
 }
 
 type QoSObserver interface {
@@ -174,8 +186,12 @@ func (s *Service) readQoSRuntime(ctx context.Context, v *view, b Binding, fresh 
 	if sample.Queues == nil {
 		sample.Queues = []QoSQueueCounters{}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"scheduler": sample.Scheduler, "reason": sample.Reason, "root_kind": root, "port_ref": target.port,
 		"source": qosRuntimeSource(sample.ObservedAt.UTC(), "fresh", "proven"), "queues": sample.Queues,
 	}
+	if sample.Scheduler == "observed" && sample.Rates != nil {
+		out["installed_rates"] = sample.Rates
+	}
+	return out
 }

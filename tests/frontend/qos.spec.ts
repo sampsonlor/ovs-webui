@@ -191,7 +191,7 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
   }
 });
 
-test('Native QoS observes Linux classes and per-Queue counters after isolated traffic', async ({
+test('Native QoS observes Linux class rates and per-Queue counters after isolated traffic', async ({
   page,
 }) => {
   const bridge = 'br-qos-runtime';
@@ -322,6 +322,25 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
     expect(before?.scheduler).toBe('observed');
     expect(before?.root_kind).toBe('htb');
     expect(before?.queues.map((q) => q.queue_id)).toEqual([0, 7]);
+    const expectRates = async (
+      root: string,
+      minimum: string,
+      maximum: string,
+    ) => {
+      await expect
+        .poll(async () => {
+          const installed = (await read())?.installed_rates;
+          return {
+            root: installed?.maximum_bps,
+            queue: installed?.queues.find((q) => q.queue_id === 7),
+          };
+        })
+        .toEqual({
+          root,
+          queue: { queue_id: 7, minimum_bps: minimum, maximum_bps: maximum },
+        });
+    };
+    await expectRates('8000000', '1000000', '3000000');
     const old = before?.queues.find((q) => q.queue_id === 7)?.packets;
     expect(old).toMatch(/^\d+$/);
     command(
@@ -360,6 +379,55 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
     });
 
     const [qos] = tagged('QoS');
+    const [queue] = tagged('Queue');
+    const setRates = (root: number, minimum: number, maximum: number) =>
+      vsctl(
+        'set',
+        'QoS',
+        qos,
+        `other_config:max-rate=${root}`,
+        '--',
+        'set',
+        'Queue',
+        queue,
+        `other_config:min-rate=${minimum}`,
+        `other_config:max-rate=${maximum}`,
+      );
+    setRates(12000000, 2000000, 4000000);
+    await expectRates('12000000', '2000000', '4000000');
+    setRates(8000000, 1000000, 3000000);
+    await expectRates('8000000', '1000000', '3000000');
+
+    // An external class makes the installed class tree incomplete from the
+    // application's perspective. The known class counters remain useful.
+    command(
+      'tc',
+      'class',
+      'add',
+      'dev',
+      receiver,
+      'parent',
+      '1:fffe',
+      'classid',
+      '1:10',
+      'htb',
+      'rate',
+      '1mbit',
+      'ceil',
+      '2mbit',
+    );
+    await expect
+      .poll(async () => {
+        const sample = await read();
+        return {
+          rates: sample?.installed_rates ?? null,
+          counters: sample?.queues.map((q) => q.queue_id),
+        };
+      })
+      .toEqual({ rates: null, counters: [0, 7] });
+    command('tc', 'class', 'del', 'dev', receiver, 'classid', '1:10');
+    await expectRates('8000000', '1000000', '3000000');
+
     vsctl('set', 'QoS', qos, 'type=linux-hfsc');
     await expect
       .poll(async () => {
@@ -371,6 +439,11 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
         };
       })
       .toEqual({ scheduler: 'observed', root: 'hfsc', queues: [0, 7] });
+    await expectRates('8000000', '1000000', '3000000');
+    setRates(12000000, 2000000, 4000000);
+    await expectRates('12000000', '2000000', '4000000');
+    setRates(8000000, 1000000, 3000000);
+    await expectRates('8000000', '1000000', '3000000');
     const hfscBefore = (await read())?.queues.find(
       (q) => q.queue_id === 7,
     )?.packets;

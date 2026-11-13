@@ -69,13 +69,16 @@ func TestQoSRuntimeReadRechecksNativeBinding(t *testing.T) {
 			s.Unavailable("OVSDB_MONITOR_UNAVAILABLE")
 		}
 		zero := "0"
-		return QoSRuntimeSample{Scheduler: "observed", RootKind: "htb", ObservedAt: s.now(), Queues: []QoSQueueCounters{{QueueID: 0, Packets: &zero}}}
+		return QoSRuntimeSample{
+			Scheduler: "observed", RootKind: "htb", ObservedAt: s.now(), Queues: []QoSQueueCounters{{QueueID: 0, Packets: &zero}},
+			Rates: &QoSInstalledRates{MaximumBPS: "8000000", Queues: []QoSInstalledQueueRate{{QueueID: 0, MinimumBPS: "12000", MaximumBPS: "8000000"}}},
+		}
 	}))
-	if got := read(); got["scheduler"] != "observed" || len(got["queues"].([]QoSQueueCounters)) != 1 {
+	if got := read(); got["scheduler"] != "observed" || len(got["queues"].([]QoSQueueCounters)) != 1 || got["installed_rates"] == nil {
 		t.Fatal("runtime observation unavailable", got)
 	}
 	change = true
-	if got := read(); got["reason"] != "QOS_ASSOCIATION_CHANGED" || len(got["queues"].([]QoSQueueCounters)) != 0 {
+	if got := read(); got["reason"] != "QOS_ASSOCIATION_CHANGED" || len(got["queues"].([]QoSQueueCounters)) != 0 || got["installed_rates"] != nil {
 		t.Fatal("published stale counters", got)
 	}
 	if got := read(); got["reason"] != "OVS_ASSOCIATION_STALE" || calls != 2 {

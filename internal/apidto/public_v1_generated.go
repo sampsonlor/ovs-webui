@@ -1301,12 +1301,22 @@ type LinuxQoSQueue struct {
 	Drops   json.RawMessage `json:"drops"`
 }
 type LinuxQoSObservation struct {
-	Scheduler string          `json:"scheduler"`
-	Reason    string          `json:"reason"`
-	RootKind  json.RawMessage `json:"root_kind"`
-	PortRef   json.RawMessage `json:"port_ref"`
-	Queues    []LinuxQoSQueue `json:"queues"`
-	Source    Source          `json:"source"`
+	Scheduler      string                 `json:"scheduler"`
+	Reason         string                 `json:"reason"`
+	RootKind       json.RawMessage        `json:"root_kind"`
+	PortRef        json.RawMessage        `json:"port_ref"`
+	Queues         []LinuxQoSQueue        `json:"queues"`
+	Source         Source                 `json:"source"`
+	InstalledRates LinuxQoSInstalledRates `json:"installed_rates,omitempty"`
+}
+type LinuxQoSInstalledQueueRate struct {
+	QueueId    int64  `json:"queue_id"`
+	MinimumBps string `json:"minimum_bps"`
+	MaximumBps string `json:"maximum_bps"`
+}
+type LinuxQoSInstalledRates struct {
+	MaximumBps string                       `json:"maximum_bps"`
+	Queues     []LinuxQoSInstalledQueueRate `json:"queues"`
 }
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
