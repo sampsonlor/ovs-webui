@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -91,7 +92,10 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 	case root.offloaded:
 		sample.Scheduler, sample.Reason = "different", "LINUX_QOS_ROOT_OFFLOADED"
 	default:
-		rows, err := s.request(ctx, unix.RTM_GETTCLASS, unix.RTM_NEWTCLASS, req.Device.IfIndex, qosRootHandle, true)
+		readClasses := func() ([][]byte, error) {
+			return s.request(ctx, unix.RTM_GETTCLASS, unix.RTM_NEWTCLASS, req.Device.IfIndex, qosRootHandle, true)
+		}
+		rows, err := readClasses()
 		if err != nil {
 			return sample, err
 		}
@@ -100,6 +104,13 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 			return sample, err
 		}
 		sample.Scheduler = "observed"
+		if rates := readQoSClassRates(rows, req, root); rates != nil {
+			// Class options can change without replacing the root. Do not
+			// publish rates from an unstable multipart class dump.
+			if next, err := readClasses(); err == nil && reflect.DeepEqual(rates, readQoSClassRates(next, req, root)) {
+				sample.Rates = rates
+			}
+		}
 		if len(sample.Queues) != len(req.QueueIDs) {
 			sample.Reason = "LINUX_QOS_CLASSES_INCOMPLETE"
 		} else {

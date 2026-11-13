@@ -33347,6 +33347,9 @@
           },
           "source": {
             "$ref": "#/components/schemas/Source"
+          },
+          "installed_rates": {
+            "$ref": "#/components/schemas/LinuxQoSInstalledRates"
           }
         },
         "required": [
@@ -33359,6 +33362,56 @@
         ],
         "additionalProperties": false,
         "description": "Detail-only bounded Linux egress observation. Queue counters are cumulative software class statistics from the associated single Port. Null counters mean unreported. A matching scheduler layout does not establish configuration ownership or traffic delivery."
+      },
+      "LinuxQoSInstalledQueueRate": {
+        "type": "object",
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 61439
+          },
+          "minimum_bps": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "maxLength": 20
+          },
+          "maximum_bps": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "queue_id",
+          "minimum_bps",
+          "maximum_bps"
+        ],
+        "additionalProperties": false
+      },
+      "LinuxQoSInstalledRates": {
+        "type": "object",
+        "properties": {
+          "maximum_bps": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "maxLength": 20
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinuxQoSInstalledQueueRate"
+            },
+            "minItems": 0,
+            "maxItems": 32
+          }
+        },
+        "required": [
+          "maximum_bps",
+          "queues"
+        ],
+        "additionalProperties": false,
+        "description": "Optional Linux HTB or linear HFSC class rates in bit/s, sampled independently of configured rates. Omitted if the expected software class tree is incomplete or the rates cannot be verified."
       },
       "BridgeCreateIntent": {
         "type": "object",

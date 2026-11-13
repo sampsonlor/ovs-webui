@@ -208,6 +208,10 @@ s.LinuxQoSObservation=closed({
  queues:array(ref('LinuxQoSQueue'),32), source:ref('Source'),
 });
 s.LinuxQoSObservation.description='Detail-only bounded Linux egress observation. Queue counters are cumulative software class statistics from the associated single Port. Null counters mean unreported. A matching scheduler layout does not establish configuration ownership or traffic delivery.';
+s.LinuxQoSInstalledQueueRate=closed({queue_id:integer(0,61439),minimum_bps:{type:'string',pattern:'^[1-9][0-9]*$',maxLength:20},maximum_bps:{type:'string',pattern:'^[1-9][0-9]*$',maxLength:20}});
+s.LinuxQoSInstalledRates=closed({maximum_bps:{type:'string',pattern:'^[1-9][0-9]*$',maxLength:20},queues:array(ref('LinuxQoSInstalledQueueRate'),32)});
+s.LinuxQoSObservation.properties.installed_rates=ref('LinuxQoSInstalledRates');
+s.LinuxQoSInstalledRates.description='Optional Linux HTB or linear HFSC class rates in bit/s, sampled independently of configured rates. Omitted if the expected software class tree is incomplete or the rates cannot be verified.';
 s.Resource.properties.linux_qos=ref('LinuxQoSObservation');
 s.Port.properties.qos_binding=closed({state:choices('bound','unbound','unknown','withheld','unsupported'),qos_ref:nullable(ref('ResourceRef'))});
 api.info.description += ' Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted.';

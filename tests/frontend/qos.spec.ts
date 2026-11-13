@@ -305,13 +305,14 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
       .click();
     const detail = new URL(page.url()).pathname.split('/').at(-1);
     expect(detail).toMatch(/^[0-9a-f-]{36}$/);
-    const read = async () => {
+    const readResource = async () => {
       const reply = await page.request.get(
         `${fixture.origin}/api/v1/qos/${detail}`,
       );
       expect(reply.status()).toBe(200);
-      return ((await reply.json()) as Resource).linux_qos;
+      return (await reply.json()) as Resource;
     };
+    const read = async () => (await readResource()).linux_qos;
     const counters = page.getByRole('table', {
       name: 'Cumulative Linux Queue counters',
     });
@@ -322,6 +323,25 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
     expect(before?.scheduler).toBe('observed');
     expect(before?.root_kind).toBe('htb');
     expect(before?.queues.map((q) => q.queue_id)).toEqual([0, 7]);
+    const expectRates = async (
+      root: string,
+      minimum: string,
+      maximum: string,
+    ) => {
+      await expect
+        .poll(async () => {
+          const installed = (await read())?.installed_rates;
+          return {
+            root: installed?.maximum_bps,
+            queue: installed?.queues.find((q) => q.queue_id === 7),
+          };
+        })
+        .toEqual({
+          root,
+          queue: { queue_id: 7, minimum_bps: minimum, maximum_bps: maximum },
+        });
+    };
+    await expectRates('8000000', '1000000', '3000000');
     const old = before?.queues.find((q) => q.queue_id === 7)?.packets;
     expect(old).toMatch(/^\d+$/);
     command(
@@ -354,12 +374,99 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
     await expect(
       counters.getByRole('rowheader', { name: '7', exact: true }),
     ).toBeVisible();
+    const installedTable = page.getByRole('table', {
+      name: 'Installed Linux Queue rates',
+    });
+    await expect(
+      installedTable.getByRole('row').filter({
+        has: page.getByRole('rowheader', { name: '7', exact: true }),
+      }),
+    ).toContainText('3000000 bit/s');
     await page.screenshot({
       path: 'test-results/frontend-evidence/qos-runtime-htb.png',
       fullPage: true,
     });
 
     const [qos] = tagged('QoS');
+    const [queue] = tagged('Queue');
+    const setRates = (
+      root: number,
+      minimum: number,
+      maximum: number,
+      wait = true,
+    ) =>
+      vsctl(
+        ...(wait ? [] : ['--no-wait']),
+        'set',
+        'QoS',
+        qos,
+        `other_config:max-rate=${root}`,
+        '--',
+        'set',
+        'Queue',
+        queue,
+        `other_config:min-rate=${minimum}`,
+        `other_config:max-rate=${maximum}`,
+      );
+    const pid = Number(
+      readFileSync(fixture.ovsDirectory + '/switch.pid', 'utf8').trim(),
+    );
+    process.kill(pid, 'SIGSTOP');
+    try {
+      setRates(12000000, 2000000, 4000000, false);
+      await expect
+        .poll(async () => {
+          const sample = await readResource();
+          return {
+            configured: sample.native_qos?.max_rate.bps,
+            installed: sample.linux_qos?.installed_rates?.maximum_bps,
+            queue: sample.linux_qos?.installed_rates?.queues.find(
+              (q) => q.queue_id === 7,
+            )?.maximum_bps,
+          };
+        })
+        .toEqual({
+          configured: '12000000',
+          installed: '8000000',
+          queue: '3000000',
+        });
+    } finally {
+      process.kill(pid, 'SIGCONT');
+    }
+    await expectRates('12000000', '2000000', '4000000');
+    setRates(8000000, 1000000, 3000000);
+    await expectRates('8000000', '1000000', '3000000');
+
+    // An external class makes the installed class tree incomplete from the
+    // application's perspective. The known class counters remain useful.
+    command(
+      'tc',
+      'class',
+      'add',
+      'dev',
+      receiver,
+      'parent',
+      '1:fffe',
+      'classid',
+      '1:10',
+      'htb',
+      'rate',
+      '1mbit',
+      'ceil',
+      '2mbit',
+    );
+    await expect
+      .poll(async () => {
+        const sample = await read();
+        return {
+          rates: sample?.installed_rates ?? null,
+          counters: sample?.queues.map((q) => q.queue_id),
+        };
+      })
+      .toEqual({ rates: null, counters: [0, 7] });
+    command('tc', 'class', 'del', 'dev', receiver, 'classid', '1:10');
+    await expectRates('8000000', '1000000', '3000000');
+
     vsctl('set', 'QoS', qos, 'type=linux-hfsc');
     await expect
       .poll(async () => {
@@ -371,10 +478,21 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
         };
       })
       .toEqual({ scheduler: 'observed', root: 'hfsc', queues: [0, 7] });
-    const hfscBefore = (await read())?.queues.find(
-      (q) => q.queue_id === 7,
-    )?.packets;
-    expect(hfscBefore).toMatch(/^\d+$/);
+    await expectRates('8000000', '1000000', '3000000');
+    setRates(12000000, 2000000, 4000000);
+    await expectRates('12000000', '2000000', '4000000');
+    setRates(8000000, 1000000, 3000000);
+    await expectRates('8000000', '1000000', '3000000');
+    let hfscBefore: string | null | undefined;
+    await expect
+      .poll(async () => {
+        const current = await read();
+        hfscBefore = current?.queues.find((q) => q.queue_id === 7)?.packets;
+        return current?.installed_rates?.maximum_bps === '8000000'
+          ? hfscBefore
+          : undefined;
+      })
+      .toMatch(/^\d+$/);
     command(
       'ip',
       'netns',
@@ -402,6 +520,11 @@ test('Native QoS observes Linux classes and per-Queue counters after isolated tr
     await expect(
       page.getByText('Observed · hfsc', { exact: true }),
     ).toBeVisible();
+    await expect(
+      installedTable.getByRole('row').filter({
+        has: page.getByRole('rowheader', { name: '7', exact: true }),
+      }),
+    ).toContainText('1000000 bit/s');
     await page.screenshot({
       path: 'test-results/frontend-evidence/qos-runtime-hfsc.png',
       fullPage: true,

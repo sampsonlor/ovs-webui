@@ -19,6 +19,7 @@
   let entry = $derived(detail ? (model.resource.value as Entry | null) : null);
   let observation = $derived(entry?.native_qos);
   let runtime = $derived(entry?.linux_qos);
+  let installed = $derived(runtime?.installed_rates);
   let items = $derived((model.resource.value?.items as Entry[] | undefined) ?? []);
   let cursor = $derived(model.resource.value?.next_cursor);
 
@@ -149,6 +150,27 @@
           {/if}
           {#if expert && runtime.source.observed_at}
             <p>Sampled at {runtime.source.observed_at}</p>
+          {/if}
+          {#if installed}
+            <dl><dt>Installed maximum rate</dt><dd>{installed.maximum_bps} bit/s</dd></dl>
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex (The scroll container must be reachable by keyboard.) -->
+            <div class="table-scroll" role="region" aria-label="Installed Linux Queue rates" tabindex="0">
+              <table>
+                <caption>Installed Linux Queue rates</caption>
+                <thead><tr><th scope="col">Queue</th><th scope="col">Minimum rate</th><th scope="col">Maximum rate</th></tr></thead>
+                <tbody>
+                  {#each installed.queues as queue (queue.queue_id)}
+                    <tr>
+                      <th scope="row">{queue.queue_id}{queue.queue_id === 0 ? ' (default)' : ''}</th>
+                      <td>{queue.minimum_bps} bit/s</td>
+                      <td>{queue.maximum_bps} bit/s</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {:else if runtime.scheduler === 'observed'}
+            <p>Installed class rates are unavailable.</p>
           {/if}
           {#if runtime.queues.length}
             <!-- svelte-ignore a11y_no_noninteractive_tabindex (The scroll container must be reachable by keyboard.) -->
