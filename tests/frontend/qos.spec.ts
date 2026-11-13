@@ -1,12 +1,14 @@
 import { test, expect, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
+import type { Resource } from '../../clients/typescript/public-v1.generated';
 
 const path = process.env.OVS_FRONTEND_FIXTURE;
 if (!path) throw new Error('Requires actual isolated Go/OVS services.');
 const fixture: {
   origin: string;
   dbSocket: string;
+  ovsDirectory: string;
   accounts: Record<string, string>;
 } = JSON.parse(readFileSync(path, 'utf8'));
 const href = fixture.origin + '/switching/qos';
@@ -117,7 +119,7 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
     ).toBeVisible();
     await expect(
       page.getByText(
-        'Scheduler installation and Queue counters are unavailable',
+        'A single Port binding is required for scheduler and Queue observation.',
         { exact: false },
       ),
     ).toBeVisible();
@@ -186,5 +188,229 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
     }
     for (const id of qos) vsctl('destroy', 'QoS', id);
     for (const id of byLabel('Queue')) vsctl('destroy', 'Queue', id);
+  }
+});
+
+test('Native QoS observes Linux classes and per-Queue counters after isolated traffic', async ({
+  page,
+}) => {
+  const bridge = 'br-qos-runtime';
+  const sender = 'qos-tx-host';
+  const receiver = 'qos-rx-host';
+  const sendNS = 'ovs-qos-tx';
+  const recvNS = 'ovs-qos-rx';
+  const command = (file: string, ...args: string[]) =>
+    execFileSync(file, args, { encoding: 'utf8', timeout: 5000 }).trim();
+  const createdNS: string[] = [];
+  const interfaces: string[] = [];
+  const tagged = (table: string) =>
+    vsctl(
+      '--bare',
+      '--columns=_uuid',
+      'find',
+      table,
+      'external_ids:synthetic-qos-runtime=fixture',
+    )
+      .split(/\s+/)
+      .filter(Boolean);
+  try {
+    for (const [host, namespace, address] of [
+      [sender, sendNS, '198.18.71.1'],
+      [receiver, recvNS, '198.18.71.2'],
+    ]) {
+      command('ip', 'netns', 'add', namespace);
+      createdNS.push(namespace);
+      command(
+        'ip',
+        'link',
+        'add',
+        host,
+        'type',
+        'veth',
+        'peer',
+        'name',
+        'qos-peer',
+        'netns',
+        namespace,
+      );
+      interfaces.push(host);
+      command('ip', 'link', 'set', host, 'up');
+      command('ip', '-n', namespace, 'link', 'set', 'qos-peer', 'up');
+      command(
+        'ip',
+        '-n',
+        namespace,
+        'addr',
+        'add',
+        address + '/24',
+        'dev',
+        'qos-peer',
+      );
+    }
+    vsctl(
+      'add-br',
+      bridge,
+      '--',
+      'set',
+      'Bridge',
+      bridge,
+      'datapath_type=system',
+      '--',
+      'add-port',
+      bridge,
+      sender,
+      '--',
+      'add-port',
+      bridge,
+      receiver,
+    );
+    const input = vsctl('get', 'Interface', sender, 'ofport');
+    expect(input).toMatch(/^[1-9][0-9]*$/);
+    command(
+      'ovs-ofctl',
+      'add-flow',
+      `unix:${fixture.ovsDirectory}/${bridge}.mgmt`,
+      `priority=100,in_port=${input},actions=set_queue:7,normal`,
+    );
+    vsctl(
+      '--',
+      '--id=@queue',
+      'create',
+      'Queue',
+      'other_config:min-rate=1000000',
+      'other_config:max-rate=3000000',
+      'external_ids:synthetic-qos-runtime=fixture',
+      '--',
+      '--id=@qos',
+      'create',
+      'QoS',
+      'type=linux-htb',
+      'queues:7=@queue',
+      'other_config:max-rate=8000000',
+      'external_ids:synthetic-qos-runtime=fixture',
+      '--',
+      'set',
+      'Port',
+      receiver,
+      'qos=@qos',
+    );
+    await login(page, 'browser-qos-runtime');
+    const list = page.getByRole('table', {
+      name: 'Observed QoS configurations',
+    });
+    await list
+      .getByRole('row')
+      .filter({ hasText: 'linux-htb' })
+      .getByRole('link')
+      .click();
+    const detail = new URL(page.url()).pathname.split('/').at(-1);
+    expect(detail).toMatch(/^[0-9a-f-]{36}$/);
+    const read = async () => {
+      const reply = await page.request.get(
+        `${fixture.origin}/api/v1/qos/${detail}`,
+      );
+      expect(reply.status()).toBe(200);
+      return ((await reply.json()) as Resource).linux_qos;
+    };
+    const counters = page.getByRole('table', {
+      name: 'Cumulative Linux Queue counters',
+    });
+    await expect(
+      counters.getByRole('rowheader', { name: '7', exact: true }),
+    ).toBeVisible();
+    const before = await read();
+    expect(before?.scheduler).toBe('observed');
+    expect(before?.root_kind).toBe('htb');
+    expect(before?.queues.map((q) => q.queue_id)).toEqual([0, 7]);
+    const old = before?.queues.find((q) => q.queue_id === 7)?.packets;
+    expect(old).toMatch(/^\d+$/);
+    command(
+      'ip',
+      'netns',
+      'exec',
+      sendNS,
+      'ping',
+      '-n',
+      '-c',
+      '3',
+      '-i',
+      '0.1',
+      '-W',
+      '1',
+      '198.18.71.2',
+    );
+    await expect
+      .poll(async () => {
+        const current = (await read())?.queues.find((q) => q.queue_id === 7);
+        return (
+          current?.packets != null &&
+          BigInt(current.packets) >= BigInt(old!) + BigInt(3) &&
+          current.bytes != null &&
+          BigInt(current.bytes) > BigInt(0)
+        );
+      })
+      .toBe(true);
+    await page.reload();
+    await expect(
+      counters.getByRole('rowheader', { name: '7', exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: 'test-results/frontend-evidence/qos-runtime-htb.png',
+      fullPage: true,
+    });
+
+    const [qos] = tagged('QoS');
+    vsctl('set', 'QoS', qos, 'type=linux-hfsc');
+    await expect
+      .poll(async () => {
+        const current = await read();
+        return {
+          scheduler: current?.scheduler,
+          root: current?.root_kind,
+          queues: current?.queues.map((q) => q.queue_id),
+        };
+      })
+      .toEqual({ scheduler: 'observed', root: 'hfsc', queues: [0, 7] });
+    const hfscBefore = (await read())?.queues.find(
+      (q) => q.queue_id === 7,
+    )?.packets;
+    expect(hfscBefore).toMatch(/^\d+$/);
+    command(
+      'ip',
+      'netns',
+      'exec',
+      sendNS,
+      'ping',
+      '-n',
+      '-c',
+      '3',
+      '-i',
+      '0.1',
+      '-W',
+      '1',
+      '198.18.71.2',
+    );
+    await expect
+      .poll(async () => {
+        const q = (await read())?.queues.find((q) => q.queue_id === 7);
+        return (
+          q?.packets != null &&
+          BigInt(q.packets) >= BigInt(hfscBefore!) + BigInt(3)
+        );
+      })
+      .toBe(true);
+    await expect(
+      page.getByText('Observed · hfsc', { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: 'test-results/frontend-evidence/qos-runtime-hfsc.png',
+      fullPage: true,
+    });
+  } finally {
+    vsctl('--if-exists', 'del-br', bridge);
+    for (const uuid of tagged('QoS')) vsctl('destroy', 'QoS', uuid);
+    for (const uuid of tagged('Queue')) vsctl('destroy', 'Queue', uuid);
+    for (const device of interfaces) command('ip', 'link', 'del', device);
+    for (const namespace of createdNS) command('ip', 'netns', 'del', namespace);
   }
 });

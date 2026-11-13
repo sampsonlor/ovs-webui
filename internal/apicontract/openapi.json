@@ -9867,7 +9867,7 @@
             }
           }
         },
-        "description": "Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping."
+        "description": "Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping. The detail response also samples the associated Linux root scheduler and supported HTB/HFSC Queue classes when the current Port and Interface identities can be verified."
       }
     },
     "/isolation": {
@@ -30474,6 +30474,9 @@
           "native_qos": {
             "$ref": "#/components/schemas/QoSObservation"
           },
+          "linux_qos": {
+            "$ref": "#/components/schemas/LinuxQoSObservation"
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -33242,6 +33245,120 @@
         ],
         "additionalProperties": false,
         "description": "Observed native configuration only. Null counts denote unknown coverage, zero denotes a known empty relationship. List results omit detail arrays. Scheduler installation, statistics and queue use require independent runtime evidence."
+      },
+      "LinuxQoSQueue": {
+        "type": "object",
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 61439
+          },
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packets": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drops": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "queue_id",
+          "bytes",
+          "packets",
+          "drops"
+        ],
+        "additionalProperties": false
+      },
+      "LinuxQoSObservation": {
+        "type": "object",
+        "properties": {
+          "scheduler": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "not-observed",
+              "different",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "root_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 31
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "port_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinuxQoSQueue"
+            },
+            "minItems": 0,
+            "maxItems": 32
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          }
+        },
+        "required": [
+          "scheduler",
+          "reason",
+          "root_kind",
+          "port_ref",
+          "queues",
+          "source"
+        ],
+        "additionalProperties": false,
+        "description": "Detail-only bounded Linux egress observation. Queue counters are cumulative software class statistics from the associated single Port. Null counters mean unreported. A matching scheduler layout does not establish configuration ownership or traffic delivery."
       },
       "BridgeCreateIntent": {
         "type": "object",

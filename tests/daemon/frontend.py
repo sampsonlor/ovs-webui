@@ -50,6 +50,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-tunnel', 'NativeStaticTunnel'), ('browser-tunnel-reader', 'NetworkAdmin'),
                        ('browser-tunnel-observer', 'InterfaceObserver'),
                        ('browser-qos-reader', 'Reader'), ('browser-qos-observer', 'InterfaceObserver'),
+                       ('browser-qos-runtime', 'Reader'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),

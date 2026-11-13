@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { QoSObservation, QoSRate, Resource } from '../../clients/typescript/public-v1.generated';
+  import type { LinuxQoSObservation, QoSObservation, QoSRate, Resource } from '../../clients/typescript/public-v1.generated';
   import type { Model } from './model';
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
@@ -18,6 +18,7 @@
   let detail = $derived(model.path !== base);
   let entry = $derived(detail ? (model.resource.value as Entry | null) : null);
   let observation = $derived(entry?.native_qos);
+  let runtime = $derived(entry?.linux_qos);
   let items = $derived((model.resource.value?.items as Entry[] | undefined) ?? []);
   let cursor = $derived(model.resource.value?.next_cursor);
 
@@ -32,6 +33,25 @@
     query.set('cursor', token);
     return `${base}?${query}`;
   }
+  const runtimeMessages: Record<string, string> = {
+    QOS_SHARED_PORT_BINDING: 'A single Port binding is required for scheduler and Queue observation.',
+    QOS_PORT_UNBOUND: 'This QoS configuration has no bound Port.',
+    QOS_DEVICE_BINDING_UNPROVEN: 'The Port could not be associated with a single Linux interface.',
+    QOS_DISCIPLINE_UNSUPPORTED: 'Runtime observation supports Linux HTB and HFSC.',
+    QOS_QUEUE_MAPPING_UNKNOWN: 'The native Queue mapping could not be verified.',
+    QOS_RUNTIME_QUEUE_LIMIT: 'The Queue mapping exceeds the runtime observation limit.',
+    QOS_QUEUE_ID_UNSUPPORTED: 'A configured Queue number is outside the Linux scheduler range.',
+    QOS_PORT_BINDING_UNKNOWN: 'The Port bindings could not be verified.',
+    LINUX_QOS_CLASSES_INCOMPLETE: 'Some expected Queue classes were not observed.',
+    LINUX_QOS_COUNTERS_INCOMPLETE: 'Some Queue counters were not reported by Linux.',
+    LINUX_QOS_ROOT_OFFLOADED: 'The kernel reports an offloaded scheduler.',
+    OVS_ASSOCIATION_STALE: 'Wait for a fresh OVS observation of the Port and Interface.',
+    QOS_ASSOCIATION_CHANGED: 'The OVS association changed during the kernel read.',
+  };
+  const schedulerLabels: Record<LinuxQoSObservation['scheduler'], string> = {
+    observed: 'Observed', 'not-observed': 'Root scheduler not observed',
+    different: 'Kernel scheduler differs from the supported layout', unavailable: 'Unavailable',
+  };
 </script>
 
 <section aria-label="Native QoS and Queues">
@@ -119,8 +139,37 @@
         {/if}
       </section>
       <section class="panel">
-        <h3>Runtime evidence</h3>
-        <p>Scheduler installation and Queue counters are unavailable in this view. Queue mappings alone do not show which traffic uses each Queue.</p>
+        <h3>Linux egress scheduler</h3>
+        {#if runtime}
+          <p>{schedulerLabels[runtime.scheduler]}{runtime.root_kind ? ` · ${runtime.root_kind}` : ''}</p>
+          {#if runtimeMessages[runtime.reason]}
+            <p>{runtimeMessages[runtime.reason]}</p>
+          {:else if runtime.scheduler === 'unavailable'}
+            <p>Current kernel evidence is unavailable.</p>
+          {/if}
+          {#if expert && runtime.source.observed_at}
+            <p>Sampled at {runtime.source.observed_at}</p>
+          {/if}
+          {#if runtime.queues.length}
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex (The scroll container must be reachable by keyboard.) -->
+            <div class="table-scroll" role="region" aria-label="Linux Queue counters" tabindex="0">
+              <table>
+                <caption>Cumulative Linux Queue counters</caption>
+                <thead><tr><th scope="col">Queue</th><th scope="col">Bytes</th><th scope="col">Packets</th><th scope="col">Drops</th></tr></thead>
+                <tbody>
+                  {#each runtime.queues as queue (queue.queue_id)}
+                    <tr>
+                      <th scope="row">{queue.queue_id}{queue.queue_id === 0 ? ' (default)' : ''}</th>
+                      <td>{queue.bytes ?? 'Unreported'}</td><td>{queue.packets ?? 'Unreported'}</td><td>{queue.drops ?? 'Unreported'}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {/if}
+        {:else}
+          <p>Current kernel evidence is unavailable.</p>
+        {/if}
       </section>
     {/if}
   {/if}

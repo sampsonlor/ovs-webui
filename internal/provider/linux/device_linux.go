@@ -24,11 +24,15 @@ type Provider struct {
 	slots         chan struct{}
 	collect       func(inventory.DeviceRequest) inventory.DeviceSample
 	policingSlots chan struct{}
+	qosSlots      chan struct{}
 }
 
 func New() *Provider { return newProvider("/sys") }
 func newProvider(root string) *Provider {
-	return &Provider{slots: make(chan struct{}, 2), policingSlots: make(chan struct{}, 2), collect: func(r inventory.DeviceRequest) inventory.DeviceSample { return collect(root, r) }}
+	return &Provider{
+		slots: make(chan struct{}, 2), policingSlots: make(chan struct{}, 2), qosSlots: make(chan struct{}, 2),
+		collect: func(r inventory.DeviceRequest) inventory.DeviceSample { return collect(root, r) },
+	}
 }
 func unavailable(reason string) inventory.DeviceSample {
 	return inventory.DeviceSample{Availability: "unavailable", Reason: reason, Fields: map[string]inventory.DeviceField{}}

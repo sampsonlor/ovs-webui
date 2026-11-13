@@ -60,6 +60,7 @@ type Service struct {
 	localInternalPortDeleteTargets map[string]bool
 	deviceObserver                 DeviceObserver
 	policingObserver               PolicingObserver
+	qosObserver                    QoSObserver
 }
 
 func New(r Registry) *Service {
@@ -312,7 +313,11 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	project := func(b Binding, kind string) (map[string]any, error) {
 		if kind == "qos" {
-			return qosResource(v, b, fresh, qosPorts, op == "readQos")
+			item, err := qosResource(v, b, fresh, qosPorts, op == "readQos")
+			if err == nil && op == "readQos" {
+				item["linux_qos"] = s.readQoSRuntime(ctx, v, b, fresh, qosPorts)
+			}
+			return item, err
 		}
 		if kind == "tunnel" && (b.Table != "Port" || !portHasTunnel(v, v.observation.Rows["Port"][b.UUID])) {
 			return nil, apitypes.Fail(404, "NOT_FOUND")

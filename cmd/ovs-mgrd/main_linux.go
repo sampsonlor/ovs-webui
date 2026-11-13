@@ -419,6 +419,7 @@ func run() int {
 		linuxObserver := linuxprovider.New()
 		inventoryService.SetDeviceObserver(linuxObserver)
 		inventoryService.SetPolicingObserver(linuxObserver)
+		inventoryService.SetQoSObserver(linuxObserver)
 		var vlanIDs []string
 		if *localVLANPorts != "" {
 			vlanIDs = strings.Split(*localVLANPorts, ",")
