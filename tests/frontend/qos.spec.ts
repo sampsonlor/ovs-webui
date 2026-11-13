@@ -191,7 +191,7 @@ test('Native QoS reads shared Port bindings, explicit Queue zero and a restricte
   }
 });
 
-test('Native QoS observes Linux class rates and per-Queue counters after isolated traffic', async ({
+test('Native QoS observes Linux classes and per-Queue counters after isolated traffic', async ({
   page,
 }) => {
   const bridge = 'br-qos-runtime';
@@ -305,13 +305,14 @@ test('Native QoS observes Linux class rates and per-Queue counters after isolate
       .click();
     const detail = new URL(page.url()).pathname.split('/').at(-1);
     expect(detail).toMatch(/^[0-9a-f-]{36}$/);
-    const read = async () => {
+    const readResource = async () => {
       const reply = await page.request.get(
         `${fixture.origin}/api/v1/qos/${detail}`,
       );
       expect(reply.status()).toBe(200);
-      return ((await reply.json()) as Resource).linux_qos;
+      return (await reply.json()) as Resource;
     };
+    const read = async () => (await readResource()).linux_qos;
     const counters = page.getByRole('table', {
       name: 'Cumulative Linux Queue counters',
     });
@@ -373,6 +374,16 @@ test('Native QoS observes Linux class rates and per-Queue counters after isolate
     await expect(
       counters.getByRole('rowheader', { name: '7', exact: true }),
     ).toBeVisible();
+    const installedTable = page.getByRole('table', {
+      name: 'Installed Linux Queue rates',
+    });
+    await expect(
+      installedTable
+        .getByRole('row')
+        .filter({
+          has: page.getByRole('rowheader', { name: '7', exact: true }),
+        }),
+    ).toContainText('3000000 bit/s');
     await page.screenshot({
       path: 'test-results/frontend-evidence/qos-runtime-htb.png',
       fullPage: true,
@@ -380,8 +391,14 @@ test('Native QoS observes Linux class rates and per-Queue counters after isolate
 
     const [qos] = tagged('QoS');
     const [queue] = tagged('Queue');
-    const setRates = (root: number, minimum: number, maximum: number) =>
+    const setRates = (
+      root: number,
+      minimum: number,
+      maximum: number,
+      wait = true,
+    ) =>
       vsctl(
+        ...(wait ? [] : ['--no-wait']),
         'set',
         'QoS',
         qos,
@@ -393,7 +410,31 @@ test('Native QoS observes Linux class rates and per-Queue counters after isolate
         `other_config:min-rate=${minimum}`,
         `other_config:max-rate=${maximum}`,
       );
-    setRates(12000000, 2000000, 4000000);
+    const pid = Number(
+      readFileSync(fixture.ovsDirectory + '/switch.pid', 'utf8').trim(),
+    );
+    process.kill(pid, 'SIGSTOP');
+    try {
+      setRates(12000000, 2000000, 4000000, false);
+      await expect
+        .poll(async () => {
+          const sample = await readResource();
+          return {
+            configured: sample.native_qos?.max_rate.bps,
+            installed: sample.linux_qos?.installed_rates?.maximum_bps,
+            queue: sample.linux_qos?.installed_rates?.queues.find(
+              (q) => q.queue_id === 7,
+            )?.maximum_bps,
+          };
+        })
+        .toEqual({
+          configured: '12000000',
+          installed: '8000000',
+          queue: '3000000',
+        });
+    } finally {
+      process.kill(pid, 'SIGCONT');
+    }
     await expectRates('12000000', '2000000', '4000000');
     setRates(8000000, 1000000, 3000000);
     await expectRates('8000000', '1000000', '3000000');
@@ -475,6 +516,13 @@ test('Native QoS observes Linux class rates and per-Queue counters after isolate
     await expect(
       page.getByText('Observed · hfsc', { exact: true }),
     ).toBeVisible();
+    await expect(
+      installedTable
+        .getByRole('row')
+        .filter({
+          has: page.getByRole('rowheader', { name: '7', exact: true }),
+        }),
+    ).toContainText('1000000 bit/s');
     await page.screenshot({
       path: 'test-results/frontend-evidence/qos-runtime-hfsc.png',
       fullPage: true,
