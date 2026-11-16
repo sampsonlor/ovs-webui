@@ -110,6 +110,12 @@ test('Authorized QoS rate editing stages, validates, applies and restores the in
   await expect(
     page.getByRole('alert').filter({ hasText: 'Each Queue minimum' }),
   ).toHaveCount(0);
+  const observedAt = page
+    .getByText('Observed at', { exact: true })
+    .locator('xpath=following-sibling::dd[1]');
+  const initialObservation = await observedAt.textContent();
+  await expect(observedAt).not.toHaveText(initialObservation ?? '');
+  await expect(maximum).toHaveValue('4000000');
   await page.screenshot({
     path: 'test-results/frontend-evidence/qos-rate-editor.png',
     fullPage: true,
@@ -118,9 +124,13 @@ test('Authorized QoS rate editing stages, validates, applies and restores the in
   await expect(
     page.getByRole('heading', { name: 'Candidate Workspace' }),
   ).toBeVisible();
+  const diff = page.getByRole('region', { name: 'Configuration Diff' });
   await expect(
-    page.getByText('Queue 7 maximum rate (bit/s)', { exact: true }),
-  ).toBeVisible();
+    diff
+      .getByRole('row', { name: /Queue 7 maximum rate/ })
+      .getByRole('cell')
+      .last(),
+  ).toHaveText('4000000');
   await seeRate('8000000');
   await page
     .getByRole('button', { name: 'Validate Candidate', exact: true })

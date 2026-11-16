@@ -5,7 +5,6 @@
   import LoadNotice from './LoadNotice.svelte';
   import Status from './Status.svelte';
   import QoSRateEditor from './QoSRateEditor.svelte';
-  import { qosMessage } from './qos';
   import { has } from './policy';
 
   type Entry = Resource & { native_qos: QoSObservation; ovs_uuid?: string };
@@ -142,17 +141,14 @@
           </div>
         {/if}
       </section>
-      {#if entry.qos_rate_edit}
-        {#if entry.qos_rate_edit.available && desktop}
-          {#key entry.id}
-            <QoSRateEditor item={entry} {model} />
-          {/key}
-        {:else if entry.qos_rate_edit.available}
-          <p class="notice">Use a desktop to stage QoS rate changes.</p>
-        {:else if entry.qos_rate_edit.reason !== 'CAPABILITY_DENIED'}
-          <p class="notice" role="status">{qosMessage(entry.qos_rate_edit.reason)}</p>
-        {/if}
-      {/if}
+    {/if}
+  {/if}
+  {#if detail}
+    {#key model.path}
+      <QoSRateEditor item={observation && model.resource.status === 'ready' ? entry : null} {model} {desktop} />
+    {/key}
+  {/if}
+  {#if model.resource.status === 'ready' && entry && observation}
       {#if model.sessionReady && (has(model.session, 'events.read') || has(model.session, 'audit.read'))}
         <div class="actions" aria-label="QoS change evidence">
           {#if has(model.session, 'events.read')}<Link href={`/operations/events?object_id=${entry.id}`}>QoS Events</Link>{/if}
@@ -213,6 +209,5 @@
           <p>Current kernel evidence is unavailable.</p>
         {/if}
       </section>
-    {/if}
   {/if}
 </section>
