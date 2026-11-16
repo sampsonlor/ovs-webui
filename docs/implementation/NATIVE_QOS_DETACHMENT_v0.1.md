@@ -3,8 +3,8 @@
 A desktop operator can stage detachment of a dedicated linear HFSC QoS from
 its existing standalone Linux veth Port. The change clears the exact
 `Port.qos` reference. QoS and Queue rows retain their identifiers, settings and
-Queue numbers. Forwarding can continue without the configured shaping once
-Linux returns to its built-in `noqueue` scheduler.
+Queue numbers. Forwarding can continue without the shaping and DSCP marking
+from that binding once Linux returns to its built-in `noqueue` scheduler.
 
 Provision the operator role with `--grant-qos-role=ROLE_ID` and authorize the
 exact pair with `--local-qos-detach-bindings=PORT_MANAGEMENT_ID:QOS_MANAGEMENT_ID`.

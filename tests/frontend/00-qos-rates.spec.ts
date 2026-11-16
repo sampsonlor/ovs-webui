@@ -45,18 +45,30 @@ async function login(page: Page, user: string) {
 }
 
 async function applyQoS(page: Page, user: string, reason: string) {
-  await page.getByRole('button', { name: 'Validate Candidate', exact: true }).click();
-  await expect(page.getByText('Usable for this revision', { exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Validate Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByText('Usable for this revision', { exact: true }),
+  ).toBeVisible();
   await page.getByLabel('Verify your password').fill(fixture.accounts[user]);
-  await page.getByRole('button', { name: 'Verify identity', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Verify identity', exact: true })
+    .click();
   await page.getByLabel('Change reason').fill(reason);
   await page.getByRole('checkbox', { name: /^I reviewed this Diff/ }).check();
-  await page.getByRole('button', { name: 'Start Safe Apply', exact: true }).click();
-  await expect(page.getByTestId('safe-state')).toHaveText('awaiting-confirmation');
+  await page
+    .getByRole('button', { name: 'Start Safe Apply', exact: true })
+    .click();
+  await expect(page.getByTestId('safe-state')).toHaveText(
+    'awaiting-confirmation',
+  );
 }
 
 async function rollbackQoS(page: Page) {
-  await page.getByRole('button', { name: 'Request rollback', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Request rollback', exact: true })
+    .click();
   await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
 }
 
@@ -151,7 +163,11 @@ test('Authorized QoS rate editing stages, validates, applies and restores the in
       .last(),
   ).toHaveText('4000000');
   await seeRate('8000000');
-  await applyQoS(page, 'browser-qos-edit', 'Change rates on an isolated QoS test port');
+  await applyQoS(
+    page,
+    'browser-qos-edit',
+    'Change rates on an isolated QoS test port',
+  );
   await seeRate('12000000');
   await page.screenshot({
     path: 'test-results/frontend-evidence/qos-rate-applied.png',
@@ -168,37 +184,67 @@ test('Authorized QoS rate editing stages, validates, applies and restores the in
   });
 });
 
-test('Authorized QoS detachment preserves the configuration and restores its live binding on rollback', async ({ page }) => {
+test('Authorized QoS detachment preserves the configuration and restores its live binding on rollback', async ({
+  page,
+}) => {
   const user = 'browser-qos-detach';
   await login(page, user);
   await page.goto(href + '/' + fixture.qosEdit.id);
-  const review = page.getByRole('button', { name: 'Review QoS detachment', exact: true });
+  const review = page.getByRole('button', {
+    name: 'Review QoS detachment',
+    exact: true,
+  });
   await page.setViewportSize({ width: 820, height: 960 });
-  await expect(page.getByText('Use a desktop to stage QoS detachment.', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Use a desktop to stage QoS detachment.', { exact: true }),
+  ).toBeVisible();
   await expect(review).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await review.click();
-  await expect(page.getByRole('region', { name: 'QoS detachment' })).toContainText('removes egress shaping');
-  await page.screenshot({ path: 'test-results/frontend-evidence/qos-detachment-review.png', fullPage: true });
-  await page.getByRole('button', { name: 'Stage QoS detachment', exact: true }).click();
-  const change = page.getByRole('region', { name: 'Configuration Diff' })
+  await expect(
+    page.getByRole('region', { name: 'QoS detachment' }),
+  ).toContainText('removes egress shaping');
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-detachment-review.png',
+    fullPage: true,
+  });
+  await page
+    .getByRole('button', { name: 'Stage QoS detachment', exact: true })
+    .click();
+  const change = page
+    .getByRole('region', { name: 'Configuration Diff' })
     .getByRole('row', { name: /Port QoS binding/ });
   await expect(change.getByRole('cell').last()).toHaveText('Unbound');
-  expect(vsctl('get', 'Port', fixture.qosEdit.port, 'qos')).toBe(fixture.qosEdit.uuid);
+  expect(vsctl('get', 'Port', fixture.qosEdit.port, 'qos')).toBe(
+    fixture.qosEdit.uuid,
+  );
   await applyQoS(page, user, 'Detach a reviewed QoS from an isolated Port');
   expect(vsctl('get', 'Port', fixture.qosEdit.port, 'qos')).toBe('[]');
-  expect(vsctl('get', 'QoS', fixture.qosEdit.uuid, 'queues:7')).toBe(fixture.qosEdit.queue);
-  const scheduler = () => {
-    const rows = JSON.parse(execFileSync('tc', ['-j', 'qdisc', 'show', 'dev', fixture.qosEdit.port], { encoding: 'utf8' })) as { kind: string; root?: boolean }[];
-    return rows.find(row => row.root)?.kind;
-  };
-  expect(scheduler()).toBe('noqueue');
-  await page.screenshot({ path: 'test-results/frontend-evidence/qos-detachment-applied.png', fullPage: true });
+  expect(vsctl('get', 'QoS', fixture.qosEdit.uuid, 'queues:7')).toBe(
+    fixture.qosEdit.queue,
+  );
+  // Inspect the root header. Some tc releases emit malformed JSON for HFSC options.
+  const qdiscs = () =>
+    execFileSync('tc', ['qdisc', 'show', 'dev', fixture.qosEdit.port], {
+      encoding: 'utf8',
+    });
+  expect(qdiscs()).toMatch(/^qdisc noqueue 0: root(?:\s|$)/m);
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-detachment-applied.png',
+    fullPage: true,
+  });
   await rollbackQoS(page);
-  expect(vsctl('get', 'Port', fixture.qosEdit.port, 'qos')).toBe(fixture.qosEdit.uuid);
-  expect(scheduler()).toBe('hfsc');
-  expect(vsctl('get', 'Queue', fixture.qosEdit.queue, 'other_config:fixture-opaque')).toBe('keep');
-  await page.screenshot({ path: 'test-results/frontend-evidence/qos-detachment-rolled-back.png', fullPage: true });
+  expect(vsctl('get', 'Port', fixture.qosEdit.port, 'qos')).toBe(
+    fixture.qosEdit.uuid,
+  );
+  expect(qdiscs()).toMatch(/^qdisc hfsc 1: root(?:\s|$)/m);
+  expect(
+    vsctl('get', 'Queue', fixture.qosEdit.queue, 'other_config:fixture-opaque'),
+  ).toBe('keep');
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-detachment-rolled-back.png',
+    fullPage: true,
+  });
 
   // Return the shared topology to its original size before its browser cases.
   vsctl('--if-exists', 'del-br', fixture.qosEdit.bridge);
@@ -207,7 +253,8 @@ test('Authorized QoS detachment preserves the configuration and restores its liv
   await expect
     .poll(async () => {
       const response = await page.request.get(
-        fixture.origin + '/api/v1/ports?filter=' +
+        fixture.origin +
+          '/api/v1/ports?filter=' +
           encodeURIComponent(fixture.qosEdit.port),
       );
       expect(response.status()).toBe(200);

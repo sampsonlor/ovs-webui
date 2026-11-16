@@ -30,7 +30,7 @@
   <section class="panel" aria-label="QoS detachment">
     <h3>Detach QoS</h3>
     {#if reviewed}
-      <p>Detaching removes egress shaping from the Port. The QoS and Queue objects remain in inventory.</p>
+      <p>Detaching removes egress shaping and DSCP marking from this QoS on the Port. The QoS and Queue objects remain in inventory.</p>
       {#if reviewed !== status?.revision}
         <p class="notice warning" role="status">Current binding evidence differs from this review. Review the current Port before staging.</p>
       {/if}
