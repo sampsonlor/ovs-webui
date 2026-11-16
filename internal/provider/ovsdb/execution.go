@@ -34,6 +34,7 @@ type nativePlan struct {
 	QoSKernelBefore      string                    `json:"qos_kernel_before,omitempty"`
 	QoSKernelStructure   string                    `json:"qos_kernel_structure,omitempty"`
 	QoSKernelRestore     string                    `json:"qos_kernel_restore,omitempty"`
+	QoSKernelLink        string                    `json:"qos_kernel_link,omitempty"`
 	MirrorBuild          *MirrorExecutionOptions   `json:"mirror_build,omitempty"`
 	MirrorAuthority      string                    `json:"mirror_authority,omitempty"`
 	TopologyDevices      map[string]string         `json:"topology_devices,omitempty"`
@@ -290,7 +291,7 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
-	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.QoSConfigure {
+	if len(envelope.Candidate.Intents) > 0 && candidate.IsQoSOperation(envelope.Candidate.Intents[0].Operation) {
 		return compileQoSExecution(id, marker, envelope, view, d)
 	}
 	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.BridgeMulticastSet {
@@ -655,7 +656,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 			row, exists = view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 		}
 		markerKey := execution.MarkerKey
-		if intent.Operation == candidate.QoSConfigure {
+		if candidate.IsQoSOperation(intent.Operation) {
 			markerKey = candidate.QoSMarker
 		}
 		if intent.Operation == candidate.BridgeMulticastSet {

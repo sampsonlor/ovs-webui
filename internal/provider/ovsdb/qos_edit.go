@@ -18,7 +18,7 @@ import (
 )
 
 func qosIntent(c candidate.Candidate) (candidate.StoredIntent, bool) {
-	if len(c.Intents) == 1 && c.Intents[0].Operation == candidate.QoSConfigure && c.Intents[0].QoS != nil {
+	if len(c.Intents) == 1 && candidate.IsQoSOperation(c.Intents[0].Operation) && c.Intents[0].QoS != nil {
 		return c.Intents[0], true
 	}
 	return candidate.StoredIntent{}, false
@@ -34,7 +34,7 @@ func compileQoSExecution(id, marker string, envelope candidate.Envelope, view in
 	if !candidate.Passed(checks) || !d.public.QoSRateWrite {
 		return out, apitypes.Fail(409, "QOS_EXECUTION_CONFLICT")
 	}
-	p := view.Candidate.QoSPorts[i.Object.ManagementID]
+	p := view.Candidate.QoSTarget(i.Operation, i.Object)
 	rows := view.Observation.Rows
 	root := rows["Open_vSwitch"][view.Observation.Evidence.Root]
 	port := rows["Port"][p.Binding.OVSUUID]
@@ -96,9 +96,9 @@ func compileQoSExecution(id, marker string, envelope candidate.Envelope, view in
 		return out, err
 	}
 	n.Operations = append(n.Operations,
-		qosUniqueReference("Port", "qos", qos.UUID, port.UUID),
-		qosUniqueReference("Port", "interfaces", iface.UUID, port.UUID),
-		qosUniqueReference("Bridge", "ports", port.UUID, p.Bridge.OVSUUID),
+		qosUniqueReference("Port", "qos", qos.UUID, port.UUID, !i.QoS.BeforeUnbound),
+		qosUniqueReference("Port", "interfaces", iface.UUID, port.UUID, true),
+		qosUniqueReference("Bridge", "ports", port.UUID, p.Bridge.OVSUUID, true),
 	)
 	// Queue references are map values. An exact table projection fences new
 	// references from any native QoS row in the same transaction.
@@ -125,6 +125,17 @@ func compileQoSExecution(id, marker string, envelope candidate.Envelope, view in
 		return []any{[]any{column, "delete", []any{"set", keys}}, []any{column, "insert", []any{"map", pairs}}}
 	}
 	decimal := func(n uint64) string { return strconv.FormatUint(n, 10) }
+	if i.QoS.BeforeUnbound != i.QoS.AfterUnbound {
+		binding := uuidSet(qos.UUID)
+		if i.QoS.AfterUnbound {
+			binding = uuidSet()
+		}
+		n.CountIndexes = append(n.CountIndexes, len(n.Operations))
+		n.Operations = append(n.Operations, map[string]any{
+			"op": "update", "table": "Port", "where": []any{uuidCondition(port.UUID)},
+			"row": map[string]any{"qos": binding},
+		})
+	}
 	if i.QoS.Before.Maximum != i.QoS.After.Maximum {
 		mutate("QoS", qos.UUID, put("other_config", []any{"max-rate"}, []any{[]any{"max-rate", decimal(i.QoS.After.Maximum)}})...)
 	}
@@ -146,8 +157,12 @@ func compileQoSExecution(id, marker string, envelope candidate.Envelope, view in
 		Root: root.UUID, Marker: marker, NextFloor: strconv.FormatInt(next, 10), CurFloor: strconv.FormatInt(cur, 10), Prepared: time.Now().UTC(), Native: data}, nil
 }
 
-func qosUniqueReference(table, column, target, row string) map[string]any {
-	return waitRows(table, []any{[]any{column, "includes", uuidSet(target)}}, []string{"_uuid"}, []any{map[string]any{"_uuid": uuidValue(row)}})
+func qosUniqueReference(table, column, target, row string, attached bool) map[string]any {
+	expected := []any{}
+	if attached {
+		expected = append(expected, map[string]any{"_uuid": uuidValue(row)})
+	}
+	return waitRows(table, []any{[]any{column, "includes", uuidSet(target)}}, []string{"_uuid"}, expected)
 }
 
 func (e *Executor) prepareQoSKernel(ctx context.Context, p execution.Plan, v inventory.ExecutionView, original *nativePlan) (execution.Plan, error) {
@@ -155,15 +170,20 @@ func (e *Executor) prepareQoSKernel(ctx context.Context, p execution.Plan, v inv
 	if !ok {
 		return p, nil
 	}
-	target := v.Candidate.QoSPorts[i.Object.ManagementID]
-	sample, err := e.inventory.QoSRateEvidence(ctx, target)
+	target := v.Candidate.QoSTarget(i.Operation, i.Object)
+	sample, err := e.inventory.QoSKernelEvidence(ctx, i.Operation, target)
 	if err != nil {
 		return execution.Plan{}, err
 	}
 	matches := inventory.QoSRatesMatch(sample.Rates, i.QoS.Before, target.MTU)
 	if i.QoS.Compensating {
-		matches = original != nil && sample.StructureDigest == original.QoSKernelStructure &&
-			(matches || sample.ConfigurationDigest == original.QoSKernelBefore)
+		if i.Operation == candidate.QoSDetach {
+			matches = original != nil && sample.LinkDigest == original.QoSKernelLink &&
+				(sample.Scheduler == "unshaped" || sample.ConfigurationDigest == original.QoSKernelBefore)
+		} else {
+			matches = original != nil && sample.StructureDigest == original.QoSKernelStructure &&
+				(matches || sample.ConfigurationDigest == original.QoSKernelBefore)
+		}
 	}
 	if !matches {
 		return execution.Plan{}, apitypes.Fail(409, "QOS_KERNEL_CONFIGURATION_CONFLICT")
@@ -175,6 +195,7 @@ func (e *Executor) prepareQoSKernel(ctx context.Context, p execution.Plan, v inv
 		return execution.Plan{}, apitypes.Fail(503, "EXECUTION_PLAN_INVALID")
 	}
 	n.QoSKernelBefore, n.QoSKernelStructure = sample.ConfigurationDigest, sample.StructureDigest
+	n.QoSKernelLink = sample.LinkDigest
 	if original != nil {
 		n.QoSKernelRestore = original.QoSKernelBefore
 	}
@@ -198,7 +219,7 @@ func (e *Executor) qosDispatchCheck(ctx context.Context, p execution.Plan, n nat
 	if !candidate.Passed(checks) {
 		return apitypes.Fail(409, "QOS_EXECUTION_CONFLICT")
 	}
-	kernel, err := e.inventory.QoSRateEvidence(ctx, s.QoSPorts[i.Object.ManagementID])
+	kernel, err := e.inventory.QoSKernelEvidence(ctx, i.Operation, s.QoSTarget(i.Operation, i.Object))
 	if err != nil {
 		return err
 	}
@@ -213,10 +234,18 @@ func (e *Executor) qosAppliedEvidence(ctx context.Context, p execution.Plan, v i
 	if !ok {
 		return "", nil
 	}
-	target := v.Candidate.QoSPorts[i.Object.ManagementID]
-	sample, err := e.inventory.QoSRateEvidence(ctx, target)
+	target := v.Candidate.QoSTarget(i.Operation, i.Object)
+	sample, err := e.inventory.QoSKernelEvidence(ctx, i.Operation, target)
 	if err != nil {
 		return "", err
+	}
+	if i.Operation == candidate.QoSDetach {
+		if sample.LinkDigest != n.QoSKernelLink ||
+			i.QoS.AfterUnbound && sample.Scheduler != "unshaped" ||
+			!i.QoS.AfterUnbound && (sample.ConfigurationDigest != n.QoSKernelRestore || !inventory.QoSRatesMatch(sample.Rates, i.QoS.After, target.MTU)) {
+			return "", apitypes.Fail(409, "QOS_DETACHMENT_UNPROVEN")
+		}
+		return sample.ConfigurationDigest, nil
 	}
 	if sample.StructureDigest != n.QoSKernelStructure || !inventory.QoSRatesMatch(sample.Rates, i.QoS.After, target.MTU) ||
 		i.QoS.Compensating && sample.ConfigurationDigest != n.QoSKernelRestore {

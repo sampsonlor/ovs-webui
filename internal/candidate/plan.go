@@ -124,7 +124,7 @@ func Compare(c Candidate, s Snapshot) View {
 			v.Diff = append(v.Diff, topologyDiff(i, s))
 			continue
 		}
-		if i.Operation == QoSConfigure {
+		if IsQoSOperation(i.Operation) {
 			if problem := qosProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
 				v.State = "reconciliation-required"
@@ -264,7 +264,8 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
-			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure {
+			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure ||
+				in.QoSBinding != nil && in.Operation != QoSDetach {
 				return e, apitypes.Fail(422, "INVALID_QOS_RATES")
 			}
 			if in.Multicast != nil && in.Operation != BridgeMulticastSet {
@@ -315,7 +316,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			}
 			break
 		}
-		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == QoSConfigure }) || cmd.Intents[0].Operation == QoSConfigure {
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsQoSOperation(i.Operation) }) || IsQoSOperation(cmd.Intents[0].Operation) {
 			var err error
 			c, err = stageQoS(c, cmd, s)
 			if err != nil {
@@ -479,7 +480,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
-			if i.Operation == QoSConfigure {
+			if IsQoSOperation(i.Operation) {
 				return e, apitypes.Fail(409, "QOS_RESTAGE_REQUIRED")
 			}
 			if i.Operation == SpanningTreePrepare {
@@ -552,6 +553,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == QoSDetach {
+			checks = append(checks, gate("QOS_DETACHMENT_CHECK_AT_DISPATCH", "allowed", i.ID))
+			continue
+		}
 		if i.Operation == QoSConfigure {
 			checks = append(checks, gate("QOS_INSTALLED_RATES_CHECK_AT_DISPATCH", "allowed", i.ID))
 			continue

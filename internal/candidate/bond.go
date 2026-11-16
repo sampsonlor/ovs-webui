@@ -21,7 +21,7 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
-		if i.Operation == QoSConfigure {
+		if IsQoSOperation(i.Operation) {
 			cap = QoSCapability
 		}
 		if i.Operation == BridgeMulticastSet {
@@ -232,6 +232,7 @@ func AfterImage(i *StoredIntent) {
 	if i.QoS != nil {
 		m := *i.QoS
 		m.Before = m.After
+		m.BeforeUnbound = m.AfterUnbound
 		i.QoS = &m
 	}
 	if i.Multicast != nil {
@@ -301,6 +302,7 @@ func Reverse(i *StoredIntent) {
 	if i.QoS != nil {
 		m := *i.QoS
 		m.Before, m.After = m.After, m.Before
+		m.BeforeUnbound, m.AfterUnbound = m.AfterUnbound, m.BeforeUnbound
 		m.Compensating = true
 		i.QoS = &m
 	}

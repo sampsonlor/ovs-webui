@@ -71,3 +71,36 @@ func TestQoSRatesRejectDifferentLayoutAndUnrepresentableRates(t *testing.T) {
 		t.Fatal("stage was available without independent root authority")
 	}
 }
+
+func TestQoSDetachmentSealsBindingAndRequiresSeparateAuthority(t *testing.T) {
+	e, s, cmd := qosCandidateFixture()
+	port := s.QoSPorts[cmd.Intents[0].Object.ManagementID]
+	cmd.Intents[0] = Intent{ID: cmd.Intents[0].ID, Object: port.Binding, Operation: QoSDetach, QoSBinding: &port.QoS}
+	if _, err := Prepare(e, cmd, s); err == nil {
+		t.Fatal("rate editing grant authorized detachment")
+	}
+	port.Rates.Type = "linux-hfsc"
+	s.QoSDetachPorts = map[string]QoSPort{port.Binding.ManagementID: port}
+	staged, err := Prepare(e, cmd, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := staged.Candidate.Intents[0]
+	gates, diff := Checks(staged.Candidate, s)
+	if !Passed(gates) || len(diff) != 1 || diff[0].After != "unbound" || i.QoS.QoS != port.QoS ||
+		!i.QoS.AfterUnbound || i.QoS.BeforeUnbound || !equalQoSRates(i.QoS.Before, i.QoS.After) {
+		t.Fatal("missing sealed detachment state", gates, diff)
+	}
+	port.Unbound = true
+	s.QoSDetachPorts[port.Binding.ManagementID] = port
+	if Compare(staged.Candidate, s).State != "reconciliation-required" {
+		t.Fatal("external detachment reused the original draft")
+	}
+	Reverse(&i)
+	rollback := staged.Candidate
+	rollback.Intents = []StoredIntent{i}
+	gates, _ = Checks(rollback, s)
+	if !Passed(gates) || !i.QoS.BeforeUnbound || i.QoS.AfterUnbound || !staged.Candidate.Intents[0].QoS.AfterUnbound {
+		t.Fatal("invalid independent rollback image", gates)
+	}
+}

@@ -15,16 +15,9 @@ import (
 
 // Each grant binds the reviewed Port to one immutable QoS identity.
 func (s *Service) SetLocalQoS(grants []string) error {
-	if len(grants) > 128 {
-		return apitypes.Fail(422, "INVALID_QOS_AUTHORITY")
-	}
-	allow := make(map[string]string, len(grants))
-	for _, grant := range grants {
-		port, qos, _ := strings.Cut(grant, ":")
-		if !apitypes.ManagementID(port) || !apitypes.ManagementID(qos) || allow[port] != "" {
-			return apitypes.Fail(422, "INVALID_QOS_AUTHORITY")
-		}
-		allow[port] = qos
+	allow, err := qosBindingGrants(grants)
+	if err != nil {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -32,24 +25,59 @@ func (s *Service) SetLocalQoS(grants []string) error {
 	return nil
 }
 
-func projectQoS(v *view, allow map[string]string, out *candidate.Snapshot, bindings []candidate.Binding) {
+func (s *Service) SetLocalQoSDetach(grants []string) error {
+	allow, err := qosBindingGrants(grants)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.localQoSDetach = allow
+	return nil
+}
+
+func qosBindingGrants(grants []string) (map[string]string, error) {
+	if len(grants) > 128 {
+		return nil, apitypes.Fail(422, "INVALID_QOS_AUTHORITY")
+	}
+	allow := make(map[string]string, len(grants))
+	for _, grant := range grants {
+		port, qos, _ := strings.Cut(grant, ":")
+		if !apitypes.ManagementID(port) || !apitypes.ManagementID(qos) || allow[port] != "" {
+			return nil, apitypes.Fail(422, "INVALID_QOS_AUTHORITY")
+		}
+		allow[port] = qos
+	}
+	return allow, nil
+}
+
+func projectQoS(v *view, rates, detach map[string]string, out *candidate.Snapshot, bindings []candidate.Binding) {
 	out.QoSPorts = map[string]candidate.QoSPort{}
+	out.QoSDetachPorts = map[string]candidate.QoSPort{}
 	var ports qosBindings
 	for _, b := range bindings {
-		if b.Table != "Port" || allow[b.ManagementID] == "" {
+		if b.Table != "Port" || rates[b.ManagementID] == "" && detach[b.ManagementID] == "" {
 			continue
 		}
 		if ports.ports == nil {
 			ports = indexQoSPorts(v)
 		}
-		out.QoSPorts[b.ManagementID] = qosRateTarget(v, b.OVSUUID, allow, ports)
+		if rates[b.ManagementID] != "" {
+			out.QoSPorts[b.ManagementID] = qosTarget(v, b.OVSUUID, rates, ports, false)
+		}
+		if detach[b.ManagementID] != "" {
+			out.QoSDetachPorts[b.ManagementID] = qosTarget(v, b.OVSUUID, detach, ports, true)
+		}
 	}
 	if len(out.QoSPorts) > 0 {
 		out.Revision = Digest([]any{out.Revision, out.QoSPorts})
 	}
+	if len(out.QoSDetachPorts) > 0 {
+		out.Revision = Digest([]any{out.Revision, out.QoSDetachPorts})
+	}
 }
 
-func qosRateTarget(v *view, portID string, allow map[string]string, ports qosBindings) (p candidate.QoSPort) {
+func qosTarget(v *view, portID string, allow map[string]string, ports qosBindings, detach bool) (p candidate.QoSPort) {
 	bind := func(table, id string) candidate.Binding {
 		b := v.decision.Bindings[Key(table, id)]
 		if b.State != "active" {
@@ -59,10 +87,25 @@ func qosRateTarget(v *view, portID string, allow map[string]string, ports qosBin
 	}
 	p.Binding = bind("Port", portID)
 	port := v.observation.Rows["Port"][portID]
-	qosID, _ := qosPortTarget(port)
-	p.QoS = bind("QoS", qosID)
+	qosID, known := qosPortTarget(port)
 	p.Reason = "EXCLUSIVE_QOS_AUTHORITY_REQUIRED"
-	if p.QoS.ManagementID == "" || allow[p.Binding.ManagementID] != p.QoS.ManagementID {
+	granted := allow[p.Binding.ManagementID]
+	if granted == "" || !known {
+		return
+	}
+	if detach && qosID == "" {
+		// Rollback addresses a retained native row by the original grant even
+		// after the Port no longer references it.
+		for _, binding := range v.decision.Bindings {
+			if binding.Table == "QoS" && binding.ManagementID == granted && binding.State == "active" {
+				qosID = binding.UUID
+				break
+			}
+		}
+		p.Unbound = true
+	}
+	p.QoS = bind("QoS", qosID)
+	if p.QoS.ManagementID != granted {
 		return
 	}
 	p.Reason = "QOS_WRITE_SCHEMA_UNSUPPORTED"
@@ -70,7 +113,22 @@ func qosRateTarget(v *view, portID string, allow map[string]string, ports qosBin
 		return
 	}
 	qos := v.observation.Rows["QoS"][qosID]
-	runtime, reason := bindQoSRuntime(v, v.decision.Bindings[Key("QoS", qosID)], ports)
+	if detach && qos.Values["type"] != "linux-hfsc" {
+		p.Reason = "QOS_DETACHMENT_DISCIPLINE_UNSUPPORTED"
+		return
+	}
+	qosBinding := v.decision.Bindings[Key("QoS", qosID)]
+	var runtime qosRuntimeBinding
+	var reason string
+	if p.Unbound {
+		p.Reason = "QOS_BINDING_CHANGED"
+		if !ports.complete || len(ports.ports[qosID]) != 0 {
+			return
+		}
+		runtime, reason = bindQoSRuntimePort(v, qosBinding, qosPort{uuid: portID, Name: textValue(port.Values["name"])})
+	} else {
+		runtime, reason = bindQoSRuntime(v, qosBinding, ports)
+	}
 	if reason != "" || runtime.portUUID != portID {
 		p.Reason = "QOS_DEVICE_BINDING_UNPROVEN"
 		return
@@ -106,8 +164,13 @@ func qosRateTarget(v *view, portID string, allow map[string]string, ports qosBin
 	}
 	p.Rates = candidate.QoSRates{Type: textValue(qos.Values["type"]), Maximum: qosRateNumber(qosOptions["max-rate"]), Queues: []candidate.QoSQueueRate{}}
 	p.QueueUUIDs = make(map[uint32]string, len(queueMap))
+	portDependencies := qosPersistentDependency(port)
+	if detach {
+		// Binding is compared separately and guarded in the write transaction.
+		delete(portDependencies, "qos")
+	}
 	deps := []any{
-		root.UUID, root.Configuration, qosPersistentDependency(bridge), qosPersistentDependency(port),
+		root.UUID, root.Configuration, qosPersistentDependency(bridge), portDependencies,
 		qosPersistentDependency(iface), p.IfIndex, iface.Values["ofport"], p.MTU,
 		p.QoS, qos.Values["queues"], qos.Values["type"], qos.Configuration["external_ids"], qosOtherOptions(qosOptions, "max-rate"),
 	}
@@ -206,7 +269,7 @@ func dedicatedQoSQueues(v *view, target string, queues map[uint32]string) bool {
 	return true
 }
 
-func qosEditStatus(v *view, qos Binding, fresh string, allow map[string]string, ports qosBindings, c authn.Claims) map[string]any {
+func (s *Service) qosEditStatus(ctx context.Context, v *view, qos Binding, fresh string, allow map[string]string, ports qosBindings, c authn.Claims, detach bool) map[string]any {
 	reason := "EXCLUSIVE_QOS_AUTHORITY_REQUIRED"
 	switch {
 	case !slices.Contains(c.Capabilities, candidate.QoSCapability) || !slices.Contains(c.Capabilities, "workspace.write"):
@@ -220,11 +283,21 @@ func qosEditStatus(v *view, qos Binding, fresh string, allow map[string]string, 
 	case len(ports.ports[qos.UUID]) == 0:
 		reason = "QOS_PORT_UNBOUND"
 	case len(ports.ports[qos.UUID]) == 1:
-		p := qosRateTarget(v, ports.ports[qos.UUID][0].uuid, allow, ports)
+		p := qosTarget(v, ports.ports[qos.UUID][0].uuid, allow, ports, detach)
 		reason = p.Reason
+		if reason == "" && detach {
+			sample, err := s.QoSKernelEvidence(ctx, candidate.QoSDetach, p)
+			if err != nil || !QoSRatesMatch(sample.Rates, p.Rates, p.MTU) {
+				reason = "QOS_DETACHMENT_RUNTIME_UNPROVEN"
+			}
+		}
 		if reason == "" {
+			reason = "QOS_RATE_EDIT_AVAILABLE"
+			if detach {
+				reason = "QOS_DETACHMENT_AVAILABLE"
+			}
 			return map[string]any{
-				"available": true, "reason": "QOS_RATE_EDIT_AVAILABLE", "port": p.Binding,
+				"available": true, "reason": reason, "port": p.Binding,
 				"revision": Digest([]any{p.Dependency, p.Rates}),
 			}
 		}
@@ -233,10 +306,15 @@ func qosEditStatus(v *view, qos Binding, fresh string, allow map[string]string, 
 }
 
 func (s *Service) QoSRateEvidence(ctx context.Context, p candidate.QoSPort) (QoSRuntimeSample, error) {
+	return s.QoSKernelEvidence(ctx, candidate.QoSConfigure, p)
+}
+
+func (s *Service) QoSKernelEvidence(ctx context.Context, operation string, p candidate.QoSPort) (QoSRuntimeSample, error) {
 	var sample QoSRuntimeSample
+	detach := operation == candidate.QoSDetach
 	current := func() bool {
 		view, err := s.CandidateSnapshot(ctx, []candidate.Binding{p.Binding})
-		return err == nil && Digest(view.QoSPorts[p.Binding.ManagementID]) == Digest(p)
+		return err == nil && Digest(view.QoSTarget(operation, p.Binding)) == Digest(p)
 	}
 	if p.Reason != "" || !current() {
 		return sample, apitypes.Fail(409, "QOS_BINDING_CHANGED")
@@ -248,6 +326,7 @@ func (s *Service) QoSRateEvidence(ctx context.Context, p candidate.QoSPort) (QoS
 		return sample, apitypes.Fail(503, "QOS_KERNEL_UNAVAILABLE")
 	}
 	request := QoSRuntimeRequest{Device: DeviceRequest{Name: p.Name, IfIndex: p.IfIndex}, Kind: strings.TrimPrefix(p.Rates.Type, "linux-"), QueueIDs: []uint32{0}, ExpectedMTU: p.MTU}
+	request.ObserveDefault = detach
 	for _, queue := range p.Rates.Queues {
 		if queue.ID != 0 {
 			request.QueueIDs = append(request.QueueIDs, queue.ID)
@@ -255,8 +334,11 @@ func (s *Service) QoSRateEvidence(ctx context.Context, p candidate.QoSPort) (QoS
 	}
 	sample = observer.ObserveQoS(ctx, request)
 	age := s.now().Sub(sample.ObservedAt)
-	if ctx.Err() != nil || !current() || sample.Scheduler != "observed" || sample.RootKind != request.Kind ||
-		sample.Rates == nil || len(sample.ConfigurationDigest) != 64 || len(sample.StructureDigest) != 64 || age < 0 || age > time.Second {
+	shaped := sample.Scheduler == "observed" && sample.RootKind == request.Kind && sample.Rates != nil
+	defaultRoot := detach && sample.Scheduler == "unshaped" && sample.RootKind == "noqueue"
+	if ctx.Err() != nil || !current() || !shaped && !defaultRoot ||
+		detach && len(sample.LinkDigest) != 64 ||
+		len(sample.ConfigurationDigest) != 64 || len(sample.StructureDigest) != 64 || age < 0 || age > time.Second {
 		return sample, apitypes.Fail(409, "QOS_KERNEL_UNPROVEN")
 	}
 	return sample, nil

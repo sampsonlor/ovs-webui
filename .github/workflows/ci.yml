@@ -122,17 +122,18 @@ jobs:
   go-runtime:
     name: Go runtime (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    # The full native/schema/browser/race matrix can exceed 30m on arm64.
-    # This is the job budget; test and production recovery deadlines stay bounded.
-    timeout-minutes: 40
+    # The arm64 run can reach 40 minutes before the final schema and recovery tests.
+    timeout-minutes: ${{ matrix.job_timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
             runner: ubuntu-24.04
+            job_timeout_minutes: 40
           - arch: arm64
             runner: ubuntu-24.04-arm
+            job_timeout_minutes: 50
     env:
       CGO_ENABLED: '0'
       GOTOOLCHAIN: local
@@ -225,6 +226,14 @@ jobs:
             sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
               outputs/runtime/execution.test -test.run '^TestNativeQoSRateExecution$' -test.v -test.timeout=180s \
               | go tool test2json -p "native-qos-rates-$schema" | tee "test-results/go-qos-rates-$schema.json"
+          done
+      - name: Native QoS detachment, Linux noqueue proof and exact restoration
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeQoSDetachment$' -test.v -test.timeout=180s \
+              | go tool test2json -p "native-qos-detach-$schema" | tee "test-results/go-qos-detach-$schema.json"
           done
       - name: Build separately qualified Mirror runtime for formal browser acceptance
         env:
@@ -397,6 +406,7 @@ jobs:
             test-results/go-safe-admission.json
             test-results/go-policing-*.json
             test-results/go-qos-rates-*.json
+            test-results/go-qos-detach-*.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json

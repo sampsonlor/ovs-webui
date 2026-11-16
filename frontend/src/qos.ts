@@ -19,6 +19,14 @@ export function qosMessage(code: string): string {
       'Wait for a fresh OVS observation before editing rates.',
     QOS_DEPENDENCY_CHANGED:
       'The QoS, Queue or Port dependencies changed. Review the current configuration and stage a new intent.',
+    QOS_BINDING_CHANGED:
+      'The Port binding changed. Review the current QoS before staging a new intent.',
+    QOS_DETACHMENT_DISCIPLINE_UNSUPPORTED:
+      'Detachment is available for verified linear HFSC on a Linux veth Port.',
+    QOS_DETACHMENT_RUNTIME_UNPROVEN:
+      'Detachment is unavailable until the installed HFSC scheduler and its Linux veth are verified.',
+    QOS_DETACHMENT_CHECK_AT_DISPATCH:
+      'Safe Apply verifies the current egress scheduler and checks that the same Port returns to its unshaped Linux default.',
     QOS_INSTALLED_RATES_CHECK_AT_DISPATCH:
       'Safe Apply checks the currently installed Linux rates before sending the change.',
   };

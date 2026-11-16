@@ -102,14 +102,14 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		return out, apitypes.Fail(410, "REQUEST_EPOCH_CHANGED")
 	}
 	treeDraft := hasTreeCapability(plan.Capabilities(in.Envelope.Candidate)) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool {
-		return plan.IsMirrorOperation(i.Operation) || plan.IsTunnelOperation(i.Operation) || plan.IsSpanningTreeOperation(i.Operation) || i.Operation == plan.PortIsolationSet || i.Operation == plan.BridgeMulticastSet || i.Operation == plan.QoSConfigure
+		return plan.IsMirrorOperation(i.Operation) || plan.IsTunnelOperation(i.Operation) || plan.IsSpanningTreeOperation(i.Operation) || i.Operation == plan.PortIsolationSet || i.Operation == plan.BridgeMulticastSet || plan.IsQoSOperation(i.Operation)
 	})
 	if treeDraft && !slices.Contains(c.Capabilities, "configuration.read") {
 		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	treeStage := cmd.Operation == "stage" && treeDraft
 	treeCapability := plan.SpanningTreePrepareCapability
-	if slices.Contains(plan.Capabilities(in.Envelope.Candidate), plan.QoSCapability) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool { return i.Operation == plan.QoSConfigure }) {
+	if slices.Contains(plan.Capabilities(in.Envelope.Candidate), plan.QoSCapability) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool { return plan.IsQoSOperation(i.Operation) }) {
 		treeCapability = plan.QoSCapability
 	}
 	if slices.Contains(plan.Capabilities(in.Envelope.Candidate), plan.BridgeMulticastCapability) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool { return i.Operation == plan.BridgeMulticastSet }) {
