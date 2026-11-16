@@ -240,6 +240,12 @@ func (e *Engine) submit(ctx context.Context, in execution.Request, a Authorizer,
 		// same Port serialize because they share one native recovery marker;
 		// unrelated Ports and external changes outside the group remain free.
 		for _, intent := range in.Envelope.Candidate.Intents {
+			if q := intent.QoS; q != nil {
+				if err = protectGraph(ctx, tx, id, p.Root, []candidate.Binding{q.Bridge, intent.Object, q.Interface}); err != nil {
+					return requests.Mutation{}, err
+				}
+				continue
+			}
 			if intent.Operation == candidate.SpanningTreeConfigure || intent.Operation == candidate.PortIsolationSet || intent.Operation == candidate.BridgeMulticastSet {
 				// These native compilers guard the persistent graph. Reserve all
 				// of its managed objects, including member field groups, durably.

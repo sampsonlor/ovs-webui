@@ -124,6 +124,14 @@ func Compare(c Candidate, s Snapshot) View {
 			v.Diff = append(v.Diff, topologyDiff(i, s))
 			continue
 		}
+		if i.Operation == QoSConfigure {
+			if problem := qosProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, qosDiff(i, s)...)
+			continue
+		}
 		if i.Operation == InterfacePolicingSet {
 			if problem := policingProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -256,6 +264,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
+			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure {
+				return e, apitypes.Fail(422, "INVALID_QOS_RATES")
+			}
 			if in.Multicast != nil && in.Operation != BridgeMulticastSet {
 				return e, apitypes.Fail(422, "INVALID_MULTICAST_REQUEST")
 			}
@@ -299,6 +310,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsTopologyOperation(i.Operation) }) || IsTopologyOperation(cmd.Intents[0].Operation) {
 			var err error
 			c, err = stageTopology(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == QoSConfigure }) || cmd.Intents[0].Operation == QoSConfigure {
+			var err error
+			c, err = stageQoS(c, cmd, s)
 			if err != nil {
 				return e, err
 			}
@@ -460,6 +479,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if i.Operation == QoSConfigure {
+				return e, apitypes.Fail(409, "QOS_RESTAGE_REQUIRED")
+			}
 			if i.Operation == SpanningTreePrepare {
 				return e, apitypes.Fail(409, "SPANNING_TREE_RESTAGE_REQUIRED")
 			}
@@ -530,6 +552,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == QoSConfigure {
+			checks = append(checks, gate("QOS_INSTALLED_RATES_CHECK_AT_DISPATCH", "allowed", i.ID))
+			continue
+		}
 		if i.Operation == BridgeMulticastSet {
 			checks = append(checks, multicastChecks(i, s)...)
 			continue

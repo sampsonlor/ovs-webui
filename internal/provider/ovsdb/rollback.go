@@ -47,6 +47,9 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 		}
 		table := "Port"
 		markerKey := execution.MarkerKey
+		if intent.Operation == candidate.QoSConfigure {
+			markerKey = candidate.QoSMarker
+		}
 		if intent.Operation == candidate.BridgeMulticastSet {
 			table = "Bridge"
 			markerKey = candidate.MulticastMarker
@@ -125,6 +128,13 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	prepared, err := e.preparePolicingKernel(ctx, compiled, view, &n)
 	var problem *apitypes.Problem
 	if errors.As(err, &problem) && (problem.Code == "POLICING_KERNEL_CONFLICT" || problem.Code == "POLICING_KERNEL_CONFIGURATION_CONFLICT") {
+		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+	}
+	if err != nil {
+		return prepared, err
+	}
+	prepared, err = e.prepareQoSKernel(ctx, prepared, view, &n)
+	if errors.As(err, &problem) && problem.Code == "QOS_KERNEL_CONFIGURATION_CONFLICT" {
 		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
 	}
 	if err != nil {

@@ -28867,7 +28867,8 @@
               "interface.patch.disconnect",
               "interface.mtu.set",
               "interface.mtu.clear",
-              "interface.policing.set"
+              "interface.policing.set",
+              "qos.configure"
             ]
           },
           "object": {
@@ -28899,6 +28900,9 @@
           },
           "multicast_change": {
             "$ref": "#/components/schemas/MulticastChange"
+          },
+          "qos_change": {
+            "$ref": "#/components/schemas/QoSRateChange"
           },
           "spanning_tree_change": {
             "$ref": "#/components/schemas/SpanningTreeDraft"
@@ -30476,6 +30480,9 @@
           },
           "linux_qos": {
             "$ref": "#/components/schemas/LinuxQoSObservation"
+          },
+          "qos_rate_edit": {
+            "$ref": "#/components/schemas/QoSRateEdit"
           },
           "related_object_refs": {
             "type": "array",
@@ -33413,6 +33420,153 @@
         "additionalProperties": false,
         "description": "Optional Linux HTB or linear HFSC class rates in bit/s, sampled independently of configured rates. Omitted if the expected software class tree is incomplete or the rates cannot be verified."
       },
+      "QoSRateEdit": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "port": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "port",
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "QoSNativeRates": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "linux-htb",
+              "linux-hfsc"
+            ]
+          },
+          "max_rate_bps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "queue_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 61439
+                },
+                "min_rate_bps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4294967295
+                },
+                "max_rate_bps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "queue_id",
+                "min_rate_bps",
+                "max_rate_bps"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 32
+          }
+        },
+        "required": [
+          "type",
+          "max_rate_bps",
+          "queues"
+        ],
+        "additionalProperties": false
+      },
+      "QoSNativeBinding": {
+        "type": "object",
+        "properties": {
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "table": {
+            "type": "string",
+            "const": "QoS"
+          }
+        },
+        "required": [
+          "management_id",
+          "ovs_uuid",
+          "instance_generation",
+          "table"
+        ],
+        "additionalProperties": false
+      },
+      "QoSRateChange": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/QoSNativeRates"
+          },
+          "after": {
+            "$ref": "#/components/schemas/QoSNativeRates"
+          },
+          "qos": {
+            "$ref": "#/components/schemas/QoSNativeBinding"
+          },
+          "bridge": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "interface": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "qos",
+          "bridge",
+          "interface"
+        ],
+        "additionalProperties": true
+      },
       "BridgeCreateIntent": {
         "type": "object",
         "properties": {
@@ -33849,7 +34003,8 @@
           "max_rate_bps",
           "queues"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Update explicit rates on one existing, independently authorized Port and dedicated native QoS and Queue mapping. The current scheduler type and all explicit Queue numbers must match the requested layout. OVSDB and Linux evidence are checked independently during protected execution and rollback."
       },
       "IsolationIntent": {
         "type": "object",

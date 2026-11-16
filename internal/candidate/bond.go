@@ -21,6 +21,9 @@ func Capabilities(c Candidate) []string {
 	out := []string{}
 	for _, i := range c.Intents {
 		cap := "unsupported-intent"
+		if i.Operation == QoSConfigure {
+			cap = QoSCapability
+		}
 		if i.Operation == BridgeMulticastSet {
 			cap = BridgeMulticastCapability
 		}
@@ -226,6 +229,11 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.QoS != nil {
+		m := *i.QoS
+		m.Before = m.After
+		i.QoS = &m
+	}
 	if i.Multicast != nil {
 		m := *i.Multicast
 		m.Before = multicast.Clone(m.After)
@@ -290,6 +298,12 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.QoS != nil {
+		m := *i.QoS
+		m.Before, m.After = m.After, m.Before
+		m.Compensating = true
+		i.QoS = &m
+	}
 	if i.Multicast != nil {
 		m := *i.Multicast
 		m.Before, m.After = multicast.Clone(m.After), multicast.Clone(m.Before)

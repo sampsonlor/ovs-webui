@@ -1,8 +1,54 @@
 package ovsdb
 
 import (
+	"slices"
+
 	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
+
+func qosWriteSchema(d discovered, raw map[string]any) bool {
+	if !d.public.QoSConfiguration {
+		return false
+	}
+	for _, table := range []string{"QoS", "Queue", "Port"} {
+		labels := d.native.Tables[table].Columns["external_ids"]
+		if !multicastMapConstraint(labels, multicastRawColumnType(raw, table, "external_ids")) {
+			return false
+		}
+	}
+	for _, table := range d.public.Tables {
+		for _, column := range table.Columns {
+			for _, ref := range column.References {
+				if ref.Table == "QoS" && (table.Name != "Port" || column.Name != "qos") ||
+					ref.Table == "Queue" && (table.Name != "QoS" || column.Name != "queues") {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func qosPrivateColumn(table, name string, c *native.ColumnSchema) bool {
+	return (table == "QoS" || table == "Queue") && slices.Contains([]string{"other_config", "external_ids"}, name) && c != nil && !c.Ephemeral() &&
+		bondConstraint("other_config", c)
+}
+
+func boundedPrivateQoS(table string, value any) any {
+	if table != "QoS" && table != "Queue" {
+		return value
+	}
+	options, _ := value.(map[string]any)
+	size := 0
+	for k, v := range options {
+		text, _ := v.(string)
+		size += len(k) + len(text)
+	}
+	if size > 4096 {
+		return nil
+	}
+	return value
+}
 
 func qosReadSchema(d discovered, raw map[string]any) bool {
 	for _, table := range []string{"QoS", "Queue"} {

@@ -10,6 +10,7 @@ const fixture: {
   dbSocket: string;
   ovsDirectory: string;
   accounts: Record<string, string>;
+  qosEdit: { id: string; uuid: string; queue: string };
 } = JSON.parse(readFileSync(path, 'utf8'));
 const href = fixture.origin + '/switching/qos';
 const vsctl = (...args: string[]) =>
@@ -36,6 +37,122 @@ async function login(page: Page, user: string) {
   expect((await response).status()).toBe(201);
   await page.goto(href);
 }
+
+test('Authorized QoS rate editing stages, validates, applies and restores the installed rates', async ({
+  page,
+  browser,
+}) => {
+  const detail = href + '/' + fixture.qosEdit.id;
+  const read = async () => {
+    const response = await page.request.get(
+      fixture.origin + '/api/v1/qos/' + fixture.qosEdit.id,
+    );
+    expect(response.status()).toBe(200);
+    return (await response.json()) as Resource;
+  };
+  const seeRate = async (maximum: string) => {
+    await expect
+      .poll(async () => {
+        const qos = await read();
+        return [
+          qos.native_qos?.max_rate.bps,
+          qos.linux_qos?.installed_rates?.maximum_bps,
+        ];
+      })
+      .toEqual([maximum, maximum]);
+  };
+  const restricted = await browser.newPage({ ignoreHTTPSErrors: true });
+  try {
+    await login(restricted, 'browser-qos-runtime');
+    await restricted.goto(detail);
+    await expect(
+      restricted.getByRole('heading', { name: 'Native configuration' }),
+    ).toBeVisible();
+    await expect(
+      restricted.getByRole('button', { name: 'Edit QoS rates' }),
+    ).toHaveCount(0);
+  } finally {
+    await restricted.close();
+  }
+  await login(page, 'browser-qos-edit');
+  await page.goto(detail);
+  await seeRate('8000000');
+  const edit = page.getByRole('button', {
+    name: 'Edit QoS rates',
+    exact: true,
+  });
+  await page.setViewportSize({ width: 820, height: 960 });
+  await expect(edit).toHaveCount(0);
+  await expect(
+    page.getByText('Use a desktop to stage QoS rate changes.'),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await edit.click();
+  await page
+    .getByLabel('QoS maximum rate (bit/s)', { exact: true })
+    .fill('12000000');
+  await page.getByLabel('Queue 7 minimum rate (bit/s)').fill('2000000');
+  const maximum = page.getByLabel('Queue 7 maximum rate (bit/s)');
+  await maximum.fill('16000000');
+  const stage = page.getByRole('button', {
+    name: 'Stage in Candidate',
+    exact: true,
+  });
+  await stage.click();
+  await expect(page.getByRole('alert')).toContainText('Each Queue minimum');
+  await maximum.fill('4000000');
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-rate-editor.png',
+    fullPage: true,
+  });
+  await stage.click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Queue 7 maximum rate (bit/s)', { exact: true }),
+  ).toBeVisible();
+  await seeRate('8000000');
+  await page
+    .getByRole('button', { name: 'Validate Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByText('Usable for this revision', { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel('Verify your password')
+    .fill(fixture.accounts['browser-qos-edit']);
+  await page
+    .getByRole('button', { name: 'Verify identity', exact: true })
+    .click();
+  await page
+    .getByLabel('Change reason')
+    .fill('Change rates on an isolated QoS test port');
+  await page.getByRole('checkbox', { name: /^I reviewed this Diff/ }).check();
+  await page
+    .getByRole('button', { name: 'Start Safe Apply', exact: true })
+    .click();
+  await expect(page.getByTestId('safe-state')).toHaveText(
+    'awaiting-confirmation',
+  );
+  await seeRate('12000000');
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-rate-applied.png',
+    fullPage: true,
+  });
+  await page
+    .getByRole('button', { name: 'Request rollback', exact: true })
+    .click();
+  await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
+  await seeRate('8000000');
+  expect(
+    vsctl('get', 'Queue', fixture.qosEdit.queue, 'other_config:fixture-opaque'),
+  ).toBe('keep');
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-rate-rolled-back.png',
+    fullPage: true,
+  });
+});
 
 test('Native QoS reads shared Port bindings, explicit Queue zero and a restricted view', async ({
   page,

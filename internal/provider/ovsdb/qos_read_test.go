@@ -3,10 +3,46 @@ package ovsdb
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 )
+
+func TestQoSWriteSchemaAndIntegerQueueReference(t *testing.T) {
+	queue := "00000000-0000-4000-8000-000000000001"
+	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
+		d := schema(t, version)
+		if !d.public.QoSRateWrite {
+			t.Fatalf("QoS schema %s should qualify", version)
+		}
+		value, err := nativeValue(map[string]any{"7": queue}, d.native.Tables["QoS"].Columns["queues"])
+		data, _ := json.Marshal(value)
+		if err != nil || string(data) != `["map",[[7,["uuid","`+queue+`"]]]]` {
+			t.Fatalf("Queue keys are native integers: %s %v", data, err)
+		}
+	}
+	data, err := os.ReadFile("testdata/vswitch-3.3.9.ovsschema")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err = json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	tables := raw["tables"].(map[string]any)
+	tables["Vendor"] = map[string]any{"isRoot": true, "columns": map[string]any{"shared_queue": map[string]any{
+		"type": map[string]any{"key": map[string]any{"type": "uuid", "refTable": "Queue", "refType": "strong"}, "min": 0, "max": 1},
+	}}}
+	body, _ := json.Marshal(raw)
+	d, err := discover(body)
+	if err != nil || d.public.QoSRateWrite || !d.public.QoSConfiguration {
+		t.Fatal("write admission ignored an unexpected Queue reference", err)
+	}
+	if boundedPrivateQoS("QoS", map[string]any{"opaque": strings.Repeat("x", 4096)}) != nil {
+		t.Fatal("unbounded optional raw settings")
+	}
+}
 
 func TestQoSMonitorKeepsUnboundRootsAndBoundsOptionalMaps(t *testing.T) {
 	d := schema(t, "3.3.9")
@@ -36,6 +72,9 @@ func TestQoSMonitorKeepsUnboundRootsAndBoundsOptionalMaps(t *testing.T) {
 	observed := rows["QoS"][qos].Values
 	if observed["queues"] != nil || len(observed["other_config"].(map[string]any)) != 1 || observed["other_config"].(map[string]any)["max-rate"] != "10000" {
 		t.Fatal("large mapping or private options leaked", observed)
+	}
+	if rows["QoS"][qos].Configuration["other_config"].(map[string]any)["private-key"] != "synthetic-private-value" {
+		t.Fatal("private native map lost the opaque setting")
 	}
 	body, _ = json.Marshal(map[string]any{"QoS": map[string]any{qos: map[string]any{
 		"old": map[string]any{"queues": []any{"map", pairs}},

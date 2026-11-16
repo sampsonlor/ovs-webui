@@ -54,6 +54,7 @@ type Table struct {
 }
 type Schema struct {
 	QoSConfiguration     bool                      `json:"-"`
+	QoSRateWrite         bool                      `json:"-"`
 	MirrorConfiguration  bool                      `json:"-"`
 	MirrorDefaults       map[string]any            `json:"-"`
 	TunnelConfiguration  bool                      `json:"-"`

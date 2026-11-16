@@ -12,6 +12,10 @@ import (
 func interfaceEvidenceObjects(r execution.Record) []apitypes.Ref {
 	refs := []apitypes.Ref{}
 	for _, i := range r.Plan.Envelope.Candidate.Intents {
+		if i.Operation == candidate.QoSConfigure && i.QoS != nil {
+			refs = append(refs, apitypes.Ref{Kind: "port", ID: i.Object.ManagementID}, apitypes.Ref{Kind: "qos", ID: i.QoS.QoS.ManagementID})
+			continue
+		}
 		if i.Operation == candidate.PortIsolationSet && i.Object.Table == "Port" && apitypes.ManagementID(i.Object.ManagementID) {
 			refs = append(refs, apitypes.Ref{Kind: "port", ID: i.Object.ManagementID})
 			continue

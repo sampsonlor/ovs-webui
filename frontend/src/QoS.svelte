@@ -4,9 +4,12 @@
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
   import Status from './Status.svelte';
+  import QoSRateEditor from './QoSRateEditor.svelte';
+  import { qosMessage } from './qos';
+  import { has } from './policy';
 
   type Entry = Resource & { native_qos: QoSObservation; ovs_uuid?: string };
-  let { model, expert }: { model: Model; expert: boolean } = $props();
+  let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
   const base = '/switching/qos';
   const bindingText = {
     bound: 'One bound Port',
@@ -139,6 +142,23 @@
           </div>
         {/if}
       </section>
+      {#if entry.qos_rate_edit}
+        {#if entry.qos_rate_edit.available && desktop}
+          {#key entry.id}
+            <QoSRateEditor item={entry} {model} />
+          {/key}
+        {:else if entry.qos_rate_edit.available}
+          <p class="notice">Use a desktop to stage QoS rate changes.</p>
+        {:else if entry.qos_rate_edit.reason !== 'CAPABILITY_DENIED'}
+          <p class="notice" role="status">{qosMessage(entry.qos_rate_edit.reason)}</p>
+        {/if}
+      {/if}
+      {#if model.sessionReady && (has(model.session, 'events.read') || has(model.session, 'audit.read'))}
+        <div class="actions" aria-label="QoS change evidence">
+          {#if has(model.session, 'events.read')}<Link href={`/operations/events?object_id=${entry.id}`}>QoS Events</Link>{/if}
+          {#if has(model.session, 'audit.read')}<Link href={`/operations/audit?object_id=${entry.id}`}>QoS Audit</Link>{/if}
+        </div>
+      {/if}
       <section class="panel">
         <h3>Linux egress scheduler</h3>
         {#if runtime}

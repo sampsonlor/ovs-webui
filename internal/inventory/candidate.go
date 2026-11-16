@@ -148,6 +148,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
 	projectMTU(v, s.localMTU, &out, bindings)
 	projectPolicing(v, s.localPolicing, &out, bindings)
+	projectQoS(v, s.localQoS, &out, bindings)
 	projectMulticast(v, s.localMulticast, &out, bindings)
 	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" && s.localMulticast[b.ManagementID] }) {
 		out.Policy = Digest([]any{out.Policy, s.multicastAuthorityRevision})

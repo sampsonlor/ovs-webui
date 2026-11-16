@@ -213,9 +213,16 @@ s.LinuxQoSInstalledRates=closed({maximum_bps:{type:'string',pattern:'^[1-9][0-9]
 s.LinuxQoSObservation.properties.installed_rates=ref('LinuxQoSInstalledRates');
 s.LinuxQoSInstalledRates.description='Optional Linux HTB or linear HFSC class rates in bit/s, sampled independently of configured rates. Omitted if the expected software class tree is incomplete or the rates cannot be verified.';
 s.Resource.properties.linux_qos=ref('LinuxQoSObservation');
+s.QoSRateEdit=closed({available:bool,reason:string(128),port:nullable(object),revision:nullable(revision)});
+s.Resource.properties.qos_rate_edit=ref('QoSRateEdit');
+s.QoSNativeRates=closed({type:choices('linux-htb','linux-hfsc'),max_rate_bps:integer(1,4294967295),queues:array(closed({queue_id:integer(0,61439),min_rate_bps:integer(1,4294967295),max_rate_bps:integer(1,4294967295)}),32)});
+s.QoSNativeBinding=closed({management_id:id,ovs_uuid:id,instance_generation:id,table:{type:'string',const:'QoS'}});
+s.QoSRateChange=open({before:ref('QoSNativeRates'),after:ref('QoSNativeRates'),qos:ref('QoSNativeBinding'),bridge:object,interface:object});
+s.ObservedIntent.properties.qos_change=ref('QoSRateChange');
 s.Port.properties.qos_binding=closed({state:choices('bound','unbound','unknown','withheld','unsupported'),qos_ref:nullable(ref('ResourceRef'))});
 api.info.description += ' Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted.';
 Object.assign(s, intentSchemas);
+s.QoSIntent.description='Update explicit rates on one existing, independently authorized Port and dedicated native QoS and Queue mapping. The current scheduler type and all explicit Queue numbers must match the requested layout. OVSDB and Linux evidence are checked independently during protected execution and rollback.';
 s.SpanningTreePrepareRequest = closed({protocol:choices('disabled','stp','rstp'),parameters:{type:'object',additionalProperties:false,properties:Object.fromEntries(['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'].map(k=>[k,nullable({type:'string',minLength:1,maxLength:128,pattern:'^[0-9]+$'})]))}});
 s.SpanningTreePrepareIntent.description = 'Draft preparation only, requiring configuration.read, workspace.write, ovs.bridge.spanning-tree.prepare and independent root-owned immutable Bridge authority. Current configuration read permission is required for current and historical review. Missing parameter keys preserve the captured original; null removes an active protocol map key. Disabled changes preserve every parameter. Inactive settings are preserved and validated. Strict native/basic scope, full private graph digests and sealed originals guard review. Rebase cannot replace originals. Validation always retains SPANNING_TREE_EXECUTION_PENDING; no Apply or Safe Apply execution adapter accepts this intent. The legacy spanning_tree.configure intent remains unsupported.';
 s.SpanningTreeNativeConfig=closed({stp_enable:bool,rstp_enable:bool,parameters:closed(Object.fromEntries(['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'].map(k=>[k,nullable({type:'string',maxLength:128})])))});
@@ -267,6 +274,7 @@ s.NativePolicing = open({ingress_policing_rate:integer(0,1000000), ingress_polic
 s.PolicingChange = open({before:ref('NativePolicing'), after:ref('NativePolicing'), port:object, bridge:object, name:string(15), ifindex:integer(1,2147483647)});
 s.ObservedIntent.properties.policing_change = ref('PolicingChange');
 s.ObservedIntent.properties.operation['x-known-values'].push('interface.policing.set');
+s.ObservedIntent.properties.operation['x-known-values'].push('qos.configure');
 s.InterfacePolicingIntent.description = 'Single controlled Interface ingress policing intent. Bandwidth rate is kbit/s; packet rate is kpps. Disabled requires zero. Both native bursts must remain zero (OVS-selected defaults). Requires ovs.interface.policing.write and a root exclusive-ingress Interface identity grant, fresh standalone non-local internal system graph, no raw options and software-only supported rules. Captured parents, all four configuration values and private kernel before-image guard dispatch, Applied, confirmation and exact compensation. No client-supplied before-image, default, host path, owner, raw transaction, compensation or result evidence.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');
