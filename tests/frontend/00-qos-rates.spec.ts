@@ -194,13 +194,28 @@ test('Authorized QoS detachment preserves the configuration and restores its liv
     name: 'Review QoS detachment',
     exact: true,
   });
-  await page.setViewportSize({ width: 820, height: 960 });
-  await expect(
-    page.getByText('Use a desktop to stage QoS detachment.', { exact: true }),
-  ).toBeVisible();
-  await expect(review).toHaveCount(0);
+  for (const width of [820, 390]) {
+    await page.setViewportSize({ width, height: 960 });
+    await expect(
+      page.getByText('Use a desktop to stage QoS detachment.', { exact: true }),
+    ).toBeVisible();
+    await expect(review).toHaveCount(0);
+  }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await review.click();
+  await expect(review).toBeEnabled();
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await expect(
+    page.getByRole('columnheader', { name: 'Management ID' }),
+  ).toBeVisible();
+  await expect(review).toBeEnabled();
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-detachment-expert.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Expert', exact: true }).click();
+  await expect(review).toBeEnabled();
+  await review.focus();
+  await page.keyboard.press('Enter');
   await expect(
     page.getByRole('region', { name: 'QoS detachment' }),
   ).toContainText('removes egress shaping');
