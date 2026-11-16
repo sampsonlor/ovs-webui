@@ -3,6 +3,7 @@
 package linux
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -76,19 +77,28 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 	readQdiscs := func() ([][]byte, error) {
 		return s.request(ctx, unix.RTM_GETQDISC, unix.RTM_NEWQDISC, req.Device.IfIndex, 0, true)
 	}
-	readRoot := func() (egressRoot, error) {
+	readRoot := func() (egressRoot, [][]byte, error) {
 		rows, err := readQdiscs()
 		if err != nil {
-			return egressRoot{}, err
+			return egressRoot{}, nil, err
 		}
-		return findEgressRoot(rows, req.Device.IfIndex)
+		root, err := findEgressRoot(rows, req.Device.IfIndex)
+		return root, rows, err
 	}
-	root, err := readRoot()
+	root, initialQdiscs, err := readRoot()
 	if err != nil {
 		return sample, err
 	}
+	var queueLength []byte
+	if req.ObserveDefault {
+		queueLength = qosVethQueueLength(initialLink)
+	}
 	sample.RootKind = root.kind
 	switch {
+	case req.ObserveDefault && queueLength != nil && qosNoqueueRoot(initialQdiscs, req.Device.IfIndex, root):
+		sample.Scheduler = "unshaped"
+		sample.ConfigurationDigest = inventory.Digest(root.kind)
+		sample.StructureDigest = sample.ConfigurationDigest
 	case root.kind == "":
 		sample.Scheduler, sample.Reason = "not-observed", "LINUX_QOS_ROOT_NOT_OBSERVED"
 	case root.kind != req.Kind || root.handle != qosRootHandle:
@@ -118,7 +128,7 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 					after := qosClassProfile(next, req)
 					if before != nil && reflect.DeepEqual(before, after) {
 						if qdiscs, err := readQdiscs(); err == nil {
-							sample.ConfigurationDigest, sample.StructureDigest = qosKernelProfile(ctx, &s, qdiscs, req, root, after)
+							sample.ConfigurationDigest, sample.StructureDigest = qosKernelProfile(ctx, &s, qdiscs, req, root, after, queueLength)
 						}
 					}
 				}
@@ -135,7 +145,8 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 			}
 		}
 	}
-	if again, err := readRoot(); err != nil || again != root {
+	if again, rows, err := readRoot(); err != nil || again != root ||
+		sample.Scheduler == "unshaped" && !qosNoqueueRoot(rows, req.Device.IfIndex, again) {
 		if err != nil {
 			return sample, err
 		}
@@ -147,9 +158,14 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 	}
 	if sample.ConfigurationDigest != "" {
 		link := qosLinkProfile(initialLink, req.ExpectedMTU)
-		if link == "" || link != qosLinkProfile(finalLink, req.ExpectedMTU) {
+		if link == "" || link != qosLinkProfile(finalLink, req.ExpectedMTU) ||
+			req.ObserveDefault && !bytes.Equal(queueLength, qosVethQueueLength(finalLink)) {
 			sample.ConfigurationDigest, sample.StructureDigest = "", ""
 		} else {
+			if req.ObserveDefault && queueLength != nil {
+				link = inventory.Digest([]any{link, queueLength})
+				sample.LinkDigest = link
+			}
 			sample.ConfigurationDigest = inventory.Digest([]string{sample.ConfigurationDigest, link})
 			sample.StructureDigest = inventory.Digest([]string{sample.StructureDigest, link})
 		}

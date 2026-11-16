@@ -28,7 +28,7 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	proof := p.Envelope
 	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
 	for i := range proof.Candidate.Intents {
-		if proof.Candidate.Intents[i].Operation == candidate.QoSConfigure {
+		if candidate.IsQoSOperation(proof.Candidate.Intents[i].Operation) {
 			candidate.AfterImage(&proof.Candidate.Intents[i])
 		}
 		if proof.Candidate.Intents[i].Operation == candidate.PortIsolationSet || proof.Candidate.Intents[i].Operation == candidate.BridgeMulticastSet {
@@ -55,7 +55,7 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
-		if intent.Operation == candidate.QoSConfigure {
+		if candidate.IsQoSOperation(intent.Operation) {
 			continue
 		}
 		if intent.Operation == candidate.BridgeMulticastSet {

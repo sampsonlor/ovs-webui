@@ -33,6 +33,7 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
+	QoSBinding   *Binding             `json:"qos,omitempty"`
 	QoSType      string               `json:"type,omitempty"`
 	QoSMaximum   uint64               `json:"max_rate_bps,omitempty"`
 	QoSQueues    []QoSQueueRate       `json:"queues,omitempty"`
@@ -160,6 +161,7 @@ type Port struct {
 }
 type Snapshot struct {
 	QoSPorts                             map[string]QoSPort
+	QoSDetachPorts                       map[string]QoSPort
 	Multicasts                           map[string]MulticastBridge
 	Isolations                           map[string]IsolationPort
 	SpanningTrees                        map[string]SpanningTreeBridge

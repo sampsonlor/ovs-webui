@@ -28868,7 +28868,8 @@
               "interface.mtu.set",
               "interface.mtu.clear",
               "interface.policing.set",
-              "qos.configure"
+              "qos.configure",
+              "qos.detach"
             ]
           },
           "object": {
@@ -30482,6 +30483,9 @@
             "$ref": "#/components/schemas/LinuxQoSObservation"
           },
           "qos_rate_edit": {
+            "$ref": "#/components/schemas/QoSRateEdit"
+          },
+          "qos_detach": {
             "$ref": "#/components/schemas/QoSRateEdit"
           },
           "related_object_refs": {
@@ -33556,6 +33560,12 @@
           },
           "interface": {
             "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "before_unbound": {
+            "type": "boolean"
+          },
+          "after_unbound": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -34774,6 +34784,32 @@
         "additionalProperties": false,
         "description": "Native Mirror lifecycle under independent ovs.mirror.write, immutable root object/name grants, sealed source/destination/VLAN/output selectors and whole five-table native CAS. Shared Candidate, durable Safe Apply and exact guarded compensation; deleted sessions recover with fresh identities. Advanced filters, external control and unqualified graph combinations stay read-only. Legacy mirror.configure is unsupported."
       },
+      "QoSDetachIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "qos.detach"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "qos": {
+            "$ref": "#/components/schemas/QoSNativeBinding"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "qos"
+        ],
+        "additionalProperties": false,
+        "description": "Detach a dedicated linear HFSC QoS from a reviewed veth Port through durable Safe Apply. Preserves the existing QoS and Queue rows. Requires exact Port and QoS identities, an independent detachment grant, shared execution authorization, and fresh Linux proof of scheduler removal or restoration."
+      },
       "SpanningTreePrepareRequest": {
         "type": "object",
         "properties": {
@@ -35624,6 +35660,9 @@
           },
           {
             "$ref": "#/components/schemas/NativeMirrorDeleteIntent"
+          },
+          {
+            "$ref": "#/components/schemas/QoSDetachIntent"
           }
         ]
       },

@@ -55,6 +55,7 @@ type Service struct {
 	localMTU                       map[string]bool
 	localPolicing                  map[string]bool
 	localQoS                       map[string]string
+	localQoSDetach                 map[string]string
 	localBridgeNames               map[string]bool
 	localBridgeDeleteNames         map[string]bool
 	localInternalPortTargets       map[string]bool
@@ -145,7 +146,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
 	localSpanningTree := s.localSpanningTree
-	localQoS := s.localQoS
+	localQoS, localQoSDetach := s.localQoS, s.localQoSDetach
 	localIsolation := s.localIsolation
 	localMulticast := s.localMulticast
 	localTunnelObjects, localTunnelCreates, tunnelRevision := s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision
@@ -318,7 +319,8 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			item, err := qosResource(v, b, fresh, qosPorts, op == "readQos")
 			if err == nil && op == "readQos" {
 				item["linux_qos"] = s.readQoSRuntime(ctx, v, b, fresh, qosPorts)
-				item["qos_rate_edit"] = qosEditStatus(v, b, fresh, localQoS, qosPorts, c)
+				item["qos_rate_edit"] = s.qosEditStatus(ctx, v, b, fresh, localQoS, qosPorts, c, false)
+				item["qos_detach"] = s.qosEditStatus(ctx, v, b, fresh, localQoSDetach, qosPorts, c, true)
 			}
 			return item, err
 		}

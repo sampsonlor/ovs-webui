@@ -47,7 +47,7 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 		}
 		table := "Port"
 		markerKey := execution.MarkerKey
-		if intent.Operation == candidate.QoSConfigure {
+		if candidate.IsQoSOperation(intent.Operation) {
 			markerKey = candidate.QoSMarker
 		}
 		if intent.Operation == candidate.BridgeMulticastSet {

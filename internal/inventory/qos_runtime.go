@@ -15,10 +15,11 @@ const (
 )
 
 type QoSRuntimeRequest struct {
-	Device      DeviceRequest
-	Kind        string
-	QueueIDs    []uint32
-	ExpectedMTU int
+	Device         DeviceRequest
+	Kind           string
+	QueueIDs       []uint32
+	ExpectedMTU    int
+	ObserveDefault bool
 }
 
 type QoSQueueCounters struct {
@@ -48,6 +49,7 @@ type QoSRuntimeSample struct {
 	Rates               *QoSInstalledRates
 	ConfigurationDigest string
 	StructureDigest     string
+	LinkDigest          string
 }
 
 type QoSObserver interface {
@@ -76,10 +78,14 @@ func bindQoSRuntime(v *view, b Binding, ports qosBindings) (qosRuntimeBinding, s
 	case 0:
 		return target, "QOS_PORT_UNBOUND"
 	case 1:
-		target.port, target.portUUID = bound[0].Ref, bound[0].uuid
+		return bindQoSRuntimePort(v, b, bound[0])
 	default:
 		return target, "QOS_SHARED_PORT_BINDING"
 	}
+}
+
+func bindQoSRuntimePort(v *view, b Binding, selected qosPort) (qosRuntimeBinding, string) {
+	target := qosRuntimeBinding{port: selected.Ref, portUUID: selected.uuid}
 	qos := v.observation.Rows["QoS"][b.UUID]
 	switch textValue(qos.Values["type"]) {
 	case "linux-htb":
@@ -102,7 +108,7 @@ func bindQoSRuntime(v *view, b Binding, ports qosBindings) (qosRuntimeBinding, s
 	ifaceBinding := v.decision.Bindings[Key("Interface", ifaceID)]
 	dev, eligible := deviceRequest(iface)
 	ofport, err := strconv.ParseUint(textValue(iface.Values["ofport"]), 10, 16)
-	if !eligible || ifaceBinding.State != "active" || dev.Name != bound[0].Name || err != nil || ofport == 0 || ofport >= 65534 {
+	if !eligible || ifaceBinding.State != "active" || dev.Name != selected.Name || err != nil || ofport == 0 || ofport >= 65534 {
 		return target, "QOS_DEVICE_BINDING_UNPROVEN"
 	}
 	queues, _, complete := readQoSQueues(v, qos, true, true)

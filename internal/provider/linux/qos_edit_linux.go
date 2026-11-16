@@ -11,6 +11,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const qosIngressParent = 0xfffffff1 // TC_H_INGRESS
+
 func qosLinkProfile(attrs map[uint16][]byte, expectedMTU int) string {
 	mtu := attrs[unix.IFLA_MTU]
 	mac := attrs[unix.IFLA_ADDRESS]
@@ -18,6 +20,52 @@ func qosLinkProfile(attrs map[uint16][]byte, expectedMTU int) string {
 		return ""
 	}
 	return inventory.Digest([][]byte{attrs[unix.IFLA_IFNAME], mtu, mac, attrs[unix.IFLA_LINK], attrs[unix.IFLA_LINK_NETNSID], attrs[unix.IFLA_PERM_ADDRESS]})
+}
+
+func qosVethQueueLength(attrs map[uint16][]byte) []byte {
+	info, err := tcAttributes(attrs[unix.IFLA_LINKINFO])
+	if err != nil {
+		return nil
+	}
+	kind, err := tcString(info[unix.IFLA_INFO_KIND])
+	length := attrs[unix.IFLA_TXQLEN]
+	if err != nil || kind != "veth" || len(length) != 4 {
+		return nil
+	}
+	return length
+}
+
+// A veth returns to its built-in, classless noqueue root. An ingress-only
+// qdisc can coexist with it. Any other qdisc (including clsact) invalidates
+// the proof that no egress shaping or filter is installed.
+func qosNoqueueRoot(rows [][]byte, index int, root egressRoot) bool {
+	if root.kind != "noqueue" || root.handle != 0 || root.options != "" || root.offloaded {
+		return false
+	}
+	for _, row := range rows {
+		if len(row) < 20 {
+			return false
+		}
+		if int(int32(binary.NativeEndian.Uint32(row[4:8]))) != index {
+			continue
+		}
+		attrs, err := tcAttributes(row[20:])
+		if err != nil {
+			return false
+		}
+		kind, err := tcString(attrs[unix.TCA_KIND])
+		if err != nil {
+			return false
+		}
+		if kind == "ingress" && binary.NativeEndian.Uint32(row[12:16]) == qosIngressParent {
+			continue
+		}
+		if kind != "noqueue" || binary.NativeEndian.Uint32(row[12:16]) != qosRootParent ||
+			attrs[unix.TCA_EGRESS_BLOCK] != nil || attrs[unix.TCA_STAB] != nil || attrs[unix.TCA_RATE] != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // Called only for two complete, verified class trees. Store the kernel's exact
@@ -31,6 +79,9 @@ func qosClassProfile(rows [][]byte, req inventory.QoSRuntimeRequest) map[uint32]
 		}
 		attrs, err := tcAttributes(row[20:])
 		if err != nil {
+			return nil
+		}
+		if req.ObserveDefault && (attrs[unix.TCA_STAB] != nil || attrs[unix.TCA_RATE] != nil) {
 			return nil
 		}
 		options, err := tcAttributes(attrs[unix.TCA_OPTIONS])
@@ -61,7 +112,10 @@ func qosClassProfile(rows [][]byte, req inventory.QoSRuntimeRequest) map[uint32]
 	return profile
 }
 
-func qosKernelProfile(ctx context.Context, s *tcSocket, rows [][]byte, req inventory.QoSRuntimeRequest, root egressRoot, classes map[uint32]map[uint16]string) (string, string) {
+func qosKernelProfile(ctx context.Context, s *tcSocket, rows [][]byte, req inventory.QoSRuntimeRequest, root egressRoot, classes map[uint32]map[uint16]string, queueLength []byte) (string, string) {
+	if req.ObserveDefault && (root.kind != "hfsc" || queueLength == nil) {
+		return "", ""
+	}
 	qdiscs := map[uint32][]string{}
 	rootSeen := false
 	for _, row := range rows {
@@ -78,6 +132,9 @@ func qosKernelProfile(ctx context.Context, s *tcSocket, rows [][]byte, req inven
 		}
 		kind, err := tcString(attrs[unix.TCA_KIND])
 		if err != nil {
+			return "", ""
+		}
+		if req.ObserveDefault && kind != "ingress" && (attrs[unix.TCA_STAB] != nil || attrs[unix.TCA_RATE] != nil) {
 			return "", ""
 		}
 		if parent == qosRootParent {
@@ -111,6 +168,12 @@ func qosKernelProfile(ctx context.Context, s *tcSocket, rows [][]byte, req inven
 			return "", ""
 		}
 		if classes[parent] == nil || parent == qosParentClass || qdiscs[parent] != nil || kind != "pfifo" && kind != "pfifo_fast" {
+			return "", ""
+		}
+		// HFSC creates a handle-zero pfifo for its default leaves. An explicit
+		// graft or foreign limit could not be recreated from the OVSDB row.
+		if req.ObserveDefault && (kind != "pfifo" || binary.NativeEndian.Uint32(row[8:12]) != 0 ||
+			string(attrs[unix.TCA_OPTIONS]) != string(queueLength)) {
 			return "", ""
 		}
 		qdiscs[parent] = []string{kind, hex.EncodeToString(row[8:12]), hex.EncodeToString(attrs[unix.TCA_OPTIONS])}

@@ -565,6 +565,7 @@ type Resource struct {
 	NativeQos         QoSObservation             `json:"native_qos,omitempty"`
 	LinuxQos          LinuxQoSObservation        `json:"linux_qos,omitempty"`
 	QosRateEdit       QoSRateEdit                `json:"qos_rate_edit,omitempty"`
+	QosDetach         QoSRateEdit                `json:"qos_detach,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1338,12 +1339,14 @@ type QoSNativeBinding struct {
 	Table              string `json:"table"`
 }
 type QoSRateChange struct {
-	Before      QoSNativeRates             `json:"before"`
-	After       QoSNativeRates             `json:"after"`
-	Qos         QoSNativeBinding           `json:"qos"`
-	Bridge      ObjectBinding              `json:"bridge"`
-	Interface   ObjectBinding              `json:"interface"`
-	ExtraFields map[string]json.RawMessage `json:"-"`
+	Before        QoSNativeRates             `json:"before"`
+	After         QoSNativeRates             `json:"after"`
+	Qos           QoSNativeBinding           `json:"qos"`
+	Bridge        ObjectBinding              `json:"bridge"`
+	Interface     ObjectBinding              `json:"interface"`
+	BeforeUnbound bool                       `json:"before_unbound,omitempty"`
+	AfterUnbound  bool                       `json:"after_unbound,omitempty"`
+	ExtraFields   map[string]json.RawMessage `json:"-"`
 }
 
 func (v *QoSRateChange) UnmarshalJSON(data []byte) error {
@@ -1579,6 +1582,12 @@ type NativeMirrorDeleteIntent struct {
 	Operation string                     `json:"operation"`
 	Object    MirrorObjectBinding        `json:"object"`
 	Topology  map[string]json.RawMessage `json:"topology"`
+}
+type QoSDetachIntent struct {
+	IntentId  Id               `json:"intent_id"`
+	Operation string           `json:"operation"`
+	Object    ObjectBinding    `json:"object"`
+	Qos       QoSNativeBinding `json:"qos"`
 }
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`

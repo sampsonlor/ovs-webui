@@ -54,6 +54,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-qos-reader', 'Reader'), ('browser-qos-observer', 'InterfaceObserver'),
                        ('browser-qos-runtime', 'Reader'),
                        ('browser-qos-edit', 'NativeQoS'),
+                       ('browser-qos-detach', 'NativeQoS'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -123,6 +124,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     qos_queue = vsctl('get', 'QoS', qos_uuid, 'queues:7').strip()
     qos_for_edit = eventually(lambda: next((item for item in get('/qos')['items'] if item['ovs_uuid'] == qos_uuid), None))
     qos_port_for_edit = eventually(lambda: next((item for item in get('/ports?filter=' + qos_port)['items'] if item['name'] == qos_port), None))
+    qos_grant = qos_port_for_edit['management_id']+':'+qos_for_edit['management_id']
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -149,7 +151,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     unit_path.write_text(mirror_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
-                                              +' --local-qos-bindings='+qos_port_for_edit['management_id']+':'+qos_for_edit['management_id']))
+                                              +' --local-qos-bindings='+qos_grant+' --local-qos-detach-bindings='+qos_grant))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])

@@ -29,6 +29,7 @@ import (
 type qosRateFixture struct {
 	*fixture
 	port                   candidate.Binding
+	qosObject              candidate.Binding
 	target, queue, qos, tx string
 	original, edited       candidate.QoSRates
 }
@@ -95,8 +96,9 @@ func newQoSRateFixture(t *testing.T, discipline string) qosRateFixture {
 	f.inventory.SetQoSObserver(linuxprovider.New())
 	result := qosRateFixture{
 		fixture: f, port: port, target: rx, queue: queue, qos: qos, tx: sendNS,
-		original: candidate.QoSRates{Type: discipline, Maximum: 8000000, Queues: []candidate.QoSQueueRate{{ID: 7, Minimum: 1000000, Maximum: 3000000}}},
-		edited:   candidate.QoSRates{Type: discipline, Maximum: 12000000, Queues: []candidate.QoSQueueRate{{ID: 7, Minimum: 2000000, Maximum: 4000000}}},
+		qosObject: candidate.Binding{Table: "QoS", OVSUUID: qos, ManagementID: management, Generation: port.Generation},
+		original:  candidate.QoSRates{Type: discipline, Maximum: 8000000, Queues: []candidate.QoSQueueRate{{ID: 7, Minimum: 1000000, Maximum: 3000000}}},
+		edited:    candidate.QoSRates{Type: discipline, Maximum: 12000000, Queues: []candidate.QoSQueueRate{{ID: 7, Minimum: 2000000, Maximum: 4000000}}},
 	}
 	result.waitRates(result.original)
 	contract, err := apicontract.New()

@@ -96,6 +96,7 @@ func run() int {
 	localMTUInterfaces := flag.String("local-mtu-interfaces", "", "Reviewed Interface management IDs with explicit internal MTU authority; independent of Port grants")
 	localPolicingInterfaces := flag.String("local-policing-interfaces", "", "Reviewed internal Interface management IDs with exclusive Linux ingress management; independent of MTU/Port grants")
 	localQoS := flag.String("local-qos-bindings", "", "Reviewed comma-separated Port management ID:QoS management ID pairs for exclusive egress rate editing")
+	localQoSDetach := flag.String("local-qos-detach-bindings", "", "Reviewed Port management ID:QoS management ID pairs for exclusive egress detachment")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -445,6 +446,12 @@ func run() int {
 		if err = inventoryService.SetLocalQoS(qosGrants); err != nil {
 			logger.Error("invalid_qos_authority", "code", auth.ErrorCode(err))
 			return 2
+		}
+		if *localQoSDetach != "" {
+			if err = inventoryService.SetLocalQoSDetach(strings.Split(*localQoSDetach, ",")); err != nil {
+				logger.Error("invalid_qos_detachment_authority", "code", auth.ErrorCode(err))
+				return 2
+			}
 		}
 		var vlanIDs []string
 		if *localVLANPorts != "" {
