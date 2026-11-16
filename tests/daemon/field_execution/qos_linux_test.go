@@ -17,9 +17,11 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
+	"github.com/sampsonlor/ovs-webui/internal/execution"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	linuxprovider "github.com/sampsonlor/ovs-webui/internal/provider/linux"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/safety"
 )
 
 type qosRateFixture struct {
@@ -215,17 +217,29 @@ func TestNativeQoSRateExecution(t *testing.T) {
 		must(t, syscall.Kill(pid, syscall.SIGSTOP))
 		t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGCONT) })
 		id := f.safeApply(in)
-		waitFor(t, func() bool {
-			return strings.Trim(f.vs("get", "QoS", f.qos, "other_config:max-rate"), `"`) == "12000000"
+		t.Cleanup(func() {
+			if t.Failed() {
+				r, _ := f.engine.Read(f.ctx, id)
+				s := f.safeState(id)
+				t.Logf("paused QoS recovery: state=%s reason=%s trigger=%s apply=%+v rollback=%+v writes=%d", s.State, s.Reason, s.Trigger, r.Outcome, s.Outcome, f.proxy.sent.Load())
+			}
 		})
-		if f.safeState(id).State == "awaiting-confirmation" {
+		r := f.observe(id, func(r execution.Record) bool {
+			return r.Outcome.Commit == "committed" && r.Outcome.Reason == "awaiting-ovs-vswitchd"
+		})
+		if s := f.safeState(id); s.Confirmation != nil || s.State == "awaiting-confirmation" {
 			t.Fatal("confirmed runtime based on database configuration alone")
 		}
-		offset.Store(int64(150 * time.Second))
+		_, err := f.executor.PrepareRollback(f.ctx, r.Plan, candidate.Digest("synthetic-qos-compensation-preflight"))
+		must(t, err)
+		offset.Store(int64(safety.PreparationBudget + time.Second))
 		waitFor(t, func() bool {
 			must(t, f.engine.SafetyTick(f.ctx))
-			return strings.Trim(f.vs("get", "QoS", f.qos, "other_config:max-rate"), `"`) == "8000000"
+			return f.proxy.sent.Load() == 2
 		})
+		if strings.Trim(f.vs("get", "QoS", f.qos, "other_config:max-rate"), `"`) != "8000000" {
+			t.Fatal("original rate not restored while daemon paused")
+		}
 		must(t, syscall.Kill(pid, syscall.SIGCONT))
 		f.waitSafety(id, "rolled-back")
 		f.waitRates(f.original)
