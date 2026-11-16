@@ -29,6 +29,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     assert code == 202
     code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeMirror','capabilities':network_role['capabilities']})
     assert code == 202
+    code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeQoS','capabilities':network_role['capabilities']})
+    assert code == 202
     roles.update({role['name']: role['id'] for role in get('/roles')['items']})
     accounts = {}
     # The deadline scenario has its own principal so rapid test logins/step-ups
@@ -51,6 +53,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-tunnel-observer', 'InterfaceObserver'),
                        ('browser-qos-reader', 'Reader'), ('browser-qos-observer', 'InterfaceObserver'),
                        ('browser-qos-runtime', 'Reader'),
+                       ('browser-qos-edit', 'NativeQoS'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -107,6 +110,19 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
         mirror_ids.append(port['id'])
         mirror_ids.extend(ref['id'] for ref in port['interface_refs'])
     assert len(mirror_ids) == 10
+    qos_bridge, qos_port, qos_peer = 'br-qos-edit', 'qos-ui-port', 'qos-ui-peer'
+    run('ip', 'link', 'add', qos_port, 'type', 'veth', 'peer', 'name', qos_peer)
+    run('ip', 'link', 'set', qos_port, 'up')
+    run('ip', 'link', 'set', qos_peer, 'up')
+    vsctl('add-br', qos_bridge, '--', 'set', 'Bridge', qos_bridge, 'datapath_type=system', '--', 'add-port', qos_bridge, qos_port)
+    vsctl('--', '--id=@queue', 'create', 'Queue', 'other_config:min-rate=1000000', 'other_config:max-rate=3000000',
+          'other_config:fixture-opaque=keep', '--', '--id=@qos', 'create', 'QoS', 'type=linux-hfsc',
+          'other_config:max-rate=8000000', 'other_config:fixture-opaque=keep', 'queues:7=@queue',
+          '--', 'set', 'Port', qos_port, 'qos=@qos')
+    qos_uuid = vsctl('get', 'Port', qos_port, 'qos').strip()
+    qos_queue = vsctl('get', 'QoS', qos_uuid, 'queues:7').strip()
+    qos_for_edit = eventually(lambda: next((item for item in get('/qos')['items'] if item['ovs_uuid'] == qos_uuid), None))
+    qos_port_for_edit = eventually(lambda: next((item for item in get('/ports?filter=' + qos_port)['items'] if item['name'] == qos_port), None))
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -120,6 +136,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-multicast-role',roles['NativeMulticast'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-static-tunnel-role',roles['NativeStaticTunnel'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-mirror-role',roles['NativeMirror'])
+    run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-qos-role',roles['NativeQoS'])
     mirror_pin=ovs/'mirror-build.json'
     assert mirror_pin.is_file(), 'formal Mirror writes require the separately fixed OVS build'
     mirror_flags=' --mirror-runtime-socket='+str(ovs/'switch.ctl')+' --mirror-runtime-executable='+str(ovs/'bin/ovs-vswitchd')+' --mirror-runtime-manifest='+str(mirror_pin)+' --mirror-runtime-manifest-sha256='+hashlib.sha256(mirror_pin.read_bytes()).hexdigest()
@@ -131,14 +148,17 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                                         'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE\n')
     unit_path.write_text(mirror_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
-                                              +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'))
+                                              +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
+                                              +' --local-qos-bindings='+qos_port_for_edit['management_id']+':'+qos_for_edit['management_id']))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
     eventually(lambda: call('/inventory')[0] == 200)
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
                 'ovsDirectory': str(ovs), 'database': str(conf), 'isolation': isolation, 'multicast': multicast,
-                'tunnel': tunnel, 'tunnelBridge': tunnel_bridge, 'mirror': mirror, 'mirrorBridge': mirror_bridge}
+                'tunnel': tunnel, 'tunnelBridge': tunnel_bridge, 'mirror': mirror, 'mirrorBridge': mirror_bridge,
+                'qosEdit': {'id': qos_for_edit['management_id'], 'port': qos_port, 'bridge': qos_bridge,
+                            'uuid': qos_uuid, 'queue': qos_queue}}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
@@ -162,3 +182,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tunnel-ui')
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tunnel-flow')
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-mirror-ui')
+        vsctl('--no-wait', '--if-exists', 'del-br', qos_bridge)
+        vsctl('--no-wait', '--if-exists', 'destroy', 'QoS', qos_uuid)
+        vsctl('--no-wait', '--if-exists', 'destroy', 'Queue', qos_queue)
+        run('ip', 'link', 'del', qos_port)

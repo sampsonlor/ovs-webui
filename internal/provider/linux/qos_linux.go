@@ -69,11 +69,15 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 		return sample, err
 	}
 	defer unix.Close(s.fd)
-	if err := s.binding(ctx, req.Device); err != nil {
+	initialLink, err := s.linkAttributes(ctx, req.Device)
+	if err != nil {
 		return sample, err
 	}
+	readQdiscs := func() ([][]byte, error) {
+		return s.request(ctx, unix.RTM_GETQDISC, unix.RTM_NEWQDISC, req.Device.IfIndex, 0, true)
+	}
 	readRoot := func() (egressRoot, error) {
-		rows, err := s.request(ctx, unix.RTM_GETQDISC, unix.RTM_NEWQDISC, req.Device.IfIndex, 0, true)
+		rows, err := readQdiscs()
 		if err != nil {
 			return egressRoot{}, err
 		}
@@ -109,6 +113,15 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 			// publish rates from an unstable multipart class dump.
 			if next, err := readClasses(); err == nil && reflect.DeepEqual(rates, readQoSClassRates(next, req, root)) {
 				sample.Rates = rates
+				if req.ExpectedMTU > 0 {
+					before := qosClassProfile(rows, req)
+					after := qosClassProfile(next, req)
+					if before != nil && reflect.DeepEqual(before, after) {
+						if qdiscs, err := readQdiscs(); err == nil {
+							sample.ConfigurationDigest, sample.StructureDigest = qosKernelProfile(ctx, &s, qdiscs, req, root, after)
+						}
+					}
+				}
 			}
 		}
 		if len(sample.Queues) != len(req.QueueIDs) {
@@ -128,8 +141,18 @@ func collectQoS(ctx context.Context, req inventory.QoSRuntimeRequest) (inventory
 		}
 		return sample, errPolicingWire
 	}
-	if err := s.binding(ctx, req.Device); err != nil {
+	finalLink, err := s.linkAttributes(ctx, req.Device)
+	if err != nil {
 		return sample, err
+	}
+	if sample.ConfigurationDigest != "" {
+		link := qosLinkProfile(initialLink, req.ExpectedMTU)
+		if link == "" || link != qosLinkProfile(finalLink, req.ExpectedMTU) {
+			sample.ConfigurationDigest, sample.StructureDigest = "", ""
+		} else {
+			sample.ConfigurationDigest = inventory.Digest([]string{sample.ConfigurationDigest, link})
+			sample.StructureDigest = inventory.Digest([]string{sample.StructureDigest, link})
+		}
 	}
 	sample.ObservedAt = time.Now().UTC()
 	return sample, nil

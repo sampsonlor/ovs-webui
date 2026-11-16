@@ -119,6 +119,7 @@ type ObservedIntent struct {
 	TopologyChange         TopologyChange             `json:"topology_change,omitempty"`
 	IsolationChange        IsolationChange            `json:"isolation_change,omitempty"`
 	MulticastChange        MulticastChange            `json:"multicast_change,omitempty"`
+	QosChange              QoSRateChange              `json:"qos_change,omitempty"`
 	SpanningTreeChange     SpanningTreeDraft          `json:"spanning_tree_change,omitempty"`
 	InternalPortCreation   InternalPortCreation       `json:"internal_port_creation,omitempty"`
 	InternalPortDeletion   InternalPortDeletion       `json:"internal_port_deletion,omitempty"`
@@ -563,6 +564,7 @@ type Resource struct {
 	NativeMirror      MirrorObservation          `json:"native_mirror,omitempty"`
 	NativeQos         QoSObservation             `json:"native_qos,omitempty"`
 	LinuxQos          LinuxQoSObservation        `json:"linux_qos,omitempty"`
+	QosRateEdit       QoSRateEdit                `json:"qos_rate_edit,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1318,6 +1320,41 @@ type LinuxQoSInstalledRates struct {
 	MaximumBps string                       `json:"maximum_bps"`
 	Queues     []LinuxQoSInstalledQueueRate `json:"queues"`
 }
+type QoSRateEdit struct {
+	Available bool            `json:"available"`
+	Reason    string          `json:"reason"`
+	Port      json.RawMessage `json:"port"`
+	Revision  json.RawMessage `json:"revision"`
+}
+type QoSNativeRates struct {
+	Type       string                       `json:"type"`
+	MaxRateBps int64                        `json:"max_rate_bps"`
+	Queues     []map[string]json.RawMessage `json:"queues"`
+}
+type QoSNativeBinding struct {
+	ManagementId       Id     `json:"management_id"`
+	OvsUuid            Id     `json:"ovs_uuid"`
+	InstanceGeneration Id     `json:"instance_generation"`
+	Table              string `json:"table"`
+}
+type QoSRateChange struct {
+	Before      QoSNativeRates             `json:"before"`
+	After       QoSNativeRates             `json:"after"`
+	Qos         QoSNativeBinding           `json:"qos"`
+	Bridge      ObjectBinding              `json:"bridge"`
+	Interface   ObjectBinding              `json:"interface"`
+	ExtraFields map[string]json.RawMessage `json:"-"`
+}
+
+func (v *QoSRateChange) UnmarshalJSON(data []byte) error {
+	type plain QoSRateChange
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v QoSRateChange) MarshalJSON() ([]byte, error) {
+	type plain QoSRateChange
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type BridgeCreateIntent struct {
 	IntentId     Id     `json:"intent_id"`
 	Operation    string `json:"operation"`

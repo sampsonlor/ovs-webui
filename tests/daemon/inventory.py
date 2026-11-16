@@ -55,7 +55,8 @@ def main():
     source = Path(args.bin_dir).resolve()
     schema = repo / f'internal/provider/ovsdb/testdata/vswitch-{args.schema_version}.ovsschema'
     suffix = uuid.uuid4().hex[:10]
-    fixture = Path('/run') / f'ovs-inventory-{suffix}'
+    # This fixture stages executables, so it cannot assume /run allows exec.
+    fixture = Path('/var/lib') / f'ovs-inventory-fixture-{suffix}'
     runtime_name = f'ovs-inventory-runtime-{suffix}'
     runtime = Path('/run') / runtime_name
     data_name = f'ovs-inventory-{suffix}'

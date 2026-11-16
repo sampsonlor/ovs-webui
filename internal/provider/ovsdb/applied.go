@@ -28,6 +28,9 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 	proof := p.Envelope
 	proof.Candidate.Intents = append([]candidate.StoredIntent{}, proof.Candidate.Intents...)
 	for i := range proof.Candidate.Intents {
+		if proof.Candidate.Intents[i].Operation == candidate.QoSConfigure {
+			candidate.AfterImage(&proof.Candidate.Intents[i])
+		}
 		if proof.Candidate.Intents[i].Operation == candidate.PortIsolationSet || proof.Candidate.Intents[i].Operation == candidate.BridgeMulticastSet {
 			candidate.AfterImage(&proof.Candidate.Intents[i])
 		}
@@ -52,6 +55,9 @@ func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d di
 		}
 	}
 	for _, intent := range p.Envelope.Candidate.Intents {
+		if intent.Operation == candidate.QoSConfigure {
+			continue
+		}
 		if intent.Operation == candidate.BridgeMulticastSet {
 			for _, binding := range p.GraphBindings {
 				if binding.Table == "Interface" {
@@ -124,6 +130,10 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 	if json.Unmarshal(p.Native, &original) != nil || identity != original.Evidence.Peer || d.public.Digest != p.Schema || !sameExecutionFile(e.provider.options, pid, original.Evidence) {
 		return errors.New("APPLIED_IDENTITY_CHANGED")
 	}
+	qosBefore, err := e.qosAppliedEvidence(ctx, p, view, original)
+	if err != nil {
+		return err
+	}
 	if err = topologyHostIdentityCheck(p.Envelope.Candidate, original); err != nil {
 		return err
 	}
@@ -193,6 +203,12 @@ func (e *Executor) verifyApplied(ctx context.Context, p execution.Plan, view inv
 		}
 		if err = e.treeAppliedProof(ctx, p, view, out.Target); err != nil {
 			return err
+		}
+		if qosBefore != "" {
+			after, err := e.qosAppliedEvidence(ctx, p, view, original)
+			if err != nil || after != qosBefore {
+				return errors.New("QOS_INSTALLED_RATES_CHANGED")
+			}
 		}
 		value, observed := strconv.FormatInt(current, 10), time.Now().UTC()
 		out.Current, out.Observed = &value, &observed

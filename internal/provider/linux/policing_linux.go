@@ -142,22 +142,27 @@ func openTCSocket() (tcSocket, error) {
 }
 
 func (s *tcSocket) binding(ctx context.Context, req inventory.DeviceRequest) error {
+	_, err := s.linkAttributes(ctx, req)
+	return err
+}
+
+func (s *tcSocket) linkAttributes(ctx context.Context, req inventory.DeviceRequest) (map[uint16][]byte, error) {
 	rows, err := s.request(ctx, unix.RTM_GETLINK, unix.RTM_NEWLINK, req.IfIndex, 0, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(rows) != 1 || len(rows[0]) < 16 || int(int32(binary.NativeEndian.Uint32(rows[0][4:8]))) != req.IfIndex {
-		return unix.ENODEV
+		return nil, unix.ENODEV
 	}
 	attrs, err := tcAttributes(rows[0][16:])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	name, err := tcString(attrs[unix.IFLA_IFNAME])
 	if err != nil || name != req.Name {
-		return unix.ENODEV
+		return nil, unix.ENODEV
 	}
-	return nil
+	return attrs, nil
 }
 
 func (s *tcSocket) request(ctx context.Context, op, expected uint16, index int, parent uint32, dump bool) ([][]byte, error) {

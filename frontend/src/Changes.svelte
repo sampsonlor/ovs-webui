@@ -11,6 +11,7 @@
  import { multicastMessage } from './multicast';
   import { isTunnelOperation, tunnelMessage } from './tunnel';
   import { isMirrorOperation, mirrorMessage } from './mirror';
+  import { qosMessage } from './qos';
   let {
     model,
     expert,
@@ -26,12 +27,14 @@
   const spanningTree = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.prepare')??false);
   const spanningTreeExecution = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.configure')??false);
   const multicast=$derived(c?.intents.some(i=>i.operation==='bridge.multicast.configure')??false);
+  const qos = $derived(c?.intents.some(i => i.operation === 'qos.configure') ?? false);
  const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
   const v = $derived(model.validation.value);
   const mirrorValidation = $derived(v?.diff.some(f=>isMirrorOperation(f.operation))??false);
   const tunnelValidation = $derived(v?.diff.some(f=>isTunnelOperation(f.operation))??false);
   const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare' || f.operation === 'bridge.spanning-tree.configure') ?? false);
   const multicastValidation=$derived(v?.diff.some(f=>f.operation==='bridge.multicast.configure')??false);
+  const qosValidation = $derived(v?.diff.some(f => f.operation === 'qos.configure') ?? false);
  const isolationValidation = $derived(v?.diff.some(f=>f.operation==='port.isolation.set')??false);
   const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);
@@ -108,13 +111,14 @@
         Revision {c.revision} · generation {c.instance_generation ?? 'Unknown'}
       </p>{/if}
     {#each c.checks ?? [] as gate}<div class="notice warning">
-        <strong>{mirror ? mirrorMessage(gate.code) : tunnel ? tunnelMessage(gate.code) : multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if mirror || tunnel || spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <strong>{qos ? qosMessage(gate.code) : mirror ? mirrorMessage(gate.code) : tunnel ? tunnelMessage(gate.code) : multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if qos || mirror || tunnel || spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     {#if c.diff_truncated}<p class="notice warning">
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
+    {#if qos && c.state === 'reconciliation-required'}<p class="notice warning">Discard the QoS intent and review the current Port and Queues before staging again.</p>{/if}
     {#if spanningTree}<section class="notice warning" aria-label="Spanning tree draft boundary"><strong>Spanning tree draft only</strong><p>Review the captured configuration and native parameter checks. Execution and safe timer recovery are not available yet. Apply remains blocked.</p>{#if c.state === 'reconciliation-required'}<p>Configuration, attachment or authority changed. Discard this intent, review the Bridge and prepare a new draft. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if spanningTreeExecution}<section class="notice warning" aria-label="Spanning tree change boundary"><strong>Spanning tree Safe Apply</strong><p>Changing or switching protocols can interrupt traffic and management connectivity. Execution checks the current native runtime, preserves the original for guarded compensation and requires management reachability and confirmation. Installed protocol state does not prove network convergence.</p>{#if c.state === 'reconciliation-required'}<p>Discard this intent and review the current Bridge. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if multicast && (c.state==='conflict'||c.state==='reconciliation-required')}<section class="notice warning" aria-label="Multicast change needs review"><strong>Review and restage this multicast change</strong><p>Discard this intent and review the current Bridge and Ports before preparing a new change. Rebase cannot replace the captured original or connected graph.</p></section>{/if}
@@ -225,8 +229,8 @@
         class="notice"
         class:warning={gate.state !== 'allowed'}
       >
-        <Status value={gate.state} /> <strong>{mirrorValidation ? mirrorMessage(gate.code) : tunnelValidation ? tunnelMessage(gate.code) : multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <Status value={gate.state} /> <strong>{qosValidation ? qosMessage(gate.code) : mirrorValidation ? mirrorMessage(gate.code) : tunnelValidation ? tunnelMessage(gate.code) : multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if qosValidation || mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     <Diff fields={v.diff} {expert} />
     {#if expert}<details>

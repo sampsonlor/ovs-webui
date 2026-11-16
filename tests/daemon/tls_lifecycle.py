@@ -31,7 +31,7 @@ def main():
     repo = Path(__file__).resolve().parents[2]
     source = Path(args.bin_dir).resolve()
     suffix = uuid.uuid4().hex[:12]
-    fixture = Path('/run') / f'ovs-webui-tls-{suffix}'
+    fixture = Path('/var/lib') / f'ovs-webui-tls-fixture-{suffix}'
     runtime_name = f'ovs-webui-tls-runtime-{suffix}'
     runtime = Path('/run') / runtime_name
     data_name = f'ovs-webui-tls-{suffix}'

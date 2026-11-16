@@ -190,6 +190,7 @@ export function applyReady(
           'mirror.session.create':'ovs.mirror.write',
           'mirror.session.configure':'ovs.mirror.write',
           'mirror.session.delete':'ovs.mirror.write',
+          'qos.configure': 'ovs.qos.write',
           'tunnel.static.create':'ovs.tunnel.static.write',
           'tunnel.static.configure':'ovs.tunnel.static.write',
           'tunnel.static.delete':'ovs.tunnel.static.write',

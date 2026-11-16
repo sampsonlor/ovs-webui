@@ -16,6 +16,14 @@ import (
 // SetIsolationExecutionRole is an offline root provisioning operation. There
 // is no HTTP/IPC entrypoint. Existing credentials keep their original ceilings.
 func (r *Repository) SetIsolationExecutionRole(ctx context.Context, id string, enabled bool) error {
+	return r.setNativeExecutionRole(ctx, id, plan.PortIsolationCapability, "port-isolation-execution-role", enabled)
+}
+
+func (r *Repository) SetQoSExecutionRole(ctx context.Context, id string, enabled bool) error {
+	return r.setNativeExecutionRole(ctx, id, plan.QoSCapability, "qos-execution-role", enabled)
+}
+
+func (r *Repository) setNativeExecutionRole(ctx context.Context, id, capability, operation string, enabled bool) error {
 	if !apitypes.ManagementID(id) {
 		return apitypes.Fail(422, "INVALID_ROLE")
 	}
@@ -30,13 +38,13 @@ func (r *Repository) SetIsolationExecutionRole(ctx context.Context, id string, e
 		if json.Unmarshal(raw, &caps) != nil || validateCapabilities(caps) != nil {
 			return repository.ErrUnavailable
 		}
-		if slices.Contains(caps, plan.PortIsolationCapability) == enabled {
+		if slices.Contains(caps, capability) == enabled {
 			return nil
 		}
-		caps = slices.DeleteFunc(caps, func(cap string) bool { return cap == plan.PortIsolationCapability })
+		caps = slices.DeleteFunc(caps, func(cap string) bool { return cap == capability })
 		result := "revoked"
 		if enabled {
-			caps = append(caps, plan.PortIsolationCapability)
+			caps = append(caps, capability)
 			result = "granted"
 		}
 		data, _ := json.Marshal(unique(caps))
@@ -46,7 +54,7 @@ func (r *Repository) SetIsolationExecutionRole(ctx context.Context, id string, e
 		if _, err := tx.ExecContext(ctx, "UPDATE auth_roles SET revision=? WHERE role_id=?", repository.NewID(), id); err != nil {
 			return err
 		}
-		_, err := evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: "port-isolation-execution-role", Result: result, Object: &apitypes.Ref{Kind: "role", ID: id}, Reason: "offline-root-policy", Created: r.now().UTC()})
+		_, err := evidence.Append(ctx, tx, evidence.Record{Collection: "audit", Origin: "Manager", Operation: operation, Result: result, Object: &apitypes.Ref{Kind: "role", ID: id}, Reason: "offline-root-policy", Created: r.now().UTC()})
 		return err
 	})
 }

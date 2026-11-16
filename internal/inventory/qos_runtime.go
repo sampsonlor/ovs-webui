@@ -15,9 +15,10 @@ const (
 )
 
 type QoSRuntimeRequest struct {
-	Device   DeviceRequest
-	Kind     string
-	QueueIDs []uint32
+	Device      DeviceRequest
+	Kind        string
+	QueueIDs    []uint32
+	ExpectedMTU int
 }
 
 type QoSQueueCounters struct {
@@ -39,12 +40,14 @@ type QoSInstalledRates struct {
 }
 
 type QoSRuntimeSample struct {
-	Scheduler  string
-	RootKind   string
-	Reason     string
-	ObservedAt time.Time
-	Queues     []QoSQueueCounters
-	Rates      *QoSInstalledRates
+	Scheduler           string
+	RootKind            string
+	Reason              string
+	ObservedAt          time.Time
+	Queues              []QoSQueueCounters
+	Rates               *QoSInstalledRates
+	ConfigurationDigest string
+	StructureDigest     string
 }
 
 type QoSObserver interface {

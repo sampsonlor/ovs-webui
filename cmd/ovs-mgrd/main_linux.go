@@ -49,6 +49,8 @@ func run() int {
 	grantTreeRole := flag.String("grant-spanning-tree-execution-role", "", "Offline root action: explicitly grant one existing role the independent STP/RSTP write capability, then exit; new login required")
 	grantIsolationRole := flag.String("grant-port-isolation-role", "", "Offline root action: grant one existing role native Port isolation capability, then exit; new login required")
 	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
+	grantQoSRole := flag.String("grant-qos-role", "", "Offline root action: grant one role QoS rate editing, then exit")
+	revokeQoSRole := flag.String("revoke-qos-role", "", "Offline root action: revoke one role QoS rate editing, then exit")
 	grantMulticastRole := flag.String("grant-multicast-role", "", "Offline root action: explicitly grant one existing role native multicast capability, then exit; new login required")
 	revokeMulticastRole := flag.String("revoke-multicast-role", "", "Offline root action: revoke one role native multicast capability, then exit")
 	grantMirrorRole := flag.String("grant-mirror-role", "", "Offline root action: grant one existing role native Mirror capability, then exit; new login required")
@@ -93,6 +95,7 @@ func run() int {
 	localBondPorts := flag.String("local-bond-ports", "", "Reviewed comma-separated Port management IDs with local Bond/LACP authority; independent of VLAN authority")
 	localMTUInterfaces := flag.String("local-mtu-interfaces", "", "Reviewed Interface management IDs with explicit internal MTU authority; independent of Port grants")
 	localPolicingInterfaces := flag.String("local-policing-interfaces", "", "Reviewed internal Interface management IDs with exclusive Linux ingress management; independent of MTU/Port grants")
+	localQoS := flag.String("local-qos-bindings", "", "Reviewed comma-separated Port management ID:QoS management ID pairs for exclusive egress rate editing")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -145,7 +148,7 @@ func run() int {
 	if *revokeIsolationRole != "" {
 		actions++
 	}
-	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
+	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *grantQoSRole != "", *revokeQoSRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
 		if enabled {
 			actions++
 		}
@@ -288,6 +291,21 @@ func run() int {
 		}
 		return 0
 	}
+	if *grantQoSRole != "" || *revokeQoSRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantQoSRole, true
+		if *revokeQoSRole != "" {
+			id, enabled = *revokeQoSRole, false
+		}
+		if err := authentication.SetQoSExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		return 0
+	}
 	if *grantMirrorRole != "" || *revokeMirrorRole != "" {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -420,6 +438,14 @@ func run() int {
 		inventoryService.SetDeviceObserver(linuxObserver)
 		inventoryService.SetPolicingObserver(linuxObserver)
 		inventoryService.SetQoSObserver(linuxObserver)
+		var qosGrants []string
+		if *localQoS != "" {
+			qosGrants = strings.Split(*localQoS, ",")
+		}
+		if err = inventoryService.SetLocalQoS(qosGrants); err != nil {
+			logger.Error("invalid_qos_authority", "code", auth.ErrorCode(err))
+			return 2
+		}
 		var vlanIDs []string
 		if *localVLANPorts != "" {
 			vlanIDs = strings.Split(*localVLANPorts, ",")

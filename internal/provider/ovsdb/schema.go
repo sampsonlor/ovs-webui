@@ -127,7 +127,7 @@ func discover(data []byte) (discovered, error) {
 			}
 			sort.Slice(c.References, func(i, j int) bool { return c.References[i].Position < c.References[j].Position })
 			tt.Columns = append(tt.Columns, c)
-			if c.Monitored || graphConfigurationColumn(t, name, col) {
+			if c.Monitored || graphConfigurationColumn(t, name, col) || d.public.QoSConfiguration && qosPrivateColumn(t, name, col) {
 				names = append(names, name)
 			}
 		}
@@ -145,6 +145,7 @@ func discover(data []byte) (discovered, error) {
 	d.public.TunnelConfiguration = staticTunnelSchemaSupported(d, raw)
 	d.public.MirrorConfiguration = mirrorSchemaSupported(d, raw)
 	d.public.MirrorDefaults = mirrorDefaults(d)
+	d.public.QoSRateWrite = qosWriteSchema(d, raw)
 	return d, nil
 }
 
@@ -291,7 +292,8 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					return errors.New("OVSDB_ROW_INVALID")
 				}
 				for name, value := range old {
-					if !monitoredColumn(d, table, name) && !graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
+					private := privateInventoryColumn(d, table, name)
+					if !monitoredColumn(d, table, name) && !private {
 						return errors.New("OVSDB_UNREQUESTED_COLUMN")
 					}
 					n, err := normalizeInventoryColumn(table, value, d.native.Tables[table].Columns[name])
@@ -299,8 +301,9 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 						return err
 					}
 					previous := prior.Values[name]
-					if graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
+					if private {
 						previous = prior.Configuration[name]
+						n = boundedPrivateQoS(table, n)
 					} else {
 						n = sanitize(table, name, n)
 					}
@@ -328,15 +331,16 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 				}
 			}
 			for name, v := range values {
-				if !monitoredColumn(d, table, name) && !graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
+				private := privateInventoryColumn(d, table, name)
+				if !monitoredColumn(d, table, name) && !private {
 					return errors.New("OVSDB_UNREQUESTED_COLUMN")
 				}
 				n, err := normalizeInventoryColumn(table, v, d.native.Tables[table].Columns[name])
 				if err != nil {
 					return err
 				}
-				if graphConfigurationColumn(table, name, d.native.Tables[table].Columns[name]) {
-					prior.Configuration[name] = n
+				if private {
+					prior.Configuration[name] = boundedPrivateQoS(table, n)
 				}
 				if monitoredColumn(d, table, name) {
 					prior.Values[name] = sanitize(table, name, n)
@@ -358,6 +362,11 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 	// callback exposing dangling intermediate Bridge -> Port -> Interface links.
 	return nil
 }
+func privateInventoryColumn(d discovered, table, name string) bool {
+	column := d.native.Tables[table].Columns[name]
+	return graphConfigurationColumn(table, name, column) || d.public.QoSConfiguration && qosPrivateColumn(table, name, column)
+}
+
 func sanitize(table, name string, n any) any {
 	if (table == "QoS" || table == "Queue") && name == "other_config" {
 		return sanitizeQoSOptions(n)

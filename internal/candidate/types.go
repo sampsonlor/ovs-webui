@@ -33,6 +33,9 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
+	QoSType      string               `json:"type,omitempty"`
+	QoSMaximum   uint64               `json:"max_rate_bps,omitempty"`
+	QoSQueues    []QoSQueueRate       `json:"queues,omitempty"`
 	Multicast    *multicast.Request   `json:"multicast,omitempty"`
 	Protected    *bool                `json:"protected,omitempty"`
 	SpanningTree *SpanningTreeRequest `json:"spanning_tree,omitempty"`
@@ -51,6 +54,7 @@ type Intent struct {
 	MTURequest   int                  `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
+	QoS          *QoSChange          `json:"qos_change,omitempty"`
 	Multicast    *MulticastChange    `json:"multicast_change,omitempty"`
 	Isolation    *IsolationChange    `json:"isolation_change,omitempty"`
 	SpanningTree *SpanningTreeChange `json:"spanning_tree_change,omitempty"`
@@ -155,6 +159,7 @@ type Port struct {
 	STP, RSTP                       bool
 }
 type Snapshot struct {
+	QoSPorts                             map[string]QoSPort
 	Multicasts                           map[string]MulticastBridge
 	Isolations                           map[string]IsolationPort
 	SpanningTrees                        map[string]SpanningTreeBridge
@@ -238,6 +243,9 @@ func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
 		out = append(out, i.Object)
+		if i.QoS != nil {
+			out = append(out, i.QoS.Bridge, i.QoS.Interface)
+		}
 		if i.Topology != nil {
 			out = append(out, TopologyBindings(i)...)
 			continue

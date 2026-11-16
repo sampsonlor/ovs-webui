@@ -467,7 +467,7 @@
         {:else if path === '/switching/mirrors' || path.startsWith('/switching/mirrors/')}
           <Mirrors model={$model} {expert} {desktop}/>
         {:else if path === '/switching/qos' || path.startsWith('/switching/qos/')}
-          <QoS model={$model} {expert} />
+          <QoS model={$model} {expert} {desktop} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}

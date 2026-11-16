@@ -58,7 +58,7 @@ def main():
     repo = Path(__file__).resolve().parents[2]
     source = Path(args.bin_dir).resolve()
     suffix = uuid.uuid4().hex[:12]
-    fixture = Path('/run') / f'ovs-webui-auth-{suffix}'
+    fixture = Path('/var/lib') / f'ovs-webui-auth-fixture-{suffix}'
     runtime_name = f'ovs-webui-auth-runtime-{suffix}'
     runtime = Path('/run') / runtime_name
     data_name = f'ovs-webui-auth-{suffix}'

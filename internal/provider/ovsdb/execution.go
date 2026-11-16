@@ -31,6 +31,9 @@ func (p *Provider) Executor(s *inventory.Service) *Executor {
 }
 
 type nativePlan struct {
+	QoSKernelBefore      string                    `json:"qos_kernel_before,omitempty"`
+	QoSKernelStructure   string                    `json:"qos_kernel_structure,omitempty"`
+	QoSKernelRestore     string                    `json:"qos_kernel_restore,omitempty"`
 	MirrorBuild          *MirrorExecutionOptions   `json:"mirror_build,omitempty"`
 	MirrorAuthority      string                    `json:"mirror_authority,omitempty"`
 	TopologyDevices      map[string]string         `json:"topology_devices,omitempty"`
@@ -114,11 +117,15 @@ func nativeValue(value any, column *native.ColumnSchema) (any, error) {
 		slices.Sort(keys)
 		pairs := []any{}
 		for _, key := range keys {
+			k, err := nativeAtom(key, column.TypeObj.Key.Type)
+			if err != nil {
+				return nil, err
+			}
 			v, err := nativeAtom(m[key], column.TypeObj.Value.Type)
 			if err != nil {
 				return nil, err
 			}
-			pairs = append(pairs, []any{key, v})
+			pairs = append(pairs, []any{k, v})
 		}
 		return []any{"map", pairs}, nil
 	}
@@ -272,6 +279,10 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if err != nil {
 		return execution.Plan{}, err
 	}
+	compiled, err = e.prepareQoSKernel(ctx, compiled, view, nil)
+	if err != nil {
+		return execution.Plan{}, err
+	}
 	compiled, err = e.prepareMirrorRuntime(ctx, compiled, nil, view.Candidate.Topology.MirrorRuntime)
 	if err != nil {
 		return execution.Plan{}, err
@@ -279,6 +290,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.QoSConfigure {
+		return compileQoSExecution(id, marker, envelope, view, d)
+	}
 	if len(envelope.Candidate.Intents) > 0 && envelope.Candidate.Intents[0].Operation == candidate.BridgeMulticastSet {
 		return compileMulticastExecution(id, marker, envelope, view, d)
 	}
@@ -519,6 +533,10 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = "topology-host-identity-changed"
 		return notSent
 	}
+	if err = e.qosDispatchCheck(ctx, p, n); err != nil {
+		notSent.Reason = "qos-dispatch-unproven"
+		return notSent
+	}
 	if err := e.mirrorDispatchCheck(ctx, p, n); err != nil {
 		e.logMirrorDenial(ctx, "mirror-final-admission", err)
 		notSent.Reason = "mirror-runtime-unqualified"
@@ -637,6 +655,9 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 			row, exists = view.Observation.Rows["Interface"][intent.Object.OVSUUID]
 		}
 		markerKey := execution.MarkerKey
+		if intent.Operation == candidate.QoSConfigure {
+			markerKey = candidate.QoSMarker
+		}
 		if intent.Operation == candidate.BridgeMulticastSet {
 			markerKey = candidate.MulticastMarker
 		}
