@@ -48,9 +48,19 @@ func newQoSRateFixture(t *testing.T, discipline string) qosRateFixture {
 	}
 	f.vs("add-br", bridge, "--", "set", "Bridge", bridge, "datapath_type=system", "--", "add-port", bridge, tx, "--", "add-port", bridge, rx)
 	t.Cleanup(func() { f.vs("--if-exists", "del-br", bridge) })
-	ofport := f.vs("get", "Interface", tx, "ofport")
+	socket := filepath.Join(f.root, bridge+".mgmt")
+	var ofport string
+	waitFor(t, func() bool {
+		info, err := os.Stat(socket)
+		if err != nil || info.Mode()&os.ModeSocket == 0 {
+			return false
+		}
+		ofport = f.vs("get", "Interface", tx, "ofport")
+		number, err := strconv.Atoi(ofport)
+		return err == nil && number > 0
+	})
 	// Select Queue 7 using a fixture-only rule on this disposable Bridge.
-	f.run("ovs-ofctl", "add-flow", "unix:"+filepath.Join(f.root, bridge+".mgmt"), "priority=100,in_port="+ofport+",actions=set_queue:7,normal")
+	f.run("ovs-ofctl", "add-flow", "unix:"+socket, "priority=100,in_port="+ofport+",actions=set_queue:7,normal")
 	f.vs("--", "--id=@queue", "create", "Queue", "other_config:min-rate=1000000", "other_config:max-rate=3000000",
 		"other_config:fixture-opaque=keep", "external_ids:fixture=qos-write", "dscp=0",
 		"--", "--id=@qos", "create", "QoS", "type="+discipline, "queues:7=@queue", "other_config:max-rate=8000000",
@@ -58,10 +68,15 @@ func newQoSRateFixture(t *testing.T, discipline string) qosRateFixture {
 		"--", "set", "Port", rx, "qos=@qos", "external_ids:fixture=qos-write")
 	qos := f.vs("get", "Port", rx, "qos")
 	queue := f.vs("get", "QoS", qos, "queues:7")
-	port := f.binding(rx)
+	var port candidate.Binding
+	portUUID := f.vs("get", "Port", rx, "_uuid")
 	var management, role string
 	waitFor(t, func() bool {
 		return f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+			if err := q.QueryRowContext(ctx, "SELECT management_id,ovs_uuid,table_name,generation FROM identities WHERE table_name='Port' AND state='active' AND ovs_uuid=?", portUUID).
+				Scan(&port.ManagementID, &port.OVSUUID, &port.Table, &port.Generation); err != nil {
+				return err
+			}
 			return q.QueryRowContext(ctx, "SELECT management_id FROM identities WHERE table_name='QoS' AND ovs_uuid=? AND state='active'", qos).Scan(&management)
 		}) == nil
 	})
@@ -106,6 +121,10 @@ func (f qosRateFixture) waitRates(want candidate.QoSRates) inventory.QoSRuntimeS
 	defer func() {
 		if f.t.Failed() {
 			f.t.Logf("QoS admission: reason=%s rates=%+v installed=%+v scheduler=%s kernel reason=%s error=%v", target.Reason, target.Rates, sample.Rates, sample.Scheduler, sample.Reason, lastErr)
+			for _, object := range []string{"qdisc", "class"} {
+				out, _ := exec.Command("tc", "-d", "-j", object, "show", "dev", f.target).CombinedOutput()
+				f.t.Logf("fixture %s: %s", object, out)
+			}
 		}
 	}()
 	waitFor(f.t, func() bool {
