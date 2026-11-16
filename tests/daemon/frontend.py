@@ -157,7 +157,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     metadata = {'origin': origin, 'accounts': accounts, 'units': units, 'dbSocket': str(db_socket),
                 'ovsDirectory': str(ovs), 'database': str(conf), 'isolation': isolation, 'multicast': multicast,
                 'tunnel': tunnel, 'tunnelBridge': tunnel_bridge, 'mirror': mirror, 'mirrorBridge': mirror_bridge,
-                'qosEdit': {'id': qos_for_edit['management_id'], 'uuid': qos_uuid, 'queue': qos_queue}}
+                'qosEdit': {'id': qos_for_edit['management_id'], 'port': qos_port, 'bridge': qos_bridge,
+                            'uuid': qos_uuid, 'queue': qos_queue}}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)

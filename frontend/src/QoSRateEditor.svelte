@@ -56,7 +56,7 @@
     <button onclick={edit} disabled={!available || model.busy || !!model.pending}>Edit QoS rates</button>
     {#if !available}<p>Review the current Candidate before staging a QoS change.</p>{/if}
   {:else}
-    <form class="form-panel" onsubmit={submit}>
+    <form class="form-panel" onsubmit={submit} oninput={() => error = ''}>
       <p>Enter rates in bit/s as multiples of 8, up to {limit}. Review the change in Candidate before Safe Apply.</p>
       {#if change?.revision !== revision}<p class="notice warning" role="status">The QoS configuration changed. Reopen the editor to review the current rates.</p>{/if}
       <fieldset disabled={!available || change?.revision !== revision || model.busy || !!model.pending || !model.sessionReady}>

@@ -52,7 +52,7 @@ def main():
     source = Path(args.bin_dir).resolve()
     repo = Path(__file__).resolve().parents[2]
     suffix = uuid.uuid4().hex[:12]
-    fixture = Path('/run') / f'ovs-webui-fixture-{suffix}'
+    fixture = Path('/var/lib') / f'ovs-webui-fixture-{suffix}'
     runtime_name = f'ovs-webui-runtime-{suffix}'
     runtime = Path('/run') / runtime_name
     units = {service: f'ovs-{service}-ci-{suffix}.service' for service in ('mgrd', 'webd')}
@@ -291,7 +291,7 @@ def main():
             path.unlink(missing_ok=True)
         run('systemctl', 'daemon-reload', check=False)
         # These absolute paths were generated above under /run for this fixture.
-        assert fixture.parent == Path('/run') and fixture.name.startswith('ovs-webui-fixture-')
+        assert fixture.parent == Path('/var/lib') and fixture.name.startswith('ovs-webui-fixture-')
         shutil.rmtree(fixture)
         if data_root.exists():
             assert data_root.parent == Path('/var/lib') and data_root.name == data_name
