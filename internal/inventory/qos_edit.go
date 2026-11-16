@@ -208,8 +208,6 @@ func dedicatedQoSQueues(v *view, target string, queues map[uint32]string) bool {
 
 func qosEditStatus(v *view, qos Binding, fresh string, allow map[string]string, ports qosBindings, c authn.Claims) map[string]any {
 	reason := "EXCLUSIVE_QOS_AUTHORITY_REQUIRED"
-	var port *candidate.Binding
-	var revision any
 	switch {
 	case !slices.Contains(c.Capabilities, candidate.QoSCapability) || !slices.Contains(c.Capabilities, "workspace.write"):
 		reason = "CAPABILITY_DENIED"
@@ -225,11 +223,13 @@ func qosEditStatus(v *view, qos Binding, fresh string, allow map[string]string, 
 		p := qosRateTarget(v, ports.ports[qos.UUID][0].uuid, allow, ports)
 		reason = p.Reason
 		if reason == "" {
-			port = &p.Binding
-			revision = Digest([]any{p.Dependency, p.Rates})
+			return map[string]any{
+				"available": true, "reason": "QOS_RATE_EDIT_AVAILABLE", "port": p.Binding,
+				"revision": Digest([]any{p.Dependency, p.Rates}),
+			}
 		}
 	}
-	return map[string]any{"available": reason == "", "reason": reason, "port": port, "revision": revision}
+	return map[string]any{"available": false, "reason": reason, "port": nil, "revision": nil}
 }
 
 func (s *Service) QoSRateEvidence(ctx context.Context, p candidate.QoSPort) (QoSRuntimeSample, error) {

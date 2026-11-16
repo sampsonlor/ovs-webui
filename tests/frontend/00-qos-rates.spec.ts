@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import type { Resource } from '../../clients/typescript/public-v1.generated';
 
 const path = process.env.OVS_FRONTEND_FIXTURE;

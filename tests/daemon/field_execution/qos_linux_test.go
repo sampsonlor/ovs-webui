@@ -5,6 +5,7 @@ package fieldexecution
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sampsonlor/ovs-webui/internal/apicontract"
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/execution"
@@ -97,6 +99,17 @@ func newQoSRateFixture(t *testing.T, discipline string) qosRateFixture {
 		edited:   candidate.QoSRates{Type: discipline, Maximum: 12000000, Queues: []candidate.QoSQueueRate{{ID: 7, Minimum: 2000000, Maximum: 4000000}}},
 	}
 	result.waitRates(result.original)
+	contract, err := apicontract.New()
+	must(t, err)
+	op, path, _ := contract.Match("GET", "/api/v1/qos/"+management)
+	detail, err := f.inventory.Read(f.ctx, op.ID, path, nil, f.login.Claims)
+	must(t, err)
+	body, err := json.Marshal(detail)
+	must(t, err)
+	must(t, op.ValidateResponse(200, body))
+	if detail.(map[string]any)["qos_rate_edit"].(map[string]any)["available"] != true {
+		t.Fatal("authorized QoS detail did not offer rate editing")
+	}
 	return result
 }
 
