@@ -294,6 +294,14 @@ test('Authorized QoS attachment installs the saved profile and restores an unbou
   }
 
   await login(page, user);
+  await expect
+    .poll(async () => {
+      const r = await page.request.get(
+        fixture.origin + '/api/v1/qos/' + fixture.qosEdit.id,
+      );
+      return r.ok() ? (await r.json()).native_qos?.binding_state : undefined;
+    })
+    .toBe('unbound');
   await page.goto(href + '/' + fixture.qosEdit.id);
   await expect(
     page.getByRole('heading', { name: 'Native configuration' }),

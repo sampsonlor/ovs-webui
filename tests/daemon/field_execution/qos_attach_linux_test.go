@@ -40,6 +40,13 @@ func (f qosRateFixture) waitNoQoS() {
 func (f qosRateFixture) attachment() execution.Request {
 	f.t.Helper()
 	must(f.t, f.inventory.SetLocalQoSAttach([]string{f.port.ManagementID + ":" + f.qosObject.ManagementID}))
+	// Stage only after the manager has consumed the external OVSDB change
+	// that set up this fixture. The live kernel can reach noqueue sooner.
+	waitFor(f.t, func() bool {
+		view, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{f.port})
+		target := view.QoSTarget(candidate.QoSAttach, f.port)
+		return err == nil && target.Unbound && target.Reason == "" && target.QoS == f.qosObject
+	})
 	return f.prepareIntents([]any{map[string]any{
 		"intent_id": repository.NewID(), "operation": candidate.QoSAttach, "object": f.port, "qos": f.qosObject,
 	}})
