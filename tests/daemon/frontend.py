@@ -55,6 +55,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-qos-runtime', 'Reader'),
                        ('browser-qos-edit', 'NativeQoS'),
                        ('browser-qos-detach', 'NativeQoS'),
+                       ('browser-qos-attach', 'NativeQoS'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -125,6 +126,16 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     qos_for_edit = eventually(lambda: next((item for item in get('/qos')['items'] if item['ovs_uuid'] == qos_uuid), None))
     qos_port_for_edit = eventually(lambda: next((item for item in get('/ports?filter=' + qos_port)['items'] if item['name'] == qos_port), None))
     qos_grant = qos_port_for_edit['management_id']+':'+qos_for_edit['management_id']
+    # The same Port has distinct grants for two profiles. Tests clear its
+    # original binding before attaching the second profile through WebUI.
+    vsctl('--', '--id=@queue', 'create', 'Queue', 'other_config:min-rate=1000000', 'other_config:max-rate=3000000',
+          'other_config:fixture-opaque=keep', 'dscp=0', '--', 'create', 'QoS', 'type=linux-hfsc',
+          'other_config:max-rate=8000000', 'external_ids:fixture=qos-attach', 'queues:7=@queue')
+    qos_attach_uuid = vsctl('--data=bare', '--no-headings', '--columns=_uuid', 'find', 'QoS',
+                            'external_ids:fixture=qos-attach').strip()
+    qos_attach_queue = vsctl('get', 'QoS', qos_attach_uuid, 'queues:7').strip()
+    qos_for_attach = eventually(lambda: next((item for item in get('/qos')['items'] if item['ovs_uuid'] == qos_attach_uuid), None))
+    qos_attach_grant = qos_port_for_edit['management_id']+':'+qos_for_attach['management_id']
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -151,7 +162,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     unit_path.write_text(mirror_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
-                                              +' --local-qos-bindings='+qos_grant+' --local-qos-detach-bindings='+qos_grant))
+                                              +' --local-qos-bindings='+qos_grant+' --local-qos-detach-bindings='+qos_grant
+                                              +' --local-qos-attach-bindings='+qos_attach_grant))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
@@ -160,7 +172,9 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                 'ovsDirectory': str(ovs), 'database': str(conf), 'isolation': isolation, 'multicast': multicast,
                 'tunnel': tunnel, 'tunnelBridge': tunnel_bridge, 'mirror': mirror, 'mirrorBridge': mirror_bridge,
                 'qosEdit': {'id': qos_for_edit['management_id'], 'port': qos_port, 'bridge': qos_bridge,
-                            'uuid': qos_uuid, 'queue': qos_queue}}
+                            'uuid': qos_uuid, 'queue': qos_queue},
+                'qosAttach': {'id': qos_for_attach['management_id'], 'port': qos_port,
+                              'uuid': qos_attach_uuid, 'queue': qos_attach_queue}}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
@@ -186,5 +200,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-mirror-ui')
         vsctl('--no-wait', '--if-exists', 'del-br', qos_bridge)
         vsctl('--no-wait', '--if-exists', 'destroy', 'QoS', qos_uuid)
+        vsctl('--no-wait', '--if-exists', 'destroy', 'QoS', qos_attach_uuid)
         vsctl('--no-wait', '--if-exists', 'destroy', 'Queue', qos_queue)
+        vsctl('--no-wait', '--if-exists', 'destroy', 'Queue', qos_attach_queue)
         run('ip', 'link', 'del', qos_port)

@@ -6,6 +6,7 @@
   import Status from './Status.svelte';
   import QoSRateEditor from './QoSRateEditor.svelte';
   import QoSDetachEditor from './QoSDetachEditor.svelte';
+  import QoSAttachEditor from './QoSAttachEditor.svelte';
   import { has } from './policy';
 
   type Entry = Resource & { native_qos: QoSObservation; ovs_uuid?: string };
@@ -148,6 +149,7 @@
     {#key model.path}
       <QoSRateEditor item={observation && model.resource.status === 'ready' ? entry : null} {model} {desktop} />
       <QoSDetachEditor item={observation && model.resource.status === 'ready' ? entry : null} {model} {desktop} />
+      <QoSAttachEditor item={observation && model.resource.status === 'ready' ? entry : null} {model} {desktop} />
     {/key}
   {/if}
   {#if model.resource.status === 'ready' && entry && observation}

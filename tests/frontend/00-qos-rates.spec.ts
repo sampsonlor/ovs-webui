@@ -17,6 +17,12 @@ const fixture: {
     uuid: string;
     queue: string;
   };
+  qosAttach: {
+    id: string;
+    port: string;
+    uuid: string;
+    queue: string;
+  };
 } = JSON.parse(readFileSync(path, 'utf8'));
 const href = fixture.origin + '/switching/qos';
 const vsctl = (...args: string[]) =>
@@ -27,6 +33,9 @@ const vsctl = (...args: string[]) =>
       encoding: 'utf8',
     },
   ).trim();
+// Read the root header since some tc releases emit malformed HFSC options JSON.
+const qdiscs = (port: string) =>
+  execFileSync('tc', ['qdisc', 'show', 'dev', port], { encoding: 'utf8' });
 
 async function login(page: Page, user: string) {
   expect((await page.goto(href))?.status()).toBe(200);
@@ -238,12 +247,9 @@ test('Authorized QoS detachment preserves the configuration and restores its liv
   expect(vsctl('get', 'QoS', fixture.qosEdit.uuid, 'queues:7')).toBe(
     fixture.qosEdit.queue,
   );
-  // Inspect the root header. Some tc releases emit malformed JSON for HFSC options.
-  const qdiscs = () =>
-    execFileSync('tc', ['qdisc', 'show', 'dev', fixture.qosEdit.port], {
-      encoding: 'utf8',
-    });
-  expect(qdiscs()).toMatch(/^qdisc noqueue 0: root(?:\s|$)/m);
+  expect(qdiscs(fixture.qosEdit.port)).toMatch(
+    /^qdisc noqueue 0: root(?:\s|$)/m,
+  );
   await page.screenshot({
     path: 'test-results/frontend-evidence/qos-detachment-applied.png',
     fullPage: true,
@@ -252,7 +258,7 @@ test('Authorized QoS detachment preserves the configuration and restores its liv
   expect(vsctl('get', 'Port', fixture.qosEdit.port, 'qos')).toBe(
     fixture.qosEdit.uuid,
   );
-  expect(qdiscs()).toMatch(/^qdisc hfsc 1: root(?:\s|$)/m);
+  expect(qdiscs(fixture.qosEdit.port)).toMatch(/^qdisc hfsc 1: root(?:\s|$)/m);
   expect(
     vsctl('get', 'Queue', fixture.qosEdit.queue, 'other_config:fixture-opaque'),
   ).toBe('keep');
@@ -260,11 +266,121 @@ test('Authorized QoS detachment preserves the configuration and restores its liv
     path: 'test-results/frontend-evidence/qos-detachment-rolled-back.png',
     fullPage: true,
   });
+});
+
+test('Authorized QoS attachment installs the saved profile and restores an unbound Port on rollback', async ({
+  page,
+  browser,
+}) => {
+  const user = 'browser-qos-attach';
+  const { id, port, uuid, queue } = fixture.qosAttach;
+  const detail = href + '/' + id;
+  vsctl('clear', 'Port', port, 'qos');
+  await expect
+    .poll(() => qdiscs(port))
+    .toMatch(/^qdisc noqueue 0: root(?:\s|$)/m);
+  const review = (p: Page) =>
+    p.getByRole('button', { name: 'Review QoS attachment', exact: true });
+  const reader = await browser.newPage({ ignoreHTTPSErrors: true });
+  try {
+    await login(reader, 'browser-qos-runtime');
+    await reader.goto(detail);
+    await expect(
+      reader.getByRole('heading', { name: 'Native configuration' }),
+    ).toBeVisible();
+    await expect(review(reader)).toHaveCount(0);
+  } finally {
+    await reader.close();
+  }
+
+  await login(page, user);
+  await expect
+    .poll(async () => {
+      const r = await page.request.get(
+        fixture.origin + '/api/v1/qos/' + fixture.qosEdit.id,
+      );
+      return r.ok() ? (await r.json()).native_qos?.binding_state : undefined;
+    })
+    .toBe('unbound');
+  await page.goto(href + '/' + fixture.qosEdit.id);
+  await expect(
+    page.getByRole('heading', { name: 'Native configuration' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Attachment requires a separate administrator grant for a target Port and this QoS.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(review(page)).toHaveCount(0);
+  await page.goto(detail);
+  for (const width of [820, 390]) {
+    await page.setViewportSize({ width, height: 960 });
+    await expect(
+      page.getByText('Use a desktop to stage QoS attachment.', { exact: true }),
+    ).toBeVisible();
+    await expect(review(page)).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(review(page)).toBeEnabled();
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await expect(
+    page.getByRole('columnheader', { name: 'Management ID' }),
+  ).toBeVisible();
+  await expect(review(page)).toBeEnabled();
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-attachment-expert.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Expert', exact: true }).click();
+  await review(page).focus();
+  await page.keyboard.press('Enter');
+  const selection = page.getByRole('region', { name: 'QoS attachment' });
+  await expect(selection).toContainText('egress shaping');
+  const target = selection.getByRole('combobox', { name: 'Target Port' });
+  await expect(target).toBeFocused();
+  await target.selectOption({ label: port });
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-attachment-review.png',
+    fullPage: true,
+  });
+  await selection
+    .getByRole('button', { name: 'Stage QoS attachment', exact: true })
+    .click();
+  const change = page
+    .getByRole('region', { name: 'Configuration Diff' })
+    .getByRole('row', { name: /Port QoS binding/ });
+  await expect(change).toContainText('Unbound');
+  await expect(change.getByRole('cell').last()).toHaveText(
+    `QoS · ${id.slice(0, 8)}`,
+  );
+  expect(vsctl('get', 'Port', port, 'qos')).toBe('[]');
+  await applyQoS(page, user, 'Attach a reviewed QoS to an isolated Port');
+  expect(vsctl('get', 'Port', port, 'qos')).toBe(uuid);
+  expect(qdiscs(port)).toMatch(/^qdisc hfsc 1: root(?:\s|$)/m);
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-attachment-applied.png',
+    fullPage: true,
+  });
+  await rollbackQoS(page);
+  expect(vsctl('get', 'Port', port, 'qos')).toBe('[]');
+  expect(qdiscs(port)).toMatch(/^qdisc noqueue 0: root(?:\s|$)/m);
+  expect(vsctl('get', 'QoS', uuid, 'queues:7')).toBe(queue);
+  expect(vsctl('get', 'Queue', queue, 'dscp')).toBe('0');
+  expect(vsctl('get', 'Queue', queue, 'other_config:fixture-opaque')).toBe(
+    'keep',
+  );
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-attachment-rolled-back.png',
+    fullPage: true,
+  });
 
   // Return the shared topology to its original size before its browser cases.
   vsctl('--if-exists', 'del-br', fixture.qosEdit.bridge);
   vsctl('--if-exists', 'destroy', 'QoS', fixture.qosEdit.uuid);
   vsctl('--if-exists', 'destroy', 'Queue', fixture.qosEdit.queue);
+  vsctl('--if-exists', 'destroy', 'QoS', uuid);
+  vsctl('--if-exists', 'destroy', 'Queue', queue);
   await expect
     .poll(async () => {
       const response = await page.request.get(

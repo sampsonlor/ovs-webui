@@ -11,11 +11,15 @@
   const policing = $derived(fields.some((field) => field.operation === 'interface.policing.set'));
   const qos = $derived(fields.some((field) => field.operation === 'qos.configure'));
   const qosDetach = $derived(fields.some((field) => field.operation === 'qos.detach'));
+  const qosAttach = $derived(fields.some((field) => field.operation === 'qos.attach'));
   function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
     if (field.operation === 'qos.configure' && value === null) return 'Unavailable';
-    if (field.operation === 'qos.detach') {
+    if ((field.operation === 'qos.detach' || field.operation === 'qos.attach') && field.field === 'Port QoS binding') {
       if (typeof value !== 'string') return 'Unavailable';
       return value === 'unbound' ? 'Unbound' : `QoS · ${value.slice(0, 8)}`;
+    }
+    if (field.operation === 'qos.attach' && value === null) {
+      return side === 'current' && field.conflict ? 'Unavailable' : 'Unbound';
     }
     if(field.operation==='bridge.multicast.configure')return value===null ? (field.conflict&&side==='current'?'Unavailable or native default · review conflict':'Native default (unset)') : typeof value==='boolean'?(value?'Enabled':'Disabled'):String(value);
  if(field.operation==='port.isolation.set') return typeof value==='boolean' ? (value ? 'Protected' : 'Unprotected') : 'Unavailable';
@@ -78,6 +82,7 @@
 {#if policing}<div class="notice warning"><strong>Interface ingress policing</strong><p>Bandwidth is kbit/s; packet rate is kpps. Only one rate is enabled. Both burst values remain zero, preserving OVS-selected defaults. Review the management path before Safe Apply. The server separately checks supported installed Linux rules and native configuration before confirmation and after rollback; this does not measure actual traffic effectiveness. Changed attachment or conflicting rules require a new review.</p></div>{/if}
 {#if qos}<div class="notice warning"><strong>QoS rate change</strong><p>Review the affected Port and management path before Safe Apply. The server checks the native configuration and installed Linux rates before confirmation and after rollback.</p></div>{/if}
 {#if qosDetach}<div class="notice warning"><strong>Remove egress shaping from this Port</strong><p>Traffic can use the Port without the configured rates after detachment. The QoS and Queue objects remain available for guarded rollback. Review the affected traffic and management path before Safe Apply.</p></div>{/if}
+{#if qosAttach}<div class="notice warning"><strong>Apply egress shaping to this Port</strong><p>Review the affected traffic and management path before Safe Apply. The server verifies that Linux installs the reviewed HFSC configuration. Rollback restores the Port's unshaped default scheduler.</p></div>{/if}
 {#if qinq.length}
   <div class="notice warning"><strong>QinQ service and customer VLANs</strong><p>The service VLAN is the outer tag. An empty customer VLAN list permits all customer VLANs. The native TPID is preserved; external dependency changes block reuse of this review and guarded rollback.</p></div>
   {#if expert}{#each qinq as field}<details><summary>QinQ native dependency evidence</summary><pre>{JSON.stringify({ original: field.before, current: field.current }, null, 2)}</pre></details>{/each}{/if}

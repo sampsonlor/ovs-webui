@@ -1,4 +1,8 @@
-export function qosMessage(code: string): string {
+export function isQoSOperation(operation: string | undefined): boolean {
+  return operation === 'qos.configure' || operation === 'qos.detach' || operation === 'qos.attach';
+}
+
+export function qosMessage(code: string, fallback = code): string {
   const messages: Record<string, string> = {
     EXCLUSIVE_QOS_AUTHORITY_REQUIRED:
       'An administrator must authorize this Port and QoS pair before rates can be edited.',
@@ -21,6 +25,12 @@ export function qosMessage(code: string): string {
       'The QoS, Queue or Port dependencies changed. Review the current configuration and stage a new intent.',
     QOS_BINDING_CHANGED:
       'The Port binding changed. Review the current QoS before staging a new intent.',
+    QOS_ATTACHMENT_DISCIPLINE_UNSUPPORTED:
+      'Attachment requires a supported linear HFSC configuration.',
+    QOS_ATTACHMENT_RUNTIME_UNPROVEN:
+      'Attachment requires verification that the target Linux veth Port is using its unshaped default scheduler.',
+    QOS_ATTACHMENT_CHECK_AT_DISPATCH:
+      'Safe Apply verifies that the target Port starts with the unshaped default and that Linux installs the reviewed HFSC profile.',
     QOS_DETACHMENT_DISCIPLINE_UNSUPPORTED:
       'Detachment is available for verified linear HFSC on a Linux veth Port.',
     QOS_DETACHMENT_RUNTIME_UNPROVEN:
@@ -30,5 +40,5 @@ export function qosMessage(code: string): string {
     QOS_INSTALLED_RATES_CHECK_AT_DISPATCH:
       'Safe Apply checks the currently installed Linux rates before sending the change.',
   };
-  return messages[code] ?? code;
+  return messages[code] ?? fallback;
 }

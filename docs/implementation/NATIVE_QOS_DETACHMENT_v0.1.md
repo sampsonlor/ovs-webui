@@ -24,3 +24,20 @@ HFSC configuration is installed before reporting rollback complete. If the
 daemon is paused, expiry can restore the database binding while Linux still
 has the exact original configuration. A foreign qdisc, shared binding or
 changed identity stops automatic execution or recovery.
+
+## Bind an existing QoS
+
+Desktop operators can also attach an existing dedicated linear HFSC QoS to
+a standalone Linux veth Port whose original scheduler is classless
+`noqueue`. Provision the role with `--grant-qos-role=ROLE_ID` and the
+exact pair with `--local-qos-attach-bindings=PORT_MANAGEMENT_ID:QOS_MANAGEMENT_ID`.
+Each grant pairs one Port with one QoS. Candidate shows the proposed Port
+binding and captured rates. The transaction changes the Port reference and
+preserves the existing QoS and Queue rows, including DSCP settings.
+
+Dispatch checks for an empty Port reference, exclusive QoS and Queue ownership,
+and the original Linux scheduler. Safe Apply opens confirmation after daemon
+acknowledgement, exact installed HFSC rates and a healthy management path.
+Rollback clears the same binding and verifies the original `noqueue` scheduler
+on the same link. A foreign or partially installed scheduler can prevent guarded
+rollback when ownership cannot be proven.

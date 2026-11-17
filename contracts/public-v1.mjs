@@ -185,6 +185,7 @@ intentSchemas.NativeMirrorCreateIntent=intent('mirror.session.create',{object,to
 intentSchemas.NativeMirrorConfigureIntent=intent('mirror.session.configure',{object:ref('MirrorObjectBinding'),topology:closed({mirror:ref('MirrorConfiguration')})});
 intentSchemas.NativeMirrorDeleteIntent=intent('mirror.session.delete',{object:ref('MirrorObjectBinding'),topology:closed({})});
 intentSchemas.QoSDetachIntent=intent('qos.detach',{object,qos:ref('QoSNativeBinding')});
+intentSchemas.QoSAttachIntent=intent('qos.attach',{object,qos:ref('QoSNativeBinding')});
 for(const key of ['NativeMirrorCreateIntent','NativeMirrorConfigureIntent','NativeMirrorDeleteIntent']) intentSchemas[key].description='Native Mirror lifecycle under independent ovs.mirror.write, immutable root object/name grants, sealed source/destination/VLAN/output selectors and whole five-table native CAS. Shared Candidate, durable Safe Apply and exact guarded compensation; deleted sessions recover with fresh identities. Advanced filters, external control and unqualified graph combinations stay read-only. Legacy mirror.configure is unsupported.';
 s.MirrorExecution=closed({available:bool,reason:{type:'string',maxLength:128},capability:{type:'string',const:'ovs.mirror.write'}});
 s.MirrorPort=closed({binding:object,name:{type:'string',maxLength:128},editable:bool,output_eligible:bool});
@@ -217,6 +218,9 @@ s.Resource.properties.linux_qos=ref('LinuxQoSObservation');
 s.QoSRateEdit=closed({available:bool,reason:string(128),port:nullable(object),revision:nullable(revision)});
 s.Resource.properties.qos_rate_edit=ref('QoSRateEdit');
 s.Resource.properties.qos_detach=ref('QoSRateEdit');
+s.QoSAttachPort=closed({port:object,name:string()});
+s.QoSAttachStatus=closed({available:bool,reason:string(128),revision:nullable(revision),ports:array(ref('QoSAttachPort'),1)});
+s.Resource.properties.qos_attach=ref('QoSAttachStatus');
 s.QoSNativeRates=closed({type:choices('linux-htb','linux-hfsc'),max_rate_bps:integer(1,4294967295),queues:array(closed({queue_id:integer(0,61439),min_rate_bps:integer(1,4294967295),max_rate_bps:integer(1,4294967295)}),32)});
 s.QoSNativeBinding=closed({management_id:id,ovs_uuid:id,instance_generation:id,table:{type:'string',const:'QoS'}});
 s.QoSRateChange=open({before:ref('QoSNativeRates'),after:ref('QoSNativeRates'),qos:ref('QoSNativeBinding'),bridge:object,interface:object});
@@ -228,6 +232,7 @@ api.info.description += ' Native Mirror sessions retain source/destination direc
 Object.assign(s, intentSchemas);
 s.QoSIntent.description='Update explicit rates on one existing, independently authorized Port and dedicated native QoS and Queue mapping. The current scheduler type and all explicit Queue numbers must match the requested layout. OVSDB and Linux evidence are checked independently during protected execution and rollback.';
 s.QoSDetachIntent.description='Detach a dedicated linear HFSC QoS from a reviewed veth Port through durable Safe Apply. Preserves the existing QoS and Queue rows. Requires exact Port and QoS identities, an independent detachment grant, shared execution authorization, and fresh Linux proof of scheduler removal or restoration.';
+s.QoSAttachIntent.description='Attach an unbound dedicated linear HFSC QoS to an eligible Linux veth Port through durable Safe Apply. Requires exact Port and QoS identities, an independent attachment grant, and Linux proof of the installed profile or restoration of the unshaped default.';
 s.SpanningTreePrepareRequest = closed({protocol:choices('disabled','stp','rstp'),parameters:{type:'object',additionalProperties:false,properties:Object.fromEntries(['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'].map(k=>[k,nullable({type:'string',minLength:1,maxLength:128,pattern:'^[0-9]+$'})]))}});
 s.SpanningTreePrepareIntent.description = 'Draft preparation only, requiring configuration.read, workspace.write, ovs.bridge.spanning-tree.prepare and independent root-owned immutable Bridge authority. Current configuration read permission is required for current and historical review. Missing parameter keys preserve the captured original; null removes an active protocol map key. Disabled changes preserve every parameter. Inactive settings are preserved and validated. Strict native/basic scope, full private graph digests and sealed originals guard review. Rebase cannot replace originals. Validation always retains SPANNING_TREE_EXECUTION_PENDING; no Apply or Safe Apply execution adapter accepts this intent. The legacy spanning_tree.configure intent remains unsupported.';
 s.SpanningTreeNativeConfig=closed({stp_enable:bool,rstp_enable:bool,parameters:closed(Object.fromEntries(['stp-priority','stp-hello-time','stp-max-age','stp-forward-delay','rstp-priority','rstp-max-age','rstp-forward-delay'].map(k=>[k,nullable({type:'string',maxLength:128})])))});
@@ -279,7 +284,7 @@ s.NativePolicing = open({ingress_policing_rate:integer(0,1000000), ingress_polic
 s.PolicingChange = open({before:ref('NativePolicing'), after:ref('NativePolicing'), port:object, bridge:object, name:string(15), ifindex:integer(1,2147483647)});
 s.ObservedIntent.properties.policing_change = ref('PolicingChange');
 s.ObservedIntent.properties.operation['x-known-values'].push('interface.policing.set');
-s.ObservedIntent.properties.operation['x-known-values'].push('qos.configure', 'qos.detach');
+s.ObservedIntent.properties.operation['x-known-values'].push('qos.configure', 'qos.detach', 'qos.attach');
 s.InterfacePolicingIntent.description = 'Single controlled Interface ingress policing intent. Bandwidth rate is kbit/s; packet rate is kpps. Disabled requires zero. Both native bursts must remain zero (OVS-selected defaults). Requires ovs.interface.policing.write and a root exclusive-ingress Interface identity grant, fresh standalone non-local internal system graph, no raw options and software-only supported rules. Captured parents, all four configuration values and private kernel before-image guard dispatch, Applied, confirmation and exact compensation. No client-supplied before-image, default, host path, owner, raw transaction, compensation or result evidence.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');

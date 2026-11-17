@@ -12,6 +12,7 @@ import (
 const (
 	QoSConfigure  = "qos.configure"
 	QoSDetach     = "qos.detach"
+	QoSAttach     = "qos.attach"
 	QoSCapability = "ovs.qos.write"
 	QoSMarker     = "ovs-webui-qos-execution"
 	QoSQueueLimit = 32
@@ -53,13 +54,19 @@ type QoSPort struct {
 	Unbound                         bool `json:",omitempty"`
 }
 
-func IsQoSOperation(op string) bool { return op == QoSConfigure || op == QoSDetach }
+func IsQoSBindingOperation(op string) bool { return op == QoSDetach || op == QoSAttach }
+
+func IsQoSOperation(op string) bool { return op == QoSConfigure || IsQoSBindingOperation(op) }
 
 func (s Snapshot) QoSTarget(operation string, port Binding) QoSPort {
-	if operation == QoSDetach {
+	switch operation {
+	case QoSDetach:
 		return s.QoSDetachPorts[port.ManagementID]
+	case QoSAttach:
+		return s.QoSAttachPorts[port.ManagementID]
+	default:
+		return s.QoSPorts[port.ManagementID]
 	}
-	return s.QoSPorts[port.ManagementID]
 }
 
 func ValidQoSRates(r QoSRates, mtu int) bool {
@@ -110,7 +117,7 @@ func qosProblem(i StoredIntent, s Snapshot) string {
 		return "FIELD_CONFLICT"
 	case !ValidQoSRates(m.After, p.MTU) || !sameQoSLayout(m.Before, m.After):
 		return "INVALID_QOS_RATES"
-	case i.Operation == QoSDetach && (m.After.Type != "linux-hfsc" || !equalQoSRates(m.Before, m.After)):
+	case IsQoSBindingOperation(i.Operation) && (m.After.Type != "linux-hfsc" || !equalQoSRates(m.Before, m.After)):
 		return "INVALID_QOS_RATES"
 	}
 	return ""
@@ -133,9 +140,9 @@ func stageQoS(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 		return c, apitypes.Fail(409, "EXCLUSIVE_QOS_AUTHORITY_REQUIRED")
 	}
 	after := p.Rates
-	detach := in.Operation == QoSDetach
-	if detach {
-		if in.QoSBinding == nil || *in.QoSBinding != p.QoS || p.Unbound {
+	binding := IsQoSBindingOperation(in.Operation)
+	if binding {
+		if in.QoSBinding == nil || *in.QoSBinding != p.QoS || p.Unbound != (in.Operation == QoSAttach) {
 			return c, apitypes.Fail(409, "QOS_BINDING_CHANGED")
 		}
 	} else {
@@ -147,7 +154,8 @@ func stageQoS(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	}
 	i := StoredIntent{ID: in.ID, Operation: in.Operation, Object: in.Object, Schema: s.Schema, Dependency: p.Dependency,
 		Value: normalize(VLAN{}), Before: normalize(VLAN{}),
-		QoS: &QoSChange{Before: p.Rates, After: after, QoS: p.QoS, Bridge: p.Bridge, Interface: p.Interface, AfterUnbound: detach}}
+		QoS: &QoSChange{Before: p.Rates, After: after, QoS: p.QoS, Bridge: p.Bridge, Interface: p.Interface,
+			BeforeUnbound: in.Operation == QoSAttach, AfterUnbound: in.Operation == QoSDetach}}
 	if len(c.Intents) == 1 {
 		i = c.Intents[0]
 		if i.Operation != in.Operation || i.ID != in.ID || i.Object != in.Object || i.QoS == nil {
@@ -160,7 +168,7 @@ func stageQoS(c Candidate, cmd Command, s Snapshot) (Candidate, error) {
 	if reason := qosProblem(i, s); reason != "" {
 		return c, apitypes.Fail(409, reason)
 	}
-	if !detach && equalQoSRates(i.QoS.Before, after) {
+	if !binding && equalQoSRates(i.QoS.Before, after) {
 		return c, apitypes.Fail(422, "QOS_RATES_UNCHANGED")
 	}
 	c.Intents, c.Generation, c.BaseRevision = []StoredIntent{i}, &s.Generation, &s.Revision
@@ -178,7 +186,8 @@ func qosDiff(i StoredIntent, s Snapshot) []Diff {
 		return Diff{Object: i.Object, Field: field, Before: before, After: after, Current: current,
 			Authority: "ovsdb-configuration", Operation: i.Operation, IntentID: i.ID, Conflict: conflict}
 	}
-	if i.Operation == QoSDetach {
+	var out []Diff
+	if IsQoSBindingOperation(i.Operation) {
 		label := func(unbound bool) string {
 			if unbound {
 				return "unbound"
@@ -189,25 +198,34 @@ func qosDiff(i StoredIntent, s Snapshot) []Diff {
 		if p.Binding == i.Object && p.QoS == m.QoS && p.Reason == "" {
 			current = label(p.Unbound)
 		}
-		return []Diff{makeDiff("Port QoS binding", label(m.BeforeUnbound), label(m.AfterUnbound), current)}
+		out = append(out, makeDiff("Port QoS binding", label(m.BeforeUnbound), label(m.AfterUnbound), current))
+		if i.Operation == QoSDetach {
+			return out
+		}
 	}
 	var maximum any
-	if p.Rates.Maximum > 0 {
+	if !p.Unbound && p.Rates.Maximum > 0 {
 		maximum = p.Rates.Maximum
 	}
-	out := []Diff{makeDiff("QoS maximum rate (bit/s)", m.Before.Maximum, m.After.Maximum, maximum)}
+	rate := func(value uint64, unbound bool) any {
+		if unbound {
+			return nil
+		}
+		return value
+	}
+	out = append(out, makeDiff("QoS maximum rate (bit/s)", rate(m.Before.Maximum, m.BeforeUnbound), rate(m.After.Maximum, m.AfterUnbound), maximum))
 	for n, before := range m.Before.Queues {
 		if n >= len(m.After.Queues) || m.After.Queues[n].ID != before.ID {
 			break
 		}
 		after := m.After.Queues[n]
 		var minNow, maxNow any
-		if index := slices.IndexFunc(p.Rates.Queues, func(q QoSQueueRate) bool { return q.ID == before.ID }); index >= 0 {
+		if index := slices.IndexFunc(p.Rates.Queues, func(q QoSQueueRate) bool { return q.ID == before.ID }); !p.Unbound && index >= 0 {
 			minNow, maxNow = p.Rates.Queues[index].Minimum, p.Rates.Queues[index].Maximum
 		}
 		out = append(out,
-			makeDiff(fmt.Sprintf("Queue %d minimum rate (bit/s)", before.ID), before.Minimum, after.Minimum, minNow),
-			makeDiff(fmt.Sprintf("Queue %d maximum rate (bit/s)", before.ID), before.Maximum, after.Maximum, maxNow))
+			makeDiff(fmt.Sprintf("Queue %d minimum rate (bit/s)", before.ID), rate(before.Minimum, m.BeforeUnbound), rate(after.Minimum, m.AfterUnbound), minNow),
+			makeDiff(fmt.Sprintf("Queue %d maximum rate (bit/s)", before.ID), rate(before.Maximum, m.BeforeUnbound), rate(after.Maximum, m.AfterUnbound), maxNow))
 	}
 	return out
 }

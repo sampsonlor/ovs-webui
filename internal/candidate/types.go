@@ -162,6 +162,7 @@ type Port struct {
 type Snapshot struct {
 	QoSPorts                             map[string]QoSPort
 	QoSDetachPorts                       map[string]QoSPort
+	QoSAttachPorts                       map[string]QoSPort
 	Multicasts                           map[string]MulticastBridge
 	Isolations                           map[string]IsolationPort
 	SpanningTrees                        map[string]SpanningTreeBridge

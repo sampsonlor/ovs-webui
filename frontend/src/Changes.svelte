@@ -11,7 +11,7 @@
  import { multicastMessage } from './multicast';
   import { isTunnelOperation, tunnelMessage } from './tunnel';
   import { isMirrorOperation, mirrorMessage } from './mirror';
-  import { qosMessage } from './qos';
+  import { isQoSOperation, qosMessage } from './qos';
   let {
     model,
     expert,
@@ -27,14 +27,14 @@
   const spanningTree = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.prepare')??false);
   const spanningTreeExecution = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.configure')??false);
   const multicast=$derived(c?.intents.some(i=>i.operation==='bridge.multicast.configure')??false);
-  const qos = $derived(c?.intents.some(i => i.operation === 'qos.configure' || i.operation === 'qos.detach') ?? false);
+  const qos = $derived(c?.intents.some(i => isQoSOperation(i.operation)) ?? false);
  const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
   const v = $derived(model.validation.value);
   const mirrorValidation = $derived(v?.diff.some(f=>isMirrorOperation(f.operation))??false);
   const tunnelValidation = $derived(v?.diff.some(f=>isTunnelOperation(f.operation))??false);
   const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare' || f.operation === 'bridge.spanning-tree.configure') ?? false);
   const multicastValidation=$derived(v?.diff.some(f=>f.operation==='bridge.multicast.configure')??false);
-  const qosValidation = $derived(v?.diff.some(f => f.operation === 'qos.configure' || f.operation === 'qos.detach') ?? false);
+  const qosValidation = $derived(v?.diff.some(f => isQoSOperation(f.operation)) ?? false);
  const isolationValidation = $derived(v?.diff.some(f=>f.operation==='port.isolation.set')??false);
   const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);

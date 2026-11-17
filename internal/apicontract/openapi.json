@@ -28869,7 +28869,8 @@
               "interface.mtu.clear",
               "interface.policing.set",
               "qos.configure",
-              "qos.detach"
+              "qos.detach",
+              "qos.attach"
             ]
           },
           "object": {
@@ -30487,6 +30488,9 @@
           },
           "qos_detach": {
             "$ref": "#/components/schemas/QoSRateEdit"
+          },
+          "qos_attach": {
+            "$ref": "#/components/schemas/QoSAttachStatus"
           },
           "related_object_refs": {
             "type": "array",
@@ -33464,6 +33468,62 @@
         ],
         "additionalProperties": false
       },
+      "QoSAttachPort": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "port",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "QoSAttachStatus": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QoSAttachPort"
+            },
+            "minItems": 0,
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "revision",
+          "ports"
+        ],
+        "additionalProperties": false
+      },
       "QoSNativeRates": {
         "type": "object",
         "properties": {
@@ -34810,6 +34870,32 @@
         "additionalProperties": false,
         "description": "Detach a dedicated linear HFSC QoS from a reviewed veth Port through durable Safe Apply. Preserves the existing QoS and Queue rows. Requires exact Port and QoS identities, an independent detachment grant, shared execution authorization, and fresh Linux proof of scheduler removal or restoration."
       },
+      "QoSAttachIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "qos.attach"
+          },
+          "object": {
+            "$ref": "#/components/schemas/ObjectBinding"
+          },
+          "qos": {
+            "$ref": "#/components/schemas/QoSNativeBinding"
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "qos"
+        ],
+        "additionalProperties": false,
+        "description": "Attach an unbound dedicated linear HFSC QoS to an eligible Linux veth Port through durable Safe Apply. Requires exact Port and QoS identities, an independent attachment grant, and Linux proof of the installed profile or restoration of the unshaped default."
+      },
       "SpanningTreePrepareRequest": {
         "type": "object",
         "properties": {
@@ -35663,6 +35749,9 @@
           },
           {
             "$ref": "#/components/schemas/QoSDetachIntent"
+          },
+          {
+            "$ref": "#/components/schemas/QoSAttachIntent"
           }
         ]
       },
