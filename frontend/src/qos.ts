@@ -1,9 +1,23 @@
+export const qosRateLimit = 4294967288;
+
+export function parseQoSRate(raw: string): number {
+  const value = Number(raw);
+  return /^[1-9][0-9]*$/.test(raw) && Number.isSafeInteger(value) && value % 8 === 0 && value <= qosRateLimit
+    ? value
+    : 0;
+}
+
 export function isQoSOperation(operation: string | undefined): boolean {
-  return operation === 'qos.configure' || operation === 'qos.detach' || operation === 'qos.attach';
+  return operation === 'qos.configure' || operation === 'qos.detach' || operation === 'qos.attach' || operation === 'qos.create';
 }
 
 export function qosMessage(code: string, fallback = code): string {
   const messages: Record<string, string> = {
+    QOS_CREATION_SCHEMA_UNSUPPORTED: 'The current OVSDB schema cannot create an unbound QoS profile with dedicated Queues.',
+    QOS_CREATION_AUTHORITY_REQUIRED: 'An administrator must authorize a profile name before you can create this QoS.',
+    QOS_CREATION_NAME_IN_USE: 'The authorized profile name is in use. Choose another available name.',
+    QOS_CREATED_PROFILE_BOUND: 'The new profile is bound to a Port. Review the current binding before recovery.',
+    QOS_CREATED_CONFIGURATION_CHANGED: 'The new profile or its Queues changed before recovery. Review the current configuration.',
     EXCLUSIVE_QOS_AUTHORITY_REQUIRED:
       'An administrator must authorize this Port and QoS pair before rates can be edited.',
     QOS_SHARED_PORT_BINDING:
@@ -20,7 +34,7 @@ export function qosMessage(code: string, fallback = code): string {
       'Rate editing requires explicit, supported rates on the existing QoS and Queues.',
     EXTERNALLY_CONTROLLED: 'This configuration is externally controlled.',
     OVS_ASSOCIATION_STALE:
-      'Wait for a fresh OVS observation before editing rates.',
+      'Wait for a fresh OVS observation before preparing the QoS change.',
     QOS_DEPENDENCY_CHANGED:
       'The QoS, Queue or Port dependencies changed. Review the current configuration and stage a new intent.',
     QOS_BINDING_CHANGED:

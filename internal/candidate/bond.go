@@ -229,6 +229,11 @@ func currentOriginal(i *StoredIntent, p Port) {
 // compensation. Deletion compensation selects a pre-reserved new graph and
 // retains the original intent's object binding for historical references.
 func AfterImage(i *StoredIntent) {
+	if i.QoSCreation != nil {
+		c := *i.QoSCreation
+		c.BeforePresent = c.AfterPresent
+		i.QoSCreation = &c
+	}
 	if i.QoS != nil {
 		m := *i.QoS
 		m.Before = m.After
@@ -299,6 +304,12 @@ func AfterImage(i *StoredIntent) {
 	}
 }
 func Reverse(i *StoredIntent) {
+	if i.QoSCreation != nil {
+		c := *i.QoSCreation
+		c.BeforePresent, c.AfterPresent = c.AfterPresent, c.BeforePresent
+		c.Compensating = true
+		i.QoSCreation = &c
+	}
 	if i.QoS != nil {
 		m := *i.QoS
 		m.Before, m.After = m.After, m.Before

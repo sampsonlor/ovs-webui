@@ -291,6 +291,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if _, ok := qosCreationIntent(envelope.Candidate); ok {
+		return compileQoSCreation(id, marker, marker, envelope, view, d)
+	}
 	if len(envelope.Candidate.Intents) > 0 && candidate.IsQoSOperation(envelope.Candidate.Intents[0].Operation) {
 		return compileQoSExecution(id, marker, envelope, view, d)
 	}
@@ -669,6 +672,10 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
 			markerKey = bridgeMarkerKey
 		}
+		if intent.Operation == candidate.QoSCreate {
+			row, exists = view.Observation.Rows["Open_vSwitch"][p.Root]
+			markerKey = candidate.QoSProfileMarker
+		}
 		labels, _ := row.Values["external_ids"].(map[string]any)
 		match := exists && labels[markerKey] == p.Marker
 		all = all && match
@@ -775,7 +782,7 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 			}
 			continue
 		}
-		if candidate.IsGraphOperation(intent.Operation) {
+		if candidate.IsGraphOperation(intent.Operation) || intent.Operation == candidate.QoSCreate {
 			continue
 		}
 		port := view.Observation.Rows["Port"][intent.Object.OVSUUID]

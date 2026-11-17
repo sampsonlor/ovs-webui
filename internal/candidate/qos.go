@@ -56,7 +56,11 @@ type QoSPort struct {
 
 func IsQoSBindingOperation(op string) bool { return op == QoSDetach || op == QoSAttach }
 
-func IsQoSOperation(op string) bool { return op == QoSConfigure || IsQoSBindingOperation(op) }
+func IsQoSOperation(op string) bool {
+	return op == QoSConfigure || op == QoSCreate || IsQoSBindingOperation(op)
+}
+
+func qosQueueField(id uint32) string { return fmt.Sprintf("Queue %d", id) }
 
 func (s Snapshot) QoSTarget(operation string, port Binding) QoSPort {
 	switch operation {
@@ -224,8 +228,8 @@ func qosDiff(i StoredIntent, s Snapshot) []Diff {
 			minNow, maxNow = p.Rates.Queues[index].Minimum, p.Rates.Queues[index].Maximum
 		}
 		out = append(out,
-			makeDiff(fmt.Sprintf("Queue %d minimum rate (bit/s)", before.ID), rate(before.Minimum, m.BeforeUnbound), rate(after.Minimum, m.AfterUnbound), minNow),
-			makeDiff(fmt.Sprintf("Queue %d maximum rate (bit/s)", before.ID), rate(before.Maximum, m.BeforeUnbound), rate(after.Maximum, m.AfterUnbound), maxNow))
+			makeDiff(qosQueueField(before.ID)+" minimum rate (bit/s)", rate(before.Minimum, m.BeforeUnbound), rate(after.Minimum, m.AfterUnbound), minNow),
+			makeDiff(qosQueueField(before.ID)+" maximum rate (bit/s)", rate(before.Maximum, m.BeforeUnbound), rate(after.Maximum, m.AfterUnbound), maxNow))
 	}
 	return out
 }

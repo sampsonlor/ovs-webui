@@ -134,6 +134,10 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 	if cmd.Operation == "stage" || cmd.Operation == "rebase" {
 		bindings := plan.Bindings(in.Envelope.Candidate)
 		for _, i := range cmd.Intents {
+			if i.Operation == plan.QoSCreate {
+				bindings = append(bindings, plan.Binding{Table: "QoS"})
+				continue
+			}
 			bindings = append(bindings, i.Object)
 			if i.Operation == plan.BridgeCreate || i.Operation == plan.InternalPortDelete {
 				bindings = append(bindings, plan.Binding{Table: "Bridge"})

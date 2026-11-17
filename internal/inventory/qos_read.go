@@ -193,10 +193,14 @@ func qosResource(v *view, b Binding, fresh string, bindings qosBindings, detail 
 			portDetails = portDetails[:32]
 		}
 	}
-	out["native_qos"] = map[string]any{
+	observation := map[string]any{
 		"discipline": discipline, "max_rate": readQoSRate(row, "max-rate", rates),
 		"binding_state": status, "port_count": portCount, "ports": portDetails,
 		"ports_truncated": len(ports) > 32, "queue_count": queueCount, "queues": queues,
 	}
+	if name := qosProfileAlias(row); name != "" {
+		observation["name"] = name
+	}
+	out["native_qos"] = observation
 	return out, nil
 }

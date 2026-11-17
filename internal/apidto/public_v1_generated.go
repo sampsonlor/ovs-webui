@@ -1250,6 +1250,11 @@ type MirrorChange struct {
 	Before json.RawMessage     `json:"before"`
 	After  json.RawMessage     `json:"after"`
 }
+type QoSCreateQueue struct {
+	QueueId    int64 `json:"queue_id"`
+	MinRateBps int64 `json:"min_rate_bps"`
+	MaxRateBps int64 `json:"max_rate_bps"`
+}
 type MirrorExecution struct {
 	Available  bool   `json:"available"`
 	Reason     string `json:"reason"`
@@ -1297,6 +1302,7 @@ type QoSObservation struct {
 	PortsTruncated bool            `json:"ports_truncated"`
 	QueueCount     json.RawMessage `json:"queue_count"`
 	Queues         json.RawMessage `json:"queues"`
+	Name           string          `json:"name,omitempty"`
 }
 type LinuxQoSQueue struct {
 	QueueId int64           `json:"queue_id"`
@@ -1337,6 +1343,13 @@ type QoSAttachStatus struct {
 	Reason    string          `json:"reason"`
 	Revision  json.RawMessage `json:"revision"`
 	Ports     []QoSAttachPort `json:"ports"`
+}
+type QoSCreateStatus struct {
+	Available          bool            `json:"available"`
+	Reason             string          `json:"reason"`
+	InstanceGeneration json.RawMessage `json:"instance_generation"`
+	Revision           json.RawMessage `json:"revision"`
+	Aliases            []string        `json:"aliases"`
 }
 type QoSNativeRates struct {
 	Type       string                       `json:"type"`
@@ -1605,6 +1618,15 @@ type QoSAttachIntent struct {
 	Operation string           `json:"operation"`
 	Object    ObjectBinding    `json:"object"`
 	Qos       QoSNativeBinding `json:"qos"`
+}
+type QoSCreateIntent struct {
+	IntentId           Id               `json:"intent_id"`
+	Operation          string           `json:"operation"`
+	InstanceGeneration Id               `json:"instance_generation"`
+	Name               string           `json:"name"`
+	Type               string           `json:"type"`
+	MaxRateBps         int64            `json:"max_rate_bps"`
+	Queues             []QoSCreateQueue `json:"queues"`
 }
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`
@@ -2113,6 +2135,7 @@ type QosPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	QosCreate          QoSCreateStatus            `json:"qos_create,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

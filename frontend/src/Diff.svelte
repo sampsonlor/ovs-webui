@@ -12,7 +12,12 @@
   const qos = $derived(fields.some((field) => field.operation === 'qos.configure'));
   const qosDetach = $derived(fields.some((field) => field.operation === 'qos.detach'));
   const qosAttach = $derived(fields.some((field) => field.operation === 'qos.attach'));
+  const qosCreate = $derived(fields.some((field) => field.operation === 'qos.create'));
   function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
+    if (field.operation === 'qos.create') {
+      if (value === null || value === undefined) return side === 'current' && field.conflict ? 'Unavailable' : 'Not present';
+      return String(value);
+    }
     if (field.operation === 'qos.configure' && value === null) return 'Unavailable';
     if ((field.operation === 'qos.detach' || field.operation === 'qos.attach') && field.field === 'Port QoS binding') {
       if (typeof value !== 'string') return 'Unavailable';
@@ -83,6 +88,7 @@
 {#if qos}<div class="notice warning"><strong>QoS rate change</strong><p>Review the affected Port and management path before Safe Apply. The server checks the native configuration and installed Linux rates before confirmation and after rollback.</p></div>{/if}
 {#if qosDetach}<div class="notice warning"><strong>Remove egress shaping from this Port</strong><p>Traffic can use the Port without the configured rates after detachment. The QoS and Queue objects remain available for guarded rollback. Review the affected traffic and management path before Safe Apply.</p></div>{/if}
 {#if qosAttach}<div class="notice warning"><strong>Apply egress shaping to this Port</strong><p>Review the affected traffic and management path before Safe Apply. The server verifies that Linux installs the reviewed HFSC configuration. Rollback restores the Port's unshaped default scheduler.</p></div>{/if}
+{#if qosCreate}<div class="notice"><strong>Create an unbound QoS profile</strong><p>Safe Apply verifies the saved HFSC profile and dedicated Queues. Rollback removes them while the configuration and references still match the creation.</p></div>{/if}
 {#if qinq.length}
   <div class="notice warning"><strong>QinQ service and customer VLANs</strong><p>The service VLAN is the outer tag. An empty customer VLAN list permits all customer VLANs. The native TPID is preserved; external dependency changes block reuse of this review and guarded rollback.</p></div>
   {#if expert}{#each qinq as field}<details><summary>QinQ native dependency evidence</summary><pre>{JSON.stringify({ original: field.before, current: field.current }, null, 2)}</pre></details>{/each}{/if}
@@ -130,9 +136,9 @@
       {#each fields.filter(field => field.field !== 'native_topology') as field}
         <tr class:conflict={field.conflict}
           ><th scope="row"
-            >{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
+            >{#if field.operation !== 'qos.create'}{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field === 'mtu_default_dependency' ? 'Automatic MTU dependency (bytes)' : (field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') ? treeFields[field.field] ?? field.field : field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{/if}{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field === 'mtu_default_dependency' ? 'Automatic MTU dependency (bytes)' : (field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') ? treeFields[field.field] ?? field.field : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field, 'before')}</td><td
             >{display(field.current, field, 'current')}</td

@@ -193,6 +193,7 @@ export function applyReady(
           'qos.configure': 'ovs.qos.write',
           'qos.detach': 'ovs.qos.write',
           'qos.attach': 'ovs.qos.write',
+          'qos.create': 'ovs.qos.write',
           'tunnel.static.create':'ovs.tunnel.static.write',
           'tunnel.static.configure':'ovs.tunnel.static.write',
           'tunnel.static.delete':'ovs.tunnel.static.write',

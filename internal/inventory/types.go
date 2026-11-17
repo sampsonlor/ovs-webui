@@ -53,6 +53,7 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
+	QoSCreate            bool                      `json:"-"`
 	QoSConfiguration     bool                      `json:"-"`
 	QoSRateWrite         bool                      `json:"-"`
 	MirrorConfiguration  bool                      `json:"-"`

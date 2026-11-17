@@ -56,6 +56,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-qos-edit', 'NativeQoS'),
                        ('browser-qos-detach', 'NativeQoS'),
                        ('browser-qos-attach', 'NativeQoS'),
+                       ('browser-qos-create', 'NativeQoS'),
+                       ('browser-qos-create-reader', 'Reader'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -136,6 +138,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     qos_attach_queue = vsctl('get', 'QoS', qos_attach_uuid, 'queues:7').strip()
     qos_for_attach = eventually(lambda: next((item for item in get('/qos')['items'] if item['ovs_uuid'] == qos_attach_uuid), None))
     qos_attach_grant = qos_port_for_edit['management_id']+':'+qos_for_attach['management_id']
+    qos_create_name = 'ui-saved-hfsc'
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -163,7 +166,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
                                               +' --local-qos-bindings='+qos_grant+' --local-qos-detach-bindings='+qos_grant
-                                              +' --local-qos-attach-bindings='+qos_attach_grant))
+                                              +' --local-qos-attach-bindings='+qos_attach_grant+' --local-qos-create-names='+qos_create_name))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
@@ -174,7 +177,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                 'qosEdit': {'id': qos_for_edit['management_id'], 'port': qos_port, 'bridge': qos_bridge,
                             'uuid': qos_uuid, 'queue': qos_queue},
                 'qosAttach': {'id': qos_for_attach['management_id'], 'port': qos_port,
-                              'uuid': qos_attach_uuid, 'queue': qos_attach_queue}}
+                              'uuid': qos_attach_uuid, 'queue': qos_attach_queue},
+                'qosCreateName': qos_create_name}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)

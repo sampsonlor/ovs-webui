@@ -1,10 +1,44 @@
 package ovsdb
 
 import (
+	"encoding/json"
 	"slices"
 
 	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
+
+func qosCreationSchema(d discovered, raw map[string]any) bool {
+	if !d.public.QoSRateWrite ||
+		!multicastMapConstraint(d.native.Tables["Open_vSwitch"].Columns["external_ids"], multicastRawColumnType(raw, "Open_vSwitch", "external_ids")) {
+		return false
+	}
+	// Compensation deletes the created rows. Qualify every column so a
+	// deployment with unobserved persistent data cannot enter that path.
+	for table, names := range map[string][]string{
+		"QoS":   {"type", "queues", "other_config", "external_ids"},
+		"Queue": {"dscp", "other_config", "external_ids"},
+	} {
+		cols := d.native.Tables[table].Columns
+		if len(cols) != len(names) {
+			return false
+		}
+		for _, name := range names {
+			if col := cols[name]; col == nil || col.Ephemeral() || !col.Mutable() {
+				return false
+			}
+		}
+	}
+	if !mirrorFreeAtom(multicastRawColumnType(raw, "QoS", "type"), "string") {
+		return false
+	}
+	q, ok := multicastRawColumnType(raw, "QoS", "queues").(map[string]any)
+	key, keyOK := q["key"].(map[string]any)
+	val, valOK := q["value"].(map[string]any)
+	return ok && keyOK && valOK && len(q) == 4 && q["min"] == json.Number("0") && q["max"] == "unlimited" &&
+		len(key) == 3 && key["type"] == "integer" && key["minInteger"] == json.Number("0") && key["maxInteger"] == json.Number("4294967295") &&
+		val["type"] == "uuid" && val["refTable"] == "Queue" &&
+		(len(val) == 2 || len(val) == 3 && val["refType"] == "strong")
+}
 
 func qosWriteSchema(d discovered, raw map[string]any) bool {
 	if !d.public.QoSConfiguration {

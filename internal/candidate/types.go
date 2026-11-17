@@ -33,28 +33,30 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
-	QoSBinding   *Binding             `json:"qos,omitempty"`
-	QoSType      string               `json:"type,omitempty"`
-	QoSMaximum   uint64               `json:"max_rate_bps,omitempty"`
-	QoSQueues    []QoSQueueRate       `json:"queues,omitempty"`
-	Multicast    *multicast.Request   `json:"multicast,omitempty"`
-	Protected    *bool                `json:"protected,omitempty"`
-	SpanningTree *SpanningTreeRequest `json:"spanning_tree,omitempty"`
-	Topology     *TopologyRequest     `json:"topology,omitempty"`
-	Policing     *PolicingRequest     `json:"policing,omitempty"`
-	ID           string               `json:"intent_id"`
-	Operation    string               `json:"operation"`
-	Object       Binding              `json:"object"`
-	Value        VLAN                 `json:"value"`
-	Mode         string               `json:"mode,omitempty"`
-	LACP         string               `json:"lacp,omitempty"`
-	Members      []string             `json:"member_interface_ids,omitempty"`
-	Fallback     string               `json:"fallback,omitempty"`
-	Name         string               `json:"name,omitempty"`
-	VLANID       int                  `json:"vlan_id,omitempty"`
-	MTURequest   int                  `json:"mtu_request,omitempty"`
+	QoSGeneration string               `json:"instance_generation,omitempty"`
+	QoSBinding    *Binding             `json:"qos,omitempty"`
+	QoSType       string               `json:"type,omitempty"`
+	QoSMaximum    uint64               `json:"max_rate_bps,omitempty"`
+	QoSQueues     []QoSQueueRate       `json:"queues,omitempty"`
+	Multicast     *multicast.Request   `json:"multicast,omitempty"`
+	Protected     *bool                `json:"protected,omitempty"`
+	SpanningTree  *SpanningTreeRequest `json:"spanning_tree,omitempty"`
+	Topology      *TopologyRequest     `json:"topology,omitempty"`
+	Policing      *PolicingRequest     `json:"policing,omitempty"`
+	ID            string               `json:"intent_id"`
+	Operation     string               `json:"operation"`
+	Object        Binding              `json:"object"`
+	Value         VLAN                 `json:"value"`
+	Mode          string               `json:"mode,omitempty"`
+	LACP          string               `json:"lacp,omitempty"`
+	Members       []string             `json:"member_interface_ids,omitempty"`
+	Fallback      string               `json:"fallback,omitempty"`
+	Name          string               `json:"name,omitempty"`
+	VLANID        int                  `json:"vlan_id,omitempty"`
+	MTURequest    int                  `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
+	QoSCreation  *QoSCreation        `json:"qos_creation,omitempty"`
 	QoS          *QoSChange          `json:"qos_change,omitempty"`
 	Multicast    *MulticastChange    `json:"multicast_change,omitempty"`
 	Isolation    *IsolationChange    `json:"isolation_change,omitempty"`
@@ -160,6 +162,7 @@ type Port struct {
 	STP, RSTP                       bool
 }
 type Snapshot struct {
+	QoSCreate                            QoSCreateState
 	QoSPorts                             map[string]QoSPort
 	QoSDetachPorts                       map[string]QoSPort
 	QoSAttachPorts                       map[string]QoSPort
@@ -245,6 +248,10 @@ func (e Envelope) Verify(key []byte, owner string) error {
 func Bindings(c Candidate) []Binding {
 	out := []Binding{}
 	for _, i := range c.Intents {
+		if i.QoSCreation != nil {
+			out = append(out, CreationBindings(i)...)
+			continue
+		}
 		out = append(out, i.Object)
 		if i.QoS != nil {
 			out = append(out, i.QoS.Bridge, i.QoS.Interface)
