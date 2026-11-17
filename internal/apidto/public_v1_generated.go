@@ -566,6 +566,7 @@ type Resource struct {
 	LinuxQos          LinuxQoSObservation        `json:"linux_qos,omitempty"`
 	QosRateEdit       QoSRateEdit                `json:"qos_rate_edit,omitempty"`
 	QosDetach         QoSRateEdit                `json:"qos_detach,omitempty"`
+	QosAttach         QoSAttachStatus            `json:"qos_attach,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1327,6 +1328,16 @@ type QoSRateEdit struct {
 	Port      json.RawMessage `json:"port"`
 	Revision  json.RawMessage `json:"revision"`
 }
+type QoSAttachPort struct {
+	Port ObjectBinding `json:"port"`
+	Name string        `json:"name"`
+}
+type QoSAttachStatus struct {
+	Available bool            `json:"available"`
+	Reason    string          `json:"reason"`
+	Revision  json.RawMessage `json:"revision"`
+	Ports     []QoSAttachPort `json:"ports"`
+}
 type QoSNativeRates struct {
 	Type       string                       `json:"type"`
 	MaxRateBps int64                        `json:"max_rate_bps"`
@@ -1584,6 +1595,12 @@ type NativeMirrorDeleteIntent struct {
 	Topology  map[string]json.RawMessage `json:"topology"`
 }
 type QoSDetachIntent struct {
+	IntentId  Id               `json:"intent_id"`
+	Operation string           `json:"operation"`
+	Object    ObjectBinding    `json:"object"`
+	Qos       QoSNativeBinding `json:"qos"`
+}
+type QoSAttachIntent struct {
 	IntentId  Id               `json:"intent_id"`
 	Operation string           `json:"operation"`
 	Object    ObjectBinding    `json:"object"`

@@ -265,7 +265,7 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		for _, in := range cmd.Intents {
 			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure ||
-				in.QoSBinding != nil && in.Operation != QoSDetach {
+				in.QoSBinding != nil && !IsQoSBindingOperation(in.Operation) {
 				return e, apitypes.Fail(422, "INVALID_QOS_RATES")
 			}
 			if in.Multicast != nil && in.Operation != BridgeMulticastSet {
@@ -553,6 +553,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == QoSAttach {
+			checks = append(checks, gate("QOS_ATTACHMENT_CHECK_AT_DISPATCH", "allowed", i.ID))
+			continue
+		}
 		if i.Operation == QoSDetach {
 			checks = append(checks, gate("QOS_DETACHMENT_CHECK_AT_DISPATCH", "allowed", i.ID))
 			continue

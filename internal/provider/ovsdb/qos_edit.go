@@ -175,15 +175,16 @@ func (e *Executor) prepareQoSKernel(ctx context.Context, p execution.Plan, v inv
 	if err != nil {
 		return execution.Plan{}, err
 	}
-	matches := inventory.QoSRatesMatch(sample.Rates, i.QoS.Before, target.MTU)
+	matches := qosKernelMatches(sample, i.QoS.BeforeUnbound, i.QoS.Before, target.MTU)
 	if i.QoS.Compensating {
-		if i.Operation == candidate.QoSDetach {
-			matches = original != nil && sample.LinkDigest == original.QoSKernelLink &&
-				(sample.Scheduler == "unshaped" || sample.ConfigurationDigest == original.QoSKernelBefore)
-		} else {
-			matches = original != nil && sample.StructureDigest == original.QoSKernelStructure &&
-				(matches || sample.ConfigurationDigest == original.QoSKernelBefore)
+		sameDevice := original != nil && sample.StructureDigest == original.QoSKernelStructure
+		if candidate.IsQoSBindingOperation(i.Operation) {
+			sameDevice = original != nil && sample.LinkDigest == original.QoSKernelLink
 		}
+		// The database may be committed while ovs-vswitchd is still paused.
+		// Accept either the verified current profile or the exact original
+		// kernel configuration that was sealed before applying the change.
+		matches = sameDevice && (matches || sample.ConfigurationDigest == original.QoSKernelBefore)
 	}
 	if !matches {
 		return execution.Plan{}, apitypes.Fail(409, "QOS_KERNEL_CONFIGURATION_CONFLICT")
@@ -223,7 +224,8 @@ func (e *Executor) qosDispatchCheck(ctx context.Context, p execution.Plan, n nat
 	if err != nil {
 		return err
 	}
-	if kernel.ConfigurationDigest != n.QoSKernelBefore || kernel.StructureDigest != n.QoSKernelStructure {
+	if kernel.ConfigurationDigest != n.QoSKernelBefore || kernel.StructureDigest != n.QoSKernelStructure ||
+		candidate.IsQoSBindingOperation(i.Operation) && kernel.LinkDigest != n.QoSKernelLink {
 		return apitypes.Fail(409, "QOS_KERNEL_CHANGED")
 	}
 	return nil
@@ -239,11 +241,15 @@ func (e *Executor) qosAppliedEvidence(ctx context.Context, p execution.Plan, v i
 	if err != nil {
 		return "", err
 	}
-	if i.Operation == candidate.QoSDetach {
+	if candidate.IsQoSBindingOperation(i.Operation) {
 		if sample.LinkDigest != n.QoSKernelLink ||
-			i.QoS.AfterUnbound && sample.Scheduler != "unshaped" ||
-			!i.QoS.AfterUnbound && (sample.ConfigurationDigest != n.QoSKernelRestore || !inventory.QoSRatesMatch(sample.Rates, i.QoS.After, target.MTU)) {
-			return "", apitypes.Fail(409, "QOS_DETACHMENT_UNPROVEN")
+			!qosKernelMatches(sample, i.QoS.AfterUnbound, i.QoS.After, target.MTU) ||
+			i.QoS.Compensating && sample.ConfigurationDigest != n.QoSKernelRestore {
+			code := "QOS_DETACHMENT_UNPROVEN"
+			if i.Operation == candidate.QoSAttach {
+				code = "QOS_ATTACHMENT_UNPROVEN"
+			}
+			return "", apitypes.Fail(409, code)
 		}
 		return sample.ConfigurationDigest, nil
 	}
@@ -252,4 +258,11 @@ func (e *Executor) qosAppliedEvidence(ctx context.Context, p execution.Plan, v i
 		return "", apitypes.Fail(409, "QOS_INSTALLED_RATES_UNPROVEN")
 	}
 	return sample.ConfigurationDigest, nil
+}
+
+func qosKernelMatches(sample inventory.QoSRuntimeSample, unbound bool, rates candidate.QoSRates, mtu int) bool {
+	if unbound {
+		return sample.Scheduler == "unshaped" && sample.RootKind == "noqueue"
+	}
+	return inventory.QoSRatesMatch(sample.Rates, rates, mtu)
 }
