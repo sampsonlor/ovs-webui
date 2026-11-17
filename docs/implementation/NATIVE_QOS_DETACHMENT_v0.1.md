@@ -41,3 +41,21 @@ acknowledgement, exact installed HFSC rates and a healthy management path.
 Rollback clears the same binding and verifies the original `noqueue` scheduler
 on the same link. A foreign or partially installed scheduler can prevent guarded
 rollback when ownership cannot be proven.
+
+## Create a saved QoS with Queues
+
+Authorize the operator's role with `--grant-qos-role=ROLE_ID` and the allowed
+profile names with `--local-qos-create-names=NAME[,NAME...]`. Use a lowercase
+letter followed by up to 31 lowercase letters, digits or hyphens. The QoS list
+offers the available names to authorized desktop operators.
+
+The operator enters a linear HFSC maximum rate and 1–32 explicit Queue numbers
+and rates. With 32 Queues, include Queue 0. Candidate shows the proposed profile
+and Queue rates. Safe Apply creates the unbound QoS and its dedicated Queues in
+one OVSDB transaction, with DSCP unset. Native identifiers are assigned by the
+manager and survive confirmation. Applying egress shaping later requires a
+separate attachment grant for the exact Port and saved QoS.
+
+Before deleting the new records on rollback, the manager checks that they still
+match the created configuration and that no Port or other QoS references them.
+If an external change alters or uses those records, rollback reports a conflict.

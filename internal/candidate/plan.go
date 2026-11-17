@@ -124,6 +124,14 @@ func Compare(c Candidate, s Snapshot) View {
 			v.Diff = append(v.Diff, topologyDiff(i, s))
 			continue
 		}
+		if i.Operation == QoSCreate {
+			if problem := qosCreationProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, qosCreationDiff(i, s)...)
+			continue
+		}
 		if IsQoSOperation(i.Operation) {
 			if problem := qosProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -264,7 +272,8 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
-			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure ||
+			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure && in.Operation != QoSCreate ||
+				in.QoSGeneration != "" && in.Operation != QoSCreate ||
 				in.QoSBinding != nil && !IsQoSBindingOperation(in.Operation) {
 				return e, apitypes.Fail(422, "INVALID_QOS_RATES")
 			}
@@ -311,6 +320,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsTopologyOperation(i.Operation) }) || IsTopologyOperation(cmd.Intents[0].Operation) {
 			var err error
 			c, err = stageTopology(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return i.Operation == QoSCreate }) || cmd.Intents[0].Operation == QoSCreate {
+			var err error
+			c, err = stageQoSCreation(c, cmd, s)
 			if err != nil {
 				return e, err
 			}
@@ -553,6 +570,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if i.Operation == QoSCreate {
+			checks = append(checks, gate("QOS_CREATION_UNBOUND_SAFE_APPLY", "allowed", i.ID))
+			continue
+		}
 		if i.Operation == QoSAttach {
 			checks = append(checks, gate("QOS_ATTACHMENT_CHECK_AT_DISPATCH", "allowed", i.ID))
 			continue

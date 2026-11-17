@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 )
 
@@ -13,7 +14,7 @@ func TestQoSWriteSchemaAndIntegerQueueReference(t *testing.T) {
 	queue := "00000000-0000-4000-8000-000000000001"
 	for _, version := range []string{"3.3.9", "3.7.1", "4.0.0"} {
 		d := schema(t, version)
-		if !d.public.QoSRateWrite {
+		if !d.public.QoSRateWrite || !d.public.QoSCreate {
 			t.Fatalf("QoS schema %s should qualify", version)
 		}
 		value, err := nativeValue(map[string]any{"7": queue}, d.native.Tables["QoS"].Columns["queues"])
@@ -36,8 +37,16 @@ func TestQoSWriteSchemaAndIntegerQueueReference(t *testing.T) {
 	}}}
 	body, _ := json.Marshal(raw)
 	d, err := discover(body)
-	if err != nil || d.public.QoSRateWrite || !d.public.QoSConfiguration {
+	if err != nil || d.public.QoSRateWrite || d.public.QoSCreate || !d.public.QoSConfiguration {
 		t.Fatal("write admission ignored an unexpected Queue reference", err)
+	}
+	delete(tables, "Vendor")
+	columns := tables["Queue"].(map[string]any)["columns"].(map[string]any)
+	columns["vendor_queue_settings"] = map[string]any{"type": "string"}
+	body, _ = json.Marshal(raw)
+	d, err = discover(body)
+	if err != nil || d.public.QoSCreate || !d.public.QoSRateWrite {
+		t.Fatal("untracked Queue data did not block create compensation independently", err)
 	}
 	if boundedPrivateQoS("QoS", map[string]any{"opaque": strings.Repeat("x", 4096)}) != nil {
 		t.Fatal("unbounded optional raw settings")
@@ -49,6 +58,7 @@ func TestQoSMonitorKeepsUnboundRootsAndBoundsOptionalMaps(t *testing.T) {
 	queue := "00000000-0000-4000-8000-000000000001"
 	qos := "00000000-0000-4000-8000-000000000002"
 	pairs := make([]any, 129)
+	marker := strings.Repeat("a", 64)
 	for i := range pairs {
 		pairs[i] = []any{i, []any{"uuid", queue}}
 	}
@@ -57,6 +67,7 @@ func TestQoSMonitorKeepsUnboundRootsAndBoundsOptionalMaps(t *testing.T) {
 		"QoS": map[string]any{qos: map[string]any{"new": map[string]any{
 			"type": "linux-htb", "queues": []any{"map", pairs},
 			"other_config": []any{"map", []any{[]any{"max-rate", "10000"}, []any{"private-key", "synthetic-private-value"}}},
+			"external_ids": []any{"map", []any{[]any{candidate.BridgeCreationMarker, marker}, []any{"private-label", "synthetic-private-value"}}},
 		}}},
 		"Queue": map[string]any{queue: map[string]any{"new": map[string]any{"dscp": 0, "other_config": []any{"map", []any{}}}}},
 	})
@@ -75,6 +86,11 @@ func TestQoSMonitorKeepsUnboundRootsAndBoundsOptionalMaps(t *testing.T) {
 	}
 	if rows["QoS"][qos].Configuration["other_config"].(map[string]any)["private-key"] != "synthetic-private-value" {
 		t.Fatal("private native map lost the opaque setting")
+	}
+	labels := observed["external_ids"].(map[string]any)
+	if len(labels) != 1 || labels[candidate.BridgeCreationMarker] != marker ||
+		rows["QoS"][qos].Configuration["external_ids"].(map[string]any)["private-label"] != "synthetic-private-value" {
+		t.Fatal("creation evidence was dropped or private labels were exposed")
 	}
 	body, _ = json.Marshal(map[string]any{"QoS": map[string]any{qos: map[string]any{
 		"old": map[string]any{"queues": []any{"map", pairs}},

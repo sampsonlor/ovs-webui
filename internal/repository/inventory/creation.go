@@ -22,10 +22,12 @@ func ReserveCreations(ctx context.Context, tx *sql.Tx, transaction, marker strin
 			}
 			continue
 		}
-		if i.Operation != candidate.BridgeCreate && i.Operation != candidate.InternalPortCreate {
+		if i.Operation != candidate.BridgeCreate && i.Operation != candidate.InternalPortCreate && i.Operation != candidate.QoSCreate {
 			continue
 		}
-		valid := i.Operation == candidate.BridgeCreate && i.Creation != nil && !i.Creation.BeforePresent && i.Creation.AfterPresent || i.Operation == candidate.InternalPortCreate && i.PortCreation != nil && !i.PortCreation.BeforePresent && i.PortCreation.AfterPresent
+		valid := i.Operation == candidate.BridgeCreate && i.Creation != nil && !i.Creation.BeforePresent && i.Creation.AfterPresent ||
+			i.Operation == candidate.InternalPortCreate && i.PortCreation != nil && !i.PortCreation.BeforePresent && i.PortCreation.AfterPresent ||
+			i.Operation == candidate.QoSCreate && i.QoSCreation != nil && !i.QoSCreation.BeforePresent && i.QoSCreation.AfterPresent && !i.QoSCreation.Compensating
 		if !valid {
 			return apitypes.Fail(422, "INVALID_CREATION_RESERVATION")
 		}

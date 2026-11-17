@@ -28,6 +28,7 @@
   const spanningTreeExecution = $derived(c?.intents.some(i=>i.operation==='bridge.spanning-tree.configure')??false);
   const multicast=$derived(c?.intents.some(i=>i.operation==='bridge.multicast.configure')??false);
   const qos = $derived(c?.intents.some(i => isQoSOperation(i.operation)) ?? false);
+  const qosCreate = $derived(c?.intents.some(i => i.operation === 'qos.create') ?? false);
  const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
   const v = $derived(model.validation.value);
   const mirrorValidation = $derived(v?.diff.some(f=>isMirrorOperation(f.operation))??false);
@@ -118,7 +119,9 @@
         Review is incomplete. Applying this Candidate is blocked.
       </p>{/if}
     <Diff fields={c.diff ?? []} {expert} />
-    {#if qos && c.state === 'reconciliation-required'}<p class="notice warning">Discard the QoS intent and review the current Port and Queues before staging again.</p>{/if}
+    {#if qos && c.state === 'reconciliation-required'}
+      <p class="notice warning">{qosCreate ? 'Discard the QoS intent and check the currently available profile names before staging again.' : 'Discard the QoS intent and review the current Port and Queues before staging again.'}</p>
+    {/if}
     {#if spanningTree}<section class="notice warning" aria-label="Spanning tree draft boundary"><strong>Spanning tree draft only</strong><p>Review the captured configuration and native parameter checks. Execution and safe timer recovery are not available yet. Apply remains blocked.</p>{#if c.state === 'reconciliation-required'}<p>Configuration, attachment or authority changed. Discard this intent, review the Bridge and prepare a new draft. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if spanningTreeExecution}<section class="notice warning" aria-label="Spanning tree change boundary"><strong>Spanning tree Safe Apply</strong><p>Changing or switching protocols can interrupt traffic and management connectivity. Execution checks the current native runtime, preserves the original for guarded compensation and requires management reachability and confirmation. Installed protocol state does not prove network convergence.</p>{#if c.state === 'reconciliation-required'}<p>Discard this intent and review the current Bridge. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if multicast && (c.state==='conflict'||c.state==='reconciliation-required')}<section class="notice warning" aria-label="Multicast change needs review"><strong>Review and restage this multicast change</strong><p>Discard this intent and review the current Bridge and Ports before preparing a new change. Rebase cannot replace the captured original or connected graph.</p></section>{/if}

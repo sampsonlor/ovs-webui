@@ -28870,7 +28870,8 @@
               "interface.policing.set",
               "qos.configure",
               "qos.detach",
-              "qos.attach"
+              "qos.attach",
+              "qos.create"
             ]
           },
           "object": {
@@ -32935,6 +32936,32 @@
         ],
         "additionalProperties": false
       },
+      "QoSCreateQueue": {
+        "type": "object",
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 61439
+          },
+          "min_rate_bps": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 4294967295
+          },
+          "max_rate_bps": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 4294967295
+          }
+        },
+        "required": [
+          "queue_id",
+          "min_rate_bps",
+          "max_rate_bps"
+        ],
+        "additionalProperties": false
+      },
       "MirrorExecution": {
         "type": "object",
         "properties": {
@@ -33246,6 +33273,12 @@
                 "type": "null"
               }
             ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z][a-z0-9-]{0,31}$"
           }
         },
         "required": [
@@ -33521,6 +33554,59 @@
           "reason",
           "revision",
           "ports"
+        ],
+        "additionalProperties": false
+      },
+      "QoSCreateStatus": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "instance_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[a-z][a-z0-9-]{0,31}$"
+            },
+            "minItems": 0,
+            "maxItems": 64,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "instance_generation",
+          "revision",
+          "aliases"
         ],
         "additionalProperties": false
       },
@@ -34896,6 +34982,55 @@
         "additionalProperties": false,
         "description": "Attach an unbound dedicated linear HFSC QoS to an eligible Linux veth Port through durable Safe Apply. Requires exact Port and QoS identities, an independent attachment grant, and Linux proof of the installed profile or restoration of the unshaped default."
       },
+      "QoSCreateIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "qos.create"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z][a-z0-9-]{0,31}$"
+          },
+          "type": {
+            "type": "string",
+            "const": "linux-hfsc"
+          },
+          "max_rate_bps": {
+            "type": "integer",
+            "minimum": 12000,
+            "maximum": 4294967295
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QoSCreateQueue"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "instance_generation",
+          "name",
+          "type",
+          "max_rate_bps",
+          "queues"
+        ],
+        "additionalProperties": false,
+        "description": "Create one unbound linear HFSC QoS and its dedicated native Queues through Candidate and durable Safe Apply. Requires an independently authorized unique profile name and the current provider generation. Rates use positive multiples of 8 bit/s. Queue minimum cannot exceed its maximum or the QoS maximum. With 32 explicit Queues, include Queue 0. Safe Apply verifies the saved configuration and detached graph. Later Port attachment is a separately authorized change."
+      },
       "SpanningTreePrepareRequest": {
         "type": "object",
         "properties": {
@@ -35752,6 +35887,9 @@
           },
           {
             "$ref": "#/components/schemas/QoSAttachIntent"
+          },
+          {
+            "$ref": "#/components/schemas/QoSCreateIntent"
           }
         ]
       },
@@ -36842,6 +36980,9 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "qos_create": {
+            "$ref": "#/components/schemas/QoSCreateStatus"
           }
         },
         "required": [

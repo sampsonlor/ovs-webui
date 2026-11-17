@@ -149,6 +149,11 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 	projectMTU(v, s.localMTU, &out, bindings)
 	projectPolicing(v, s.localPolicing, &out, bindings)
 	projectQoS(v, s.localQoS, s.localQoSDetach, s.localQoSAttach, &out, bindings)
+	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "QoS" }) {
+		out.QoSCreate = qosCreateState(v, s.localQoSCreateNames, bindings)
+		out.Policy = Digest([]any{out.Policy, out.QoSCreate.Allowed})
+		out.Revision = Digest([]any{out.Revision, out.QoSCreate.Root, out.QoSCreate.Names, out.QoSCreate.Objects})
+	}
 	projectMulticast(v, s.localMulticast, &out, bindings)
 	if slices.ContainsFunc(bindings, func(b candidate.Binding) bool { return b.Table == "Bridge" && s.localMulticast[b.ManagementID] }) {
 		out.Policy = Digest([]any{out.Policy, s.multicastAuthorityRevision})

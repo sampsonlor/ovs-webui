@@ -35,6 +35,13 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	}
 	envelope := original.Envelope
 	envelope.Candidate.Intents = append([]candidate.StoredIntent{}, envelope.Candidate.Intents...)
+	if i, ok := qosCreationIntent(envelope.Candidate); ok {
+		if i.QoSCreation.Compensating || n.CreationMarker != original.Marker {
+			return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_CONFLICT")
+		}
+		candidate.Reverse(&envelope.Candidate.Intents[0])
+		return compileQoSCreation(original.ID, marker, n.CreationMarker, envelope, view, d)
+	}
 	for i := range envelope.Candidate.Intents {
 		intent := &envelope.Candidate.Intents[i]
 		if candidate.IsGraphOperation(intent.Operation) {

@@ -2,7 +2,7 @@
   import type { QoSIntent, QoSObservation, Resource } from '../../clients/typescript/public-v1.generated';
   import { controller, type Model } from './model';
   import { has } from './policy';
-  import { qosMessage } from './qos';
+  import { parseQoSRate, qosMessage, qosRateLimit } from './qos';
 
   let { item, model, desktop }: { item: (Resource & { native_qos: QoSObservation }) | null; model: Model; desktop: boolean } = $props();
   const change = $derived(item?.qos_rate_edit);
@@ -19,7 +19,6 @@
   let maximum = $state('');
   let queues = $state<{ id: number; min: string; max: string }[]>([]);
   let error = $state('');
-  const limit = 4294967288;
 
   function edit() {
     if (!item || !available) return;
@@ -32,18 +31,14 @@
     error = '';
     opened = true;
   }
-  function readRate(raw: string) {
-    const value = Number(raw);
-    return /^[1-9][0-9]*$/.test(raw) && Number.isSafeInteger(value) && value % 8 === 0 && value <= limit ? value : 0;
-  }
   async function submit(event: SubmitEvent) {
     event.preventDefault();
     const port = change?.port;
     const type = item?.native_qos.discipline;
     if (!available || !port || revision !== change?.revision || model.busy || model.pending ||
       !model.sessionReady || type !== 'linux-htb' && type !== 'linux-hfsc') return;
-    const max_rate_bps = readRate(maximum);
-    const queueRates = queues.map(q => ({ queue_id: q.id, min_rate_bps: readRate(q.min), max_rate_bps: readRate(q.max) }));
+    const max_rate_bps = parseQoSRate(maximum);
+    const queueRates = queues.map(q => ({ queue_id: q.id, min_rate_bps: parseQoSRate(q.min), max_rate_bps: parseQoSRate(q.max) }));
     if (!max_rate_bps || queueRates.some(q => !q.min_rate_bps || q.min_rate_bps > q.max_rate_bps || q.max_rate_bps > max_rate_bps)) {
       error = 'Enter positive multiples of 8. Each Queue minimum must be at most its maximum, within the QoS maximum.';
       return;
@@ -67,7 +62,7 @@
     {#if !available}<p>Review the current Candidate before staging a QoS change.</p>{/if}
   {:else}
     <form class="form-panel" onsubmit={submit} oninput={() => error = ''}>
-      <p>Enter rates in bit/s as multiples of 8, up to {limit.toLocaleString('en-US')}. Review the change in Candidate before Safe Apply.</p>
+      <p>Enter rates in bit/s as multiples of 8, up to {qosRateLimit.toLocaleString('en-US')}. Review the change in Candidate before Safe Apply.</p>
       {#if !change?.available}
         <p class="notice warning" role="status">{change ? qosMessage(change.reason) : 'Wait for a fresh QoS observation before staging.'}</p>
       {:else if change.revision !== revision}

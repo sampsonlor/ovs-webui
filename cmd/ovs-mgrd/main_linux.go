@@ -98,6 +98,7 @@ func run() int {
 	localQoS := flag.String("local-qos-bindings", "", "Reviewed comma-separated Port management ID:QoS management ID pairs for exclusive egress rate editing")
 	localQoSDetach := flag.String("local-qos-detach-bindings", "", "Reviewed Port management ID:QoS management ID pairs for exclusive egress detachment")
 	localQoSAttach := flag.String("local-qos-attach-bindings", "", "Reviewed Port management ID:QoS management ID pairs for exclusive egress attachment")
+	localQoSCreate := flag.String("local-qos-create-names", "", "Reviewed comma-separated names for creating unbound QoS profiles")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -457,6 +458,12 @@ func run() int {
 		if *localQoSAttach != "" {
 			if err = inventoryService.SetLocalQoSAttach(strings.Split(*localQoSAttach, ",")); err != nil {
 				logger.Error("invalid_qos_attachment_authority", "code", auth.ErrorCode(err))
+				return 2
+			}
+		}
+		if *localQoSCreate != "" {
+			if err = inventoryService.SetLocalQoSCreateNames(strings.Split(*localQoSCreate, ",")); err != nil {
+				logger.Error("invalid_qos_creation_authority", "code", auth.ErrorCode(err))
 				return 2
 			}
 		}

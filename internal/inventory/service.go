@@ -57,6 +57,7 @@ type Service struct {
 	localQoS                       map[string]string
 	localQoSDetach                 map[string]string
 	localQoSAttach                 map[string]string
+	localQoSCreateNames            map[string]bool
 	localBridgeNames               map[string]bool
 	localBridgeDeleteNames         map[string]bool
 	localInternalPortTargets       map[string]bool
@@ -148,6 +149,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing
 	localSpanningTree := s.localSpanningTree
 	localQoS, localQoSDetach, localQoSAttach := s.localQoS, s.localQoSDetach, s.localQoSAttach
+	localQoSCreateNames := s.localQoSCreateNames
 	localIsolation := s.localIsolation
 	localMulticast := s.localMulticast
 	localTunnelObjects, localTunnelCreates, tunnelRevision := s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision
@@ -562,7 +564,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 			}
 			name := textValue(row.Values["name"])
 			if qos {
-				name = textValue(row.Values["type"]) + " " + b.ManagementID
+				name = qosProfileAlias(row) + " " + textValue(row.Values["type"]) + " " + b.ManagementID
 			}
 			if !strings.Contains(strings.ToLower(name), strings.ToLower(filter)) {
 				continue
@@ -647,7 +649,11 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		}
 		next = base64.RawURLEncoding.EncodeToString(sealed)
 	}
-	return map[string]any{"snapshot_id": v.id, "instance_generation": v.decision.Generation, "source": source(v, fresh, "ovsdb"), "availability": availability, "reason": reason, "items": items, "next_cursor": next, "truncated": more, "coverage": coverage(v)}, nil
+	page := map[string]any{"snapshot_id": v.id, "instance_generation": v.decision.Generation, "source": source(v, fresh, "ovsdb"), "availability": availability, "reason": reason, "items": items, "next_cursor": next, "truncated": more, "coverage": coverage(v)}
+	if op == "listQos" {
+		page["qos_create"] = qosCreateStatus(v, localQoSCreateNames, fresh, c)
+	}
+	return page, nil
 }
 func (s *Service) status(v *view, fresh, availability, reason string) map[string]any {
 	out := base(s.id, "inventory", fresh, v)

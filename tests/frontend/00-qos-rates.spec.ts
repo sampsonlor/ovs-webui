@@ -23,6 +23,7 @@ const fixture: {
     uuid: string;
     queue: string;
   };
+  qosCreateName: string;
 } = JSON.parse(readFileSync(path, 'utf8'));
 const href = fixture.origin + '/switching/qos';
 const vsctl = (...args: string[]) =>
@@ -189,6 +190,144 @@ test('Authorized QoS rate editing stages, validates, applies and restores the in
   ).toBe('keep');
   await page.screenshot({
     path: 'test-results/frontend-evidence/qos-rate-rolled-back.png',
+    fullPage: true,
+  });
+});
+
+test('Authorized QoS creation saves a reviewed profile and two queues with guarded rollback', async ({
+  page,
+  browser,
+}) => {
+  const user = 'browser-qos-create';
+  const name = fixture.qosCreateName;
+  const alias = `external_ids:ovs-webui-qos-profile=${name}`;
+  const create = (p: Page) =>
+    p.getByRole('button', { name: 'Create QoS profile', exact: true });
+  const rootIDs = (table: string, ...where: string[]) =>
+    vsctl(
+      '--data=bare',
+      '--no-headings',
+      '--columns=_uuid',
+      'find',
+      table,
+      ...where,
+    )
+      .split(/\s+/)
+      .filter(Boolean)
+      .sort();
+  const originalProfiles = rootIDs('QoS');
+  const originalQueues = rootIDs('Queue');
+  const reader = await browser.newPage({ ignoreHTTPSErrors: true });
+  try {
+    await login(reader, 'browser-qos-create-reader');
+    await expect(
+      reader.getByRole('heading', { name: 'QoS & Queues' }),
+    ).toBeVisible();
+    await expect(create(reader)).toHaveCount(0);
+    const listing = await reader.request.get(fixture.origin + '/api/v1/qos');
+    expect(listing.ok()).toBe(true);
+    expect((await listing.json()).qos_create?.aliases ?? []).toEqual([]);
+  } finally {
+    await reader.close();
+  }
+
+  await login(page, user);
+  for (const width of [820, 390]) {
+    await page.setViewportSize({ width, height: 950 });
+    await expect(
+      page.getByText('Use a desktop to stage QoS creation.', { exact: true }),
+    ).toBeVisible();
+    await expect(create(page)).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(create(page)).toBeEnabled();
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await expect(create(page)).toBeEnabled();
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-creation-expert.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Expert', exact: true }).click();
+  await create(page).focus();
+  await page.keyboard.press('Enter');
+  const profile = page.getByLabel('Profile name', { exact: true });
+  await expect(profile).toBeFocused();
+  await profile.selectOption({ label: name });
+  await page
+    .getByLabel('QoS maximum rate (bit/s)', { exact: true })
+    .fill('8000000');
+  await page.getByRole('button', { name: 'Add Queue', exact: true }).click();
+  for (const [i, number, minimum, maximum] of [
+    [1, '7', '1000000', '3000000'],
+    [2, '9', '2000000', '4000000'],
+  ] as const) {
+    const queue = page.getByRole('group', { name: `Queue ${i}`, exact: true });
+    await queue.getByLabel('Queue number', { exact: true }).fill(number);
+    await queue
+      .getByLabel('Minimum rate (bit/s)', { exact: true })
+      .fill(minimum);
+    await queue
+      .getByLabel('Maximum rate (bit/s)', { exact: true })
+      .fill(maximum);
+  }
+  const stage = page.getByRole('button', {
+    name: 'Stage QoS creation',
+    exact: true,
+  });
+  const secondNumber = page
+    .getByRole('group', { name: 'Queue 2', exact: true })
+    .getByLabel('Queue number', { exact: true });
+  await secondNumber.fill('7');
+  await stage.click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Enter a different Queue number',
+  );
+  await secondNumber.fill('9');
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-creation-review.png',
+    fullPage: true,
+  });
+  await stage.click();
+  const diff = page.getByRole('region', { name: 'Configuration Diff' });
+  const proposed = (field: string) =>
+    diff
+      .getByRole('row', { name: new RegExp(field) })
+      .getByRole('cell')
+      .last();
+  await expect(proposed('QoS profile')).toHaveText(name);
+  await expect(proposed('Queue 9 maximum rate')).toHaveText('4000000');
+  expect(rootIDs('QoS')).toEqual(originalProfiles);
+  expect(rootIDs('Queue')).toEqual(originalQueues);
+  await applyQoS(page, user, 'Save an unbound HFSC profile in isolated OVSDB');
+  const matches = rootIDs('QoS', alias);
+  expect(matches).toHaveLength(1);
+  const [id] = matches;
+  expect(rootIDs('Port', `qos=${id}`)).toEqual([]);
+  const first = vsctl('get', 'QoS', id, 'queues:7');
+  const second = vsctl('get', 'QoS', id, 'queues:9');
+  expect(first).not.toEqual(second);
+  expect(rootIDs('Queue')).toEqual([...originalQueues, first, second].sort());
+  expect(vsctl('get', 'Queue', second, 'other_config:max-rate')).toBe(
+    '"4000000"',
+  );
+  await expect
+    .poll(async () => {
+      const listing = await page.request.get(fixture.origin + '/api/v1/qos');
+      if (!listing.ok()) return null;
+      const items = (await listing.json()).items as Resource[];
+      const profile = items.find((item) => item.ovs_uuid === id)?.native_qos;
+      return profile && { name: profile.name, binding: profile.binding_state };
+    })
+    .toEqual({ name, binding: 'unbound' });
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-creation-applied.png',
+    fullPage: true,
+  });
+  await rollbackQoS(page);
+  expect(rootIDs('QoS')).toEqual(originalProfiles);
+  expect(rootIDs('Queue')).toEqual(originalQueues);
+  await page.screenshot({
+    path: 'test-results/frontend-evidence/qos-creation-rolled-back.png',
     fullPage: true,
   });
 });

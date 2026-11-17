@@ -15,12 +15,13 @@ import (
 
 	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
+	"github.com/sampsonlor/ovs-webui/internal/candidate"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 )
 
 var selected = map[string][]string{
-	"QoS":          {"type", "queues", "other_config"},
-	"Queue":        {"dscp", "other_config"},
+	"QoS":          {"type", "queues", "other_config", "external_ids"},
+	"Queue":        {"dscp", "other_config", "external_ids"},
 	"Mirror":       {"name", "select_all", "select_src_port", "select_dst_port", "select_vlan", "output_port", "output_vlan", "snaplen", "statistics", "external_ids"},
 	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths", "iface_types"},
 	"Datapath":     {"capabilities"},
@@ -83,7 +84,7 @@ func discover(data []byte) (discovered, error) {
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
 			if t == "QoS" || t == "Queue" {
-				c.Monitored = c.Monitored && d.public.QoSConfiguration
+				c.Monitored = c.Monitored && d.public.QoSConfiguration && (name != "external_ids" || qosPrivateColumn(t, name, col))
 			}
 			if t == "Bridge" && name == "mcast_snooping_enable" {
 				c.MulticastCompatible = isolationConstraint(col)
@@ -146,6 +147,7 @@ func discover(data []byte) (discovered, error) {
 	d.public.MirrorConfiguration = mirrorSchemaSupported(d, raw)
 	d.public.MirrorDefaults = mirrorDefaults(d)
 	d.public.QoSRateWrite = qosWriteSchema(d, raw)
+	d.public.QoSCreate = qosCreationSchema(d, raw) && candidate.Passed(topologyCounterChecks(d))
 	return d, nil
 }
 
@@ -370,6 +372,15 @@ func privateInventoryColumn(d discovered, table, name string) bool {
 func sanitize(table, name string, n any) any {
 	if (table == "QoS" || table == "Queue") && name == "other_config" {
 		return sanitizeQoSOptions(n)
+	}
+	if (table == "QoS" || table == "Queue") && name == "external_ids" {
+		// The registry claims preallocated identities using this reserved
+		// marker. Other values remain in private configuration only.
+		labels, _ := n.(map[string]any)
+		if marker, ok := labels[candidate.BridgeCreationMarker].(string); ok && len(marker) == 64 {
+			return map[string]any{candidate.BridgeCreationMarker: marker}
+		}
+		return map[string]any{}
 	}
 	if keys := spanningTreeMapKeys(table, name); keys != nil {
 		safe := map[string]any{}

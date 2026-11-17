@@ -2,6 +2,7 @@ package candidate
 
 import (
 	"regexp"
+	"strconv"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
@@ -36,6 +37,13 @@ var bridgeName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$`)
 func ValidBridgeName(name string) bool { return bridgeName.MatchString(name) }
 
 func CreationBindings(i StoredIntent) []Binding {
+	if i.QoSCreation != nil {
+		bindings := []Binding{i.Object}
+		for _, q := range i.QoSCreation.Rates.Queues {
+			bindings = append(bindings, i.QoSCreation.Queues[strconv.FormatUint(uint64(q.ID), 10)])
+		}
+		return bindings
+	}
 	if i.Topology != nil {
 		return TopologyCreations(i, false)
 	}

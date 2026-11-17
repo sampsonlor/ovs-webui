@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { LinuxQoSObservation, QoSObservation, QoSRate, Resource } from '../../clients/typescript/public-v1.generated';
+  import type { LinuxQoSObservation, QoSObservation, QoSRate, QosPage, Resource } from '../../clients/typescript/public-v1.generated';
   import type { Model } from './model';
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
@@ -7,6 +7,7 @@
   import QoSRateEditor from './QoSRateEditor.svelte';
   import QoSDetachEditor from './QoSDetachEditor.svelte';
   import QoSAttachEditor from './QoSAttachEditor.svelte';
+  import QoSCreateEditor from './QoSCreateEditor.svelte';
   import { has } from './policy';
 
   type Entry = Resource & { native_qos: QoSObservation; ovs_uuid?: string };
@@ -26,12 +27,16 @@
   let installed = $derived(runtime?.installed_rates);
   let items = $derived((model.resource.value?.items as Entry[] | undefined) ?? []);
   let cursor = $derived(model.resource.value?.next_cursor);
+  let createStatus = $derived((model.resource.value as QosPage | null)?.qos_create);
 
   function rate(value: QoSRate) {
     return value.bps === null ? rateState[value.state] : `${value.bps} bit/s`;
   }
   function discipline(value: string | null) {
     return value === null ? 'Unknown' : value || 'No scheduler type configured';
+  }
+  function profileLabel(item: Entry) {
+    return item.native_qos.name ?? `QoS · ${item.id.slice(0, 8)}`;
   }
   function nextPage(token: string) {
     const query = new URLSearchParams(model.query);
@@ -65,6 +70,9 @@
   <p>Review egress QoS, Port bindings and native Queue configuration.</p>
   {#if detail}<p><Link href={base}>← QoS &amp; Queues</Link></p>{/if}
   <LoadNotice load={model.resource} />
+  {#if !detail}
+    <QoSCreateEditor status={createStatus} {model} {desktop} />
+  {/if}
   {#if model.resource.status === 'ready'}
     {#if !detail}
       {#if items.length > 0}
@@ -75,7 +83,7 @@
             <tbody>
               {#each items as item (item.id)}
                 <tr>
-                  <th scope="row"><Link href={`${base}/${item.id}`}>QoS · {item.id.slice(0, 8)}</Link></th>
+                  <th scope="row"><Link href={`${base}/${item.id}`}>{profileLabel(item)}</Link></th>
                   <td>{discipline(item.native_qos.discipline)}</td>
                   <td>{bindingText[item.native_qos.binding_state]}</td>
                   <td>{item.native_qos.queue_count ?? 'Unknown'}</td>
@@ -91,7 +99,7 @@
       {#if typeof cursor === 'string'}<p><Link href={nextPage(cursor)}>Next QoS page →</Link></p>{/if}
     {:else if entry && observation}
       <div class="page-heading">
-        <h2>QoS · {entry.id.slice(0, 8)}</h2>
+        <h2>{profileLabel(entry)}</h2>
         <Status value={entry.source.freshness} />
       </div>
       <section class="panel">
