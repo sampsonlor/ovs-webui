@@ -58,6 +58,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-qos-attach', 'NativeQoS'),
                        ('browser-qos-create', 'NativeQoS'),
                        ('browser-qos-create-reader', 'Reader'),
+                       ('browser-telemetry-reader', 'Reader'), ('browser-telemetry-observer', 'InterfaceObserver'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),

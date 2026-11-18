@@ -567,6 +567,7 @@ type Resource struct {
 	QosRateEdit       QoSRateEdit                `json:"qos_rate_edit,omitempty"`
 	QosDetach         QoSRateEdit                `json:"qos_detach,omitempty"`
 	QosAttach         QoSAttachStatus            `json:"qos_attach,omitempty"`
+	NativeTelemetry   TelemetryObservation       `json:"native_telemetry,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1350,6 +1351,23 @@ type QoSCreateStatus struct {
 	InstanceGeneration json.RawMessage `json:"instance_generation"`
 	Revision           json.RawMessage `json:"revision"`
 	Aliases            []string        `json:"aliases"`
+}
+type TelemetrySetting struct {
+	State string          `json:"state"`
+	Value json.RawMessage `json:"value"`
+}
+type TelemetryExporter struct {
+	State        string                     `json:"state"`
+	Reason       string                     `json:"reason"`
+	NativeUuid   json.RawMessage            `json:"native_uuid"`
+	TargetCount  json.RawMessage            `json:"target_count"`
+	Targets      json.RawMessage            `json:"targets"`
+	TargetsState string                     `json:"targets_state"`
+	Settings     map[string]json.RawMessage `json:"settings"`
+}
+type TelemetryObservation struct {
+	Delivery  string                     `json:"delivery"`
+	Exporters map[string]json.RawMessage `json:"exporters"`
 }
 type QoSNativeRates struct {
 	Type       string                       `json:"type"`
@@ -2370,6 +2388,10 @@ type TelemetryPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Source             Source                     `json:"source,omitempty"`
+	Availability       string                     `json:"availability,omitempty"`
+	Reason             json.RawMessage            `json:"reason,omitempty"`
+	Coverage           map[string]json.RawMessage `json:"coverage,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

@@ -29,6 +29,6 @@ func interfaceConfigurationConstraint(name string, c *native.ColumnSchema) bool 
 
 func monitoredColumn(d discovered, table, name string) bool {
 	c := d.native.Tables[table].Columns[name]
-	return c != nil && slices.Contains(selected[table], name) &&
+	return c != nil && (slices.Contains(selected[table], name) || d.telemetryColumns[table][name]) &&
 		(table != "Interface" || !slices.Contains(inventory.InterfaceConfigurationColumns, name) || interfaceConfigurationConstraint(name, c))
 }

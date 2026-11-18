@@ -21,6 +21,7 @@
   import Tunnels from './Tunnels.svelte';
   import Mirrors from './Mirrors.svelte';
   import QoS from './QoS.svelte';
+  import Telemetry from './Telemetry.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -162,6 +163,7 @@
         {#each domains as domain}<Link
             href={domain.href}
             current={path === domain.href ||
+              (domain.name === 'Visibility' && path.startsWith('/visibility/')) ||
               (domain.name === 'Switching' &&
                 (path.startsWith('/switching/') || path.startsWith('/ports/') ||
                   path.startsWith('/bridges/') ||
@@ -180,6 +182,10 @@
         <Link href="/switching/isolation" current={path.startsWith('/switching/isolation')}>Port isolation</Link>
         {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
+      <nav aria-label="Visibility views" class="nav-section">
+        <p class="eyebrow">Visibility</p>
+        <Link href="/visibility/telemetry" current={path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}>Telemetry</Link>
+      </nav>
       <nav aria-label="Change Control" class="nav-section">
         <p class="eyebrow">Shared Change Control</p>
         <Link href="/changes/candidate" current={path.includes('/candidate')}
@@ -468,6 +474,8 @@
           <Mirrors model={$model} {expert} {desktop}/>
         {:else if path === '/switching/qos' || path.startsWith('/switching/qos/')}
           <QoS model={$model} {expert} {desktop} />
+        {:else if path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}
+          <Telemetry model={$model} {expert} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}
@@ -508,7 +516,7 @@
             <button onclick={() => controller.refresh()}>Refresh resource</button>
           </header>
           {#if path === '/bridges'}<p>Select a Bridge to review its Interfaces, or <Link href="/interfaces">review all Interfaces</Link>.</p>{/if}
-          {#if path.startsWith('/bridges/') && $model.resource.value}<p><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link></p>{/if}
+          {#if path.startsWith('/bridges/') && $model.resource.value}<p class="actions"><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link><Link href={`/visibility/telemetry/${String($model.resource.value.id)}`}>Review Telemetry</Link></p>{/if}
           <LoadNotice load={$model.resource} />
           {#if $model.resource.value}
             {@const resource = $model.resource.value}
@@ -666,10 +674,11 @@
               <h1>Visibility</h1>
             </div>
           </header>
-          <p class="notice">
-            Observation pages are scheduled for later frontend migration. OpenFlow, DPDK
-            and Offload retain their approved Observe boundaries.
-          </p>
+          <section class="panel">
+            <h2>Telemetry</h2>
+            <p>Review sFlow, NetFlow and IPFIX exporter settings on each Bridge.</p>
+            <Link href="/visibility/telemetry">Open Telemetry</Link>
+          </section>
           <Link href="/operations/events">Inspect current Events →</Link>
         {:else}<h1>Page unavailable</h1>
           <Link href="/ports">Return to Ports</Link>{/if}

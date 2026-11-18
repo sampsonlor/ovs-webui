@@ -372,6 +372,11 @@ export class Controller {
       } else if (path === '/switching/qos' || path.startsWith('/switching/qos/')) {
         resourceURL = parts.length === 2 ? '/qos' + query : `/qos/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';
+      } else if (path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')) {
+        const telemetryQuery = new URLSearchParams(query);
+        if (!telemetryQuery.has('limit')) telemetryQuery.set('limit', '25');
+        resourceURL = parts.length === 2 ? `/telemetry?${telemetryQuery}` : `/telemetry/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read') ? 'configuration.read' : 'inventory.read';
       } else if (path === '/switching/topology') {
         resourceURL = '/inventory/topology';
         capability = 'configuration.read';

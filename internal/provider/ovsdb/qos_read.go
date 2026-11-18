@@ -112,7 +112,14 @@ func qosReadSchema(d discovered, raw map[string]any) bool {
 
 // Oversized optional QoS maps are unknown. Keep the rest of the inventory
 // usable and distinguish an unavailable queue mapping from a known empty one.
-func normalizeInventoryColumn(table string, value any, column *native.ColumnSchema) (any, error) {
+func normalizeInventoryColumn(table, name string, value any, column *native.ColumnSchema) (any, error) {
+	if telemetryTable(table) {
+		normalized, err := normalize(value, column)
+		if err != nil {
+			return nil, nil
+		}
+		return constrainTelemetryField(table, name, normalized), nil
+	}
 	if (table == "QoS" || table == "Queue") && column.Type == native.TypeMap {
 		if wire, ok := value.([]any); ok && len(wire) == 2 && wire[0] == "map" {
 			if pairs, ok := wire[1].([]any); ok && len(pairs) > 128 {

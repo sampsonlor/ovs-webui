@@ -226,6 +226,28 @@ s.QoSAttachPort=closed({port:object,name:string()});
 s.QoSAttachStatus=closed({available:bool,reason:string(128),revision:nullable(revision),ports:array(ref('QoSAttachPort'),1)});
 s.QoSCreateStatus=closed({available:bool,reason:string(128),instance_generation:nullable(id),revision:nullable(revision),aliases:{...array(qosProfileName,64),uniqueItems:true}});
 s.Resource.properties.qos_attach=ref('QoSAttachStatus');
+s.TelemetrySetting=closed({
+ state:choices('known','unset','unsupported','unknown'),
+ value:{anyOf:[integer(Number.MIN_SAFE_INTEGER,Number.MAX_SAFE_INTEGER),string(256),bool,{type:'null'}]},
+});
+const telemetrySettingNames = [
+ 'sampling','polling','header','agent','engine_type','engine_id','active_timeout','add_id_to_interface',
+ 'obs_domain_id','obs_point_id','cache_active_timeout','cache_max_flows','stats_interval','template_interval',
+ 'enable-tunnel-sampling','enable-input-sampling','enable-output-sampling',
+];
+s.TelemetryExporter=closed({
+ state:choices('configured','unconfigured','unsupported','unknown'), reason:string(),
+ native_uuid:nullable({type:'string',pattern:'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'}),
+ target_count:nullable(integer(0,2147483647)), targets:nullable(array(string(256),16)),
+ targets_state:choices('known','unknown','limited','not-projected'),
+ settings:{type:'object',maxProperties:12,additionalProperties:false,properties:Object.fromEntries(telemetrySettingNames.map(k=>[k,ref('TelemetrySetting')]))},
+});
+s.TelemetryObservation=closed({
+ delivery:{type:'string',const:'unverified'},
+ exporters:closed({sflow:ref('TelemetryExporter'),netflow:ref('TelemetryExporter'),ipfix:ref('TelemetryExporter')}),
+});
+s.TelemetryObservation.description='Independent Bridge sFlow, NetFlow and IPFIX reference observations from one OVSDB snapshot. Configured describes a native reference. The bounded target and setting projection carries explicit unknown, limited, unsupported and unset cases. Collector delivery remains unverified.';
+s.Resource.properties.native_telemetry=ref('TelemetryObservation');
 s.QoSNativeRates=closed({type:choices('linux-htb','linux-hfsc'),max_rate_bps:integer(1,4294967295),queues:array(closed({queue_id:integer(0,61439),min_rate_bps:integer(1,4294967295),max_rate_bps:integer(1,4294967295)}),32)});
 s.QoSNativeBinding=closed({management_id:id,ovs_uuid:id,instance_generation:id,table:{type:'string',const:'QoS'}});
 s.QoSRateChange=open({before:ref('QoSNativeRates'),after:ref('QoSNativeRates'),qos:ref('QoSNativeBinding'),bridge:object,interface:object});
@@ -395,6 +417,7 @@ for (const [path, kind, schema, issue] of resources) {
  if (!api.paths[`/${path}/{${kind}_id}`]) add(`/${path}/{${kind}_id}`, 'get', `read${name(kind)}`, schema, cap, issue, { kind });
 }
 Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
+Object.assign(s.TelemetryPage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 s.QosPage.properties.qos_create=ref('QoSCreateStatus');
 s.SpanningTreeObservationPage = open({ ...s.ResourcePage.properties, items: array(ref('SpanningTree'),500), source: ref('Source'), availability: string(), reason: nullable({type:'string'}), coverage: {type:'object',additionalProperties:true} });
 s.Port.properties.spanning_tree = ref('SpanningTreePortObservation');
@@ -406,6 +429,12 @@ api.paths['/inventory/spanning-tree'].get['x-service-state'] = 'implemented';
 api.paths['/bridges/{bridge_id}/spanning-tree'].get['x-service-state'] = 'implemented';
 for (const path of ['/tunnels','/tunnels/{tunnel_id}']) api.paths[path].get['x-service-state'] = 'implemented';
 for (const path of ['/mirrors','/mirrors/{mirror_id}']) api.paths[path].get['x-service-state'] = 'implemented';
+for (const path of ['/telemetry','/telemetry/{telemetry_id}']) {
+ api.paths[path].get['x-service-state'] = 'implemented';
+ api.paths[path].get.description = 'Read-only OVSDB observation of sFlow, NetFlow and IPFIX attached to each Bridge. The telemetry ID is the active Bridge management identity. Requires inventory.read and configuration.read in addition to state.read. IPFIX covers Bridge sampling. Collector delivery remains unverified.';
+}
+api.paths['/telemetry'].get.description += ' The bounded list includes independently observed exporter states and target counts.';
+api.paths['/telemetry/{telemetry_id}'].get.description += ' The detail includes up to 16 configured collector targets per exporter and the supported native settings.';
 for (const path of ['/qos','/qos/{qos_id}']) {
  api.paths[path].get['x-service-state'] = 'implemented';
  api.paths[path].get.description = 'Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping.';
