@@ -14520,7 +14520,7 @@
         "summary": "listTelemetry",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "telemetry",
         "parameters": [
           {
@@ -14716,7 +14716,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read-only OVSDB observation of sFlow, NetFlow and IPFIX attached to each Bridge. The telemetry ID is the active Bridge management identity. Requires inventory.read and configuration.read in addition to state.read. IPFIX covers Bridge sampling. Collector delivery remains unverified. The bounded list includes independently observed exporter states and target counts."
       }
     },
     "/telemetry/{telemetry_id}": {
@@ -14725,7 +14726,7 @@
         "summary": "readTelemetry",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "telemetry",
         "parameters": [
           {
@@ -14898,7 +14899,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read-only OVSDB observation of sFlow, NetFlow and IPFIX attached to each Bridge. The telemetry ID is the active Bridge management identity. Requires inventory.read and configuration.read in addition to state.read. IPFIX covers Bridge sampling. Collector delivery remains unverified. The detail includes up to 16 configured collector targets per exporter and the supported native settings."
       }
     },
     "/capabilities": {
@@ -30493,6 +30495,9 @@
           "qos_attach": {
             "$ref": "#/components/schemas/QoSAttachStatus"
           },
+          "native_telemetry": {
+            "$ref": "#/components/schemas/TelemetryObservation"
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -33609,6 +33614,216 @@
           "aliases"
         ],
         "additionalProperties": false
+      },
+      "TelemetrySetting": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "known",
+              "unset",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "TelemetryExporter": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "configured",
+              "unconfigured",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "native_uuid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "minItems": 0,
+                "maxItems": 16
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets_state": {
+            "type": "string",
+            "enum": [
+              "known",
+              "unknown",
+              "limited",
+              "not-projected"
+            ]
+          },
+          "settings": {
+            "type": "object",
+            "maxProperties": 12,
+            "additionalProperties": false,
+            "properties": {
+              "sampling": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "polling": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "header": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "agent": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "engine_type": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "engine_id": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "active_timeout": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "add_id_to_interface": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "obs_domain_id": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "obs_point_id": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "cache_active_timeout": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "cache_max_flows": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "stats_interval": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "template_interval": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "enable-tunnel-sampling": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "enable-input-sampling": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              },
+              "enable-output-sampling": {
+                "$ref": "#/components/schemas/TelemetrySetting"
+              }
+            }
+          }
+        },
+        "required": [
+          "state",
+          "reason",
+          "native_uuid",
+          "target_count",
+          "targets",
+          "targets_state",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "TelemetryObservation": {
+        "type": "object",
+        "properties": {
+          "delivery": {
+            "type": "string",
+            "const": "unverified"
+          },
+          "exporters": {
+            "type": "object",
+            "properties": {
+              "sflow": {
+                "$ref": "#/components/schemas/TelemetryExporter"
+              },
+              "netflow": {
+                "$ref": "#/components/schemas/TelemetryExporter"
+              },
+              "ipfix": {
+                "$ref": "#/components/schemas/TelemetryExporter"
+              }
+            },
+            "required": [
+              "sflow",
+              "netflow",
+              "ipfix"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "delivery",
+          "exporters"
+        ],
+        "additionalProperties": false,
+        "description": "Independent Bridge sFlow, NetFlow and IPFIX reference observations from one OVSDB snapshot. Configured describes a native reference. The bounded target and setting projection carries explicit unknown, limited, unsupported and unset cases. Collector delivery remains unverified."
       },
       "QoSNativeRates": {
         "type": "object",
@@ -37620,6 +37835,28 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage": {
+            "type": "object",
+            "additionalProperties": true
           }
         },
         "required": [

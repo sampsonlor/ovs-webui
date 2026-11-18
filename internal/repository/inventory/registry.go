@@ -182,7 +182,9 @@ func (r *Registry) reconcile(ctx context.Context, o domain.Observation, accepted
 				return err
 			}
 			for table, objects := range o.Rows {
-				if table == "Open_vSwitch" || table == "Datapath" {
+				// Telemetry observations use the Bridge identity. The exporter
+				// rows are provider data and do not carry management IDs.
+				if table == "Open_vSwitch" || table == "Datapath" || table == "sFlow" || table == "NetFlow" || table == "IPFIX" {
 					continue
 				}
 				for uuid := range objects {

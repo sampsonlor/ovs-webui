@@ -28,6 +28,7 @@ type Reference struct {
 	Position string `json:"position"`
 }
 type Column struct {
+	TelemetryCompatible       bool            `json:"-"`
 	MulticastCompatible       bool            `json:"-"`
 	IsolationCompatible       bool            `json:"-"`
 	Name                      string          `json:"name"`
@@ -53,6 +54,7 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
+	Telemetry            map[string]bool           `json:"-"`
 	QoSCreate            bool                      `json:"-"`
 	QoSConfiguration     bool                      `json:"-"`
 	QoSRateWrite         bool                      `json:"-"`
@@ -138,7 +140,7 @@ type Reader interface {
 
 func Operation(id string) bool {
 	switch id {
-	case "listQos", "readQos", "listMirrors", "readMirror", "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
+	case "listTelemetry", "readTelemetry", "listQos", "readQos", "listMirrors", "readMirror", "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
 		return true
 	}
 	return false

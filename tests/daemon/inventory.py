@@ -329,6 +329,8 @@ def main():
         metrics['interface_selection'] = verify_interface_selection(vsctl, get, call, token['secret'], eventually, ovs_run, ovs)
         from spanning_tree import verify_spanning_tree
         metrics['spanning_tree_observation'] = verify_spanning_tree(vsctl, get, call, token['secret'], eventually)
+        from telemetry import verify_telemetry
+        metrics['telemetry_observation'] = verify_telemetry(vsctl, get, call, token['secret'], eventually)
         from spanning_tree_parameters import verify_spanning_tree_parameters
         metrics['spanning_tree_parameters'] = verify_spanning_tree_parameters(vsctl, get, call, token['secret'], eventually, ovs_run, ovs)
         from spanning_tree_prepare import verify_spanning_tree_prepare
@@ -470,12 +472,20 @@ def main():
 
         stop_ovs('db')
         eventually(lambda: observed_ports(lambda p: p['source']['freshness'] == 'stale' and p['availability'] == 'degraded'))
+        telemetry_path = '/telemetry/' + bridge['management_id']
+        stale_telemetry = get(telemetry_path)
+        assert stale_telemetry['source']['freshness'] == 'stale'
+        assert stale_telemetry['native_telemetry']['delivery'] == 'unverified'
         before = time.monotonic()
         start_db()
         page = eventually(lambda: observed_ports(lambda p: p['source']['freshness'] == 'fresh'))
         metrics['database_reconnect_seconds'] = round(time.monotonic() - before, 3)
         assert page['instance_generation'] == generation
         assert next(p for p in page['items'] if p['name'] == 'inv-p1')['management_id'] == recreated['management_id']
+        observed_telemetry = get(telemetry_path)
+        assert observed_telemetry['source']['freshness'] == 'fresh'
+        assert observed_telemetry['bridge_ref'] == stale_telemetry['bridge_ref']
+        metrics['telemetry_observation']['stale_and_recovered'] = True
         fingerprint = hashlib.sha256(vsctl('--format=json', '--columns=_uuid,name,ports', 'list', 'Bridge').encode()).hexdigest()
         run('systemctl', 'kill', '--signal=SIGKILL', units['mgrd'])
         eventually(lambda: call('/runtime', anonymous=True)[0] == 200)

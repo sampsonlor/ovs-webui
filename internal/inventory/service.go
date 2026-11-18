@@ -188,7 +188,8 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	allowedConfig := slices.Contains(c.Capabilities, "configuration.read")
 	qos := op == "listQos" || op == "readQos"
-	if (qos || slices.Contains([]string{"listTunnels", "readTunnel", "listMirrors", "readMirror"}, op)) && !allowedConfig {
+	telemetry := op == "listTelemetry" || op == "readTelemetry"
+	if (qos || telemetry || slices.Contains([]string{"listTunnels", "readTunnel", "listMirrors", "readMirror"}, op)) && !allowedConfig {
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	var qosPorts qosBindings
@@ -318,6 +319,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return mirrorSnapshot.Topology
 	}
 	project := func(b Binding, kind string) (map[string]any, error) {
+		if kind == "telemetry" {
+			return telemetryResource(v, b, fresh, op == "readTelemetry")
+		}
 		if kind == "qos" {
 			item, err := qosResource(v, b, fresh, qosPorts, op == "readQos")
 			if err == nil && op == "readQos" {
@@ -482,7 +486,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		return item, nil
 	}
 	if len(path) > 0 {
-		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel", "readMirror": "mirror", "readQos": "qos"}[op]
+		kind := map[string]string{"readPort": "port", "readBridge": "bridge", "readInterface": "interface", "readBond": "bond", "readSpanningTreeObservation": "spanning_tree", "readTunnel": "tunnel", "readMirror": "mirror", "readQos": "qos", "readTelemetry": "telemetry"}[op]
 		for _, b := range v.decision.Bindings {
 			for _, id := range path {
 				if b.ManagementID == id && kindFor(b.Table) == tableKind(kind) {
@@ -541,7 +545,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 		cur = old
 	}
 	items := []map[string]any{}
-	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel", "listMirrors": "mirror", "listQos": "qos"}[op]
+	kind := map[string]string{"listPorts": "port", "listBridges": "bridge", "listInterfaces": "interface", "listBonds": "bond", "listSpanningTreeObservations": "spanning_tree", "listTunnels": "tunnel", "listMirrors": "mirror", "listQos": "qos", "listTelemetry": "telemetry"}[op]
 	ids := []string{}
 	bindings := map[string]Binding{}
 	if op == "readInventorySchema" {
@@ -710,7 +714,7 @@ func kindFor(t string) string {
 	return map[string]string{"Bridge": "bridge", "Port": "port", "Interface": "interface", "Mirror": "mirror", "QoS": "qos"}[t]
 }
 func tableKind(k string) string {
-	if k == "spanning_tree" {
+	if k == "spanning_tree" || k == "telemetry" {
 		return "bridge"
 	}
 	if k == "bond" || k == "tunnel" {

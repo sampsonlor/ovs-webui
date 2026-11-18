@@ -32,10 +32,11 @@ var selected = map[string][]string{
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
 
 type discovered struct {
-	multicastMaps map[string]bool
-	public        inventory.Schema
-	native        native.DatabaseSchema
-	requests      map[string]any
+	multicastMaps    map[string]bool
+	telemetryColumns map[string]map[string]bool
+	public           inventory.Schema
+	native           native.DatabaseSchema
+	requests         map[string]any
 }
 
 func discover(data []byte) (discovered, error) {
@@ -64,6 +65,7 @@ func discover(data []byte) (discovered, error) {
 		}
 	}
 	d.public.QoSConfiguration = qosReadSchema(d, raw)
+	discoverTelemetry(&d, raw)
 	for t, table := range d.native.Tables {
 		if len(table.Columns) > 256 {
 			return d, errors.New("OVSDB_SCHEMA_BUDGET")
@@ -83,6 +85,8 @@ func discover(data []byte) (discovered, error) {
 				return d, errors.New("OVSDB_SCHEMA_INVALID")
 			}
 			c := inventory.Column{Name: name, Type: col.Type, NativeType: typ, Mutable: col.Mutable(), Ephemeral: col.Ephemeral(), References: []inventory.Reference{}, Monitored: slices.Contains(selected[t], name)}
+			c.TelemetryCompatible = d.telemetryColumns[t][name]
+			c.Monitored = c.Monitored || c.TelemetryCompatible
 			if t == "QoS" || t == "Queue" {
 				c.Monitored = c.Monitored && d.public.QoSConfiguration && (name != "external_ids" || qosPrivateColumn(t, name, col))
 			}
@@ -134,7 +138,7 @@ func discover(data []byte) (discovered, error) {
 		}
 		sort.Slice(tt.Columns, func(i, j int) bool { return tt.Columns[i].Name < tt.Columns[j].Name })
 		d.public.Tables = append(d.public.Tables, tt)
-		if _, ok := selected[t]; ok && (t != "QoS" && t != "Queue" || d.public.QoSConfiguration) {
+		if _, ok := selected[t]; (ok || len(d.telemetryColumns[t]) > 0) && (t != "QoS" && t != "Queue" || d.public.QoSConfiguration) {
 			sort.Strings(names)
 			d.requests[t] = []any{map[string]any{"columns": names, "select": map[string]bool{"initial": true, "insert": true, "delete": true, "modify": true}}}
 		}
@@ -298,7 +302,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					if !monitoredColumn(d, table, name) && !private {
 						return errors.New("OVSDB_UNREQUESTED_COLUMN")
 					}
-					n, err := normalizeInventoryColumn(table, value, d.native.Tables[table].Columns[name])
+					n, err := normalizeInventoryColumn(table, name, value, d.native.Tables[table].Columns[name])
 					if err != nil {
 						return err
 					}
@@ -337,7 +341,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 				if !monitoredColumn(d, table, name) && !private {
 					return errors.New("OVSDB_UNREQUESTED_COLUMN")
 				}
-				n, err := normalizeInventoryColumn(table, v, d.native.Tables[table].Columns[name])
+				n, err := normalizeInventoryColumn(table, name, v, d.native.Tables[table].Columns[name])
 				if err != nil {
 					return err
 				}
@@ -495,7 +499,9 @@ func validateRelations(rows inventory.Rows) error {
 	for table, objects := range rows {
 		// Native QoS and Queue are root tables without a name column. Unbound
 		// records are legitimate, and Port or Queue sharing is observable.
-		if table == "Open_vSwitch" || table == "Datapath" || table == "QoS" || table == "Queue" {
+		// Exporters do not have names and IPFIX may be used only by a
+		// Flow_Sample_Collector_Set outside the Bridge-scoped projection.
+		if table == "Open_vSwitch" || table == "Datapath" || table == "QoS" || table == "Queue" || telemetryTable(table) {
 			continue
 		}
 		for uuid, row := range objects {
