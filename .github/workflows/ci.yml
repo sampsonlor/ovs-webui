@@ -122,18 +122,16 @@ jobs:
   go-runtime:
     name: Go runtime (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    # The arm64 run can reach 40 minutes before the final schema and recovery tests.
-    timeout-minutes: ${{ matrix.job_timeout_minutes }}
+    # The full runtime matrix can reach 40 minutes before final schema and recovery tests.
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
             runner: ubuntu-24.04
-            job_timeout_minutes: 40
           - arch: arm64
             runner: ubuntu-24.04-arm
-            job_timeout_minutes: 50
     env:
       CGO_ENABLED: '0'
       GOTOOLCHAIN: local
