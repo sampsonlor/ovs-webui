@@ -149,7 +149,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
           '--', 'set', 'Bridge', telemetry_bridge, 'datapath_type=dummy', 'netflow=@nf')
     telemetry = eventually(lambda: next((item for item in get('/telemetry?filter='+telemetry_bridge)['items']
                                          if item['name'] == telemetry_bridge), None))
-    telemetry_grant = telemetry['management_id']+':netflow'
+    telemetry_id = telemetry['bridge_ref']['id']
+    telemetry_grant = telemetry_id+':netflow'
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -192,7 +193,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                 'qosAttach': {'id': qos_for_attach['management_id'], 'port': qos_port,
                               'uuid': qos_attach_uuid, 'queue': qos_attach_queue},
                 'qosCreateName': qos_create_name,
-                'telemetryWrite': {'id': telemetry['management_id'], 'bridge': telemetry_bridge}}
+                'telemetryWrite': {'id': telemetry_id, 'bridge': telemetry_bridge}}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
