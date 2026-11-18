@@ -303,3 +303,9 @@ test('Authorized NetFlow collector editing stages, applies and restores the exac
   checkNative(original, 60);
   await capture(page, 'write-rolled-back');
 });
+
+test.afterAll(() => {
+  // Retire the Bridge provisioned for the telemetry grant before later tests
+  // inspect the bounded native topology of the shared browser environment.
+  vsctl('--if-exists', 'del-br', fixture.telemetryWrite.bridge);
+});
