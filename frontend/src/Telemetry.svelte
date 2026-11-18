@@ -9,23 +9,22 @@
   import { controller, navigate, type Model } from './model';
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
+  import { has } from './policy';
   import Status from './Status.svelte';
+  import TelemetryExporterEditor from './TelemetryExporterEditor.svelte';
+  import { telemetryLabels, telemetrySettingLabels, type TelemetryProtocol } from './telemetry';
 
-  let { model, expert }: { model: Model; expert: boolean } = $props();
+  let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
 
   const route = '/visibility/telemetry';
-  const protocols = [['sflow', 'sFlow'], ['netflow', 'NetFlow'], ['ipfix', 'IPFIX']] as const;
+  const protocols = ['sflow', 'netflow', 'ipfix'] satisfies TelemetryProtocol[];
   const names: Record<string, string> = {
-    sampling: 'Sampling rate',
-    polling: 'Polling interval (s)',
-    active_timeout: 'Active timeout (s)',
+    ...telemetrySettingLabels,
     header: 'Sample header size (bytes)',
     agent: 'sFlow agent device',
     engine_type: 'Engine type',
     engine_id: 'Engine ID',
     add_id_to_interface: 'Include engine ID in Interface numbers',
-    obs_domain_id: 'Observation domain ID',
-    obs_point_id: 'Observation point ID',
     cache_active_timeout: 'Cache active timeout (s)',
     cache_max_flows: 'Cache flow limit',
     stats_interval: 'Statistics interval (s)',
@@ -34,7 +33,7 @@
     'enable-input-sampling': 'Input sampling',
     'enable-output-sampling': 'Output sampling',
   };
-  const basic = ['sampling', 'polling', 'active_timeout', 'obs_domain_id', 'obs_point_id'];
+  const basic = Object.keys(telemetrySettingLabels);
   const states: Record<TelemetryExporter['state'], string> = {
     configured: 'Configured',
     unconfigured: 'Not configured',
@@ -54,6 +53,10 @@
   const page = $derived(!detail ? (model.resource.value as unknown as TelemetryPage | null) : null);
   const source = $derived(item?.source ?? page?.source);
   const stale = $derived(source?.freshness === 'stale');
+  const write = $derived(item?.telemetry_write);
+  const authorized = $derived(!!write && has(model.session, 'configuration.read') && has(model.session, 'inventory.read') &&
+    has(model.session, 'workspace.write') && has(model.session, 'ovs.telemetry.write'));
+  const hasAvailableExporter = $derived(!!write && Object.values(write.protocols).some(status => status.available));
   let filter = $state(untrack(() => new URLSearchParams(model.query).get('filter') ?? ''));
   let previousQuery: string | undefined;
 
@@ -114,7 +117,14 @@
   <p class="notice warning" role="status">Stale telemetry observation. Refresh to check the current configuration.</p>
 {/if}
 {#if page || item}
-  <p class="notice">Read-only Bridge exporter configuration. <span>Collector delivery is unverified.</span></p>
+  <p class="notice">
+    {#if authorized && hasAvailableExporter}
+      {#if desktop}Stage exporter changes for Candidate review and Safe Apply.{:else}Use a desktop to stage exporter changes.{/if}
+    {:else}
+      Read-only Bridge exporter configuration.
+    {/if}
+    <span>Collector delivery is unverified.</span>
+  </p>
 {/if}
 
 {#if page}
@@ -134,9 +144,9 @@
       <article class="panel">
         <h2><Link href={`${route}/${encodeURIComponent(bridge.id)}`}>{bridgeName(bridge)}</Link></h2>
         <dl>
-          {#each protocols as [protocol, label]}
+          {#each protocols as protocol (protocol)}
             {@const exporter = bridge.native_telemetry?.exporters[protocol]}
-            <dt>{label}</dt>
+            <dt>{telemetryLabels[protocol]}</dt>
             <dd>
               <Status value={exporter ? states[exporter.state] : 'Unknown'} neutral />
               {#if exporter?.state === 'configured'}
@@ -177,11 +187,14 @@
     </dl>
   </section>
   {#if item.native_telemetry}
+    {#if authorized && desktop && hasAvailableExporter && model.workspace.value?.candidate?.intents.length}
+      <p class="notice" role="status">Review the current Candidate before staging an exporter change.</p>
+    {/if}
     <section class="columns" aria-label="Bridge exporters">
-      {#each protocols as [protocol, label]}
+      {#each protocols as protocol (protocol)}
         {@const exporter = item.native_telemetry.exporters[protocol]}
         <article class="panel" aria-labelledby={`telemetry-${protocol}`}>
-          <h3 id={`telemetry-${protocol}`}>{label}</h3>
+          <h3 id={`telemetry-${protocol}`}>{telemetryLabels[protocol]}</h3>
           <Status value={states[exporter.state]} neutral />
           {#if protocol === 'ipfix'}<p class="muted">Bridge sampling</p>{/if}
           {#if exporter.state === 'configured'}
@@ -210,6 +223,11 @@
               {#if exporter.native_uuid}<dt>Native UUID</dt><dd class="mono">{exporter.native_uuid}</dd>{/if}
             </dl>
           {/if}
+          {#if authorized && desktop && !stale && write}
+            {#key write.object.ovs_uuid + '/' + write.object.instance_generation}
+              <TelemetryExporterEditor {protocol} object={write.object} status={write.protocols[protocol]} {model} />
+            {/key}
+          {/if}
         </article>
       {/each}
     </section>
@@ -230,4 +248,5 @@
   nav.actions { margin-top: 1rem; }
   dd > span.muted { display: block; margin-top: .35rem; }
   .targets { margin: 0; padding: 0; list-style: none; }
+  .targets li { overflow-wrap: anywhere; }
 </style>

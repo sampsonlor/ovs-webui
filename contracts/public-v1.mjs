@@ -248,6 +248,36 @@ s.TelemetryObservation=closed({
 });
 s.TelemetryObservation.description='Independent Bridge sFlow, NetFlow and IPFIX reference observations from one OVSDB snapshot. Configured describes a native reference. The bounded target and setting projection carries explicit unknown, limited, unsupported and unset cases. Collector delivery remains unverified.';
 s.Resource.properties.native_telemetry=ref('TelemetryObservation');
+const telemetryWriteProtocols = ['sflow', 'netflow', 'ipfix'];
+const telemetryWriteSettings = {
+ sflow: { sampling: nullable(integer(1,4294967295)), polling: nullable(integer(0,3600)) },
+ netflow: { active_timeout: integer(-1,86400) },
+ ipfix: { sampling: nullable(integer(1,4294967295)), obs_domain_id: nullable(integer(0,4294967295)), obs_point_id: nullable(integer(0,4294967295)) },
+};
+const telemetryTargets = minimum => ({ ...array(string(256),16,minimum), uniqueItems:true });
+s.TelemetryBridgeBinding=closed({management_id:id,ovs_uuid:id,instance_generation:id,table:{type:'string',const:'Bridge'}});
+const telemetryObject = ref('TelemetryBridgeBinding');
+intentSchemas.TelemetryExporterSetIntent = {
+ description: 'Create or update one Bridge exporter through Candidate and Safe Apply. Targets are explicit numeric unicast IPv4:UDP-port or [IPv6]:UDP-port destinations. The settings object may omit individual keys to preserve native values. Null removes an optional setting. Other native settings are preserved.',
+ oneOf: telemetryWriteProtocols.map(protocol => intent('telemetry.exporter.set', {
+  object:telemetryObject, protocol:{type:'string',const:protocol}, targets:telemetryTargets(1),
+  settings:{type:'object',additionalProperties:false,properties:telemetryWriteSettings[protocol]},
+ })),
+};
+intentSchemas.TelemetryExporterClearIntent = intent('telemetry.exporter.clear', {object:telemetryObject,protocol:choices(...telemetryWriteProtocols)});
+intentSchemas.TelemetryExporterClearIntent.description = 'Disable one Bridge exporter through Candidate and Safe Apply. Guarded rollback restores the prior exporter configuration. Collector delivery is unverified.';
+s.TelemetryExporterWriteStatus = closed({
+ available:bool, reason:string(), revision:nullable(revision), configured:bool, targets:nullable(telemetryTargets(0)),
+ settings:{type:'object',additionalProperties:false,properties:{
+  ...telemetryWriteSettings.sflow, active_timeout:nullable(telemetryWriteSettings.netflow.active_timeout), ...telemetryWriteSettings.ipfix,
+ }},
+});
+s.TelemetryWrite=closed({
+ object:telemetryObject,
+ protocols:closed(Object.fromEntries(telemetryWriteProtocols.map(protocol => [protocol,ref('TelemetryExporterWriteStatus')]))),
+});
+s.TelemetryWrite.description='Optional Bridge detail write status. Requires workspace.write, ovs.telemetry.write and the current observation permissions. Per-protocol availability and review revision depend on current native state and explicit Bridge write authority.';
+s.Resource.properties.telemetry_write=ref('TelemetryWrite');
 s.QoSNativeRates=closed({type:choices('linux-htb','linux-hfsc'),max_rate_bps:integer(1,4294967295),queues:array(closed({queue_id:integer(0,61439),min_rate_bps:integer(1,4294967295),max_rate_bps:integer(1,4294967295)}),32)});
 s.QoSNativeBinding=closed({management_id:id,ovs_uuid:id,instance_generation:id,table:{type:'string',const:'QoS'}});
 s.QoSRateChange=open({before:ref('QoSNativeRates'),after:ref('QoSNativeRates'),qos:ref('QoSNativeBinding'),bridge:object,interface:object});
@@ -313,6 +343,7 @@ s.PolicingChange = open({before:ref('NativePolicing'), after:ref('NativePolicing
 s.ObservedIntent.properties.policing_change = ref('PolicingChange');
 s.ObservedIntent.properties.operation['x-known-values'].push('interface.policing.set');
 s.ObservedIntent.properties.operation['x-known-values'].push('qos.configure', 'qos.detach', 'qos.attach', 'qos.create');
+s.ObservedIntent.properties.operation['x-known-values'].push('telemetry.exporter.set', 'telemetry.exporter.clear');
 s.InterfacePolicingIntent.description = 'Single controlled Interface ingress policing intent. Bandwidth rate is kbit/s; packet rate is kpps. Disabled requires zero. Both native bursts must remain zero (OVS-selected defaults). Requires ovs.interface.policing.write and a root exclusive-ingress Interface identity grant, fresh standalone non-local internal system graph, no raw options and software-only supported rules. Captured parents, all four configuration values and private kernel before-image guard dispatch, Applied, confirmation and exact compensation. No client-supplied before-image, default, host path, owner, raw transaction, compensation or result evidence.';
 s.Intent = { oneOf: [ref('VlanIntent'), ...Object.keys(intentSchemas).map(ref)] };
 s.CandidateCommand.oneOf[0].properties.intents.items = ref('Intent');
@@ -434,7 +465,7 @@ for (const path of ['/telemetry','/telemetry/{telemetry_id}']) {
  api.paths[path].get.description = 'Read-only OVSDB observation of sFlow, NetFlow and IPFIX attached to each Bridge. The telemetry ID is the active Bridge management identity. Requires inventory.read and configuration.read in addition to state.read. IPFIX covers Bridge sampling. Collector delivery remains unverified.';
 }
 api.paths['/telemetry'].get.description += ' The bounded list includes independently observed exporter states and target counts.';
-api.paths['/telemetry/{telemetry_id}'].get.description += ' The detail includes up to 16 configured collector targets per exporter and the supported native settings.';
+api.paths['/telemetry/{telemetry_id}'].get.description += ' The detail includes up to 16 configured collector targets per exporter and the supported native settings. Eligible sessions can inspect telemetry_write for Bridge exporter changes through Candidate and Safe Apply.';
 for (const path of ['/qos','/qos/{qos_id}']) {
  api.paths[path].get['x-service-state'] = 'implemented';
  api.paths[path].get.description = 'Read-only QoS configuration from one OVSDB snapshot. Requires inventory.read and configuration.read in addition to state.read. Queue numbers are scoped to a QoS record. Observed configuration does not establish scheduler installation, queue selection or traffic shaping.';

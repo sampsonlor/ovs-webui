@@ -31,6 +31,7 @@ func (p *Provider) Executor(s *inventory.Service) *Executor {
 }
 
 type nativePlan struct {
+	Telemetry            *telemetryNativePlan      `json:"telemetry,omitempty"`
 	QoSKernelBefore      string                    `json:"qos_kernel_before,omitempty"`
 	QoSKernelStructure   string                    `json:"qos_kernel_structure,omitempty"`
 	QoSKernelRestore     string                    `json:"qos_kernel_restore,omitempty"`
@@ -252,6 +253,12 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	if d.public.Digest != view.Candidate.Schema || identity != view.Observation.Evidence.Peer {
 		return out, apitypes.Fail(409, "PROVIDER_IDENTITY_CHANGED")
 	}
+	if _, ok := telemetryIntent(envelope.Candidate); ok {
+		if !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
+			return out, apitypes.Fail(409, "PROVIDER_IDENTITY_CHANGED")
+		}
+		return compileTelemetryExecution(id, marker, envelope, view, d)
+	}
 	if deletion := envelope.Candidate.Intents[0].Deletion; deletion != nil {
 		if !sameExecutionFile(e.provider.options, pid, view.Observation.Evidence) {
 			return out, apitypes.Fail(409, "PROVIDER_IDENTITY_CHANGED")
@@ -291,6 +298,9 @@ func (e *Executor) Prepare(ctx context.Context, id, marker string, envelope cand
 	return e.prepareTreeExecution(ctx, compiled)
 }
 func compileExecution(id, marker string, envelope candidate.Envelope, view inventory.ExecutionView, d discovered) (execution.Plan, error) {
+	if _, ok := telemetryIntent(envelope.Candidate); ok {
+		return compileTelemetryExecution(id, marker, envelope, view, d)
+	}
 	if _, ok := qosCreationIntent(envelope.Candidate); ok {
 		return compileQoSCreation(id, marker, marker, envelope, view, d)
 	}
@@ -474,15 +484,25 @@ func (e *Executor) Commit(ctx context.Context, p execution.Plan, beforeSend func
 		notSent.Reason = "execution-plan-invalid"
 		return notSent
 	}
+	if _, telemetry := telemetryIntent(p.Envelope.Candidate); telemetry != (n.Telemetry != nil) {
+		notSent.Reason = "execution-plan-invalid"
+		return notSent
+	}
 	view, err := e.inventory.ExecutionView(ctx, candidate.Bindings(p.Envelope.Candidate))
 	if err != nil || view.Candidate.Generation != p.Generation || view.Candidate.Schema != p.Schema {
 		notSent.Reason = "identity-or-provider-unavailable"
 		return notSent
 	}
-	checks, _ := candidate.Checks(p.Envelope.Candidate, view.Candidate)
-	if !candidate.Passed(checks) {
+	if n.Telemetry != nil && (view.Observation.Evidence.Root != p.Root || !telemetryImageMatches(view, n.Telemetry, false)) {
 		notSent.Reason = "execution-preflight-conflict"
 		return notSent
+	}
+	if n.Telemetry == nil || !n.Telemetry.Rollback {
+		checks, _ := candidate.Checks(p.Envelope.Candidate, view.Candidate)
+		if !candidate.Passed(checks) {
+			notSent.Reason = "execution-preflight-conflict"
+			return notSent
+		}
 	}
 	if bridgeHostCheck(p.Envelope.Candidate) != nil {
 		notSent.Reason = "bridge-host-interface-conflict"
@@ -624,7 +644,7 @@ func decodeCommit(n nativePlan, p execution.Plan, body []byte) execution.Outcome
 	}
 	target, err := rows[0].Next.Int64()
 	floor, _ := strconv.ParseInt(p.NextFloor, 10, 64)
-	if err != nil || target <= floor {
+	if err != nil || target <= floor || n.Telemetry != nil && target != floor+1 {
 		return out
 	}
 	value := strconv.FormatInt(target, 10)
@@ -648,6 +668,9 @@ func (e *Executor) Observe(ctx context.Context, p execution.Plan, prior executio
 		out.Applied = "pending"
 		out.Reason = "awaiting-post-commit-observation"
 		return out
+	}
+	if _, ok := telemetryIntent(p.Envelope.Candidate); ok {
+		return e.observeTelemetry(ctx, p, view, out)
 	}
 	all, anyMarker := true, false
 	for _, intent := range p.Envelope.Candidate.Intents {

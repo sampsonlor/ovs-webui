@@ -23,6 +23,10 @@ func (r *Repository) SetQoSExecutionRole(ctx context.Context, id string, enabled
 	return r.setNativeExecutionRole(ctx, id, plan.QoSCapability, "qos-execution-role", enabled)
 }
 
+func (r *Repository) SetTelemetryExecutionRole(ctx context.Context, id string, enabled bool) error {
+	return r.setNativeExecutionRole(ctx, id, plan.TelemetryCapability, "telemetry-execution-role", enabled)
+}
+
 func (r *Repository) setNativeExecutionRole(ctx context.Context, id, capability, operation string, enabled bool) error {
 	if !apitypes.ManagementID(id) {
 		return apitypes.Fail(422, "INVALID_ROLE")

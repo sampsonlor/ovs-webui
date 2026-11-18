@@ -20,6 +20,7 @@ import type { Pending } from './api';
 import { has } from './policy.ts';
 import { interfaceListPath, readInterfaceQuery } from './interface-query.ts';
 import type { InterfaceScope } from './interface-query';
+import { telemetryMessage } from './telemetry.ts';
 
 export type Load<T> = {
   status: 'loading' | 'ready' | 'unavailable' | 'denied';
@@ -105,6 +106,10 @@ export function errorText(error: unknown): string {
     error.problem.code === 'TRANSACTION_VERSION_CHANGED'
   )
     return 'The transaction changed before this decision was accepted. Review the refreshed evidence and choose again.';
+  if (error instanceof APIError) {
+    const code = error.problem.code;
+    if (code && /^(?:INVALID_)?TELEMETRY_/.test(code)) return telemetryMessage(code, error.message);
+  }
   return error instanceof Error ? error.message : 'UNKNOWN_ERROR';
 }
 export class Controller {

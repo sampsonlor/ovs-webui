@@ -27,6 +27,7 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	localTelemetry                 map[string]bool
 	localMirrorObjects             map[string]bool
 	localMirrorCreates             map[string]bool
 	mirrorAuthorityRevision        string
@@ -150,6 +151,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	localSpanningTree := s.localSpanningTree
 	localQoS, localQoSDetach, localQoSAttach := s.localQoS, s.localQoSDetach, s.localQoSAttach
 	localQoSCreateNames := s.localQoSCreateNames
+	localTelemetry := s.localTelemetry
 	localIsolation := s.localIsolation
 	localMulticast := s.localMulticast
 	localTunnelObjects, localTunnelCreates, tunnelRevision := s.localTunnelObjects, s.localTunnelCreates, s.tunnelAuthorityRevision
@@ -320,7 +322,13 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	project := func(b Binding, kind string) (map[string]any, error) {
 		if kind == "telemetry" {
-			return telemetryResource(v, b, fresh, op == "readTelemetry")
+			item, err := telemetryResource(v, b, fresh, op == "readTelemetry")
+			if err == nil && op == "readTelemetry" {
+				if status := telemetryWriteStatus(v, b, fresh, localTelemetry, c); status != nil {
+					item["telemetry_write"] = status
+				}
+			}
+			return item, err
 		}
 		if kind == "qos" {
 			item, err := qosResource(v, b, fresh, qosPorts, op == "readQos")

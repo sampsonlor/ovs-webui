@@ -16,8 +16,8 @@ func TestBridgeTelemetryDiscoveryQualifiesEachProtocolAndField(t *testing.T) {
 		t.Run(version, func(t *testing.T) {
 			d := schema(t, version)
 			for protocol, table := range telemetryTables {
-				if !d.public.Telemetry[protocol] || !monitoredColumn(d, "Bridge", protocol) || d.requests[table] == nil ||
-					!monitoredColumn(d, table, "targets") || monitoredColumn(d, table, "external_ids") || privateInventoryColumn(d, table, "external_ids") {
+				if !d.public.Telemetry[protocol] || !d.public.TelemetryWrite[protocol] || !monitoredColumn(d, "Bridge", protocol) || d.requests[table] == nil ||
+					!monitoredColumn(d, table, "targets") || monitoredColumn(d, table, "external_ids") || !privateInventoryColumn(d, table, "external_ids") {
 					t.Fatalf("%s exporter projection did not qualify safely", protocol)
 				}
 				for name := range telemetryFields[table] {
@@ -27,7 +27,7 @@ func TestBridgeTelemetryDiscoveryQualifiesEachProtocolAndField(t *testing.T) {
 				}
 				request := d.requests[table].([]any)[0].(map[string]any)
 				columns := request["columns"].([]string)
-				allowed := 1 + len(telemetryFields[table])
+				allowed := 2 + len(telemetryFields[table])
 				if table == "IPFIX" {
 					allowed++
 					if !slices.Contains(columns, "other_config") {
@@ -38,8 +38,9 @@ func TestBridgeTelemetryDiscoveryQualifiesEachProtocolAndField(t *testing.T) {
 					t.Fatalf("unexpected %s monitor columns: %v", table, columns)
 				}
 			}
-			if d.requests["Flow_Sample_Collector_Set"] != nil {
-				t.Fatal("per-flow IPFIX is outside the Bridge-scoped view")
+			if d.requests[flowSampleCollectorTable] == nil || !privateInventoryColumn(d, flowSampleCollectorTable, "ipfix") ||
+				monitoredColumn(d, flowSampleCollectorTable, "ipfix") {
+				t.Fatal("per-flow IPFIX reference must remain a private write dependency")
 			}
 		})
 	}
@@ -68,7 +69,7 @@ func TestBridgeTelemetryDiscoveryQualifiesEachProtocolAndField(t *testing.T) {
 		monitoredColumn(d, "Bridge", "sflow") || monitoredColumn(d, "Bridge", "netflow") {
 		t.Fatal("incompatible exporter references or targets were accepted")
 	}
-	if !d.public.Telemetry["ipfix"] || !monitoredColumn(d, "IPFIX", "targets") || monitoredColumn(d, "IPFIX", "obs_point_id") {
+	if d.public.TelemetryWrite["ipfix"] || !d.public.Telemetry["ipfix"] || !monitoredColumn(d, "IPFIX", "targets") || monitoredColumn(d, "IPFIX", "obs_point_id") {
 		t.Fatal("one optional field should not qualify a changed shape or disable the exporter")
 	}
 	if !privateInventoryColumn(d, "Bridge", "sflow") {
@@ -140,9 +141,13 @@ func TestBridgeTelemetryMonitorPreservesNativeShapesAndBoundsText(t *testing.T) 
 		len(opts) != 2 || opts["enable-input-sampling"] != "true" || !present || malformed != nil {
 		t.Fatal("filtered IPFIX settings, explicitly empty targets, or unsigned precision lost", ip)
 	}
-	body, _ = json.Marshal(rows)
+	body, _ = json.Marshal([]any{rows["sFlow"][sflow].Values, nf, ip})
 	if strings.Contains(string(body), "synthetic-secret") {
 		t.Fatal("raw exporter values leaked")
+	}
+	private, _ := rows["IPFIX"][ipfix].Configuration["other_config"].(map[string]any)
+	if private["unchecked-option"] != "synthetic-secret" {
+		t.Fatal("native rollback image lost opaque configuration")
 	}
 	changes = map[string]any{"sFlow": map[string]any{sflow: map[string]any{
 		"old": map[string]any{"targets": []any{"set", targets}},

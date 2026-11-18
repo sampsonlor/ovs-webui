@@ -33,6 +33,9 @@ func (e *Executor) PrepareRollback(ctx context.Context, original execution.Plan,
 	if identity != n.Evidence.Peer || d.public.Digest != original.Schema || !sameExecutionFile(e.provider.options, pid, n.Evidence) {
 		return execution.Plan{}, apitypes.Fail(409, "ROLLBACK_GENERATION_CHANGED")
 	}
+	if _, ok := telemetryIntent(original.Envelope.Candidate); ok {
+		return compileTelemetryRollback(original, marker, n.Telemetry, view, d)
+	}
 	envelope := original.Envelope
 	envelope.Candidate.Intents = append([]candidate.StoredIntent{}, envelope.Candidate.Intents...)
 	if i, ok := qosCreationIntent(envelope.Candidate); ok {

@@ -475,7 +475,7 @@
         {:else if path === '/switching/qos' || path.startsWith('/switching/qos/')}
           <QoS model={$model} {expert} {desktop} />
         {:else if path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}
-          <Telemetry model={$model} {expert} />
+          <Telemetry model={$model} {expert} {desktop} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}

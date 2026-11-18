@@ -14900,7 +14900,7 @@
             }
           }
         },
-        "description": "Read-only OVSDB observation of sFlow, NetFlow and IPFIX attached to each Bridge. The telemetry ID is the active Bridge management identity. Requires inventory.read and configuration.read in addition to state.read. IPFIX covers Bridge sampling. Collector delivery remains unverified. The detail includes up to 16 configured collector targets per exporter and the supported native settings."
+        "description": "Read-only OVSDB observation of sFlow, NetFlow and IPFIX attached to each Bridge. The telemetry ID is the active Bridge management identity. Requires inventory.read and configuration.read in addition to state.read. IPFIX covers Bridge sampling. Collector delivery remains unverified. The detail includes up to 16 configured collector targets per exporter and the supported native settings. Eligible sessions can inspect telemetry_write for Bridge exporter changes through Candidate and Safe Apply."
       }
     },
     "/capabilities": {
@@ -28873,7 +28873,9 @@
               "qos.configure",
               "qos.detach",
               "qos.attach",
-              "qos.create"
+              "qos.create",
+              "telemetry.exporter.set",
+              "telemetry.exporter.clear"
             ]
           },
           "object": {
@@ -30497,6 +30499,9 @@
           },
           "native_telemetry": {
             "$ref": "#/components/schemas/TelemetryObservation"
+          },
+          "telemetry_write": {
+            "$ref": "#/components/schemas/TelemetryWrite"
           },
           "related_object_refs": {
             "type": "array",
@@ -33825,6 +33830,184 @@
         "additionalProperties": false,
         "description": "Independent Bridge sFlow, NetFlow and IPFIX reference observations from one OVSDB snapshot. Configured describes a native reference. The bounded target and setting projection carries explicit unknown, limited, unsupported and unset cases. Collector delivery remains unverified."
       },
+      "TelemetryBridgeBinding": {
+        "type": "object",
+        "properties": {
+          "management_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "ovs_uuid": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "table": {
+            "type": "string",
+            "const": "Bridge"
+          }
+        },
+        "required": [
+          "management_id",
+          "ovs_uuid",
+          "instance_generation",
+          "table"
+        ],
+        "additionalProperties": false
+      },
+      "TelemetryExporterWriteStatus": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Revision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "minItems": 0,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sampling": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4294967295
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "polling": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3600
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "active_timeout": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -1,
+                    "maximum": 86400
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "obs_domain_id": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "obs_point_id": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "revision",
+          "configured",
+          "targets",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "TelemetryWrite": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "$ref": "#/components/schemas/TelemetryBridgeBinding"
+          },
+          "protocols": {
+            "type": "object",
+            "properties": {
+              "sflow": {
+                "$ref": "#/components/schemas/TelemetryExporterWriteStatus"
+              },
+              "netflow": {
+                "$ref": "#/components/schemas/TelemetryExporterWriteStatus"
+              },
+              "ipfix": {
+                "$ref": "#/components/schemas/TelemetryExporterWriteStatus"
+              }
+            },
+            "required": [
+              "sflow",
+              "netflow",
+              "ipfix"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "object",
+          "protocols"
+        ],
+        "additionalProperties": false,
+        "description": "Optional Bridge detail write status. Requires workspace.write, ovs.telemetry.write and the current observation permissions. Per-protocol availability and review revision depend on current native state and explicit Bridge write authority."
+      },
       "QoSNativeRates": {
         "type": "object",
         "properties": {
@@ -35246,6 +35429,242 @@
         "additionalProperties": false,
         "description": "Create one unbound linear HFSC QoS and its dedicated native Queues through Candidate and durable Safe Apply. Requires an independently authorized unique profile name and the current provider generation. Rates use positive multiples of 8 bit/s. Queue minimum cannot exceed its maximum or the QoS maximum. With 32 explicit Queues, include Queue 0. Safe Apply verifies the saved configuration and detached graph. Later Port attachment is a separately authorized change."
       },
+      "TelemetryExporterSetIntent": {
+        "description": "Create or update one Bridge exporter through Candidate and Safe Apply. Targets are explicit numeric unicast IPv4:UDP-port or [IPv6]:UDP-port destinations. The settings object may omit individual keys to preserve native values. Null removes an optional setting. Other native settings are preserved.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "intent_id": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "operation": {
+                "type": "string",
+                "const": "telemetry.exporter.set"
+              },
+              "object": {
+                "$ref": "#/components/schemas/TelemetryBridgeBinding"
+              },
+              "protocol": {
+                "type": "string",
+                "const": "sflow"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sampling": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 4294967295
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "polling": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 3600
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "required": [
+              "intent_id",
+              "operation",
+              "object",
+              "protocol",
+              "targets",
+              "settings"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "intent_id": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "operation": {
+                "type": "string",
+                "const": "telemetry.exporter.set"
+              },
+              "object": {
+                "$ref": "#/components/schemas/TelemetryBridgeBinding"
+              },
+              "protocol": {
+                "type": "string",
+                "const": "netflow"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "active_timeout": {
+                    "type": "integer",
+                    "minimum": -1,
+                    "maximum": 86400
+                  }
+                }
+              }
+            },
+            "required": [
+              "intent_id",
+              "operation",
+              "object",
+              "protocol",
+              "targets",
+              "settings"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "intent_id": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "operation": {
+                "type": "string",
+                "const": "telemetry.exporter.set"
+              },
+              "object": {
+                "$ref": "#/components/schemas/TelemetryBridgeBinding"
+              },
+              "protocol": {
+                "type": "string",
+                "const": "ipfix"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sampling": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 4294967295
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "obs_domain_id": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "obs_point_id": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4294967295
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "required": [
+              "intent_id",
+              "operation",
+              "object",
+              "protocol",
+              "targets",
+              "settings"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "TelemetryExporterClearIntent": {
+        "type": "object",
+        "properties": {
+          "intent_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "operation": {
+            "type": "string",
+            "const": "telemetry.exporter.clear"
+          },
+          "object": {
+            "$ref": "#/components/schemas/TelemetryBridgeBinding"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "sflow",
+              "netflow",
+              "ipfix"
+            ]
+          }
+        },
+        "required": [
+          "intent_id",
+          "operation",
+          "object",
+          "protocol"
+        ],
+        "additionalProperties": false,
+        "description": "Disable one Bridge exporter through Candidate and Safe Apply. Guarded rollback restores the prior exporter configuration. Collector delivery is unverified."
+      },
       "SpanningTreePrepareRequest": {
         "type": "object",
         "properties": {
@@ -36105,6 +36524,12 @@
           },
           {
             "$ref": "#/components/schemas/QoSCreateIntent"
+          },
+          {
+            "$ref": "#/components/schemas/TelemetryExporterSetIntent"
+          },
+          {
+            "$ref": "#/components/schemas/TelemetryExporterClearIntent"
           }
         ]
       },
