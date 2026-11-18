@@ -331,11 +331,29 @@ func TestNativeTelemetryExecution(t *testing.T) {
 		id := f.safeApply(f.request(reviewed))
 		f.waitSafety(id, "awaiting-confirmation")
 		f.vs("set", "IPFIX", uuid, "external_ids:fixture=late")
+		// Exercise rollback preflight with the edit already observed. If a
+		// change races that snapshot, the native transaction guards reject it.
+		waitFor(t, func() bool {
+			view, err := f.inventory.ExecutionView(f.ctx, []candidate.Binding{f.bridge})
+			if err != nil {
+				return false
+			}
+			labels, _ := view.Observation.Rows["IPFIX"][uuid].Configuration["external_ids"].(map[string]any)
+			return labels["fixture"] == "late"
+		})
 		f.decide(id, "rollback")
-		f.waitSafety(id, "rollback-conflict")
-		if f.reference() != uuid || f.configuration(uuid, "external_ids:fixture") != "late" || !f.hasTarget(uuid, reviewed) ||
-			f.proxy.sent.Load() != 1 {
-			t.Fatal("rollback changed an exporter that had an intervening edit")
+		state := f.waitSafety(id, "rollback-conflict")
+		if ref := f.reference(); ref != uuid {
+			t.Fatalf("rollback changed the IPFIX reference to %s; expected %s", ref, uuid)
+		}
+		if label := f.configuration(uuid, "external_ids:fixture"); label != "late" {
+			t.Fatalf("rollback changed the externally edited label to %q; expected late", label)
+		}
+		if !f.hasTarget(uuid, reviewed) {
+			t.Fatalf("rollback changed the IPFIX targets to %s; expected %s", f.configuration(uuid, "targets"), reviewed)
+		}
+		if sends := f.proxy.sent.Load(); sends != 1 {
+			t.Fatalf("rollback dispatched despite the observed conflict; %d writes, state reason %s", sends, state.Reason)
 		}
 	})
 }
