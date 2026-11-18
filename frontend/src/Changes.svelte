@@ -12,6 +12,7 @@
   import { isTunnelOperation, tunnelMessage } from './tunnel';
   import { isMirrorOperation, mirrorMessage } from './mirror';
   import { isQoSOperation, qosMessage } from './qos';
+  import { isTelemetryOperation, telemetryMessage } from './telemetry';
   let {
     model,
     expert,
@@ -29,6 +30,7 @@
   const multicast=$derived(c?.intents.some(i=>i.operation==='bridge.multicast.configure')??false);
   const qos = $derived(c?.intents.some(i => isQoSOperation(i.operation)) ?? false);
   const qosCreate = $derived(c?.intents.some(i => i.operation === 'qos.create') ?? false);
+  const telemetry = $derived(c?.intents.some(i => isTelemetryOperation(i.operation)) ?? false);
  const isolation = $derived(c?.intents.some(i=>i.operation==='port.isolation.set')??false);
   const v = $derived(model.validation.value);
   const mirrorValidation = $derived(v?.diff.some(f=>isMirrorOperation(f.operation))??false);
@@ -36,8 +38,9 @@
   const treeValidation = $derived(v?.diff.some(f => f.operation === 'bridge.spanning-tree.prepare' || f.operation === 'bridge.spanning-tree.configure') ?? false);
   const multicastValidation=$derived(v?.diff.some(f=>f.operation==='bridge.multicast.configure')??false);
   const qosValidation = $derived(v?.diff.some(f => isQoSOperation(f.operation)) ?? false);
+  const telemetryValidation = $derived(v?.diff.some(f => isTelemetryOperation(f.operation)) ?? false);
  const isolationValidation = $derived(v?.diff.some(f=>f.operation==='port.isolation.set')??false);
-  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
+  const validationGates = $derived([...v?.checks ?? [], ...v?.invalidations ?? []].filter((g, i, all) => !(mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation || telemetryValidation) || all.findIndex(other => other.code === g.code && other.intent_id === g.intent_id) === i));
   const t = $derived(model.transaction.value);
   const blocked = $derived(model.busy || !!model.pending || !model.sessionReady);
   const page = $derived(model.path.split('/')[2]);
@@ -112,8 +115,8 @@
         Revision {c.revision} · generation {c.instance_generation ?? 'Unknown'}
       </p>{/if}
     {#each c.checks ?? [] as gate}<div class="notice warning">
-        <strong>{qos ? qosMessage(gate.code) : mirror ? mirrorMessage(gate.code) : tunnel ? tunnelMessage(gate.code) : multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if qos || mirror || tunnel || spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <strong>{telemetry ? telemetryMessage(gate.code, gate.reason || gate.code) : qos ? qosMessage(gate.code) : mirror ? mirrorMessage(gate.code) : tunnel ? tunnelMessage(gate.code) : multicast ? multicastMessage(gate.code) : isolation ? isolationMessage(gate.code) : spanningTree ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if telemetry || qos || mirror || tunnel || spanningTree || isolation || multicast}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     {#if c.diff_truncated}<p class="notice warning">
         Review is incomplete. Applying this Candidate is blocked.
@@ -121,6 +124,12 @@
     <Diff fields={c.diff ?? []} {expert} />
     {#if qos && c.state === 'reconciliation-required'}
       <p class="notice warning">{qosCreate ? 'Discard the QoS intent and check the currently available profile names before staging again.' : 'Discard the QoS intent and review the current Port and Queues before staging again.'}</p>
+    {/if}
+    {#if telemetry && (c.state === 'conflict' || c.state === 'reconciliation-required')}
+      <div class="notice warning">
+        <strong>Review and restage the exporter change</strong>
+        <p>Discard this intent and review the Bridge exporter before staging it again.</p>
+      </div>
     {/if}
     {#if spanningTree}<section class="notice warning" aria-label="Spanning tree draft boundary"><strong>Spanning tree draft only</strong><p>Review the captured configuration and native parameter checks. Execution and safe timer recovery are not available yet. Apply remains blocked.</p>{#if c.state === 'reconciliation-required'}<p>Configuration, attachment or authority changed. Discard this intent, review the Bridge and prepare a new draft. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
     {#if spanningTreeExecution}<section class="notice warning" aria-label="Spanning tree change boundary"><strong>Spanning tree Safe Apply</strong><p>Changing or switching protocols can interrupt traffic and management connectivity. Execution checks the current native runtime, preserves the original for guarded compensation and requires management reachability and confirmation. Installed protocol state does not prove network convergence.</p>{#if c.state === 'reconciliation-required'}<p>Discard this intent and review the current Bridge. Rebase cannot replace its captured original.</p>{/if}</section>{/if}
@@ -133,7 +142,7 @@
         <p>Live configuration or attachment changed. Discard this intent, review the current Interface and stage a new request with its current binding.</p>
       </section>
     {/if}
-    {#if c.state === 'conflict'}
+    {#if c.state === 'conflict' && !telemetry}
       <section class="panel">
         <h2>Resolve against this snapshot</h2>
         <p>
@@ -232,8 +241,8 @@
         class="notice"
         class:warning={gate.state !== 'allowed'}
       >
-        <Status value={gate.state} /> <strong>{qosValidation ? qosMessage(gate.code) : mirrorValidation ? mirrorMessage(gate.code) : tunnelValidation ? tunnelMessage(gate.code) : multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
-        {#if qosValidation || mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
+        <Status value={gate.state} /> <strong>{telemetryValidation ? telemetryMessage(gate.code, gate.reason || gate.code) : qosValidation ? qosMessage(gate.code) : mirrorValidation ? mirrorMessage(gate.code) : tunnelValidation ? tunnelMessage(gate.code) : multicastValidation ? multicastMessage(gate.code) : isolationValidation ? isolationMessage(gate.code) : treeValidation ? treeGateMessage(gate.code) : gate.code}</strong>
+        {#if telemetryValidation || qosValidation || mirrorValidation || tunnelValidation || treeValidation || isolationValidation || multicastValidation}{#if expert}<code>{gate.code}</code>{/if}{:else}<p>{gate.reason}</p>{/if}
       </div>{/each}
     <Diff fields={v.diff} {expert} />
     {#if expert}<details>

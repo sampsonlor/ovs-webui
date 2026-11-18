@@ -54,6 +54,7 @@ type Table struct {
 	Columns []Column   `json:"columns"`
 }
 type Schema struct {
+	TelemetryWrite       map[string]bool           `json:"-"`
 	Telemetry            map[string]bool           `json:"-"`
 	QoSCreate            bool                      `json:"-"`
 	QoSConfiguration     bool                      `json:"-"`

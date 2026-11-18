@@ -31,6 +31,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     assert code == 202
     code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeQoS','capabilities':network_role['capabilities']})
     assert code == 202
+    code, _, _ = call('/roles','POST',{'request_id':request_id(),'name':'NativeTelemetry','capabilities':network_role['capabilities']})
+    assert code == 202
     roles.update({role['name']: role['id'] for role in get('/roles')['items']})
     accounts = {}
     # The deadline scenario has its own principal so rapid test logins/step-ups
@@ -59,6 +61,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-qos-create', 'NativeQoS'),
                        ('browser-qos-create-reader', 'Reader'),
                        ('browser-telemetry-reader', 'Reader'), ('browser-telemetry-observer', 'InterfaceObserver'),
+                       ('browser-telemetry-writer', 'NativeTelemetry'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -140,6 +143,13 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     qos_for_attach = eventually(lambda: next((item for item in get('/qos')['items'] if item['ovs_uuid'] == qos_attach_uuid), None))
     qos_attach_grant = qos_port_for_edit['management_id']+':'+qos_for_attach['management_id']
     qos_create_name = 'ui-saved-hfsc'
+    telemetry_bridge = 'br-telem-write'
+    vsctl('add-br', telemetry_bridge, '--', '--id=@nf', 'create', 'NetFlow',
+          'targets="127.0.0.1:2055"', 'active_timeout=60', 'external_ids:fixture=preserve',
+          '--', 'set', 'Bridge', telemetry_bridge, 'datapath_type=dummy', 'netflow=@nf')
+    telemetry = eventually(lambda: next((item for item in get('/telemetry?filter='+telemetry_bridge)['items']
+                                         if item['name'] == telemetry_bridge), None))
+    telemetry_grant = telemetry['management_id']+':netflow'
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -154,6 +164,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-static-tunnel-role',roles['NativeStaticTunnel'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-mirror-role',roles['NativeMirror'])
     run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-qos-role',roles['NativeQoS'])
+    run(str(fixture/'ovs-mgrd'),'--database',str(manager_db),'--grant-telemetry-role',roles['NativeTelemetry'])
     mirror_pin=ovs/'mirror-build.json'
     assert mirror_pin.is_file(), 'formal Mirror writes require the separately fixed OVS build'
     mirror_flags=' --mirror-runtime-socket='+str(ovs/'switch.ctl')+' --mirror-runtime-executable='+str(ovs/'bin/ovs-vswitchd')+' --mirror-runtime-manifest='+str(mirror_pin)+' --mirror-runtime-manifest-sha256='+hashlib.sha256(mirror_pin.read_bytes()).hexdigest()
@@ -167,7 +178,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
                                               +' --local-qos-bindings='+qos_grant+' --local-qos-detach-bindings='+qos_grant
-                                              +' --local-qos-attach-bindings='+qos_attach_grant+' --local-qos-create-names='+qos_create_name))
+                                              +' --local-qos-attach-bindings='+qos_attach_grant+' --local-qos-create-names='+qos_create_name
+                                              +' --local-telemetry-bindings='+telemetry_grant))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
@@ -179,7 +191,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                             'uuid': qos_uuid, 'queue': qos_queue},
                 'qosAttach': {'id': qos_for_attach['management_id'], 'port': qos_port,
                               'uuid': qos_attach_uuid, 'queue': qos_attach_queue},
-                'qosCreateName': qos_create_name}
+                'qosCreateName': qos_create_name,
+                'telemetryWrite': {'id': telemetry['management_id'], 'bridge': telemetry_bridge}}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
@@ -203,6 +216,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tunnel-ui')
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-tunnel-flow')
         vsctl('--no-wait', '--if-exists', 'del-br', 'br-mirror-ui')
+        vsctl('--no-wait', '--if-exists', 'del-br', telemetry_bridge)
         vsctl('--no-wait', '--if-exists', 'del-br', qos_bridge)
         vsctl('--no-wait', '--if-exists', 'destroy', 'QoS', qos_uuid)
         vsctl('--no-wait', '--if-exists', 'destroy', 'QoS', qos_attach_uuid)

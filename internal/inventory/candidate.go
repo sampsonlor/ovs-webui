@@ -146,6 +146,7 @@ func (s *Service) CandidateSnapshot(ctx context.Context, bindings []candidate.Bi
 		return out, apitypes.Fail(409, "GENERATION_RECONCILIATION_REQUIRED")
 	}
 	out = candidateSnapshot(v, s.localVLAN, s.localBond, bindings)
+	projectTelemetryWrites(v, s.localTelemetry, &out, bindings)
 	projectMTU(v, s.localMTU, &out, bindings)
 	projectPolicing(v, s.localPolicing, &out, bindings)
 	projectQoS(v, s.localQoS, s.localQoSDetach, s.localQoSAttach, &out, bindings)

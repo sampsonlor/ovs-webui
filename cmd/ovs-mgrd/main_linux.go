@@ -51,6 +51,8 @@ func run() int {
 	revokeIsolationRole := flag.String("revoke-port-isolation-role", "", "Offline root action: revoke one role native Port isolation capability, then exit")
 	grantQoSRole := flag.String("grant-qos-role", "", "Offline root action: grant one role QoS rate editing, then exit")
 	revokeQoSRole := flag.String("revoke-qos-role", "", "Offline root action: revoke one role QoS rate editing, then exit")
+	grantTelemetryRole := flag.String("grant-telemetry-role", "", "Offline root action: grant one role Bridge Telemetry configuration, then exit")
+	revokeTelemetryRole := flag.String("revoke-telemetry-role", "", "Offline root action: revoke one role Bridge Telemetry configuration, then exit")
 	grantMulticastRole := flag.String("grant-multicast-role", "", "Offline root action: explicitly grant one existing role native multicast capability, then exit; new login required")
 	revokeMulticastRole := flag.String("revoke-multicast-role", "", "Offline root action: revoke one role native multicast capability, then exit")
 	grantMirrorRole := flag.String("grant-mirror-role", "", "Offline root action: grant one existing role native Mirror capability, then exit; new login required")
@@ -99,6 +101,7 @@ func run() int {
 	localQoSDetach := flag.String("local-qos-detach-bindings", "", "Reviewed Port management ID:QoS management ID pairs for exclusive egress detachment")
 	localQoSAttach := flag.String("local-qos-attach-bindings", "", "Reviewed Port management ID:QoS management ID pairs for exclusive egress attachment")
 	localQoSCreate := flag.String("local-qos-create-names", "", "Reviewed comma-separated names for creating unbound QoS profiles")
+	localTelemetry := flag.String("local-telemetry-bindings", "", "Reviewed comma-separated Bridge management ID:protocol pairs for Telemetry configuration")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -149,6 +152,12 @@ func run() int {
 		actions++
 	}
 	if *revokeIsolationRole != "" {
+		actions++
+	}
+	if *grantTelemetryRole != "" {
+		actions++
+	}
+	if *revokeTelemetryRole != "" {
 		actions++
 	}
 	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *grantQoSRole != "", *revokeQoSRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
@@ -309,6 +318,21 @@ func run() int {
 		}
 		return 0
 	}
+	if *grantTelemetryRole != "" || *revokeTelemetryRole != "" {
+		if authentication == nil {
+			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		id, enabled := *grantTelemetryRole, true
+		if *revokeTelemetryRole != "" {
+			id, enabled = *revokeTelemetryRole, false
+		}
+		if err := authentication.SetTelemetryExecutionRole(ctx, id, enabled); err != nil {
+			logger.Error("security_action_failed", "code", auth.ErrorCode(err))
+			return 1
+		}
+		return 0
+	}
 	if *grantMirrorRole != "" || *revokeMirrorRole != "" {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
@@ -464,6 +488,12 @@ func run() int {
 		if *localQoSCreate != "" {
 			if err = inventoryService.SetLocalQoSCreateNames(strings.Split(*localQoSCreate, ",")); err != nil {
 				logger.Error("invalid_qos_creation_authority", "code", auth.ErrorCode(err))
+				return 2
+			}
+		}
+		if *localTelemetry != "" {
+			if err = inventoryService.SetLocalTelemetryBindings(strings.Split(*localTelemetry, ",")); err != nil {
+				logger.Error("invalid_telemetry_authority", "code", auth.ErrorCode(err))
 				return 2
 			}
 		}

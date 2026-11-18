@@ -118,7 +118,7 @@ func normalizeInventoryColumn(table, name string, value any, column *native.Colu
 		if err != nil {
 			return nil, nil
 		}
-		return constrainTelemetryField(table, name, normalized), nil
+		return normalized, nil
 	}
 	if (table == "QoS" || table == "Queue") && column.Type == native.TypeMap {
 		if wire, ok := value.([]any); ok && len(wire) == 2 && wire[0] == "map" {

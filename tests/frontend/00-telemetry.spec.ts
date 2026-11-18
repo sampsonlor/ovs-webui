@@ -8,6 +8,7 @@ const fixture: {
   origin: string;
   dbSocket: string;
   accounts: Record<string, string>;
+  telemetryWrite: { id: string; bridge: string };
 } = JSON.parse(readFileSync(fixturePath, 'utf8'));
 const href = fixture.origin + '/visibility/telemetry';
 
@@ -199,4 +200,106 @@ test('Native telemetry reviews three Bridge exporters through authenticated resp
   } finally {
     vsctl('--no-wait', '--if-exists', 'del-br', bridge);
   }
+});
+
+test('Authorized NetFlow collector editing stages, applies and restores the exact Bridge configuration', async ({
+  page,
+  browser,
+}) => {
+  const user = 'browser-telemetry-writer';
+  const { id, bridge } = fixture.telemetryWrite;
+  const detail = href + '/' + id;
+  const netflow = (view: Page) =>
+    view.getByRole('article', { name: 'NetFlow', exact: true });
+  const configure = (view: Page) =>
+    netflow(view).getByRole('button', {
+      name: 'Configure NetFlow',
+      exact: true,
+    });
+  const original = '127.0.0.1:2055';
+  const reviewed = '127.0.0.1:2056';
+  const uuid = vsctl('get', 'Bridge', bridge, 'netflow');
+  const checkNative = (target: string, timeout: number) => {
+    expect(vsctl('get', 'Bridge', bridge, 'netflow')).toBe(uuid);
+    expect(vsctl('get', 'NetFlow', uuid, 'targets')).toBe(
+      '[' + JSON.stringify(target) + ']',
+    );
+    expect(vsctl('get', 'NetFlow', uuid, 'active_timeout')).toBe(
+      String(timeout),
+    );
+    expect(vsctl('get', 'NetFlow', uuid, 'external_ids:fixture')).toBe(
+      'preserve',
+    );
+  };
+
+  const reader = await browser.newPage({ ignoreHTTPSErrors: true });
+  try {
+    await login(reader, 'browser-telemetry-reader');
+    await reader.goto(detail);
+    await expect(netflow(reader)).toContainText(original);
+    await expect(configure(reader)).toHaveCount(0);
+  } finally {
+    await reader.close();
+  }
+
+  await login(page, user);
+  await page.goto(detail);
+  await expect(netflow(page)).toContainText(original);
+  for (const width of [820, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(configure(page)).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(
+    page.getByRole('button', { name: /Configure (sFlow|IPFIX)/ }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Standard', exact: true }).click();
+  await configure(page).click();
+  const targets = netflow(page).getByLabel('Collector targets');
+  await expect(targets).toHaveValue(original);
+  await targets.fill(reviewed);
+  await netflow(page).getByLabel('Active timeout (s)').fill('30');
+  await netflow(page).getByRole('button', { name: 'Review changes' }).click();
+  await expect(netflow(page)).toContainText(reviewed);
+  checkNative(original, 60);
+  await capture(page, 'write-review');
+
+  await netflow(page)
+    .getByRole('button', { name: 'Stage NetFlow configuration' })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Candidate Workspace' }),
+  ).toBeVisible();
+  const diff = page.getByRole('region', { name: 'Configuration Diff' });
+  await expect(diff).toContainText(reviewed);
+  await page
+    .getByRole('button', { name: 'Validate Candidate', exact: true })
+    .click();
+  await expect(
+    page.getByText('Usable for this revision', { exact: true }),
+  ).toBeVisible();
+  checkNative(original, 60);
+  await page.getByLabel('Verify your password').fill(fixture.accounts[user]);
+  await page
+    .getByRole('button', { name: 'Verify identity', exact: true })
+    .click();
+  await page
+    .getByLabel('Change reason')
+    .fill('Move the isolated NetFlow collector');
+  await page.getByRole('checkbox', { name: /^I reviewed this Diff/ }).check();
+  await page
+    .getByRole('button', { name: 'Start Safe Apply', exact: true })
+    .click();
+  await expect(page.getByTestId('safe-state')).toHaveText(
+    'awaiting-confirmation',
+  );
+  checkNative(reviewed, 30);
+  await capture(page, 'write-applied');
+
+  await page
+    .getByRole('button', { name: 'Request rollback', exact: true })
+    .click();
+  await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
+  checkNative(original, 60);
+  await capture(page, 'write-rolled-back');
 });

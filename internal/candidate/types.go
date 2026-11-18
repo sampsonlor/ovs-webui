@@ -33,29 +33,33 @@ type VLAN struct {
 	CVLANs []int   `json:"cvlans"`
 }
 type Intent struct {
-	QoSGeneration string               `json:"instance_generation,omitempty"`
-	QoSBinding    *Binding             `json:"qos,omitempty"`
-	QoSType       string               `json:"type,omitempty"`
-	QoSMaximum    uint64               `json:"max_rate_bps,omitempty"`
-	QoSQueues     []QoSQueueRate       `json:"queues,omitempty"`
-	Multicast     *multicast.Request   `json:"multicast,omitempty"`
-	Protected     *bool                `json:"protected,omitempty"`
-	SpanningTree  *SpanningTreeRequest `json:"spanning_tree,omitempty"`
-	Topology      *TopologyRequest     `json:"topology,omitempty"`
-	Policing      *PolicingRequest     `json:"policing,omitempty"`
-	ID            string               `json:"intent_id"`
-	Operation     string               `json:"operation"`
-	Object        Binding              `json:"object"`
-	Value         VLAN                 `json:"value"`
-	Mode          string               `json:"mode,omitempty"`
-	LACP          string               `json:"lacp,omitempty"`
-	Members       []string             `json:"member_interface_ids,omitempty"`
-	Fallback      string               `json:"fallback,omitempty"`
-	Name          string               `json:"name,omitempty"`
-	VLANID        int                  `json:"vlan_id,omitempty"`
-	MTURequest    int                  `json:"mtu_request,omitempty"`
+	TelemetryProtocol string               `json:"protocol,omitempty"`
+	TelemetryTargets  []string             `json:"targets,omitempty"`
+	TelemetrySettings map[string]*int64    `json:"settings,omitempty"`
+	QoSGeneration     string               `json:"instance_generation,omitempty"`
+	QoSBinding        *Binding             `json:"qos,omitempty"`
+	QoSType           string               `json:"type,omitempty"`
+	QoSMaximum        uint64               `json:"max_rate_bps,omitempty"`
+	QoSQueues         []QoSQueueRate       `json:"queues,omitempty"`
+	Multicast         *multicast.Request   `json:"multicast,omitempty"`
+	Protected         *bool                `json:"protected,omitempty"`
+	SpanningTree      *SpanningTreeRequest `json:"spanning_tree,omitempty"`
+	Topology          *TopologyRequest     `json:"topology,omitempty"`
+	Policing          *PolicingRequest     `json:"policing,omitempty"`
+	ID                string               `json:"intent_id"`
+	Operation         string               `json:"operation"`
+	Object            Binding              `json:"object"`
+	Value             VLAN                 `json:"value"`
+	Mode              string               `json:"mode,omitempty"`
+	LACP              string               `json:"lacp,omitempty"`
+	Members           []string             `json:"member_interface_ids,omitempty"`
+	Fallback          string               `json:"fallback,omitempty"`
+	Name              string               `json:"name,omitempty"`
+	VLANID            int                  `json:"vlan_id,omitempty"`
+	MTURequest        int                  `json:"mtu_request,omitempty"`
 }
 type StoredIntent struct {
+	Telemetry    *TelemetryChange    `json:"telemetry_change,omitempty"`
 	QoSCreation  *QoSCreation        `json:"qos_creation,omitempty"`
 	QoS          *QoSChange          `json:"qos_change,omitempty"`
 	Multicast    *MulticastChange    `json:"multicast_change,omitempty"`
@@ -162,6 +166,7 @@ type Port struct {
 	STP, RSTP                       bool
 }
 type Snapshot struct {
+	Telemetry                            map[string]TelemetryTarget
 	QoSCreate                            QoSCreateState
 	QoSPorts                             map[string]QoSPort
 	QoSDetachPorts                       map[string]QoSPort

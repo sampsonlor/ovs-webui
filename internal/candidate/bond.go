@@ -24,6 +24,9 @@ func Capabilities(c Candidate) []string {
 		if IsQoSOperation(i.Operation) {
 			cap = QoSCapability
 		}
+		if IsTelemetryOperation(i.Operation) {
+			cap = TelemetryCapability
+		}
 		if i.Operation == BridgeMulticastSet {
 			cap = BridgeMulticastCapability
 		}

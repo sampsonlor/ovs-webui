@@ -16,6 +16,9 @@ import (
 // Compile only zero-timeout guards and a counter select. No update, mutate or
 // commit operation is allowed into this private, read-only proof transaction.
 func appliedProofOperations(p execution.Plan, view inventory.ExecutionView, d discovered) ([]any, error) {
+	if _, ok := telemetryIntent(p.Envelope.Candidate); ok {
+		return telemetryAppliedProof(p, view, d)
+	}
 	if _, ok := qosCreationIntent(p.Envelope.Candidate); ok {
 		return qosCreationProof(p, view, d)
 	}

@@ -568,6 +568,7 @@ type Resource struct {
 	QosDetach         QoSRateEdit                `json:"qos_detach,omitempty"`
 	QosAttach         QoSAttachStatus            `json:"qos_attach,omitempty"`
 	NativeTelemetry   TelemetryObservation       `json:"native_telemetry,omitempty"`
+	TelemetryWrite    TelemetryWrite             `json:"telemetry_write,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1369,6 +1370,24 @@ type TelemetryObservation struct {
 	Delivery  string                     `json:"delivery"`
 	Exporters map[string]json.RawMessage `json:"exporters"`
 }
+type TelemetryBridgeBinding struct {
+	ManagementId       Id     `json:"management_id"`
+	OvsUuid            Id     `json:"ovs_uuid"`
+	InstanceGeneration Id     `json:"instance_generation"`
+	Table              string `json:"table"`
+}
+type TelemetryExporterWriteStatus struct {
+	Available  bool                       `json:"available"`
+	Reason     string                     `json:"reason"`
+	Revision   json.RawMessage            `json:"revision"`
+	Configured bool                       `json:"configured"`
+	Targets    json.RawMessage            `json:"targets"`
+	Settings   map[string]json.RawMessage `json:"settings"`
+}
+type TelemetryWrite struct {
+	Object    TelemetryBridgeBinding     `json:"object"`
+	Protocols map[string]json.RawMessage `json:"protocols"`
+}
 type QoSNativeRates struct {
 	Type       string                       `json:"type"`
 	MaxRateBps int64                        `json:"max_rate_bps"`
@@ -1645,6 +1664,13 @@ type QoSCreateIntent struct {
 	Type               string           `json:"type"`
 	MaxRateBps         int64            `json:"max_rate_bps"`
 	Queues             []QoSCreateQueue `json:"queues"`
+}
+type TelemetryExporterSetIntent = json.RawMessage
+type TelemetryExporterClearIntent struct {
+	IntentId  Id                     `json:"intent_id"`
+	Operation string                 `json:"operation"`
+	Object    TelemetryBridgeBinding `json:"object"`
+	Protocol  string                 `json:"protocol"`
 }
 type SpanningTreePrepareRequest struct {
 	Protocol   string                     `json:"protocol"`

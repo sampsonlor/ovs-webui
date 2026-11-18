@@ -194,6 +194,8 @@ export function applyReady(
           'qos.detach': 'ovs.qos.write',
           'qos.attach': 'ovs.qos.write',
           'qos.create': 'ovs.qos.write',
+          'telemetry.exporter.set': 'ovs.telemetry.write',
+          'telemetry.exporter.clear': 'ovs.telemetry.write',
           'tunnel.static.create':'ovs.tunnel.static.write',
           'tunnel.static.configure':'ovs.tunnel.static.write',
           'tunnel.static.delete':'ovs.tunnel.static.write',

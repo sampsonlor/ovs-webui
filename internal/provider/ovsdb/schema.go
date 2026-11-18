@@ -34,6 +34,7 @@ var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name
 type discovered struct {
 	multicastMaps    map[string]bool
 	telemetryColumns map[string]map[string]bool
+	telemetryPrivate map[string]map[string]bool
 	public           inventory.Schema
 	native           native.DatabaseSchema
 	requests         map[string]any
@@ -66,6 +67,7 @@ func discover(data []byte) (discovered, error) {
 	}
 	d.public.QoSConfiguration = qosReadSchema(d, raw)
 	discoverTelemetry(&d, raw)
+	discoverTelemetryWrites(&d, raw)
 	for t, table := range d.native.Tables {
 		if len(table.Columns) > 256 {
 			return d, errors.New("OVSDB_SCHEMA_BUDGET")
@@ -132,13 +134,13 @@ func discover(data []byte) (discovered, error) {
 			}
 			sort.Slice(c.References, func(i, j int) bool { return c.References[i].Position < c.References[j].Position })
 			tt.Columns = append(tt.Columns, c)
-			if c.Monitored || graphConfigurationColumn(t, name, col) || d.public.QoSConfiguration && qosPrivateColumn(t, name, col) {
+			if c.Monitored || privateInventoryColumn(d, t, name) {
 				names = append(names, name)
 			}
 		}
 		sort.Slice(tt.Columns, func(i, j int) bool { return tt.Columns[i].Name < tt.Columns[j].Name })
 		d.public.Tables = append(d.public.Tables, tt)
-		if _, ok := selected[t]; (ok || len(d.telemetryColumns[t]) > 0) && (t != "QoS" && t != "Queue" || d.public.QoSConfiguration) {
+		if _, ok := selected[t]; (ok || len(d.telemetryColumns[t]) > 0 || len(d.telemetryPrivate[t]) > 0) && (t != "QoS" && t != "Queue" || d.public.QoSConfiguration) {
 			sort.Strings(names)
 			d.requests[t] = []any{map[string]any{"columns": names, "select": map[string]bool{"initial": true, "insert": true, "delete": true, "modify": true}}}
 		}
@@ -309,7 +311,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					previous := prior.Values[name]
 					if private {
 						previous = prior.Configuration[name]
-						n = boundedPrivateQoS(table, n)
+						n = boundedPrivateTelemetry(table, boundedPrivateQoS(table, n))
 					} else {
 						n = sanitize(table, name, n)
 					}
@@ -346,7 +348,7 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 					return err
 				}
 				if private {
-					prior.Configuration[name] = boundedPrivateQoS(table, n)
+					prior.Configuration[name] = boundedPrivateTelemetry(table, boundedPrivateQoS(table, n))
 				}
 				if monitoredColumn(d, table, name) {
 					prior.Values[name] = sanitize(table, name, n)
@@ -370,10 +372,13 @@ func update(d discovered, rows inventory.Rows, data []byte, initial bool) error 
 }
 func privateInventoryColumn(d discovered, table, name string) bool {
 	column := d.native.Tables[table].Columns[name]
-	return graphConfigurationColumn(table, name, column) || d.public.QoSConfiguration && qosPrivateColumn(table, name, column)
+	return graphConfigurationColumn(table, name, column) || d.telemetryPrivate[table][name] || d.public.QoSConfiguration && qosPrivateColumn(table, name, column)
 }
 
 func sanitize(table, name string, n any) any {
+	if telemetryTable(table) {
+		return constrainTelemetryField(table, name, n)
+	}
 	if (table == "QoS" || table == "Queue") && name == "other_config" {
 		return sanitizeQoSOptions(n)
 	}
@@ -501,7 +506,7 @@ func validateRelations(rows inventory.Rows) error {
 		// records are legitimate, and Port or Queue sharing is observable.
 		// Exporters do not have names and IPFIX may be used only by a
 		// Flow_Sample_Collector_Set outside the Bridge-scoped projection.
-		if table == "Open_vSwitch" || table == "Datapath" || table == "QoS" || table == "Queue" || telemetryTable(table) {
+		if table == "Open_vSwitch" || table == "Datapath" || table == "QoS" || table == "Queue" || table == flowSampleCollectorTable || telemetryTable(table) {
 			continue
 		}
 		for uuid, row := range objects {

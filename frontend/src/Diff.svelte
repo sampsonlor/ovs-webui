@@ -2,6 +2,7 @@
   import type { DiffField } from '../../clients/typescript/public-v1.generated';
   import Link from './Link.svelte';
   import TopologyDiff from './TopologyDiff.svelte';
+  import { isTelemetryOperation, telemetryDiffLabels } from './telemetry';
   let { fields, expert = false }: { fields: DiffField[]; expert?: boolean } = $props();
   const internalPorts = $derived(fields.filter((field) => field.operation === 'port.create-internal'));
   const portDeletions = $derived(fields.filter((field) => field.operation === 'port.delete-internal'));
@@ -13,7 +14,21 @@
   const qosDetach = $derived(fields.some((field) => field.operation === 'qos.detach'));
   const qosAttach = $derived(fields.some((field) => field.operation === 'qos.attach'));
   const qosCreate = $derived(fields.some((field) => field.operation === 'qos.create'));
+  const telemetry = $derived(fields.some(field => isTelemetryOperation(field.operation)));
+  const telemetryClear = $derived(fields.some(field => field.operation === 'telemetry.exporter.clear'));
   function display(value: unknown, field: DiffField, side: 'before' | 'current' | 'after') {
+    if (isTelemetryOperation(field.operation)) {
+      if (value === 'configured') return 'Configured';
+      if (value === 'unconfigured') return 'Not configured';
+      if (value == null && side === 'current' && field.conflict) return 'Unavailable';
+      if (field.field === 'Collector targets') return Array.isArray(value) && value.length ? value.join(', ') : 'None';
+      if (value == null) {
+        if (field.field.endsWith(' exporter')) return 'Unavailable';
+        const state = fields.find(next => next.intent_id === field.intent_id && next.field.endsWith(' exporter'))?.[side];
+        return state === 'unconfigured' ? 'Not configured' : 'Unset native value';
+      }
+      return String(value);
+    }
     if (field.operation === 'qos.create') {
       if (value === null || value === undefined) return side === 'current' && field.conflict ? 'Unavailable' : 'Not present';
       return String(value);
@@ -89,6 +104,17 @@
 {#if qosDetach}<div class="notice warning"><strong>Remove egress shaping from this Port</strong><p>Traffic can use the Port without the configured rates after detachment. The QoS and Queue objects remain available for guarded rollback. Review the affected traffic and management path before Safe Apply.</p></div>{/if}
 {#if qosAttach}<div class="notice warning"><strong>Apply egress shaping to this Port</strong><p>Review the affected traffic and management path before Safe Apply. The server verifies that Linux installs the reviewed HFSC configuration. Rollback restores the Port's unshaped default scheduler.</p></div>{/if}
 {#if qosCreate}<div class="notice"><strong>Create an unbound QoS profile</strong><p>Safe Apply verifies the saved HFSC profile and dedicated Queues. Rollback removes them while the configuration and references still match the creation.</p></div>{/if}
+{#if telemetry}
+  <div class="notice warning">
+    <strong>Bridge exporter Safe Apply</strong>
+    {#if telemetryClear}
+      <p>Disabling the exporter stops export to the listed collector destinations. Guarded rollback can restore the configuration with a fresh exporter identity.</p>
+    {:else}
+      <p>Review the UDP collector destinations and the basic settings. Export traffic and switch load may change. Guarded rollback can restore the prior exporter configuration.</p>
+    {/if}
+    <p>Safe Apply checks OVSDB configuration and daemon acknowledgement. Collector delivery is unverified.</p>
+  </div>
+{/if}
 {#if qinq.length}
   <div class="notice warning"><strong>QinQ service and customer VLANs</strong><p>The service VLAN is the outer tag. An empty customer VLAN list permits all customer VLANs. The native TPID is preserved; external dependency changes block reuse of this review and guarded rollback.</p></div>
   {#if expert}{#each qinq as field}<details><summary>QinQ native dependency evidence</summary><pre>{JSON.stringify({ original: field.before, current: field.current }, null, 2)}</pre></details>{/each}{/if}
@@ -138,7 +164,7 @@
           ><th scope="row"
             >{#if field.operation !== 'qos.create'}{#if field.object.table === 'Port' && !['port.create-internal', 'port.delete-internal'].includes(field.operation ?? '')}<Link href={`/ports/${field.object.management_id}`}
               >{field.object.management_id.slice(0, 8)}</Link
-            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{/if}{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field === 'mtu_default_dependency' ? 'Automatic MTU dependency (bytes)' : (field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') ? treeFields[field.field] ?? field.field : field.field}{#if field.conflict}<span class="badge">Conflict</span
+            >{:else if field.object.table === 'Interface'}<Link href={`/interfaces/${field.object.management_id}`}>Interface · {field.object.management_id.slice(0, 8)}</Link>{:else if isTelemetryOperation(field.operation)}<Link href={`/visibility/telemetry/${field.object.management_id}`}>Bridge · {field.object.management_id.slice(0, 8)}</Link>{:else}<span>{field.object.table} · {field.object.management_id.slice(0, 8)}</span>{/if}<br />{/if}{field.operation === 'port.create-internal' ? 'Create internal Port' : field.operation === 'port.delete-internal' ? 'Delete internal Port' : field.field === 'mtu_default_dependency' ? 'Automatic MTU dependency (bytes)' : (field.operation === 'bridge.spanning-tree.prepare' || field.operation === 'bridge.spanning-tree.configure') ? treeFields[field.field] ?? field.field : isTelemetryOperation(field.operation) ? telemetryDiffLabels[field.field] ?? field.field : field.field}{#if field.conflict}<span class="badge">Conflict</span
               >{/if}</th
           ><td>{display(field.before, field, 'before')}</td><td
             >{display(field.current, field, 'current')}</td

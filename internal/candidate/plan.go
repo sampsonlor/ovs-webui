@@ -124,6 +124,14 @@ func Compare(c Candidate, s Snapshot) View {
 			v.Diff = append(v.Diff, topologyDiff(i, s))
 			continue
 		}
+		if IsTelemetryOperation(i.Operation) {
+			if problem := telemetryProblem(i, s); problem != "" {
+				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
+				v.State = "reconciliation-required"
+			}
+			v.Diff = append(v.Diff, telemetryDiff(i, s)...)
+			continue
+		}
 		if i.Operation == QoSCreate {
 			if problem := qosCreationProblem(i, s); problem != "" {
 				v.Checks = append(v.Checks, gate(problem, "blocked", i.ID))
@@ -272,6 +280,12 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 			return e, apitypes.Fail(422, "INVALID_INTENT")
 		}
 		for _, in := range cmd.Intents {
+			if IsTelemetryOperation(in.Operation) && len(cmd.Intents) != 1 {
+				return e, apitypes.Fail(409, "TELEMETRY_RESTAGE_REQUIRED")
+			}
+			if !IsTelemetryOperation(in.Operation) && (in.TelemetryProtocol != "" || in.TelemetryTargets != nil || in.TelemetrySettings != nil) {
+				return e, apitypes.Fail(422, "INVALID_TELEMETRY_EXPORTER")
+			}
 			if (in.QoSType != "" || in.QoSMaximum != 0 || in.QoSQueues != nil) && in.Operation != QoSConfigure && in.Operation != QoSCreate ||
 				in.QoSGeneration != "" && in.Operation != QoSCreate ||
 				in.QoSBinding != nil && !IsQoSBindingOperation(in.Operation) {
@@ -320,6 +334,14 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsTopologyOperation(i.Operation) }) || IsTopologyOperation(cmd.Intents[0].Operation) {
 			var err error
 			c, err = stageTopology(c, cmd, s)
+			if err != nil {
+				return e, err
+			}
+			break
+		}
+		if slices.ContainsFunc(c.Intents, func(i StoredIntent) bool { return IsTelemetryOperation(i.Operation) }) || IsTelemetryOperation(cmd.Intents[0].Operation) {
+			var err error
+			c, err = stageTelemetry(c, cmd, s)
 			if err != nil {
 				return e, err
 			}
@@ -497,6 +519,9 @@ func Prepare(e Envelope, cmd Command, s Snapshot) (Envelope, error) {
 		}
 		next := []StoredIntent{}
 		for _, i := range c.Intents {
+			if IsTelemetryOperation(i.Operation) {
+				return e, apitypes.Fail(409, "TELEMETRY_RESTAGE_REQUIRED")
+			}
 			if IsQoSOperation(i.Operation) {
 				return e, apitypes.Fail(409, "QOS_RESTAGE_REQUIRED")
 			}
@@ -570,6 +595,10 @@ func Checks(c Candidate, s Snapshot) ([]Gate, []Diff) {
 		checks = append(checks, gate("EMPTY_CANDIDATE", "blocked", ""))
 	}
 	for _, i := range c.Intents {
+		if IsTelemetryOperation(i.Operation) {
+			checks = append(checks, gate("TELEMETRY_EXPORTER_SAFE_APPLY", "allowed", i.ID))
+			continue
+		}
 		if i.Operation == QoSCreate {
 			checks = append(checks, gate("QOS_CREATION_UNBOUND_SAFE_APPLY", "allowed", i.ID))
 			continue
