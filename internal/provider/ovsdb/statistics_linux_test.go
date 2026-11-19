@@ -28,11 +28,11 @@ func TestStatisticsObserverChecksUnixPeerAndOnlyReadsBoundCounters(t *testing.T)
 			requests := make(chan map[string]any, 2)
 			control := controlServer(t, func(conn net.Conn) {
 				decoder := json.NewDecoder(conn)
-				var request map[string]any
-				if decoder.Decode(&request) != nil {
+				var discovery map[string]any
+				if decoder.Decode(&discovery) != nil {
 					return
 				}
-				requests <- request
+				requests <- discovery
 				if scenario == "timeout" {
 					var discarded any
 					_ = decoder.Decode(&discarded)
@@ -41,10 +41,11 @@ func TestStatisticsObserverChecksUnixPeerAndOnlyReadsBoundCounters(t *testing.T)
 				if json.NewEncoder(conn).Encode(map[string]any{"id": 1, "result": json.RawMessage(schemaBody), "error": nil}) != nil {
 					return
 				}
-				if decoder.Decode(&request) != nil {
+				var transaction map[string]any
+				if decoder.Decode(&transaction) != nil {
 					return
 				}
-				requests <- request
+				requests <- transaction
 				_ = json.NewEncoder(conn).Encode(map[string]any{"id": 2, "result": statisticsTestResult(), "error": nil})
 			})
 			provider := &Provider{options: Options{Socket: control.Socket, PeerUID: control.PeerUID}}

@@ -18,7 +18,7 @@ func (s *Service) readStatistics(op string, path map[string]string, q url.Values
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
 	s.mu.RLock()
-	v, failure := s.current, s.failure
+	v, failure, epoch := s.current, s.failure, s.statisticsEpoch
 	s.mu.RUnlock()
 	if v == nil {
 		return nil, apitypes.Fail(503, "OVSDB_RESYNCING")
@@ -33,7 +33,7 @@ func (s *Service) readStatistics(op string, path map[string]string, q url.Values
 	if op == "readStatistic" {
 		for _, binding := range v.decision.Bindings {
 			if binding.ManagementID == path["statistic_id"] && binding.Table == "Interface" && binding.State == "active" {
-				return statisticResource(v, failure, binding, *cache, now, true), nil
+				return statisticResource(v, failure, epoch, binding, *cache, now, true), nil
 			}
 		}
 		return nil, apitypes.Fail(404, "NOT_FOUND")
@@ -120,7 +120,7 @@ func (s *Service) readStatistics(op string, path map[string]string, q url.Values
 	items := []map[string]any{}
 	size := 0
 	for _, binding := range bindings[start:] {
-		item := statisticResource(v, failure, binding, *cache, now, false)
+		item := statisticResource(v, failure, epoch, binding, *cache, now, false)
 		blob, _ := json.Marshal(item)
 		if len(items) >= limit || len(items) >= 50 || len(items) > 0 && size+len(blob) > 40<<10 {
 			break
@@ -197,7 +197,7 @@ func optionalStatisticText(value string) any {
 	return value
 }
 
-func statisticResource(v *view, failure string, binding Binding, cache statisticsCache, now time.Time, detail bool) map[string]any {
+func statisticResource(v *view, failure string, epoch uint64, binding Binding, cache statisticsCache, now time.Time, detail bool) map[string]any {
 	item := base(binding.ManagementID, "statistic", "unknown", v)
 	item["name"] = textValue(v.observation.Rows["Interface"][binding.UUID].Values["name"])
 	item["native_uuid"], item["instance_generation"] = binding.UUID, v.decision.Generation
@@ -243,7 +243,7 @@ func statisticResource(v *view, failure string, binding Binding, cache statistic
 		} else if reason == "" {
 			reason = "STATISTICS_COUNTERS_UNREPORTED"
 		}
-		if !statisticViewFresh(v, failure, now) || reason != "" || now.Sub(sample.SampledAt) < 0 || now.Sub(sample.SampledAt) > statisticsFreshFor {
+		if !statisticViewFresh(v, failure, now) || entry.sourceEpoch != epoch || reason != "" || now.Sub(sample.SampledAt) < 0 || now.Sub(sample.SampledAt) > statisticsFreshFor {
 			fresh = "stale"
 			sample.Rates = emptyStatisticRates()
 			if reason == "" {

@@ -126,6 +126,10 @@ func TestStatisticsBreaksBriefOutageAndNativeAssociationChanges(t *testing.T) {
 	if stale["source"].(map[string]any)["freshness"] != "stale" || stale["rates"].(map[string]*float64)["rx_bytes"] != nil {
 		t.Fatal("outage retained fresh rate")
 	}
+	f.service.install(f.observation, f.decision)
+	if resumed := f.read(t); resumed["source"].(map[string]any)["freshness"] == "fresh" || resumed["rates"].(map[string]*float64)["rx_bytes"] != nil {
+		t.Fatal("monitor reconnect revived an old statistics sample")
+	}
 	f.set("rx_bytes", "20")
 	f.sample(t, StatisticsInterval)
 	after := f.read(t)
@@ -184,5 +188,12 @@ func TestStatisticsRetentionResponseBudgetAndScopedCursor(t *testing.T) {
 	f.now = f.now.Add(StatisticsRetention + time.Second)
 	if f.read(t)["sample_count"] != 0 {
 		t.Fatal("expired history remained visible")
+	}
+	f.service.Unavailable("OVSDB_UNAVAILABLE")
+	if err := f.service.SampleStatistics(context.Background()); err == nil {
+		t.Fatal("sampling unavailable inventory succeeded")
+	}
+	if len(f.service.statistics.entries) != 0 {
+		t.Fatal("expired private history remained allocated after failed collection")
 	}
 }

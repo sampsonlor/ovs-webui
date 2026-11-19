@@ -159,6 +159,16 @@ func (s *Service) SampleStatistics(ctx context.Context) error {
 		err = apitypes.Fail(503, "STATISTICS_SOURCE_CHANGED")
 	}
 	if err != nil {
+		for id, entry := range cache.entries {
+			cutoff := completed.Add(-StatisticsRetention)
+			kept := slices.DeleteFunc(entry.samples, func(point statisticPoint) bool { return point.at.Before(cutoff) })
+			if len(kept) == 0 {
+				delete(cache.entries, id)
+				continue
+			}
+			entry.samples = slices.Clone(kept)
+			cache.entries[id] = entry
+		}
 		cache.failure = "STATISTICS_UNAVAILABLE"
 		switch err.Error() {
 		case "STATISTICS_SCHEMA_UNSUPPORTED", "STATISTICS_SOURCE_CHANGED", "STATISTICS_OBJECT_BUDGET":

@@ -6,10 +6,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,7 +58,24 @@ func newStatisticsFixture(t *testing.T) *statisticsFixture {
 	f.port = f.binding("field-p1")
 	f.intf = f.interfaceBinding("field-p1")
 	must(t, f.inventory.ConfigureStatistics(f.provider))
+	f.waitStatisticsSource()
 	return f
+}
+
+func (f *statisticsFixture) waitStatisticsSource() {
+	f.t.Helper()
+	waitFor(f.t, func() bool {
+		view, err := f.inventory.ExecutionView(f.ctx, []candidate.Binding{f.port})
+		if err != nil {
+			return false
+		}
+		root := view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root]
+		progress := strings.Fields(f.vs("get", "Open_vSwitch", ".", "cur_cfg", "next_cfg"))
+		if len(progress) != 2 || progress[0] != progress[1] || root.Values["cur_cfg"] != progress[0] || root.Values["next_cfg"] != progress[1] {
+			return false
+		}
+		return f.nativeCounters("field-p1")["rx_packets"] != ""
+	})
 }
 
 func (f *statisticsFixture) interfaceBinding(name string) candidate.Binding {
@@ -156,6 +175,34 @@ func (f *statisticsFixture) evidenceCount() int {
 	return count
 }
 
+func (f *statisticsFixture) evidenceSince(count int) []string {
+	f.t.Helper()
+	records := []string{}
+	must(f.t, f.store.Read(f.ctx, func(ctx context.Context, q *sql.Conn) error {
+		rows, err := q.QueryContext(ctx, "SELECT operation,source,document FROM evidence_records ORDER BY created_at_ms,id LIMIT -1 OFFSET ?", count)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var operation, source string
+			var document []byte
+			if err := rows.Scan(&operation, &source, &document); err != nil {
+				return err
+			}
+			var record struct {
+				Reason any `json:"reason"`
+			}
+			if err := json.Unmarshal(document, &record); err != nil {
+				return err
+			}
+			records = append(records, fmt.Sprintf("%s source=%s reason=%v", operation, source, record.Reason))
+		}
+		return rows.Err()
+	}))
+	return records
+}
+
 func TestNativeStatisticsObservation(t *testing.T) {
 	if os.Getenv("OVS_EXECUTION_NATIVE_TEST") != "1" {
 		t.Skip("requires the explicit isolated Linux OVS statistics fixture")
@@ -191,17 +238,6 @@ func TestNativeStatisticsObservation(t *testing.T) {
 				}
 			} else if actual != nil {
 				t.Fatalf("unreported native %s became a known shared value", key)
-			}
-		}
-		actual := f.nativeCounters("field-p1")
-		for _, key := range []string{"rx_bytes", "tx_bytes", "rx_packets", "tx_packets", "rx_errors", "tx_errors", "rx_dropped", "tx_dropped"} {
-			want, reported := actual[key]
-			value := second.Counters[key]
-			if reported && want != "-1" && (value == nil || *value != want) {
-				t.Fatalf("shared %s differs from the native Interface counter: %v, expected %s", key, value, want)
-			}
-			if !reported && value != nil {
-				t.Fatalf("unreported native %s became a value", key)
 			}
 		}
 		if second.SampledAt == nil || !second.SampledAt.After(*first.SampledAt) || second.Reset || len(second.History) < 2 || len(second.History) > 60 {
@@ -248,8 +284,11 @@ func TestNativeStatisticsObservation(t *testing.T) {
 		}
 		after, err := f.inventory.CandidateSnapshot(f.ctx, []candidate.Binding{f.port})
 		must(t, err)
-		if after.Revision != baseline.Revision || f.evidenceCount() != evidence {
-			t.Fatal("counter sampling invalidated desired configuration or persisted per-sample evidence")
+		if after.Revision != baseline.Revision {
+			t.Fatalf("counter sampling changed the desired configuration revision from %s to %s; before=%+v after=%+v", baseline.Revision, after.Revision, baseline, after)
+		}
+		if count := f.evidenceCount(); count != evidence {
+			t.Fatalf("evidence records changed from %d to %d during counter sampling: %v", evidence, count, f.evidenceSince(evidence))
 		}
 	})
 	t.Run("native_source_outage_withholds_fresh_values_and_recovery_breaks_trend", func(t *testing.T) {
@@ -269,6 +308,9 @@ func TestNativeStatisticsObservation(t *testing.T) {
 		}
 		f.startDB()
 		waitFor(t, func() bool { _, err := f.inventory.CandidateSnapshot(f.ctx, nil); return err == nil })
+		// OVSDB discards ephemeral statistics at restart. The live daemon
+		// reconnects and repopulates them on its own statistics cadence.
+		f.waitStatisticsSource()
 		must(t, f.sample())
 		recovered := f.detail(f.intf.ManagementID).Statistics
 		if recovered.SampledAt == nil || first.SampledAt != nil && !recovered.SampledAt.After(*first.SampledAt) || recovered.Source.Freshness != "fresh" {
