@@ -257,6 +257,14 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeTelemetryExecution$' -test.v -test.timeout=180s \
               | go tool test2json -p "native-telemetry-write-$schema" | tee "test-results/go-telemetry-write-$schema.json"
           done
+      - name: Native Interface statistics, shared RAM trends and source recovery
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeStatisticsObservation$' -test.v -test.timeout=180s \
+              | go tool test2json -p "native-statistics-$schema" | tee "test-results/go-statistics-$schema.json"
+          done
       - name: Build separately qualified Mirror runtime for formal browser acceptance
         env:
           MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -432,6 +440,7 @@ jobs:
             test-results/go-qos-attach-*.json
             test-results/go-qos-create-*.json
             test-results/go-telemetry-write-*.json
+            test-results/go-statistics-*.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json

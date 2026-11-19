@@ -632,6 +632,13 @@ func run() int {
 		defer cancelProvider()
 		providerDone := make(chan struct{})
 		go func() { defer close(providerDone); provider.Run(providerCtx, inventoryService) }()
+		if err = inventoryService.ConfigureStatistics(provider); err != nil {
+			logger.Error("service_start_failed", "code", "INVALID_STATISTICS_OBSERVER")
+			return 2
+		}
+		statisticsDone := make(chan struct{})
+		go func() { defer close(statisticsDone); inventoryService.RunStatistics(providerCtx) }()
+		defer func() { cancelProvider(); <-statisticsDone }()
 		if *acceptEvidence != "" {
 			deadline := time.NewTimer(8 * time.Second)
 			defer deadline.Stop()

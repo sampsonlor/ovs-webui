@@ -96,6 +96,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     interface: '/interfaces',
     mirror: '/switching/mirrors',
     qos: '/switching/qos',
+    statistic: '/visibility/statistics',
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -377,6 +378,11 @@ export class Controller {
       } else if (path === '/switching/qos' || path.startsWith('/switching/qos/')) {
         resourceURL = parts.length === 2 ? '/qos' + query : `/qos/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';
+      } else if (path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')) {
+        const statisticQuery = new URLSearchParams(query);
+        if (!statisticQuery.has('limit')) statisticQuery.set('limit', '25');
+        resourceURL = parts.length === 2 ? `/statistics?${statisticQuery}` : `/statistics/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
       } else if (path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')) {
         const telemetryQuery = new URLSearchParams(query);
         if (!telemetryQuery.has('limit')) telemetryQuery.set('limit', '25');

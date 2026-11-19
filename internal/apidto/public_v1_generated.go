@@ -569,6 +569,14 @@ type Resource struct {
 	QosAttach         QoSAttachStatus            `json:"qos_attach,omitempty"`
 	NativeTelemetry   TelemetryObservation       `json:"native_telemetry,omitempty"`
 	TelemetryWrite    TelemetryWrite             `json:"telemetry_write,omitempty"`
+	Statistics        Statistics                 `json:"statistics,omitempty"`
+	Name              string                     `json:"name,omitempty"`
+	InterfaceRef      ResourceRef                `json:"interface_ref,omitempty"`
+	PortRef           json.RawMessage            `json:"port_ref,omitempty"`
+	BridgeRef         json.RawMessage            `json:"bridge_ref,omitempty"`
+	PortName          json.RawMessage            `json:"port_name,omitempty"`
+	BridgeName        json.RawMessage            `json:"bridge_name,omitempty"`
+	NativeUuid        Id                         `json:"native_uuid,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -1388,6 +1396,82 @@ type TelemetryWrite struct {
 	Object    TelemetryBridgeBinding     `json:"object"`
 	Protocols map[string]json.RawMessage `json:"protocols"`
 }
+type StatisticCounters struct {
+	RxBytes   json.RawMessage `json:"rx_bytes"`
+	TxBytes   json.RawMessage `json:"tx_bytes"`
+	RxPackets json.RawMessage `json:"rx_packets"`
+	TxPackets json.RawMessage `json:"tx_packets"`
+	RxErrors  json.RawMessage `json:"rx_errors"`
+	TxErrors  json.RawMessage `json:"tx_errors"`
+	RxDropped json.RawMessage `json:"rx_dropped"`
+	TxDropped json.RawMessage `json:"tx_dropped"`
+}
+type StatisticRates struct {
+	RxBytes   json.RawMessage `json:"rx_bytes"`
+	TxBytes   json.RawMessage `json:"tx_bytes"`
+	RxPackets json.RawMessage `json:"rx_packets"`
+	TxPackets json.RawMessage `json:"tx_packets"`
+}
+type StatisticSample struct {
+	SampledAt     DateTime          `json:"sampled_at"`
+	Counters      StatisticCounters `json:"counters"`
+	Rates         StatisticRates    `json:"rates"`
+	Reset         bool              `json:"reset"`
+	Discontinuity json.RawMessage   `json:"discontinuity"`
+	Coalesced     bool              `json:"coalesced"`
+}
+type Statistics struct {
+	State            string            `json:"state"`
+	Reason           json.RawMessage   `json:"reason"`
+	Counters         StatisticCounters `json:"counters"`
+	Rates            StatisticRates    `json:"rates"`
+	SampledAt        json.RawMessage   `json:"sampled_at"`
+	Reset            bool              `json:"reset"`
+	Discontinuity    json.RawMessage   `json:"discontinuity"`
+	Coalesced        bool              `json:"coalesced"`
+	SampleCount      int64             `json:"sample_count"`
+	IntervalMs       int64             `json:"interval_ms"`
+	RetentionSeconds int64             `json:"retention_seconds"`
+	Source           Source            `json:"source"`
+	History          []StatisticSample `json:"history,omitempty"`
+}
+type Statistic struct {
+	Id                 Id                         `json:"id"`
+	State              string                     `json:"state"`
+	Sequence           Sequence                   `json:"sequence"`
+	ResourceKind       string                     `json:"resource_kind"`
+	Source             Source                     `json:"source"`
+	AllowedActions     []string                   `json:"allowed_actions"`
+	NativeTunnel       StaticTunnelObservation    `json:"native_tunnel,omitempty"`
+	NativeMirror       MirrorObservation          `json:"native_mirror,omitempty"`
+	NativeQos          QoSObservation             `json:"native_qos,omitempty"`
+	LinuxQos           LinuxQoSObservation        `json:"linux_qos,omitempty"`
+	QosRateEdit        QoSRateEdit                `json:"qos_rate_edit,omitempty"`
+	QosDetach          QoSRateEdit                `json:"qos_detach,omitempty"`
+	QosAttach          QoSAttachStatus            `json:"qos_attach,omitempty"`
+	NativeTelemetry    TelemetryObservation       `json:"native_telemetry,omitempty"`
+	TelemetryWrite     TelemetryWrite             `json:"telemetry_write,omitempty"`
+	Statistics         Statistics                 `json:"statistics,omitempty"`
+	Name               string                     `json:"name"`
+	InterfaceRef       ResourceRef                `json:"interface_ref"`
+	PortRef            json.RawMessage            `json:"port_ref"`
+	BridgeRef          json.RawMessage            `json:"bridge_ref"`
+	PortName           json.RawMessage            `json:"port_name"`
+	BridgeName         json.RawMessage            `json:"bridge_name"`
+	NativeUuid         Id                         `json:"native_uuid"`
+	InstanceGeneration json.RawMessage            `json:"instance_generation,omitempty"`
+	ExtraFields        map[string]json.RawMessage `json:"-"`
+}
+
+func (v *Statistic) UnmarshalJSON(data []byte) error {
+	type plain Statistic
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v Statistic) MarshalJSON() ([]byte, error) {
+	type plain Statistic
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type QoSNativeRates struct {
 	Type       string                       `json:"type"`
 	MaxRateBps int64                        `json:"max_rate_bps"`
@@ -2360,6 +2444,10 @@ type StatisticPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Source             Source                     `json:"source,omitempty"`
+	Availability       string                     `json:"availability,omitempty"`
+	Reason             json.RawMessage            `json:"reason,omitempty"`
+	Coverage           map[string]json.RawMessage `json:"coverage,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
