@@ -66,7 +66,7 @@ func (f *statisticsFixture) waitStatisticsSource() {
 	f.t.Helper()
 	waitFor(f.t, func() bool {
 		view, err := f.inventory.ExecutionView(f.ctx, []candidate.Binding{f.port})
-		if err != nil {
+		if err != nil || !view.Observation.Evidence.Continuous {
 			return false
 		}
 		root := view.Observation.Rows["Open_vSwitch"][view.Observation.Evidence.Root]
