@@ -22,6 +22,7 @@
   import Mirrors from './Mirrors.svelte';
   import QoS from './QoS.svelte';
   import Telemetry from './Telemetry.svelte';
+  import Statistics from './Statistics.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -185,6 +186,7 @@
       <nav aria-label="Visibility views" class="nav-section">
         <p class="eyebrow">Visibility</p>
         <Link href="/visibility/telemetry" current={path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}>Telemetry</Link>
+        <Link href="/visibility/statistics" current={path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')}>Statistics</Link>
       </nav>
       <nav aria-label="Change Control" class="nav-section">
         <p class="eyebrow">Shared Change Control</p>
@@ -398,6 +400,7 @@
                 </div>
                 <Status value={port.vlan.source.freshness} />
               </header>
+              <p class="actions"><Link href={`/visibility/statistics?port_id=${encodeURIComponent(port.management_id)}`}>Review member Interface statistics</Link></p>
               <section class="panel">
                 <h2>Bridge → Port → Interface</h2>
                 <div class="topology">
@@ -476,6 +479,8 @@
           <QoS model={$model} {expert} {desktop} />
         {:else if path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}
           <Telemetry model={$model} {expert} {desktop} />
+        {:else if path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')}
+          <Statistics model={$model} {expert} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}
@@ -516,7 +521,7 @@
             <button onclick={() => controller.refresh()}>Refresh resource</button>
           </header>
           {#if path === '/bridges'}<p>Select a Bridge to review its Interfaces, or <Link href="/interfaces">review all Interfaces</Link>.</p>{/if}
-          {#if path.startsWith('/bridges/') && $model.resource.value}<p class="actions"><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link><Link href={`/visibility/telemetry/${String($model.resource.value.id)}`}>Review Telemetry</Link></p>{/if}
+          {#if path.startsWith('/bridges/') && $model.resource.value}<p class="actions"><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link><Link href={`/visibility/telemetry/${String($model.resource.value.id)}`}>Review Telemetry</Link><Link href={`/visibility/statistics?bridge_id=${String($model.resource.value.id)}`}>Review Bridge statistics</Link></p>{/if}
           <LoadNotice load={$model.resource} />
           {#if $model.resource.value}
             {@const resource = $model.resource.value}
@@ -678,6 +683,11 @@
             <h2>Telemetry</h2>
             <p>Review sFlow, NetFlow and IPFIX exporter settings on each Bridge.</p>
             <Link href="/visibility/telemetry">Open Telemetry</Link>
+          </section>
+          <section class="panel">
+            <h2>Statistics</h2>
+            <p>Review Interface traffic counters and recent observations.</p>
+            <Link href="/visibility/statistics">Open Statistics</Link>
           </section>
           <Link href="/operations/events">Inspect current Events →</Link>
         {:else}<h1>Page unavailable</h1>

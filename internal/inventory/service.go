@@ -27,6 +27,9 @@ type view struct {
 	sequence    uint64
 }
 type Service struct {
+	statisticsMu                   sync.Mutex
+	statistics                     statisticsCache
+	statisticsEpoch                uint64
 	localTelemetry                 map[string]bool
 	localMirrorObjects             map[string]bool
 	localMirrorCreates             map[string]bool
@@ -106,7 +109,12 @@ func (s *Service) install(o Observation, d Decision) {
 	s.current = v
 	s.failure = ""
 }
-func (s *Service) Unavailable(code string) { s.mu.Lock(); defer s.mu.Unlock(); s.failure = code }
+func (s *Service) Unavailable(code string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failure = code
+	s.statisticsEpoch++
+}
 func (s *Service) Accept(ctx context.Context, digest, reason string) error {
 	s.mu.RLock()
 	v := s.current
@@ -145,6 +153,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	if !slices.Contains(c.Capabilities, "inventory.read") {
 		return nil, apitypes.Fail(403, "CAPABILITY_DENIED")
+	}
+	if op == "listStatistics" || op == "readStatistic" {
+		return s.readStatistics(op, path, q, c)
 	}
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing

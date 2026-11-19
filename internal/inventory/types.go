@@ -141,7 +141,7 @@ type Reader interface {
 
 func Operation(id string) bool {
 	switch id {
-	case "listTelemetry", "readTelemetry", "listQos", "readQos", "listMirrors", "readMirror", "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
+	case "listStatistics", "readStatistic", "listTelemetry", "readTelemetry", "listQos", "readQos", "listMirrors", "readMirror", "listTunnels", "readTunnel", "readInventory", "readInventoryTopology", "readInventorySchema", "listPorts", "readPort", "listBridges", "readBridge", "listInterfaces", "readInterface", "listBonds", "readBond", "listSpanningTreeObservations", "readSpanningTreeObservation":
 		return true
 	}
 	return false
