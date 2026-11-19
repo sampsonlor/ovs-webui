@@ -252,6 +252,8 @@
   .statistics-filters input[type="search"] { width: 15rem; }
   .statistics-pages { margin-block: 1rem; }
   .trend-scroll { max-height: 26rem; }
+  .trend-table { min-width: 60rem; }
+  .trend-table th:first-child { min-width: 8rem; white-space: nowrap; overflow-wrap: normal; }
   td, th { vertical-align: top; }
   .trend-rate { min-width: 9rem; position: relative; }
   .rate-bar { position: absolute; inset-inline-start: 0; bottom: .35rem; height: .25rem; background: var(--accent, #0b7664); opacity: .7; max-width: 100%; }

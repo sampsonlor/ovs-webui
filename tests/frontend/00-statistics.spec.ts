@@ -201,6 +201,24 @@ test('Native Statistics shares exact Interface counters and RAM trends through r
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(width);
   }
+  const timestampLayout = await page
+    .getByRole('region', { name: 'Recent traffic trend', exact: true })
+    .locator('tbody th time')
+    .first()
+    .evaluate((timestamp) => {
+      const range = document.createRange();
+      range.selectNodeContents(timestamp);
+      return {
+        height: range.getBoundingClientRect().height,
+        fragments: range.getClientRects().length,
+        lineHeight: Number.parseFloat(getComputedStyle(timestamp).lineHeight),
+      };
+    });
+  expect(timestampLayout.height).toBeGreaterThan(0);
+  expect(timestampLayout.fragments).toBe(1);
+  expect(timestampLayout.height).toBeLessThanOrEqual(
+    timestampLayout.lineHeight + 1,
+  );
   await capture(page, 'mobile');
   expect(writes).toEqual([]);
   expect((await page.request.get(detail)).status()).toBe(200);
