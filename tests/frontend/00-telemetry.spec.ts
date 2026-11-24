@@ -35,11 +35,11 @@ async function login(page: Page, account: string) {
   expect((await response).status()).toBe(201);
 }
 
-async function capture(page: Page, state: string) {
+async function capture(page: Page, state: string, fullPage = true) {
   mkdirSync('test-results/frontend-evidence', { recursive: true });
   await page.screenshot({
     path: `test-results/frontend-evidence/telemetry-${state}.png`,
-    fullPage: true,
+    fullPage,
   });
 }
 
@@ -262,7 +262,8 @@ test('Authorized NetFlow collector editing stages, applies and restores the exac
   await netflow(page).getByRole('button', { name: 'Review changes' }).click();
   await expect(netflow(page)).toContainText(reviewed);
   checkNative(original, 60);
-  await capture(page, 'write-review');
+  // The review is local component state and needs its desktop viewport.
+  await capture(page, 'write-review', false);
 
   await netflow(page)
     .getByRole('button', { name: 'Stage NetFlow configuration' })

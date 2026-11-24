@@ -257,6 +257,14 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeTelemetryExecution$' -test.v -test.timeout=180s \
               | go tool test2json -p "native-telemetry-write-$schema" | tee "test-results/go-telemetry-write-$schema.json"
           done
+      - name: Native Interface statistics, shared RAM trends and source recovery
+        run: |
+          set -o pipefail
+          for schema in 3.3.9 3.7.1 4.0.0; do
+            sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-$schema.ovsschema" \
+              outputs/runtime/execution.test -test.run '^TestNativeStatisticsObservation$' -test.v -test.timeout=180s \
+              | go tool test2json -p "native-statistics-$schema" | tee "test-results/go-statistics-$schema.json"
+          done
       - name: Build separately qualified Mirror runtime for formal browser acceptance
         env:
           MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -379,8 +387,9 @@ jobs:
           mkdir -p test-results
           # Keep production Argon2id cost and the existing per-group deadline.
           # The growing auth package exceeded 180s cumulatively on arm64. The
-          # three complementary filters retain every existing auth test; the new
-          # Mirror authority regression runs in its own group, exactly once.
+          # complementary filters retain every existing auth test, exactly once.
+          # Keep switching authority separate from core account tests so growing
+          # native coverage does not consume another test's remaining deadline.
           # Other packages retain the complete normal suite, with no global skip.
           auth_package=$(go list ./internal/repository/auth)
           mapfile -t all_packages <<< "$(go list ./...)"
@@ -391,10 +400,12 @@ jobs:
           go test -json -race -count=1 -timeout=180s "${runtime_packages[@]}" | tee test-results/go-tests.json
           auth_services='^(TestFormalValidation|TestShared|TestRunningCancellation|TestEvidence|TestLegacy|TestExecution|TestTLS|TestVerifiedAuth)'
           mirror_authority='^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$'
-          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply|$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
+          switching_authority='^(TestIsolation|TestInterface|TestTopology|TestMulticast|TestSpanningTree|TestStaticTunnel)'
+          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply|$mirror_authority|$switching_authority" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
           go test -json -race -count=1 -timeout=180s -run "$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run "$switching_authority" "$auth_package" | tee -a test-results/go-tests.json
           # Force the worker-held-lock admission regression repeatedly without
           # increasing timeouts or counting these runs as unique suite tests.
           go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
@@ -432,6 +443,7 @@ jobs:
             test-results/go-qos-attach-*.json
             test-results/go-qos-create-*.json
             test-results/go-telemetry-write-*.json
+            test-results/go-statistics-*.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json

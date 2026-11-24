@@ -278,6 +278,33 @@ s.TelemetryWrite=closed({
 });
 s.TelemetryWrite.description='Optional Bridge detail write status. Requires workspace.write, ovs.telemetry.write and the current observation permissions. Per-protocol availability and review revision depend on current native state and explicit Bridge write authority.';
 s.Resource.properties.telemetry_write=ref('TelemetryWrite');
+const statisticCounterNames = ['rx_bytes','tx_bytes','rx_packets','tx_packets','rx_errors','tx_errors','rx_dropped','tx_dropped'];
+const statisticRateNames = ['rx_bytes','tx_bytes','rx_packets','tx_packets'];
+const statisticCounter = nullable({type:'string',pattern:'^(0|[1-9][0-9]*)$',maxLength:20});
+s.StatisticCounters=closed(Object.fromEntries(statisticCounterNames.map(key=>[key,statisticCounter])));
+s.StatisticRates=closed(Object.fromEntries(statisticRateNames.map(key=>[key,nullable({type:'number',minimum:0})])));
+s.StatisticSample=closed({
+ sampled_at:ref('DateTime'),counters:ref('StatisticCounters'),rates:ref('StatisticRates'),
+ reset:bool,discontinuity:nullable(string(128)),coalesced:bool,
+});
+s.Statistics=closed({
+ state:choices('observed','unknown','unsupported'),reason:nullable(string(128)),
+ counters:ref('StatisticCounters'),rates:ref('StatisticRates'),sampled_at:nullable(ref('DateTime')),
+ reset:bool,discontinuity:nullable(string(128)),coalesced:bool,sample_count:integer(0,60),
+ interval_ms:{type:'integer',const:5000},retention_seconds:{type:'integer',const:300},source:ref('Source'),
+});
+s.Statistics.properties.history=array(ref('StatisticSample'),60);
+s.Statistics.description='Shared, bounded RAM observations of native OVS Interface counters. Counter values are exact cumulative decimal strings; null means unreported. Rates average changes in reported OVSDB values across collection intervals. sampled_at records manager observation time. Native OVS publishes periodically and its underlying datapath capture time is not established. Reset, discontinuity and skipped collection slots interrupt rate continuity. History is detail-only and disappears on manager restart.';
+s.Resource.properties.statistics=ref('Statistics');
+Object.assign(s.Resource.properties,{
+ name:{type:'string'},interface_ref:ref('ResourceRef'),port_ref:nullable(ref('ResourceRef')),bridge_ref:nullable(ref('ResourceRef')),
+ port_name:nullable({type:'string'}),bridge_name:nullable({type:'string'}),native_uuid:id,
+});
+s.Statistic={
+ ...structuredClone(s.Resource),
+ properties:{...structuredClone(s.Resource.properties),instance_generation:nullable(id)},
+ required:[...s.Resource.required,'name','interface_ref','port_ref','bridge_ref','port_name','bridge_name','native_uuid'],
+};
 s.QoSNativeRates=closed({type:choices('linux-htb','linux-hfsc'),max_rate_bps:integer(1,4294967295),queues:array(closed({queue_id:integer(0,61439),min_rate_bps:integer(1,4294967295),max_rate_bps:integer(1,4294967295)}),32)});
 s.QoSNativeBinding=closed({management_id:id,ovs_uuid:id,instance_generation:id,table:{type:'string',const:'QoS'}});
 s.QoSRateChange=open({before:ref('QoSNativeRates'),after:ref('QoSNativeRates'),qos:ref('QoSNativeBinding'),bridge:object,interface:object});
@@ -451,6 +478,13 @@ Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability:
 Object.assign(s.TelemetryPage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 s.QosPage.properties.qos_create=ref('QoSCreateStatus');
 s.SpanningTreeObservationPage = open({ ...s.ResourcePage.properties, items: array(ref('SpanningTree'),500), source: ref('Source'), availability: string(), reason: nullable({type:'string'}), coverage: {type:'object',additionalProperties:true} });
+Object.assign(s.StatisticPage.properties,{source:ref('Source'),availability:string(),reason:nullable(string(128)),coverage:{type:'object',additionalProperties:true}});
+api.paths['/statistics'].get.parameters.push(...['bridge_id','port_id','interface_id'].map(key=>param(key,'query',id)));
+for(const path of ['/statistics','/statistics/{statistic_id}']){
+ api.paths[path].get['x-service-state']='implemented';
+ api.paths[path].get.description='Read shared RAM traffic observations for exact Interface identities. Requires state.read and inventory.read. Port or Bridge scope returns individual member Interfaces. Source times are manager observations of periodically published OVSDB counters. Short retained history is bounded, volatile and detail-only.';
+}
+api.paths['/statistics'].get.description += ' The optional limit defaults to 100 and accepts values from 1 to 500. Each returned page is bounded by 50 Interfaces or 40 KiB, with next_cursor for additional selected identities. Members retain independent observation timestamps.';
 s.Port.properties.spanning_tree = ref('SpanningTreePortObservation');
 s.Bond.properties.spanning_tree = ref('SpanningTreePortObservation');
 api.paths['/ports'].get.parameters.push(param('filter', 'query', string(1024)));
