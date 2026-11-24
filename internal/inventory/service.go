@@ -66,7 +66,7 @@ type Service struct {
 	localBridgeDeleteNames         map[string]bool
 	localInternalPortTargets       map[string]bool
 	localInternalPortDeleteTargets map[string]bool
-	deviceObserver                 DeviceObserver
+	devices                        deviceCache
 	policingObserver               PolicingObserver
 	qosObserver                    QoSObserver
 }
@@ -108,12 +108,14 @@ func (s *Service) install(o Observation, d Decision) {
 	}
 	s.current = v
 	s.failure = ""
+	s.devices.prune(v)
 }
 func (s *Service) Unavailable(code string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failure = code
 	s.statisticsEpoch++
+	s.devices.invalidate()
 }
 func (s *Service) Accept(ctx context.Context, digest, reason string) error {
 	s.mu.RLock()
@@ -169,6 +171,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	localMirrorObjects, localMirrorCreates, mirrorRevision := s.localMirrorObjects, s.localMirrorCreates, s.mirrorAuthorityRevision
 	localSpanningTreeExecution := s.localSpanningTreeExecution
 	localTopology, localTopologyCreates, localBridgeNames := s.localTopology, s.localTopologyCreates, s.localBridgeNames
+	deviceEpoch := s.devices.epoch
 	s.mu.RUnlock()
 	now := s.now()
 	fresh := "unknown"
@@ -514,7 +517,7 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 						return nil, err
 					}
 					if op == "readInterface" {
-						item["linux_device"] = s.readDevice(ctx, v, b, fresh)
+						item["linux_device"] = s.readDevice(v, b, fresh, deviceEpoch)
 						item["linux_ingress_policing"] = s.readPolicing(ctx, v, b, fresh, allowedConfig)
 					}
 					return item, nil

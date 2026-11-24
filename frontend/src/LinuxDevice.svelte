@@ -9,7 +9,7 @@
 
 <section class="panel" aria-labelledby="linux-device-heading">
   <h2 id="linux-device-heading">Linux device observations</h2>
-  <p>Linux carrier and device state are separate from the OVS observations above. Hardware association requires host evidence.</p>
+  <p>The shared host sample reports Linux carrier and device state. OVS reports its link state separately.</p>
   <div class="summary"><Status value={device?.availability ?? 'unavailable'} /><span>{device?.source.observed_at ? `Sampled ${device.source.observed_at}` : 'Not sampled'}</span><Status value={device?.source.freshness ?? 'unavailable'} /></div>
   {#if device?.availability !== 'known'}<p class="notice warning" role="status">{linuxReason(item)}</p>{/if}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users must be able to scroll the observations.) -->

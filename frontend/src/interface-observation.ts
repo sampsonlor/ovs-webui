@@ -90,12 +90,14 @@ export function linuxReason(resource: Interface): string {
         LINUX_DEVICE_CHANGED:
           'The Linux device changed during refresh. Refresh to review its current identity.',
         LINUX_DEVICE_NOT_FOUND: 'The associated Linux device is not present.',
+        LINUX_OBSERVATION_PENDING:
+          'Waiting for a shared Linux sample for this Interface.',
         LINUX_PROVIDER_BUSY:
-          'The Linux observation service is busy. Refresh to try again.',
+          'The shared Linux sampler is busy. Check again after the next collection.',
         LINUX_OBSERVATION_TIMEOUT:
-          'The Linux observation did not finish in time. Refresh to try again.',
+          'The Linux sample did not finish in time. Check again after the next collection.',
         LINUX_OBSERVATION_EXPIRED:
-          'The Linux observation is no longer fresh. Refresh to sample the device.',
+          'The shared Linux sample has expired. Refresh to check for a newer sample.',
       } as Record<string, string>
     )[code ?? ''] ?? 'Linux device observations are unavailable.'
   );

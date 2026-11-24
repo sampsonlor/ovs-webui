@@ -51,8 +51,9 @@ func (p *Provider) Observe(ctx context.Context, req inventory.DeviceRequest) inv
 	}
 	result := make(chan inventory.DeviceSample, 1)
 	go func() {
-		defer func() { <-p.slots }()
-		result <- p.collect(req)
+		sample := p.collect(req)
+		<-p.slots
+		result <- sample
 	}()
 	// A blocked kernel attribute retains its worker slot after timeout. Requests
 	// do not spawn unbounded workers or borrow the configuration/safety queue.
