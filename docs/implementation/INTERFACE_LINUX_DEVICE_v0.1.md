@@ -20,7 +20,7 @@ Linux 设备关联与已知 carrier 不证明 OVS 已成功挂接、数据转发
 
 ## 预算与异常
 
-生产固定 `/sys`，公开 API/IPC 不接受 host path 或 sysfs root。os.Root 对每次属性读取约束根目录及符号链接；每个属性最多 128 字节，输出最多十个字段，不公开路径、设备序列号、地址或其它 host inventory。最多两个独立采样 worker，响应上限 250ms；读取超时后 worker 继续占用其 slot，后续 busy 请求不增加 worker，不占共享配置/安全队列。没有采样缓存或主机写入。
+生产固定 `/sys`，公开 API/IPC 不接受 host path 或 sysfs root。os.Root 对每次属性读取约束根目录及符号链接；每个属性最多 128 字节，输出最多十个字段，不公开路径、设备序列号、地址或其它 host inventory。最多两个独立采样 worker，每次设备读取等待上限 250ms；超时后卡在内核的 worker 继续占用采集槽位。采集只读并使用独立于配置和安全工作流的资源。
 
 OVS stale、类型或 ifindex 不可证明、sysfs 不可用、设备消失、同名新 index、读取期间重新关联、超时与 busy 均返回明确状态，无旧设备值回填。字段读取失败只影响其字段；已验证的设备关联不制造缺失硬件能力。
 
@@ -29,6 +29,12 @@ OVS stale、类型或 ifindex 不可证明、sysfs 不可用、设备消失、�
 正式 Svelte 详情的 Standard 显示可读值与 availability，Expert 增加关联来源与字段证据；桌面、平板 Standard 和手机均只读，保留表格键盘访问。没有新配置按钮。
 
 设备本身已证明、但没有硬件关联的字段使用中性 unavailable 标记，避免把正常虚拟接口缺少 PCI 信息呈现为设备故障；关联不匹配、来源不可用等真实例外仍明确提示。
+
+## #44 共享采样
+
+`ovs-mgrd` 每秒启动一次有界采样轮次，每轮最多安排 24 个已确认的 Interface，两个 worker 共用 500ms 时间预算。采样按管理 ID 轮转，容量压力下继续轮到其余设备。每个 Interface 最多保留一份 RAM 样本，条目总数受库存 2048 行上限约束。详情读取共享结果，列表维持原有投影。页面刷新读取已发布的样本及其采样时间。
+
+管理 ID、原生 UUID、实例 generation、类型、名称、ifindex 及 OVS 连接连续性共同约束缓存。发生重新绑定或 OVS 断线时淘汰旧证据。设备读取失败时发布该次失败状态；无样本或样本超过六秒时隐藏字段并显示待采样或过期原因。服务重启后从空缓存开始。后续由 #44 继续跟踪 rtnetlink 事件采集、硬件角色证明及共享流通知。
 
 本地 Windows 检查不能运行 Linux 设备验收。双架构 native CI 使用真实 kernel sysfs loopback 和正式 Go/OVS 浏览器中的隔离 veth：验证 index、MTU、carrier up/down、消失、同名新设备拒绝、配置权限隐藏与原生 provider stale。PCI/USB/driver 的成功解析使用受限 sysfs 文件系统夹具，不能等同真实 NIC/DPDK/Offload 硬件 qualification。三份 OVS schema fixture 亦不代表三个 daemon 二进制版本。
 

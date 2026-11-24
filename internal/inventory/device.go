@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strconv"
 	"time"
@@ -32,7 +33,8 @@ type DeviceObserver interface {
 func (s *Service) SetDeviceObserver(p DeviceObserver) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.deviceObserver = p
+	s.devices.observer = p
+	s.devices.invalidate()
 }
 
 func deviceRequest(row Row) (DeviceRequest, bool) {
@@ -46,36 +48,17 @@ func deviceUnavailable(reason string) DeviceSample {
 	return DeviceSample{Availability: "unavailable", Reason: reason, Fields: map[string]DeviceField{}}
 }
 
-// The OVS snapshot and Linux sample are separate observations, not an atomic
-// host snapshot. Check the native association again after the bounded read.
-func (s *Service) readDevice(ctx context.Context, v *view, b Binding, fresh string) map[string]any {
-	sample := deviceUnavailable("LINUX_PROVIDER_UNAVAILABLE")
-	req, eligible := deviceRequest(v.observation.Rows["Interface"][b.UUID])
+// The OVS snapshot and Linux sample are separate observations. Join them only
+// while the association and observation epoch still match the current view.
+func (s *Service) readDevice(v *view, b Binding, fresh string, epoch uint64) map[string]any {
+	proof, eligible := deviceBinding(v, b.UUID)
+	var sample DeviceSample
 	if fresh != "fresh" {
 		sample = deviceUnavailable("OVS_ASSOCIATION_STALE")
 	} else if !eligible {
 		sample = deviceUnavailable("OVS_DEVICE_BINDING_UNPROVEN")
 	} else {
-		s.mu.RLock()
-		p := s.deviceObserver
-		s.mu.RUnlock()
-		if p != nil {
-			sample = p.Observe(ctx, req)
-			s.mu.RLock()
-			current, failure := s.current, s.failure
-			s.mu.RUnlock()
-			matched := current != nil && failure == "" && current.decision.State == "confirmed" && current.decision.Generation == v.decision.Generation
-			if matched {
-				binding := current.decision.Bindings[Key("Interface", b.UUID)]
-				row := current.observation.Rows["Interface"][b.UUID]
-				next, valid := deviceRequest(row)
-				age := s.now().Sub(current.observation.Evidence.ObservedAt)
-				matched = valid && next == req && row.Values["type"] == v.observation.Rows["Interface"][b.UUID].Values["type"] && binding.ManagementID == b.ManagementID && age >= 0 && age <= FreshFor
-			}
-			if !matched || ctx.Err() != nil {
-				sample = deviceUnavailable("OVS_DEVICE_BINDING_CHANGED")
-			}
-		}
+		sample = s.cachedDevice(proof, epoch)
 	}
 	confidence, freshness := "unknown", "unavailable"
 	var at, index any
@@ -84,7 +67,7 @@ func (s *Service) readDevice(ctx context.Context, v *view, b Binding, fresh stri
 	}
 	if sample.Availability == "known" {
 		age := s.now().Sub(sample.ObservedAt)
-		if sample.IfIndex != req.IfIndex || sample.ObservedAt.IsZero() || age < 0 || age > FreshFor {
+		if sample.IfIndex != proof.request.IfIndex || sample.ObservedAt.IsZero() || age < 0 || age > FreshFor {
 			sample = deviceUnavailable("LINUX_OBSERVATION_EXPIRED")
 			at = nil
 		} else {
@@ -92,7 +75,7 @@ func (s *Service) readDevice(ctx context.Context, v *view, b Binding, fresh stri
 		}
 	}
 	return map[string]any{
-		"availability": sample.Availability, "reason": sample.Reason, "ifindex": index, "fields": sample.Fields,
+		"availability": sample.Availability, "reason": sample.Reason, "ifindex": index, "fields": maps.Clone(sample.Fields),
 		"source": map[string]any{"provider_id": "linux", "authority": "linux-sysfs-observation", "observed_at": at, "freshness": freshness, "confidence": confidence},
 	}
 }

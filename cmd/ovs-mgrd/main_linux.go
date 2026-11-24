@@ -638,7 +638,13 @@ func run() int {
 		}
 		statisticsDone := make(chan struct{})
 		go func() { defer close(statisticsDone); inventoryService.RunStatistics(providerCtx) }()
-		defer func() { cancelProvider(); <-statisticsDone }()
+		devicesDone := make(chan struct{})
+		go func() { defer close(devicesDone); inventoryService.RunDeviceObservations(providerCtx) }()
+		defer func() {
+			cancelProvider()
+			<-devicesDone
+			<-statisticsDone
+		}()
 		if *acceptEvidence != "" {
 			deadline := time.NewTimer(8 * time.Second)
 			defer deadline.Stop()

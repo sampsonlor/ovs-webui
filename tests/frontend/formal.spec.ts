@@ -4837,7 +4837,7 @@ test('Linux ingress policing withholds runtime configuration in both modes and m
   }
 });
 async function kernelInterface(context: BrowserContext, name: string) {
-  let managementID = '';
+  let detail: Awaited<ReturnType<typeof get>>;
   await expect
     .poll(async () => {
       const iface = (
@@ -4846,17 +4846,20 @@ async function kernelInterface(context: BrowserContext, name: string) {
         | { management_id: string }
         | undefined;
       if (!iface) return null;
-      managementID = iface.management_id;
-      const detail = await get(context, '/interfaces/' + iface.management_id);
-      return detail.linux_device?.availability;
+      detail = await get(context, '/interfaces/' + iface.management_id);
+      return [
+        detail.linux_device?.availability,
+        detail.linux_device?.fields.carrier?.value,
+      ];
     })
-    .toBe('known');
-  return get(context, '/interfaces/' + managementID);
+    .toEqual(['known', true]);
+  return detail;
 }
 
 test('Linux device detail separates real kernel carrier and MTU, hardware absence, depth and responsive review', async ({
   page,
   context,
+  browser,
 }) => {
   await login(page, 'browser-linux-device');
   const name = 'plinux-ui',
@@ -4869,7 +4872,11 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
     )
       mutations.push(r.method());
   });
+  const peerContext = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
+    const peerPage = await peerContext.newPage();
+    await login(peerPage, 'browser-linux-exceptions');
+    await peerPage.close();
     execFileSync('ip', [
       'link',
       'add',
@@ -4894,7 +4901,31 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
     );
     expect(iface.linux_device.fields.pci_address.value).toBeNull();
     expect(iface.allowed_operations).toEqual([]);
-    await page.goto(fixture.origin + '/interfaces/' + iface.management_id);
+    const path = '/interfaces/' + iface.management_id;
+    // The independent reads can straddle a refresh, so check for agreement
+    // within the scheduler's refresh window.
+    await expect
+      .poll(
+        async () => {
+          const first = (await get(context, path)).linux_device;
+          const second = (await get(peerContext, path)).linux_device;
+          return {
+            freshness: [first.source.freshness, second.source.freshness],
+            time: first.source.observed_at,
+            shared:
+              first.source.observed_at === second.source.observed_at &&
+              first.fields.carrier?.value === second.fields.carrier?.value &&
+              first.fields.mtu?.value === second.fields.mtu?.value,
+          };
+        },
+        { timeout: 10000 },
+      )
+      .toEqual({
+        freshness: ['fresh', 'fresh'],
+        time: expect.any(String),
+        shared: true,
+      });
+    await page.goto(fixture.origin + path);
     await expect(linuxRow(page, 'Linux carrier')).toContainText('Up (1)');
     await expect(linuxRow(page, 'Host PCI association')).toContainText(
       'Unavailable',
@@ -4930,17 +4961,16 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
     execFileSync('ip', ['link', 'set', name, 'mtu', '1800']);
     await expect
       .poll(async () => {
-        const current = await get(
-          context,
-          '/interfaces/' + iface.management_id,
-        );
+        const current = await get(context, path);
         return [
-          current.linux_device.fields.carrier.value,
-          current.linux_device.fields.mtu.value,
+          current.linux_device.fields.carrier?.value,
+          current.linux_device.fields.mtu?.value,
           current.config_revision,
+          Date.parse(current.linux_device.source.observed_at) >
+            Date.parse(iface.linux_device.source.observed_at),
         ];
       })
-      .toEqual([false, 1800, iface.config_revision]);
+      .toEqual([false, 1800, iface.config_revision, true]);
     await page
       .getByRole('button', { name: 'Refresh resource', exact: true })
       .focus();
@@ -4952,6 +4982,7 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
     await screen(page, 'interface-linux-carrier-down');
     expect(mutations).toEqual([]);
   } finally {
+    await peerContext.close();
     vsctl('--if-exists', 'del-port', 'br-ui-parent', name);
     spawnSync('ip', ['link', 'del', name], { stdio: 'pipe' });
   }
