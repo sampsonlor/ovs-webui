@@ -97,6 +97,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     mirror: '/switching/mirrors',
     qos: '/switching/qos',
     statistic: '/visibility/statistics',
+    neighbor: '/visibility/neighbors',
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -382,6 +383,11 @@ export class Controller {
         const statisticQuery = new URLSearchParams(query);
         if (!statisticQuery.has('limit')) statisticQuery.set('limit', '25');
         resourceURL = parts.length === 2 ? `/statistics?${statisticQuery}` : `/statistics/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
+      } else if (path === '/visibility/neighbors' || path.startsWith('/visibility/neighbors/')) {
+        const neighborQuery = new URLSearchParams(query);
+        if (!neighborQuery.has('limit')) neighborQuery.set('limit', '25');
+        resourceURL = parts.length === 2 ? `/neighbors?${neighborQuery}` : `/neighbors/${encodeURIComponent(parts[2])}`;
         capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
       } else if (path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')) {
         const telemetryQuery = new URLSearchParams(query);

@@ -63,6 +63,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-telemetry-reader', 'Reader'), ('browser-telemetry-observer', 'InterfaceObserver'),
                        ('browser-telemetry-writer', 'NativeTelemetry'),
                        ('browser-statistics-observer', 'InterfaceObserver'), ('browser-statistics-denied', 'SpanningTreeDenied'),
+                       ('browser-neighbors-observer', 'InterfaceObserver'), ('browser-neighbors-denied', 'SpanningTreeDenied'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),

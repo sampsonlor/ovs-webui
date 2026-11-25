@@ -463,6 +463,7 @@ func run() int {
 		}
 		linuxObserver := linuxprovider.New()
 		inventoryService.SetDeviceObserver(linuxObserver)
+		inventoryService.SetNeighborObserver(linuxObserver)
 		inventoryService.SetPolicingObserver(linuxObserver)
 		inventoryService.SetQoSObserver(linuxObserver)
 		var qosGrants []string
@@ -640,9 +641,12 @@ func run() int {
 		go func() { defer close(statisticsDone); inventoryService.RunStatistics(providerCtx) }()
 		devicesDone := make(chan struct{})
 		go func() { defer close(devicesDone); inventoryService.RunDeviceObservations(providerCtx) }()
+		neighborsDone := make(chan struct{})
+		go func() { defer close(neighborsDone); inventoryService.RunNeighbors(providerCtx) }()
 		defer func() {
 			cancelProvider()
 			<-devicesDone
+			<-neighborsDone
 			<-statisticsDone
 		}()
 		if *acceptEvidence != "" {
