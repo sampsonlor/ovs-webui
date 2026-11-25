@@ -170,7 +170,7 @@ func (s *Service) readStatistics(op string, path map[string]string, q url.Values
 	}
 	return map[string]any{"snapshot_id": v.id, "instance_generation": v.decision.Generation, "items": items, "next_cursor": next,
 		"truncated": more, "source": map[string]any{"provider_id": "ovsdb", "authority": "ovsdb-statistics", "observed_at": observed, "freshness": fresh, "confidence": "partial"},
-		"availability": availability, "reason": optionalStatisticText(reason),
+		"availability": availability, "reason": nullableObservationText(reason),
 		"coverage": map[string]any{"state": "selected-interface-counters", "matched_interfaces": len(bindings), "returned_interfaces": len(items),
 			"sampled_interfaces": len(cache.entries), "max_objects": statisticsObjects, "max_samples_per_interface": statisticsSamples,
 			"retention_seconds": 300, "interval_ms": 5000, "native_capture_time": "unreported",
@@ -190,7 +190,7 @@ func statisticParents(v *view, binding Binding) (Binding, Binding) {
 	return p, v.decision.Bindings[Key("Bridge", bridge.UUID)]
 }
 
-func optionalStatisticText(value string) any {
+func nullableObservationText(value string) any {
 	if value == "" {
 		return nil
 	}
@@ -260,7 +260,7 @@ func statisticResource(v *view, failure string, epoch uint64, binding Binding, c
 		reason = failure
 	}
 	statsSource := map[string]any{"provider_id": "ovsdb", "authority": "ovsdb-statistics", "observed_at": at, "freshness": fresh, "confidence": "partial"}
-	stats := map[string]any{"state": state, "reason": optionalStatisticText(reason), "sampled_at": at,
+	stats := map[string]any{"state": state, "reason": nullableObservationText(reason), "sampled_at": at,
 		"counters": sample.Counters, "rates": sample.Rates, "reset": sample.Reset, "discontinuity": sample.Discontinuity,
 		"coalesced": sample.Coalesced, "sample_count": len(history), "interval_ms": 5000, "retention_seconds": 300, "source": statsSource}
 	if detail {

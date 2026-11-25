@@ -12585,7 +12585,7 @@
         "summary": "listNeighbors",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "neighbor",
         "parameters": [
           {
@@ -12617,6 +12617,42 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1024
+            }
+          },
+          {
+            "name": "family",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ipv4",
+                "ipv6"
+              ]
+            }
+          },
+          {
+            "name": "bridge_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "port_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "interface_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
             }
           }
         ],
@@ -12781,7 +12817,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read IPv4 ARP and IPv6 NDP entries from a shared Linux rtnetlink observation. Requires state.read and inventory.read. Only individually verified associations to active managed Interfaces are covered. Observed time is the manager sample time. Kernel NUD state does not attest to reachability beyond the recorded observation. Visible rows are limited to 2048 per sample and 50 per page. next_cursor continues the current result set; truncated reports limited collector retention. Address, MAC and Interface name accept substring filtering. Missing or stale coverage is explicit and withholds rows."
       }
     },
     "/neighbors/{neighbor_id}": {
@@ -12790,7 +12827,7 @@
         "summary": "readNeighbor",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "neighbor",
         "parameters": [
           {
@@ -12963,7 +13000,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read IPv4 ARP and IPv6 NDP entries from a shared Linux rtnetlink observation. Requires state.read and inventory.read. Only individually verified associations to active managed Interfaces are covered. Observed time is the manager sample time. Kernel NUD state does not attest to reachability beyond the recorded observation."
       }
     },
     "/lldp": {
@@ -30581,6 +30619,40 @@
           "native_uuid": {
             "$ref": "#/components/schemas/Id"
           },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 45
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 17
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "ipv4",
+              "ipv6"
+            ]
+          },
+          "ifindex": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "interface_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -37693,6 +37765,207 @@
         ],
         "additionalProperties": false
       },
+      "Neighbor": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/Sequence"
+          },
+          "resource_kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 64
+          },
+          "native_tunnel": {
+            "$ref": "#/components/schemas/StaticTunnelObservation"
+          },
+          "native_mirror": {
+            "$ref": "#/components/schemas/MirrorObservation"
+          },
+          "native_qos": {
+            "$ref": "#/components/schemas/QoSObservation"
+          },
+          "linux_qos": {
+            "$ref": "#/components/schemas/LinuxQoSObservation"
+          },
+          "qos_rate_edit": {
+            "$ref": "#/components/schemas/QoSRateEdit"
+          },
+          "qos_detach": {
+            "$ref": "#/components/schemas/QoSRateEdit"
+          },
+          "qos_attach": {
+            "$ref": "#/components/schemas/QoSAttachStatus"
+          },
+          "native_telemetry": {
+            "$ref": "#/components/schemas/TelemetryObservation"
+          },
+          "telemetry_write": {
+            "$ref": "#/components/schemas/TelemetryWrite"
+          },
+          "statistics": {
+            "$ref": "#/components/schemas/Statistics"
+          },
+          "name": {
+            "type": "string"
+          },
+          "interface_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "port_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bridge_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "port_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bridge_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "native_uuid": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 45
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 17
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "ipv4",
+              "ipv6"
+            ]
+          },
+          "ifindex": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "interface_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "sequence",
+          "resource_kind",
+          "source",
+          "allowed_actions"
+        ],
+        "additionalProperties": true
+      },
+      "NeighborCoverage": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "managed-linux-interfaces"
+            ]
+          },
+          "eligible_interfaces": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "observed_interfaces": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "matched_entries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "returned_entries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50
+          },
+          "max_entries": {
+            "type": "integer",
+            "minimum": 2048,
+            "maximum": 2048
+          }
+        },
+        "required": [
+          "scope",
+          "eligible_interfaces",
+          "observed_interfaces",
+          "matched_entries",
+          "returned_entries",
+          "max_entries"
+        ],
+        "additionalProperties": false
+      },
       "BridgePage": {
         "type": "object",
         "properties": {
@@ -38540,6 +38813,29 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/NeighborCoverage"
           }
         },
         "required": [

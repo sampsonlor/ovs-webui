@@ -20,13 +20,15 @@ import (
 )
 
 type view struct {
-	observation Observation
-	decision    Decision
-	id          string
-	digest      string
-	sequence    uint64
+	observation   Observation
+	decision      Decision
+	neighborScope neighborScope
+	id            string
+	digest        string
+	sequence      uint64
 }
 type Service struct {
+	neighbors                      neighborCache
 	statisticsMu                   sync.Mutex
 	statistics                     statisticsCache
 	statisticsEpoch                uint64
@@ -96,14 +98,18 @@ func (s *Service) install(o Observation, d Decision) {
 		Rows                                     Rows
 		Schema, Generation, State, MirrorRuntime string
 	}{o.Rows, o.Schema.Digest, d.Generation, d.State, o.MirrorRuntime})
+	v := &view{observation: o, decision: d, id: repository.NewID(), digest: digest, sequence: 1}
+	v.neighborScope = indexNeighbors(v)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	v := &view{observation: o, decision: d, id: repository.NewID(), digest: digest, sequence: 1}
 	if s.current != nil {
 		v.sequence = s.current.sequence + 1
 		if s.current.digest == digest {
 			v.id = s.current.id
 			v.sequence = s.current.sequence
+		}
+		if !s.current.neighborScope.equal(v.neighborScope) {
+			s.neighbors.invalidate("NEIGHBORS_SCOPE_CHANGED")
 		}
 	}
 	s.current = v
@@ -116,6 +122,7 @@ func (s *Service) Unavailable(code string) {
 	s.failure = code
 	s.statisticsEpoch++
 	s.devices.invalidate()
+	s.neighbors.invalidate("NEIGHBORS_RESYNCING")
 }
 func (s *Service) Accept(ctx context.Context, digest, reason string) error {
 	s.mu.RLock()
@@ -158,6 +165,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	if op == "listStatistics" || op == "readStatistic" {
 		return s.readStatistics(op, path, q, c)
+	}
+	if op == "listNeighbors" || op == "readNeighbor" {
+		return s.readNeighbors(op, path, q, c)
 	}
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing

@@ -235,9 +235,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		refs := []apitypes.Ref{}
 		for _, id := range path {
-			// The selected receipt domain owns its principal/resource check. A
-			// workspace receipt does not have a duplicate row in manager.db.
-			if op.ID != "readRequestReceipt" {
+			// Receipt domains and the Linux neighbor cache resolve their own
+			// identities. Neither resource has a duplicate row in manager.db.
+			if op.ID != "readRequestReceipt" && op.ID != "readNeighbor" {
 				refs = append(refs, apitypes.Ref{Kind: op.ResourceKind, ID: id})
 			}
 		}

@@ -456,6 +456,15 @@ add('/session/reauthentication', 'post', 'reauthenticateSession', 'Session', 'se
 // OpenAPI itself is a document, not a management resource.
 api.paths['/openapi.json'] = { get: { operationId: 'readOpenAPI', security: [], 'x-capability': '', 'x-service-issue': 33, 'x-service-state': 'transport', parameters: [], responses: { 200: { description: 'OpenAPI 3.1.1 document', content: { 'application/json': { schema: { type: 'object', additionalProperties: true } } } } } } };
 
+Object.assign(s.Resource.properties, {
+ address: string(45), mac: nullable(string(17)), family: choices('ipv4','ipv6'), ifindex: integer(1,2147483647),
+ interface_name: string(15),
+});
+s.Neighbor = structuredClone(s.Resource);
+s.NeighborCoverage = closed({
+ scope: choices('managed-linux-interfaces'), eligible_interfaces: integer(0,2048), observed_interfaces: integer(0,2048),
+ matched_entries: integer(0,2048), returned_entries: integer(0,50), max_entries: integer(2048,2048),
+});
 const resources = [
  ['bridges','bridge','Bridge',36], ['interfaces','interface','Interface',36], ['vlans','vlan','Resource',42], ['bonds','bond','Bond',42],
  ['spanning-tree','spanning_tree','Resource',43], ['multicast','multicast','Resource',43], ['tunnels','tunnel','Resource',43], ['mirrors','mirror','Resource',43],
@@ -475,6 +484,13 @@ for (const [path, kind, schema, issue] of resources) {
  if (!api.paths[`/${path}/{${kind}_id}`]) add(`/${path}/{${kind}_id}`, 'get', `read${name(kind)}`, schema, cap, issue, { kind });
 }
 Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
+Object.assign(s.NeighborPage.properties, {source: ref('Source'), availability: string(), reason: nullable(string(128)), coverage: ref('NeighborCoverage')});
+api.paths['/neighbors'].get.parameters.push(param('family','query',choices('ipv4','ipv6')),...['bridge_id','port_id','interface_id'].map(key=>param(key,'query',id)));
+for(const path of ['/neighbors','/neighbors/{neighbor_id}']){
+ api.paths[path].get['x-service-state']='implemented';
+ api.paths[path].get.description='Read IPv4 ARP and IPv6 NDP entries from a shared Linux rtnetlink observation. Requires state.read and inventory.read. Only individually verified associations to active managed Interfaces are covered. Observed time is the manager sample time. Kernel NUD state does not attest to reachability beyond the recorded observation.';
+}
+api.paths['/neighbors'].get.description += ' Visible rows are limited to 2048 per sample and 50 per page. next_cursor continues the current result set; truncated reports limited collector retention. Address, MAC and Interface name accept substring filtering. Missing or stale coverage is explicit and withholds rows.';
 Object.assign(s.TelemetryPage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 s.QosPage.properties.qos_create=ref('QoSCreateStatus');
 s.SpanningTreeObservationPage = open({ ...s.ResourcePage.properties, items: array(ref('SpanningTree'),500), source: ref('Source'), availability: string(), reason: nullable({type:'string'}), coverage: {type:'object',additionalProperties:true} });

@@ -577,6 +577,11 @@ type Resource struct {
 	PortName          json.RawMessage            `json:"port_name,omitempty"`
 	BridgeName        json.RawMessage            `json:"bridge_name,omitempty"`
 	NativeUuid        Id                         `json:"native_uuid,omitempty"`
+	Address           string                     `json:"address,omitempty"`
+	Mac               json.RawMessage            `json:"mac,omitempty"`
+	Family            string                     `json:"family,omitempty"`
+	Ifindex           int64                      `json:"ifindex,omitempty"`
+	InterfaceName     string                     `json:"interface_name,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -2109,6 +2114,55 @@ type OpenFlowPreflight struct {
 	Operation               string        `json:"operation"`
 	SpecificationArtifactId Id            `json:"specification_artifact_id"`
 }
+type Neighbor struct {
+	Id              Id                         `json:"id"`
+	State           string                     `json:"state"`
+	Sequence        Sequence                   `json:"sequence"`
+	ResourceKind    string                     `json:"resource_kind"`
+	Source          Source                     `json:"source"`
+	AllowedActions  []string                   `json:"allowed_actions"`
+	NativeTunnel    StaticTunnelObservation    `json:"native_tunnel,omitempty"`
+	NativeMirror    MirrorObservation          `json:"native_mirror,omitempty"`
+	NativeQos       QoSObservation             `json:"native_qos,omitempty"`
+	LinuxQos        LinuxQoSObservation        `json:"linux_qos,omitempty"`
+	QosRateEdit     QoSRateEdit                `json:"qos_rate_edit,omitempty"`
+	QosDetach       QoSRateEdit                `json:"qos_detach,omitempty"`
+	QosAttach       QoSAttachStatus            `json:"qos_attach,omitempty"`
+	NativeTelemetry TelemetryObservation       `json:"native_telemetry,omitempty"`
+	TelemetryWrite  TelemetryWrite             `json:"telemetry_write,omitempty"`
+	Statistics      Statistics                 `json:"statistics,omitempty"`
+	Name            string                     `json:"name,omitempty"`
+	InterfaceRef    ResourceRef                `json:"interface_ref,omitempty"`
+	PortRef         json.RawMessage            `json:"port_ref,omitempty"`
+	BridgeRef       json.RawMessage            `json:"bridge_ref,omitempty"`
+	PortName        json.RawMessage            `json:"port_name,omitempty"`
+	BridgeName      json.RawMessage            `json:"bridge_name,omitempty"`
+	NativeUuid      Id                         `json:"native_uuid,omitempty"`
+	Address         string                     `json:"address,omitempty"`
+	Mac             json.RawMessage            `json:"mac,omitempty"`
+	Family          string                     `json:"family,omitempty"`
+	Ifindex         int64                      `json:"ifindex,omitempty"`
+	InterfaceName   string                     `json:"interface_name,omitempty"`
+	ExtraFields     map[string]json.RawMessage `json:"-"`
+}
+
+func (v *Neighbor) UnmarshalJSON(data []byte) error {
+	type plain Neighbor
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v Neighbor) MarshalJSON() ([]byte, error) {
+	type plain Neighbor
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type NeighborCoverage struct {
+	Scope              string `json:"scope"`
+	EligibleInterfaces int64  `json:"eligible_interfaces"`
+	ObservedInterfaces int64  `json:"observed_interfaces"`
+	MatchedEntries     int64  `json:"matched_entries"`
+	ReturnedEntries    int64  `json:"returned_entries"`
+	MaxEntries         int64  `json:"max_entries"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`
@@ -2408,6 +2462,10 @@ type NeighborPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Source             Source                     `json:"source,omitempty"`
+	Availability       string                     `json:"availability,omitempty"`
+	Reason             json.RawMessage            `json:"reason,omitempty"`
+	Coverage           NeighborCoverage           `json:"coverage,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 
