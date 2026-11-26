@@ -398,10 +398,22 @@ test('FDB compares isolated kernel OVS MAC learning with the scoped read-only br
 
   await page.goto(view + '?' + scope);
   const filters = page.getByRole('form', { name: 'FDB filters', exact: true });
-  await filters.getByLabel('MAC', { exact: true }).fill(absentMAC);
+  await expect(
+    table(page).getByRole('link', { name: mac, exact: true }),
+  ).toHaveCount(2);
+  const macFilter = filters.getByLabel('MAC', { exact: true });
+  await macFilter.fill(absentMAC);
+  expect(
+    await macFilter.evaluate((input: HTMLInputElement) =>
+      input.checkValidity(),
+    ),
+  ).toBe(true);
   await filters
     .getByRole('button', { name: 'Apply filter', exact: true })
     .click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('mac'))
+    .toBe(absentMAC);
   await expect(
     table(page).getByText(completeEmpty, { exact: true }),
   ).toBeVisible();

@@ -100,7 +100,7 @@
 
 {#if !detail}
   <form class="fdb-filters" aria-label="FDB filters" onsubmit={search} oninput={() => error = ''}>
-    <div><label for="fdb-mac">MAC</label><input id="fdb-mac" type="search" bind:value={filters.mac} maxlength="17" pattern="[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}" placeholder="All" /></div>
+    <div><label for="fdb-mac">MAC</label><input id="fdb-mac" type="search" bind:value={filters.mac} maxlength="17" pattern={'([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}'} placeholder="All" /></div>
     <div><label for="fdb-vlan">VLAN</label><input id="fdb-vlan" inputmode="numeric" bind:value={filters.vlan} maxlength="4" placeholder="All" /></div>
     <div><label for="fdb-bridge">Bridge</label><input id="fdb-bridge" bind:value={filters.bridge} maxlength="36" placeholder="Management ID or all" /></div>
     <div><label for="fdb-port">Port</label><input id="fdb-port" bind:value={filters.port} maxlength="36" placeholder="Management ID or all" /></div>
