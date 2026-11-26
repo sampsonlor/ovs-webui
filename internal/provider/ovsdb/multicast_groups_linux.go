@@ -75,7 +75,7 @@ func (p *multicastGroupObserver) ObserveMulticast(ctx context.Context, req inven
 	if err != nil || first.Witness.Bridge.Name != req.Name || ovswitness.Installed(first.Witness) != nil {
 		return inventory.MulticastGroupSample{}, bad
 	}
-	if !multicastBuildSchema(ctx, p.database, req.Evidence, first.buildSchema) {
+	if !nativeWitnessBuildSchema(ctx, p.database, req.Evidence, first.buildSchema) {
 		return inventory.MulticastGroupSample{}, bad
 	}
 	if _, err = spanningTreeSource(ctx, conn, o.PeerUID, p.database, req.Evidence, o.Executable); err != nil {
@@ -106,7 +106,7 @@ func (p *multicastGroupObserver) ObserveMulticast(ctx context.Context, req inven
 		return inventory.MulticastGroupSample{}, err
 	}
 	second, err := ReadBoundSpanningTreeWitness(ctx, control, p.database, req.Evidence, build, req.Bridge.UUID, func(c context.Context) error { return c.Err() })
-	if err != nil || second.Daemon != first.Daemon || second.buildIdentity != first.buildIdentity || second.buildSchema != first.buildSchema || !sameMulticastWitness(first.Witness, second.Witness) {
+	if err != nil || second.Daemon != first.Daemon || second.buildIdentity != first.buildIdentity || second.buildSchema != first.buildSchema || !sameInstalledWitness(first.Witness, second.Witness) {
 		return inventory.MulticastGroupSample{}, bad
 	}
 	current, err := spanningTreeDaemon(conn, o.PeerUID)
@@ -116,7 +116,7 @@ func (p *multicastGroupObserver) ObserveMulticast(ctx context.Context, req inven
 	return inventory.MulticastGroupSample{ObservedAt: at, Groups: groups}, nil
 }
 
-func sameMulticastWitness(a, b ovswitness.Sample) bool {
+func sameInstalledWitness(a, b ovswitness.Sample) bool {
 	// Nonce and wall time are deliberately different; the daemon incarnation,
 	// UUID/name binding and installed configuration/IDL epochs must be equal.
 	return a.Daemon == b.Daemon && inventory.Digest(a.Database) == inventory.Digest(b.Database) && a.Bridge == b.Bridge && inventory.Digest(a.Configuration) == inventory.Digest(b.Configuration) && inventory.Digest(a.Native) == inventory.Digest(b.Native)
@@ -124,7 +124,7 @@ func sameMulticastWitness(a, b ovswitness.Sample) bool {
 
 // The attested binary's compiled schema must match the actual DB schema, not
 // merely the raw inventory digest or a same-name configured database.
-func multicastBuildSchema(ctx context.Context, o Options, expected inventory.Evidence, buildSchema string) bool {
+func nativeWitnessBuildSchema(ctx context.Context, o Options, expected inventory.Evidence, buildSchema string) bool {
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", o.Socket)
 	if err != nil {
 		return false

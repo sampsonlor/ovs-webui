@@ -30,6 +30,7 @@ python3 "$extension/apply.py" "$out/source" "$out/upstream.tar.gz"
 python3 tests/ovs_witness/check_registry.py "$out/source"
 python3 extensions/ovs-mirror-delete/apply.py "$version" "$out/source" "$out/upstream.tar.gz" --with-witness
 python3 tests/ovs_mirror/check_profiles.py
+python3 extensions/ovs-witness/apply_fdb.py "$version" "$out/source"
 cd "$out/source"
 ./boot.sh > "$repo/test-results/ovs-witness/bootstrap.log" 2>&1
 for mode in enabled sanitized default; do
@@ -79,7 +80,7 @@ if [ "$version" = 3.3.9 ]; then
   # All default and source-denial gates remain unchanged.
   ui_status=0
   sudo -- env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:?}" python3 tests/daemon/inventory.py --bin-dir outputs/runtime --frontend-browser \
-    --frontend-spanning-execution --witness-bin-dir "$out/enabled" \
+    --frontend-spanning-execution --fdb-browser --witness-bin-dir "$out/enabled" \
     --browser-node "$(command -v "${WITNESS_BROWSER_NODE:?}")" || ui_status=$?
   for proof in test-results/go-frontend.json test-results/go-frontend-journal.log; do
     if [ -f "$proof" ]; then cp "$proof" test-results/ovs-witness/; fi

@@ -1,0 +1,56 @@
+diff --git a/ofproto/ofproto-dpif.c b/ofproto/ofproto-dpif.c
+--- a/ofproto/ofproto-dpif.c
++++ b/ofproto/ofproto-dpif.c
+@@ -15,6 +15,7 @@
+
+ #include <config.h>
+ #include "ovs-webui-witness.h"
++#include "ovs-webui-fdb.h"
+ #include <errno.h>
+
+ #include "bfd.h"
+@@ -6209,6 +6210,10 @@
+     return CONTAINER_OF(ovs_list_front(&bundle->ports), struct ofport_dpif,
+                         bundle_node);
+ }
++
++#ifdef ENABLE_OVS_WEBUI_WITNESS
++#include "ofproto/ovs-webui-fdb-snapshot.inc"
++#endif
+
+ static void
+ ofproto_unixctl_fdb_show_text(const struct ofproto_dpif *ofproto,
+diff --git a/vswitchd/bridge.c b/vswitchd/bridge.c
+--- a/vswitchd/bridge.c
++++ b/vswitchd/bridge.c
+@@ -15,6 +15,7 @@
+
+ #include <config.h>
+ #include "ovs-webui-witness.h"
++#include "ovs-webui-fdb.h"
+ #include "openvswitch/json.h"
+ #include "bridge.h"
+ #include <errno.h>
+@@ -299,6 +300,7 @@
+ static void webui_begin(struct bridge *);
+ static void webui_finish(struct bridge *, const struct ovsrec_open_vswitch *);
+ static void webui_show(struct unixctl_conn *, int, const char *[], void *);
++static void webui_fdb_sample(struct unixctl_conn *, int, const char *[], void *);
+ static struct uuid webui_daemon_instance;
+ static int
+ webui_check(struct bridge *br, int error)
+@@ -540,6 +542,8 @@
+     uuid_generate(&webui_daemon_instance);
+     unixctl_command_register("ovs-webui/stp-witness-v1", "bridge-uuid nonce", 2, 2,
+                              webui_show, NULL);
++    unixctl_command_register("ovs-webui/fdb-sample-v1", "bridge-uuid bridge-name",
++                             2, 2, webui_fdb_sample, NULL);
+ #endif
+     /* Register unixctl commands. */
+     unixctl_command_register("qos/show-types", "interface", 1, 1,
+@@ -5449,4 +5453,5 @@
+
+ #ifdef ENABLE_OVS_WEBUI_WITNESS
+ #include "vswitchd/ovs-webui-witness.inc"
++#include "vswitchd/ovs-webui-fdb-sample.inc"
+ #endif

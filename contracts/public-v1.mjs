@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.32.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.33.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
 api.info.description += ' Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness.';
 api['x-review-status'] = 'implementation-review';
 api.info.description += ' Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable.';
@@ -475,6 +475,24 @@ s.LldpCoverage = closed({
  scope: choices('opted-in-managed-interfaces'), configured_interfaces: integer(0,16), observed_interfaces: integer(0,16),
  matched_entries: integer(0,256), returned_entries: integer(0,50), max_entries: integer(256,256),
 });
+const fdbMAC = {...string(17), minLength:17, pattern:'^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$|^([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}$'};
+s.FdbObservation = {
+ type:'object', additionalProperties:true,
+ properties:{
+  mac:fdbMAC, vlan:integer(0,4095), bridge_name:string(15), bridge_ref:ref('ResourceRef'),
+  port_resolution:choices('resolved','unmapped','ambiguous'), port_name:string(64), ofport:integer(1,65534),
+  port_ref:ref('ResourceRef'), age_seconds:integer(0,4294967295), last_seen_at:ref('DateTime'),
+ },
+ required:['mac','vlan','bridge_name','bridge_ref','port_resolution'],
+ description:'A sampled native FDB row. The OpenFlow number may be the representative member of a Bond. A Port reference requires an exact logical Port association. Last seen is an estimate derived from the sampled whole-second age. Static rows omit both age and last seen.',
+};
+s.FdbCoverage = closed({
+ bridges_sampled:integer(0,8), bridges_total:integer(0,2048), entries_sampled:integer(0,2048),
+ entries_total:integer(0,34359738360), truncated:bool,
+});
+s.FdbCoverage.description = 'Bridge coverage applies after Bridge/Port scope selection. Entry counts describe all learned and static rows from sampled Bridges before MAC, VLAN, Port or free-text row filters. The total is the native count across sampled Bridges only.';
+s.Resource.properties.fdb = ref('FdbObservation');
+
 const resources = [
  ['bridges','bridge','Bridge',36], ['interfaces','interface','Interface',36], ['vlans','vlan','Resource',42], ['bonds','bond','Bond',42],
  ['spanning-tree','spanning_tree','Resource',43], ['multicast','multicast','Resource',43], ['tunnels','tunnel','Resource',43], ['mirrors','mirror','Resource',43],
@@ -495,6 +513,18 @@ for (const [path, kind, schema, issue] of resources) {
 }
 Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 Object.assign(s.NeighborPage.properties, {source: ref('Source'), availability: string(), reason: nullable(string(128)), coverage: ref('NeighborCoverage')});
+Object.assign(s.FdbEntryPage.properties, {
+ source:choices('ovs_fdb'), availability:choices('available','unavailable','degraded'), freshness:choices('fresh','stale','unavailable'),
+ reason:choices('disabled','unsupported','not_ready','timeout','permission','source_unavailable','source_invalid','no_managed_bridges','partial','truncated','expired','epoch_changed'),
+ coverage:ref('FdbCoverage'), observed_at:ref('DateTime'),
+});
+api.paths['/fdb'].get.parameters.push(param('mac','query',fdbMAC),param('vlan','query',integer(0,4095)),param('bridge','query',id),param('port','query',id));
+for(const path of ['/fdb','/fdb/{fdb_entry_id}']){
+ api.paths[path].get['x-service-state']='implemented';
+ api.paths[path].get.description='Read native OVS FDB observations. Requires state.read and inventory.read and an independent, root-reviewed bounded FDB witness configuration. No write, Linux neighbor inference, or OVS command on request.';
+}
+api.paths['/fdb'].get.description += ' Sample at most eight enabled Bridges and keep at most 256 entries per Bridge. Pages contain up to 50 sampled rows. Filters and cursors apply to a single immutable sample. observed_at is the oldest included Bridge sample; individual rows preserve their own sample time. Truncated, unavailable, stale and partial coverage remain explicit.';
+api.info.description += ' Native FDB observation is opt-in with a qualified bounded OVS witness. Filters, paging and bounded export operate on cached observations.';
 Object.assign(s.LldpNeighborPage.properties, {source: ref('Source'), availability: string(), reason: nullable(string(128)), coverage: ref('LldpCoverage')});
 api.paths['/lldp'].get.parameters.push(...['bridge_id','port_id','interface_id'].map(key=>param(key,'query',id)));
 for(const path of ['/lldp','/lldp/{lldp_neighbor_id}']){
