@@ -1,4 +1,5 @@
 """Real Svelte browser acceptance inside the disposable Go/OVS VM fixture."""
+from contextlib import ExitStack
 import json
 import hashlib
 import os
@@ -10,8 +11,46 @@ from authentication import request_id, run
 from spanning_tree_prepare import reconfigure_draft_fixture
 
 
+def make_lldp_fixture(vsctl, call, get, eventually, cleanup):
+    def read_disabled():
+        code, page, _ = call('/lldp')
+        return page if code == 200 else None
+
+    disabled = eventually(read_disabled)
+    assert disabled['availability'] == 'unavailable'
+    assert disabled['reason'] == 'LLDP_PROVIDER_DISABLED' and disabled['items'] == []
+    bridge, namespace = 'br-lldp-ui', 'ovs-lldp-ui-peer'
+    vsctl('add-br', bridge, '--', 'set', 'Bridge', bridge, 'datapath_type=system')
+    cleanup.callback(vsctl, '--no-wait', '--if-exists', 'del-br', bridge)
+    run('ip', 'netns', 'add', namespace)
+    cleanup.callback(run, 'ip', 'netns', 'delete', namespace, check=False)
+    result = {'bridge': bridge, 'namespace': namespace, 'disabled': disabled}
+    for role, local, peer in [('capture', 'ld-ui-rx', 'ld-ui-src'), ('excluded', 'ld-ui-off', 'ld-ui-src2')]:
+        run('ip', 'link', 'add', local, 'type', 'veth', 'peer', 'name', peer)
+        cleanup.callback(run, 'ip', 'link', 'del', local, check=False)
+        run('ip', 'link', 'set', 'dev', peer, 'netns', namespace)
+        # No IP addressing or IPv6 discovery chatter is needed for the LLDP fixture.
+        run('sysctl', '-q', '-w', f'net.ipv6.conf.{local}.disable_ipv6=1')
+        run('ip', 'netns', 'exec', namespace, 'sysctl', '-q', '-w', f'net.ipv6.conf.{peer}.disable_ipv6=1')
+        vsctl('add-port', bridge, local)
+        run('ip', 'link', 'set', 'dev', local, 'up')
+        run('ip', '-n', namespace, 'link', 'set', 'dev', peer, 'up')
+        binding = eventually(lambda: next((row for row in get('/interfaces?filter=' + local)['items']
+                                           if row['name'] == local and row.get('bridge_ref')), None))
+        result[role] = {'interface': local, 'peer': peer, 'id': binding['management_id'],
+                        'portID': binding['port_ref']['id'], 'bridgeID': binding['bridge_ref']['id']}
+    return result
+
+
 def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, units,
                     db_socket, ovs, conf, manager_db, credentials, network_metrics, eventually):
+    with ExitStack() as cleanup:
+        return _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, units,
+                                db_socket, ovs, conf, manager_db, credentials, network_metrics, eventually, cleanup)
+
+
+def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, units,
+                     db_socket, ovs, conf, manager_db, credentials, network_metrics, eventually, cleanup):
     assert node and Path(node).is_file(), 'an explicit CI Node build/test tool is required'
     assert call('/session/reauthentication', 'POST', {'password': password})[0] == 200
     code, _, _ = call('/roles', 'POST', {'request_id': request_id(), 'name': 'InterfaceObserver',
@@ -64,6 +103,7 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                        ('browser-telemetry-writer', 'NativeTelemetry'),
                        ('browser-statistics-observer', 'InterfaceObserver'), ('browser-statistics-denied', 'SpanningTreeDenied'),
                        ('browser-neighbors-observer', 'InterfaceObserver'), ('browser-neighbors-denied', 'SpanningTreeDenied'),
+                       ('browser-lldp-observer', 'InterfaceObserver'), ('browser-lldp-denied', 'SpanningTreeDenied'),
                        ('browser-mtu-reader', 'Reader'),
                        ('browser-mtu-defaults', 'NetworkAdmin'), ('browser-mtu-default-drift', 'NetworkAdmin'),
                        ('browser-interface-observer', 'InterfaceObserver'),
@@ -153,10 +193,12 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                                          if item['name'] == telemetry_bridge), None))
     telemetry_id = telemetry['bridge_ref']['id']
     telemetry_grant = telemetry_id+':netflow'
+    lldp = make_lldp_fixture(vsctl, call, get, eventually, cleanup)
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
     assert needle in unit_original and '--local-spanning-tree-bridges' not in unit_original
+    assert '--lldp-observe-interfaces' not in unit_original
     # The reserved capability cannot be delegated by an HTTP caller who does
     # not hold it. Provision this disposable role only through the root CLI.
     assert units['mgrd'].startswith('ovs-mgrd-inventory-')
@@ -177,12 +219,17 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
     # unit in finally; the packaged default remains unchanged.
     mirror_unit = unit_original.replace('CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW\n',
                                         'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE\n')
-    unit_path.write_text(mirror_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
+    families = 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK'
+    assert families + '\n' in mirror_unit
+    # Allow a filtered packet socket solely on this explicit LLDP fixture unit.
+    fixture_unit = mirror_unit.replace(families + '\n', families + ' AF_PACKET\n')
+    unit_path.write_text(fixture_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
                                               +' --local-qos-bindings='+qos_grant+' --local-qos-detach-bindings='+qos_grant
                                               +' --local-qos-attach-bindings='+qos_attach_grant+' --local-qos-create-names='+qos_create_name
-                                              +' --local-telemetry-bindings='+telemetry_grant))
+                                              +' --local-telemetry-bindings='+telemetry_grant
+                                              +' --lldp-observe-interfaces='+lldp['capture']['id']))
     run('systemctl','daemon-reload')
     run('systemctl','reset-failed',units['mgrd'])
     run('systemctl','start',units['mgrd'])
@@ -195,7 +242,8 @@ def verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, uni
                 'qosAttach': {'id': qos_for_attach['management_id'], 'port': qos_port,
                               'uuid': qos_attach_uuid, 'queue': qos_attach_queue},
                 'qosCreateName': qos_create_name,
-                'telemetryWrite': {'id': telemetry_id, 'bridge': telemetry_bridge}}
+                'telemetryWrite': {'id': telemetry_id, 'bridge': telemetry_bridge},
+                'lldp': lldp}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)

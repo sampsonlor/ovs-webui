@@ -28,9 +28,13 @@ func (s neighborSelection) matches(row neighborEntry) bool {
 }
 
 func selectNeighbors(v *view, q url.Values) (neighborSelection, int, error) {
+	return selectObservedInterfaces(v, q, "INVALID_NEIGHBOR_FILTER", "INVALID_NEIGHBOR_SELECTION")
+}
+
+func selectObservedInterfaces(v *view, q url.Values, filterError, selectionError string) (neighborSelection, int, error) {
 	selection := neighborSelection{q.Get("bridge_id"), q.Get("port_id"), q.Get("interface_id"), strings.ToLower(q.Get("filter")), q.Get("family")}
 	if len(q.Get("filter")) > 1024 || selection.family != "" && selection.family != "ipv4" && selection.family != "ipv6" {
-		return selection, 0, apitypes.Fail(422, "INVALID_NEIGHBOR_FILTER")
+		return selection, 0, apitypes.Fail(422, filterError)
 	}
 	limit := 100
 	if q.Get("limit") != "" {
@@ -45,7 +49,7 @@ func selectNeighbors(v *view, q url.Values) (neighborSelection, int, error) {
 			continue
 		}
 		if !apitypes.ManagementID(item.id) {
-			return selection, 0, apitypes.Fail(422, "INVALID_NEIGHBOR_SELECTION")
+			return selection, 0, apitypes.Fail(422, selectionError)
 		}
 		found := false
 		for _, binding := range v.decision.Bindings {
@@ -59,6 +63,39 @@ func selectNeighbors(v *view, q url.Values) (neighborSelection, int, error) {
 		}
 	}
 	return selection, limit, nil
+}
+
+func (s *Service) observationCursor(token string, pageKey []byte, cur cursor, now time.Time, fresh bool) (cursor, error) {
+	if token == "" {
+		return cur, nil
+	}
+	expired := apitypes.Fail(410, "CURSOR_EXPIRED")
+	if len(token) > 4096 || !fresh {
+		return cursor{}, expired
+	}
+	sealed, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return cursor{}, expired
+	}
+	plain, err := authn.Unseal(s.key, sealed, pageKey)
+	var old cursor
+	if err != nil || json.Unmarshal(plain, &old) != nil || old.After == "" || old.Expires <= now.UnixMilli() {
+		return cursor{}, expired
+	}
+	cur.After, cur.Expires = old.After, old.Expires
+	if cur != old {
+		return cursor{}, expired
+	}
+	return cur, nil
+}
+
+func (s *Service) sealObservationCursor(cur cursor, pageKey []byte) (string, error) {
+	plain, _ := json.Marshal(cur)
+	sealed, err := authn.Seal(s.key, plain, pageKey)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(sealed), nil
 }
 
 type neighborStatus struct {
@@ -164,23 +201,9 @@ func (s *Service) readNeighbors(op string, path map[string]string, q url.Values,
 		Selection:  Digest([]string{claims.CredentialID, selection.bridge, selection.port, selection.iface, selection.family}),
 		Generation: v.decision.Generation, Snapshot: snapshot, Limit: limit, Expires: now.Add(30 * time.Second).UnixMilli(), Order: "linux-neighbor-v1"}
 	pageKey := []byte("neighbor-page-v1")
-	if token := q.Get("cursor"); token != "" {
-		if len(token) > 4096 || status.freshness != "fresh" {
-			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
-		}
-		sealed, err := base64.RawURLEncoding.DecodeString(token)
-		if err != nil {
-			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
-		}
-		plain, err := authn.Unseal(s.key, sealed, pageKey)
-		var old cursor
-		if err != nil || json.Unmarshal(plain, &old) != nil || old.After == "" || old.Expires <= now.UnixMilli() {
-			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
-		}
-		cur.After, cur.Expires = old.After, old.Expires
-		if cur != old {
-			return nil, apitypes.Fail(410, "CURSOR_EXPIRED")
-		}
+	cur, err = s.observationCursor(q.Get("cursor"), pageKey, cur, now, status.freshness == "fresh")
+	if err != nil {
+		return nil, err
 	}
 	matched := make([]neighborEntry, 0)
 	if status.freshness == "fresh" {
@@ -212,12 +235,10 @@ func (s *Service) readNeighbors(op string, path map[string]string, q url.Values,
 	var next any
 	if start+len(items) < len(matched) {
 		cur.After = matched[start+len(items)-1].ID
-		plain, _ := json.Marshal(cur)
-		sealed, err := authn.Seal(s.key, plain, pageKey)
+		next, err = s.sealObservationCursor(cur, pageKey)
 		if err != nil {
 			return nil, err
 		}
-		next = base64.RawURLEncoding.EncodeToString(sealed)
 	}
 	return map[string]any{
 		"snapshot_id": snapshot, "instance_generation": v.decision.Generation, "items": items, "next_cursor": next,

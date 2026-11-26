@@ -102,6 +102,7 @@ func run() int {
 	localQoSAttach := flag.String("local-qos-attach-bindings", "", "Reviewed Port management ID:QoS management ID pairs for exclusive egress attachment")
 	localQoSCreate := flag.String("local-qos-create-names", "", "Reviewed comma-separated names for creating unbound QoS profiles")
 	localTelemetry := flag.String("local-telemetry-bindings", "", "Reviewed comma-separated Bridge management ID:protocol pairs for Telemetry configuration")
+	lldpInterfaces := flag.String("lldp-observe-interfaces", "", "Opt-in passive LLDP on up to 16 exact Interface management IDs, separated by commas")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -464,6 +465,14 @@ func run() int {
 		linuxObserver := linuxprovider.New()
 		inventoryService.SetDeviceObserver(linuxObserver)
 		inventoryService.SetNeighborObserver(linuxObserver)
+		if *lldpInterfaces != "" {
+			observer := linuxprovider.NewLLDPObserver()
+			defer observer.Close()
+			if err = inventoryService.SetLLDPObserver(observer, strings.Split(*lldpInterfaces, ",")); err != nil {
+				logger.Error("invalid_lldp_observation_scope", "code", auth.ErrorCode(err))
+				return 2
+			}
+		}
 		inventoryService.SetPolicingObserver(linuxObserver)
 		inventoryService.SetQoSObserver(linuxObserver)
 		var qosGrants []string
@@ -643,6 +652,11 @@ func run() int {
 		go func() { defer close(devicesDone); inventoryService.RunDeviceObservations(providerCtx) }()
 		neighborsDone := make(chan struct{})
 		go func() { defer close(neighborsDone); inventoryService.RunNeighbors(providerCtx) }()
+		if *lldpInterfaces != "" {
+			lldpDone := make(chan struct{})
+			go func() { defer close(lldpDone); inventoryService.RunLLDP(providerCtx) }()
+			defer func() { cancelProvider(); <-lldpDone }()
+		}
 		defer func() {
 			cancelProvider()
 			<-devicesDone
