@@ -235,9 +235,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		refs := []apitypes.Ref{}
 		for _, id := range path {
-			// Receipt domains and the Linux neighbor cache resolve their own
+			// Receipt domains and the Linux observation caches resolve their own
 			// identities. Neither resource has a duplicate row in manager.db.
-			if op.ID != "readRequestReceipt" && op.ID != "readNeighbor" {
+			if op.ID != "readRequestReceipt" && op.ID != "readNeighbor" && op.ID != "readLldpNeighbor" {
 				refs = append(refs, apitypes.Ref{Kind: op.ResourceKind, ID: id})
 			}
 		}

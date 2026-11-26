@@ -13010,7 +13010,7 @@
         "summary": "listLldp",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "lldp_neighbor",
         "parameters": [
           {
@@ -13042,6 +13042,30 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1024
+            }
+          },
+          {
+            "name": "bridge_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "port_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "interface_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
             }
           }
         ],
@@ -13206,7 +13230,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read LLDP advertisements received on explicitly opted-in managed Linux Interfaces. Requires state.read and inventory.read. Source time is the latest collection; last_seen_at is the kernel receive time. Rows expire at the advertised TTL. This observation does not attest to remote identity or forwarding. Disabled or stale capture is explicit. Up to 256 active rows and 50 items per page; truncated denotes capture or retention loss. Pagination and filters apply to the same authorized result set."
       }
     },
     "/lldp/{lldp_neighbor_id}": {
@@ -13215,7 +13240,7 @@
         "summary": "readLldpNeighbor",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "lldp_neighbor",
         "parameters": [
           {
@@ -13388,7 +13413,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read LLDP advertisements received on explicitly opted-in managed Linux Interfaces. Requires state.read and inventory.read. Source time is the latest collection; last_seen_at is the kernel receive time. Rows expire at the advertised TTL. This observation does not attest to remote identity or forwarding."
       }
     },
     "/statistics": {
@@ -30653,6 +30679,9 @@
             "minLength": 1,
             "maxLength": 15
           },
+          "lldp": {
+            "$ref": "#/components/schemas/LldpAdvertisement"
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -37966,6 +37995,119 @@
         ],
         "additionalProperties": false
       },
+      "LldpIdentifier": {
+        "type": "object",
+        "properties": {
+          "subtype": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "text",
+              "hex",
+              "mac"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 510
+          }
+        },
+        "required": [
+          "subtype",
+          "encoding",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "LldpAdvertisement": {
+        "type": "object",
+        "properties": {
+          "chassis_id": {
+            "$ref": "#/components/schemas/LldpIdentifier"
+          },
+          "port_id": {
+            "$ref": "#/components/schemas/LldpIdentifier"
+          },
+          "system_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ttl_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "last_seen_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "required": [
+          "chassis_id",
+          "port_id",
+          "system_name",
+          "ttl_seconds",
+          "last_seen_at"
+        ],
+        "additionalProperties": false
+      },
+      "LldpCoverage": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "opted-in-managed-interfaces"
+            ]
+          },
+          "configured_interfaces": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "observed_interfaces": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "matched_entries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 256
+          },
+          "returned_entries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50
+          },
+          "max_entries": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 256
+          }
+        },
+        "required": [
+          "scope",
+          "configured_interfaces",
+          "observed_interfaces",
+          "matched_entries",
+          "returned_entries",
+          "max_entries"
+        ],
+        "additionalProperties": false
+      },
       "BridgePage": {
         "type": "object",
         "properties": {
@@ -38885,6 +39027,29 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/LldpCoverage"
           }
         },
         "required": [

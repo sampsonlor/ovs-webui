@@ -582,6 +582,7 @@ type Resource struct {
 	Family            string                     `json:"family,omitempty"`
 	Ifindex           int64                      `json:"ifindex,omitempty"`
 	InterfaceName     string                     `json:"interface_name,omitempty"`
+	Lldp              LldpAdvertisement          `json:"lldp,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -2163,6 +2164,26 @@ type NeighborCoverage struct {
 	ReturnedEntries    int64  `json:"returned_entries"`
 	MaxEntries         int64  `json:"max_entries"`
 }
+type LldpIdentifier struct {
+	Subtype  int64  `json:"subtype"`
+	Encoding string `json:"encoding"`
+	Value    string `json:"value"`
+}
+type LldpAdvertisement struct {
+	ChassisId  LldpIdentifier  `json:"chassis_id"`
+	PortId     LldpIdentifier  `json:"port_id"`
+	SystemName json.RawMessage `json:"system_name"`
+	TtlSeconds int64           `json:"ttl_seconds"`
+	LastSeenAt DateTime        `json:"last_seen_at"`
+}
+type LldpCoverage struct {
+	Scope                string `json:"scope"`
+	ConfiguredInterfaces int64  `json:"configured_interfaces"`
+	ObservedInterfaces   int64  `json:"observed_interfaces"`
+	MatchedEntries       int64  `json:"matched_entries"`
+	ReturnedEntries      int64  `json:"returned_entries"`
+	MaxEntries           int64  `json:"max_entries"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`
@@ -2484,6 +2505,10 @@ type LldpNeighborPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Source             Source                     `json:"source,omitempty"`
+	Availability       string                     `json:"availability,omitempty"`
+	Reason             json.RawMessage            `json:"reason,omitempty"`
+	Coverage           LldpCoverage               `json:"coverage,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

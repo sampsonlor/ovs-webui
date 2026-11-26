@@ -18,7 +18,7 @@
 
 <div class="breadcrumbs"><Link href={`/interfaces${model.query}`}>Interfaces</Link><span>› {item?.name ?? 'Interface'}</span></div>
 <header class="page-heading"><div><p class="eyebrow">Switching / Interface detail</p><h1>{item?.name ?? 'Interface'}</h1><p>Native configuration and observations for this exact Interface identity.</p></div><button onclick={() => controller.refresh()}>Refresh resource</button></header>
-<p class="actions"><Link href={`/visibility/statistics/${encodeURIComponent(identity)}`}>Review Interface statistics</Link><Link href={`/visibility/neighbors?interface_id=${encodeURIComponent(identity)}`}>Review Interface neighbors</Link></p>
+<p class="actions"><Link href={`/visibility/statistics/${encodeURIComponent(identity)}`}>Review Interface statistics</Link><Link href={`/visibility/neighbors?interface_id=${encodeURIComponent(identity)}`}>Review Interface neighbors</Link><Link href={`/visibility/lldp?interface_id=${encodeURIComponent(identity)}`}>Review Interface LLDP</Link></p>
 <LoadNotice load={model.interface} />
 {#if model.interface.error === 'NOT_FOUND'}<p class="notice warning">This Interface identity is no longer available. A same-name replacement has its own identity.</p>{/if}
 {#if refPath({kind:'interface', id:identity})}

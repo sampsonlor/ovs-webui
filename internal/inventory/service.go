@@ -28,6 +28,7 @@ type view struct {
 	sequence      uint64
 }
 type Service struct {
+	lldp                           lldpCache
 	neighbors                      neighborCache
 	statisticsMu                   sync.Mutex
 	statistics                     statisticsCache
@@ -110,6 +111,9 @@ func (s *Service) install(o Observation, d Decision) {
 		}
 		if !s.current.neighborScope.equal(v.neighborScope) {
 			s.neighbors.invalidate("NEIGHBORS_SCOPE_CHANGED")
+			if len(s.lldp.grants) != 0 && !slices.Equal(lldpBindings(s.current, s.lldp.grants), lldpBindings(v, s.lldp.grants)) {
+				s.lldp.invalidate("LLDP_RESYNCING")
+			}
 		}
 	}
 	s.current = v
@@ -123,6 +127,7 @@ func (s *Service) Unavailable(code string) {
 	s.statisticsEpoch++
 	s.devices.invalidate()
 	s.neighbors.invalidate("NEIGHBORS_RESYNCING")
+	s.lldp.invalidate("OVS_ASSOCIATION_STALE")
 }
 func (s *Service) Accept(ctx context.Context, digest, reason string) error {
 	s.mu.RLock()
@@ -168,6 +173,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	if op == "listNeighbors" || op == "readNeighbor" {
 		return s.readNeighbors(op, path, q, c)
+	}
+	if op == "listLldp" || op == "readLldpNeighbor" {
+		return s.readLLDP(op, path, q, c)
 	}
 	s.mu.RLock()
 	v, failure, localVLAN, localBond, localMTU, localPolicing := s.current, s.failure, s.localVLAN, s.localBond, s.localMTU, s.localPolicing

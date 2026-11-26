@@ -465,6 +465,16 @@ s.NeighborCoverage = closed({
  scope: choices('managed-linux-interfaces'), eligible_interfaces: integer(0,2048), observed_interfaces: integer(0,2048),
  matched_entries: integer(0,2048), returned_entries: integer(0,50), max_entries: integer(2048,2048),
 });
+s.LldpIdentifier = closed({subtype: integer(1,7), encoding: choices('text','hex','mac'), value: string(510)});
+s.LldpAdvertisement = closed({
+ chassis_id: ref('LldpIdentifier'), port_id: ref('LldpIdentifier'), system_name: nullable(string(255)),
+ ttl_seconds: integer(1,65535), last_seen_at: ref('DateTime'),
+});
+s.Resource.properties.lldp = ref('LldpAdvertisement');
+s.LldpCoverage = closed({
+ scope: choices('opted-in-managed-interfaces'), configured_interfaces: integer(0,16), observed_interfaces: integer(0,16),
+ matched_entries: integer(0,256), returned_entries: integer(0,50), max_entries: integer(256,256),
+});
 const resources = [
  ['bridges','bridge','Bridge',36], ['interfaces','interface','Interface',36], ['vlans','vlan','Resource',42], ['bonds','bond','Bond',42],
  ['spanning-tree','spanning_tree','Resource',43], ['multicast','multicast','Resource',43], ['tunnels','tunnel','Resource',43], ['mirrors','mirror','Resource',43],
@@ -485,6 +495,13 @@ for (const [path, kind, schema, issue] of resources) {
 }
 Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 Object.assign(s.NeighborPage.properties, {source: ref('Source'), availability: string(), reason: nullable(string(128)), coverage: ref('NeighborCoverage')});
+Object.assign(s.LldpNeighborPage.properties, {source: ref('Source'), availability: string(), reason: nullable(string(128)), coverage: ref('LldpCoverage')});
+api.paths['/lldp'].get.parameters.push(...['bridge_id','port_id','interface_id'].map(key=>param(key,'query',id)));
+for(const path of ['/lldp','/lldp/{lldp_neighbor_id}']){
+ api.paths[path].get['x-service-state']='implemented';
+ api.paths[path].get.description='Read LLDP advertisements received on explicitly opted-in managed Linux Interfaces. Requires state.read and inventory.read. Source time is the latest collection; last_seen_at is the kernel receive time. Rows expire at the advertised TTL. This observation does not attest to remote identity or forwarding.';
+}
+api.paths['/lldp'].get.description += ' Disabled or stale capture is explicit. Up to 256 active rows and 50 items per page; truncated denotes capture or retention loss. Pagination and filters apply to the same authorized result set.';
 api.paths['/neighbors'].get.parameters.push(param('family','query',choices('ipv4','ipv6')),...['bridge_id','port_id','interface_id'].map(key=>param(key,'query',id)));
 for(const path of ['/neighbors','/neighbors/{neighbor_id}']){
  api.paths[path].get['x-service-state']='implemented';

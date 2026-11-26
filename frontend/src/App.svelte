@@ -24,6 +24,7 @@
   import Telemetry from './Telemetry.svelte';
   import Statistics from './Statistics.svelte';
   import Neighbors from './Neighbors.svelte';
+  import Lldp from './Lldp.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -189,6 +190,7 @@
         <Link href="/visibility/telemetry" current={path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}>Telemetry</Link>
         <Link href="/visibility/statistics" current={path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')}>Statistics</Link>
         <Link href="/visibility/neighbors" current={path === '/visibility/neighbors' || path.startsWith('/visibility/neighbors/')}>Neighbors</Link>
+        <Link href="/visibility/lldp" current={path === '/visibility/lldp' || path.startsWith('/visibility/lldp/')}>LLDP</Link>
       </nav>
       <nav aria-label="Change Control" class="nav-section">
         <p class="eyebrow">Shared Change Control</p>
@@ -485,6 +487,8 @@
           <Statistics model={$model} {expert} />
         {:else if path === '/visibility/neighbors' || path.startsWith('/visibility/neighbors/')}
           <Neighbors model={$model} {expert} />
+        {:else if path === '/visibility/lldp' || path.startsWith('/visibility/lldp/')}
+          <Lldp model={$model} {expert} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}
@@ -697,6 +701,11 @@
             <h2>Neighbors</h2>
             <p>Review Linux ARP and NDP entries on managed Interfaces.</p>
             <Link href="/visibility/neighbors">Open Neighbors</Link>
+          </section>
+          <section class="panel">
+            <h2>LLDP</h2>
+            <p>Review advertisements received on opted-in managed Interfaces.</p>
+            <Link href="/visibility/lldp">Open LLDP</Link>
           </section>
           <Link href="/operations/events">Inspect current Events →</Link>
         {:else}<h1>Page unavailable</h1>

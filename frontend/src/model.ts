@@ -98,6 +98,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     qos: '/switching/qos',
     statistic: '/visibility/statistics',
     neighbor: '/visibility/neighbors',
+    lldp_neighbor: '/visibility/lldp',
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -388,6 +389,11 @@ export class Controller {
         const neighborQuery = new URLSearchParams(query);
         if (!neighborQuery.has('limit')) neighborQuery.set('limit', '25');
         resourceURL = parts.length === 2 ? `/neighbors?${neighborQuery}` : `/neighbors/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
+      } else if (path === '/visibility/lldp' || path.startsWith('/visibility/lldp/')) {
+        const lldpQuery = new URLSearchParams(query);
+        if (!lldpQuery.has('limit')) lldpQuery.set('limit', '25');
+        resourceURL = parts.length === 2 ? `/lldp?${lldpQuery}` : `/lldp/${encodeURIComponent(parts[2])}`;
         capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
       } else if (path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')) {
         const telemetryQuery = new URLSearchParams(query);
