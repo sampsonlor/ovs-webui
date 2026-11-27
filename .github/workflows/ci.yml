@@ -277,6 +277,12 @@ jobs:
           sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema" \
             outputs/runtime/execution.test -test.run '^TestNativeNeighborEventCache$' -test.v -test.timeout=90s \
             | go tool test2json -p native-neighbor-events | tee test-results/go-neighbor-events.json
+      - name: Typed product-only systemd restart with live OVS forwarding
+        if: runner.environment == 'github-hosted'
+        run: |
+          go test -c -o outputs/runtime/systemd-restart.test ./internal/runtimecontrol
+          sudo -- env OVS_CI_SYSTEMD_RESTART=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            python3 tests/daemon/smoke.py --bin-dir outputs/runtime --systemd-restart-probe
       - name: Build separately qualified Mirror runtime for formal browser acceptance
         env:
           MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -460,6 +466,8 @@ jobs:
             test-results/go-neighbor-events.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
+            test-results/go-systemd-restart.json
+            test-results/go-systemd-restart-journal.log
             test-results/go-auth-smoke.json
             test-results/go-auth-journal.log
             test-results/go-tls-smoke.json

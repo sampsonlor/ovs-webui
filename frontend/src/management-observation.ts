@@ -17,6 +17,8 @@ const componentNames = new Map([
   ['manager-db', 'Management database'],
   ['web-secret-store', 'Web secret store'],
   ['manager-secret-store', 'Management secret store'],
+  ['management-debug', 'Temporary Debug'],
+  ['management-restart', 'Service restart policy'],
   ['manager-ipc', 'Manager connection'],
   ['auth', 'Authentication'],
   ['tls', 'HTTPS'],
@@ -43,6 +45,14 @@ const componentNames = new Map([
 ]);
 
 const reasons = new Map([
+  [
+    'MANAGEMENT_RESTART_POLICY_DISABLED',
+    'Service restart is disabled by the manager policy.',
+  ],
+  [
+    'MANAGEMENT_RESTART_UNAVAILABLE',
+    'Service restart is unavailable for this manager.',
+  ],
   ['OVSDB_RESYNCING', 'Waiting for a current OVSDB observation.'],
   ['OVSDB_UNAVAILABLE', 'The OVSDB provider is unavailable.'],
   ['SAFETY_WATCHDOG_STALE', 'A current watchdog observation is unavailable.'],

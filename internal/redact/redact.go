@@ -23,6 +23,7 @@ var messages = map[string]bool{
 	"session_key_initialization_failed": true, "session_key_initialized": true,
 	"invalid_public_api_configuration": true, "ipc_request_rejected": true,
 	"security_action_failed": true, "security_action_completed": true,
+	"management_debug_sample": true,
 }
 
 // Diagnostic attributes are fixed vocabularies, not another channel for

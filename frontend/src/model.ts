@@ -3,6 +3,8 @@ import type {
   Accepted,
   Candidate,
   Login,
+  ManagementDebugCommand,
+  ManagementServiceRestartCommand,
   Interface,
   InterfacePage,
   Port,
@@ -553,6 +555,19 @@ export class Controller {
         await this.refresh();
       }
     }
+  }
+  setManagementDebug(duration: ManagementDebugCommand['duration_seconds']) {
+    if (this.state.path !== healthRoute || !has(this.state.session, 'management.debug.write')) return;
+    return this.mutate(() => this.api.command<Accepted>(
+      '/health/debug', 'POST', 'management', { duration_seconds: duration },
+    ));
+  }
+  restartManagementService(service: ManagementServiceRestartCommand['service']) {
+    if (this.state.path !== healthRoute || !has(this.state.session, 'management.services.control')) return;
+    return this.mutate(
+      () => this.api.command<Accepted>('/health/service-restarts', 'POST', 'management', { service }),
+      (response) => '/operations/jobs/' + (response as Accepted).job_id,
+    );
   }
   stage(port: Port, value: VlanInput) {
     const c = this.state.workspace.value?.candidate;

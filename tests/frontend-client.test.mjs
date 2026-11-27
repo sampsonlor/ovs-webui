@@ -472,6 +472,76 @@ await test('acknowledgements and definitive rejections must match the original c
   }
 });
 
+await test('management controls acknowledge and recover only the matching Health or restart Job', async () => {
+  const controls = [
+    [
+      '/health/debug',
+      { kind: 'health', id: '31fa3492-67e6-4a39-bfce-000000000001' },
+      { kind: 'health', id: principal },
+    ],
+    [
+      '/health/service-restarts',
+      { kind: 'job', id: resource },
+      { kind: 'job', id: principal },
+    ],
+  ];
+  for (const [path, target, otherTarget] of controls) {
+    const disk = storage();
+    let acknowledgedTarget = target;
+    let recoveredTarget = target;
+    let jobRef = { kind: 'job', id: resource };
+    let submissions = 0;
+    let reads = 0;
+    const api = new API(async (_url, options) => {
+      const { request_id, request_domain, request_epoch } = JSON.parse(
+        [...disk.data.values()][0],
+      );
+      const identity = { request_id, request_domain, request_epoch };
+      if (options.method === 'POST') {
+        submissions++;
+        return response(
+          {
+            ...identity,
+            job_id: resource,
+            resource_ref: acknowledgedTarget,
+          },
+          202,
+        );
+      }
+      reads++;
+      return response({
+        ...identity,
+        state: 'completed',
+        resource_ref: recoveredTarget,
+        job_ref: jobRef,
+      });
+    }, disk);
+    api.session = session;
+    await api.command(path, 'POST', 'management', {});
+    assert.equal(api.pending(), null);
+
+    acknowledgedTarget = otherTarget;
+    await assert.rejects(
+      api.command(path, 'POST', 'management', {}),
+      /COMMAND_RESPONSE_IDENTITY_MISMATCH/,
+    );
+    const original = api.pending();
+    assert.ok(original);
+    recoveredTarget = otherTarget;
+    await assert.rejects(api.recover(), /RECEIPT_RESOURCE_MISMATCH/);
+    assert.deepEqual(api.pending(), original);
+    recoveredTarget = target;
+    jobRef = null;
+    await assert.rejects(api.recover(), /RECEIPT_RESOURCE_MISMATCH/);
+    assert.deepEqual(api.pending(), original);
+    jobRef = { kind: 'job', id: resource };
+    assert.deepEqual((await api.recover()).resource_ref, target);
+    assert.equal(api.pending(), null);
+    assert.equal(submissions, 2);
+    assert.equal(reads, 3);
+  }
+});
+
 await test('a late recovery response cannot erase a newer pending identity', async () => {
   const disk = storage();
   const original = {

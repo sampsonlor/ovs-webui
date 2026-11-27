@@ -35,6 +35,10 @@ export function requestID(): string {
 export type Pending = RecoveryIdentity & { principal_id: string; path: string };
 export type StoragePort = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
+const debugPath = '/health/debug';
+const restartPath = '/health/service-restarts';
+const managementHealthID = '31fa3492-67e6-4a39-bfce-000000000001';
+
 // No credentials, CSRF tokens, form data or native configuration are persisted.
 // Only a principal-bound command identity survives navigation and browser restart.
 export class API {
@@ -178,7 +182,7 @@ export class API {
           data.request_domain !== domain ||
           data.request_epoch !== pending.request_epoch ||
           !uuid(data.job_id) ||
-          !this.resourceMatches(path, data.resource_ref)
+          !this.resourceMatches(path, data.resource_ref, data.job_id)
         : !uuid(data.id) ||
           !uuid(data.revision) ||
           !Array.isArray(data.intents))
@@ -201,15 +205,32 @@ export class API {
       throw new Error('RECEIPT_IDENTITY_MISMATCH');
     // Unknown future receipt states cannot unlock another configuration command.
     if (['accepted', 'completed'].includes(receipt.state)) {
-      if (!this.resourceMatches(pending.path, receipt.resource_ref))
+      const job = receipt.job_ref;
+      if (
+        ((pending.path === debugPath || pending.path === restartPath) &&
+          (job?.kind !== 'job' ||
+            typeof job.id !== 'string' ||
+            !/^[0-9a-f-]{14}4[0-9a-f-]{21}$/.test(job.id))) ||
+        !this.resourceMatches(pending.path, receipt.resource_ref, job?.id)
+      )
         throw new Error('RECEIPT_RESOURCE_MISMATCH');
       this.forget(pending);
     }
     return receipt;
   }
-  private resourceMatches(path: string, value: unknown): boolean {
+  private resourceMatches(
+    path: string,
+    value: unknown,
+    jobID?: unknown,
+  ): boolean {
     if (!value || typeof value !== 'object') return false;
     const ref = value as Record<string, unknown>;
+    if (path === debugPath)
+      return ref.kind === 'health' && ref.id === managementHealthID;
+    if (path === restartPath)
+      return (
+        ref.kind === 'job' && typeof jobID === 'string' && ref.id === jobID
+      );
     const kind =
       path === '/candidate'
         ? 'candidate'

@@ -2334,6 +2334,14 @@ type HealthChange struct {
 	Current     string `json:"current"`
 	Transitions int64  `json:"transitions"`
 }
+type ManagementDebugCommand struct {
+	RequestId       RequestId `json:"request_id"`
+	DurationSeconds int64     `json:"duration_seconds"`
+}
+type ManagementServiceRestartCommand struct {
+	RequestId RequestId `json:"request_id"`
+	Service   string    `json:"service"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`

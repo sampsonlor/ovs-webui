@@ -18,6 +18,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	identity "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
+	"github.com/sampsonlor/ovs-webui/internal/repository/runtimeops"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/safety"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
@@ -95,6 +96,9 @@ func loadSafety(ctx context.Context, q evidence.Query, id string) (safety.Record
 	return s, nil
 }
 func (e *Engine) admitSafety(ctx context.Context, tx *sql.Tx, r execution.Record, a safeAdmission) error {
+	if err := runtimeops.RequireNoRestart(ctx, tx); err != nil {
+		return err
+	}
 	var n int
 	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM safe_resolutions WHERE owner_id=? AND request_epoch=? AND request_id=?", r.Owner, a.command.Epoch, r.RequestID).Scan(&n); err != nil {
 		return err

@@ -9,18 +9,22 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
+	"github.com/sampsonlor/ovs-webui/internal/runtimehealth"
 )
 
 const watchdogObservationMaxAge = 10 * time.Second
 
 type managerRuntimeHealth struct {
-	storage          func() repository.Status
-	inventory        *inventory.Service
-	secretCheckedAt  time.Time
-	authConfigured   bool
-	secretConfigured bool
-	safetyConfigured bool
-	lastWatchdog     atomic.Pointer[ipc.HealthComponent]
+	restartConfigured bool
+	restartBootKnown  bool
+	storage           func() repository.Status
+	inventory         *inventory.Service
+	secretCheckedAt   time.Time
+	authConfigured    bool
+	secretConfigured  bool
+	safetyConfigured  bool
+	debug             *runtimehealth.Debug
+	lastWatchdog      atomic.Pointer[ipc.HealthComponent]
 }
 
 func healthTime(at time.Time) *time.Time {
@@ -66,6 +70,13 @@ func (m *managerRuntimeHealth) snapshot(now time.Time) ipc.Health {
 		}
 	}
 	watchdog := m.watchdog(now)
+	restart := ipc.HealthComponent{Key: "management-restart", State: "disabled", Reason: "MANAGEMENT_RESTART_POLICY_DISABLED", Authority: "manager-runtime-policy", ObservedAt: healthTime(now)}
+	if m.restartConfigured {
+		restart.State, restart.Reason = "ready", "MANAGEMENT_RESTART_POLICY_ENABLED"
+		if !m.restartBootKnown || !m.authConfigured {
+			restart.State, restart.Reason = "unavailable", "MANAGEMENT_RESTART_UNAVAILABLE"
+		}
+	}
 	view := ipc.Health{
 		State: "ready", Scope: "runtime-inspection",
 		AuthenticationReady: m.authConfigured && status.Writable,
@@ -73,11 +84,21 @@ func (m *managerRuntimeHealth) snapshot(now time.Time) ipc.Health {
 		Storage:             &ipc.StorageHealth{Manager: &status},
 		Components: []ipc.HealthComponent{
 			{Key: "manager", State: "ready", Authority: "manager-runtime", ObservedAt: healthTime(now)},
-			database, secret, watchdog,
+			database, secret, watchdog, restart,
 		},
 	}
 	if database.State != "ready" || watchdog.State == "degraded" || watchdog.State == "stale" {
 		view.State = "degraded"
+	}
+	if m.debug != nil {
+		debug := ipc.HealthComponent{
+			Key: "management-debug", State: "disabled", Reason: "DEBUG_INACTIVE",
+			Authority: "manager-debug-lease", ObservedAt: healthTime(now),
+		}
+		if _, active := m.debug.State(); active {
+			debug.State, debug.Reason = "ready", "DEBUG_ACTIVE"
+		}
+		view.Components = append(view.Components, debug)
 	}
 	for _, observation := range m.inventory.RuntimeHealth() {
 		view.Components = append(view.Components, ipc.HealthComponent{

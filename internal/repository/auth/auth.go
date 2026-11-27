@@ -20,10 +20,12 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository/executions"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
+	"github.com/sampsonlor/ovs-webui/internal/runtimehealth"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
 
 type Repository struct {
+	runtimeRestart  *managementRestarter
 	store           *sqlite.Store
 	receipts        *requests.Repository
 	contract        *apicontract.Contract
@@ -33,6 +35,7 @@ type Repository struct {
 	tlsNow          func() tlscontrol.Clock
 	inventory       inventory.Reader
 	fields          *executions.Engine
+	debug           *runtimehealth.Debug
 }
 
 func (r *Repository) WithInventory(reader inventory.Reader) *Repository {
