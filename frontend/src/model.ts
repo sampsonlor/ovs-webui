@@ -100,6 +100,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     neighbor: '/visibility/neighbors',
     lldp_neighbor: '/visibility/lldp',
     fdb_entry: '/visibility/fdb',
+    endpoint: '/visibility/endpoints',
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -395,6 +396,17 @@ export class Controller {
         const lldpQuery = new URLSearchParams(query);
         if (!lldpQuery.has('limit')) lldpQuery.set('limit', '25');
         resourceURL = parts.length === 2 ? `/lldp?${lldpQuery}` : `/lldp/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
+      } else if (path === '/visibility/endpoints' || path.startsWith('/visibility/endpoints/')) {
+        const endpointQuery = new URLSearchParams(query);
+        if (parts.length === 2) {
+          if (!endpointQuery.has('limit')) endpointQuery.set('limit', '25');
+          resourceURL = '/endpoints?' + endpointQuery;
+        } else {
+          const ip = endpointQuery.get('ip');
+          const detailQuery = ip === null ? '' : '?' + new URLSearchParams({ ip });
+          resourceURL = '/endpoints/' + encodeURIComponent(parts[2]) + detailQuery;
+        }
         capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
       } else if (path === '/visibility/fdb' || path.startsWith('/visibility/fdb/')) {
         const fdbQuery = new URLSearchParams(query);

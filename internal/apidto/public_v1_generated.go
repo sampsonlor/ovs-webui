@@ -584,6 +584,7 @@ type Resource struct {
 	InterfaceName     string                     `json:"interface_name,omitempty"`
 	Lldp              LldpAdvertisement          `json:"lldp,omitempty"`
 	Fdb               FdbObservation             `json:"fdb,omitempty"`
+	Endpoint          EndpointObservation        `json:"endpoint,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -2215,6 +2216,82 @@ type FdbCoverage struct {
 	EntriesTotal   int64 `json:"entries_total"`
 	Truncated      bool  `json:"truncated"`
 }
+type EndpointEvidence struct {
+	Ref            ResourceRef                `json:"ref"`
+	Source         Source                     `json:"source"`
+	State          string                     `json:"state"`
+	Ip             string                     `json:"ip,omitempty"`
+	Family         string                     `json:"family,omitempty"`
+	Mac            string                     `json:"mac,omitempty"`
+	Vlan           int64                      `json:"vlan,omitempty"`
+	Ofport         int64                      `json:"ofport,omitempty"`
+	PortName       string                     `json:"port_name,omitempty"`
+	PortResolution string                     `json:"port_resolution,omitempty"`
+	ChassisId      LldpIdentifier             `json:"chassis_id,omitempty"`
+	LldpPortId     LldpIdentifier             `json:"lldp_port_id,omitempty"`
+	SystemName     string                     `json:"system_name,omitempty"`
+	TtlSeconds     int64                      `json:"ttl_seconds,omitempty"`
+	LastSeenAt     DateTime                   `json:"last_seen_at,omitempty"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
+}
+
+func (v *EndpointEvidence) UnmarshalJSON(data []byte) error {
+	type plain EndpointEvidence
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v EndpointEvidence) MarshalJSON() ([]byte, error) {
+	type plain EndpointEvidence
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type EndpointObservation struct {
+	Basis             string                     `json:"basis"`
+	Mac               string                     `json:"mac,omitempty"`
+	Vlan              int64                      `json:"vlan,omitempty"`
+	BridgeRef         ResourceRef                `json:"bridge_ref,omitempty"`
+	BridgeName        string                     `json:"bridge_name,omitempty"`
+	PortRef           ResourceRef                `json:"port_ref,omitempty"`
+	PortName          string                     `json:"port_name,omitempty"`
+	InterfaceRef      ResourceRef                `json:"interface_ref,omitempty"`
+	InterfaceName     string                     `json:"interface_name,omitempty"`
+	Addresses         []string                   `json:"addresses"`
+	Evidence          []EndpointEvidence         `json:"evidence"`
+	EvidenceTotal     int64                      `json:"evidence_total"`
+	EvidenceTruncated bool                       `json:"evidence_truncated"`
+	ExtraFields       map[string]json.RawMessage `json:"-"`
+}
+
+func (v *EndpointObservation) UnmarshalJSON(data []byte) error {
+	type plain EndpointObservation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v EndpointObservation) MarshalJSON() ([]byte, error) {
+	type plain EndpointObservation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type EndpointSourceCoverage struct {
+	Kind         string                     `json:"kind"`
+	Source       Source                     `json:"source"`
+	Availability string                     `json:"availability"`
+	Reason       string                     `json:"reason,omitempty"`
+	ScopeReason  string                     `json:"scope_reason,omitempty"`
+	ScopeUnit    string                     `json:"scope_unit"`
+	Eligible     int64                      `json:"eligible"`
+	Observed     int64                      `json:"observed"`
+	Truncated    bool                       `json:"truncated"`
+	ExtraFields  map[string]json.RawMessage `json:"-"`
+}
+
+func (v *EndpointSourceCoverage) UnmarshalJSON(data []byte) error {
+	type plain EndpointSourceCoverage
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v EndpointSourceCoverage) MarshalJSON() ([]byte, error) {
+	type plain EndpointSourceCoverage
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`
@@ -2478,6 +2555,10 @@ type EndpointPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Availability       string                     `json:"availability,omitempty"`
+	Freshness          string                     `json:"freshness,omitempty"`
+	Matched            int64                      `json:"matched,omitempty"`
+	Sources            []EndpointSourceCoverage   `json:"sources,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

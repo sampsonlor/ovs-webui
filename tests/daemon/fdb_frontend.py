@@ -11,8 +11,8 @@ from authentication import request_id, run
 from spanning_tree_prepare import reconfigure_draft_fixture
 
 
-def prepare_fdb_links(vsctl, get, eventually, cleanup):
-    bridge_name, other_name, namespace = 'br-fdb-ui', 'br-fdb-off', 'ovs-fdb-ui-peer'
+def prepare_observation_links(vsctl, get, eventually, cleanup, bridge_name, other_name,
+                              namespace, port_specs):
     bridges = {}
     for name in (bridge_name, other_name):
         vsctl('add-br', name, '--', 'set', 'Bridge', name, 'datapath_type=system',
@@ -27,11 +27,7 @@ def prepare_fdb_links(vsctl, get, eventually, cleanup):
     run('ip', 'netns', 'add', namespace)
     cleanup.callback(run, 'ip', 'netns', 'delete', namespace, check=False)
     ports = []
-    for name, local, peer, vlan in (
-        (bridge_name, 'fd-ui-v101', 'fd-src-v101', 101),
-        (bridge_name, 'fd-ui-v202', 'fd-src-v202', 202),
-        (other_name, 'fd-ui-off', 'fd-src-off', 101),
-    ):
+    for name, local, peer, vlan in port_specs:
         run('ip', 'link', 'add', local, 'type', 'veth', 'peer', 'name', peer)
         cleanup.callback(run, 'ip', 'link', 'del', local, check=False)
         run('ip', 'link', 'set', 'dev', peer, 'netns', namespace)
@@ -49,18 +45,8 @@ def prepare_fdb_links(vsctl, get, eventually, cleanup):
             'namespace': namespace, 'ports': ports}
 
 
-def verify_fdb_frontend(repo, fixture, node, origin, password, call, get, vsctl,
-                        units, ovs, credentials, eventually):
-    assert node and Path(node).is_file()
+def prepare_observer_accounts(password, call, get, credentials):
     assert call('/session/reauthentication', 'POST', {'password': password})[0] == 200
-
-    def disabled_page():
-        code, payload, _ = call('/fdb?limit=1')
-        return payload if code == 200 else None
-
-    disabled = eventually(disabled_page)
-    assert disabled['availability'] == 'unavailable'
-    assert disabled['reason'] == 'disabled' and disabled['items'] == []
     accounts = {}
     for suffix, caps in (
         ('observer', ['state.read', 'inventory.read']),
@@ -77,28 +63,55 @@ def verify_fdb_frontend(repo, fixture, node, origin, password, call, get, vsctl,
                                       'password': secret, 'role_ids': [role_id]})[0] == 202
         accounts[username] = secret
 
+    return accounts
+
+
+def enable_fdb_scope(units, ovs, cleanup, bridge_ids, lldp_interface=None):
+    unit_path = Path('/etc/systemd/system') / units['mgrd']
+    original = unit_path.read_text()
+    needle = '--database=${MANAGER_DATABASE}'
+    caps = 'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW\n'
+    assert needle in original and caps in original and '--fdb-' not in original
+    assert units['mgrd'].startswith('ovs-mgrd-inventory-')
+    pin = ovs / 'witness-build.json'
+    executable = ovs / 'bin/ovs-vswitchd'
+    control = ovs / 'switch.ctl'
+    assert pin.is_file() and executable.is_file() and control.is_socket()
+    flags = (
+        f' --fdb-observe-bridges={",".join(bridge_ids)} --fdb-witness-socket={control}'
+        f' --fdb-witness-executable={executable} --fdb-witness-manifest={pin}'
+        f' --fdb-witness-manifest-sha256={hashlib.sha256(pin.read_bytes()).hexdigest()}'
+    )
+    cleanup.callback(reconfigure_draft_fixture, unit_path, units['mgrd'], original)
+    # Only this disposable root service may inspect the qualified test OVS process.
+    updated = original.replace(caps, 'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE\n')
+    if lldp_interface:
+        families = 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK'
+        assert '--lldp-observe-interfaces' not in original and families + '\n' in original
+        updated = updated.replace(families + '\n', families + ' AF_PACKET\n')
+        flags += ' --lldp-observe-interfaces=' + lldp_interface
+    reconfigure_draft_fixture(unit_path, units['mgrd'], updated.replace(needle, needle + flags))
+    return control
+
+
+def verify_fdb_frontend(repo, fixture, node, origin, accounts, call, get, vsctl, units, ovs, eventually):
+    assert node and Path(node).is_file()
+
+    def disabled_page():
+        code, payload, _ = call('/fdb?limit=1')
+        return payload if code == 200 else None
+
+    disabled = eventually(disabled_page)
+    assert disabled['availability'] == 'unavailable'
+    assert disabled['reason'] == 'disabled' and disabled['items'] == []
     with ExitStack() as cleanup:
-        topology = prepare_fdb_links(vsctl, get, eventually, cleanup)
-        unit_path = Path('/etc/systemd/system') / units['mgrd']
-        original = unit_path.read_text()
-        needle = '--database=${MANAGER_DATABASE}'
-        caps = 'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW\n'
-        assert needle in original and caps in original and '--fdb-' not in original
-        assert units['mgrd'].startswith('ovs-mgrd-inventory-')
-        pin = ovs / 'witness-build.json'
-        executable = ovs / 'bin/ovs-vswitchd'
-        control = ovs / 'switch.ctl'
-        assert pin.is_file() and executable.is_file() and control.is_socket()
-        flags = (
-            f' --fdb-observe-bridges={topology["bridge"]["id"]} --fdb-witness-socket={control}'
-            f' --fdb-witness-executable={executable} --fdb-witness-manifest={pin}'
-            f' --fdb-witness-manifest-sha256={hashlib.sha256(pin.read_bytes()).hexdigest()}'
-        )
-        cleanup.callback(reconfigure_draft_fixture, unit_path, units['mgrd'], original)
-        # Only this disposable root service may inspect the qualified test OVS process.
-        updated = original.replace(needle, needle + flags).replace(
-            caps, 'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE\n')
-        reconfigure_draft_fixture(unit_path, units['mgrd'], updated)
+        topology = prepare_observation_links(vsctl, get, eventually, cleanup, 'br-fdb-ui',
+                                             'br-fdb-off', 'ovs-fdb-ui-peer', (
+            ('br-fdb-ui', 'fd-ui-v101', 'fd-src-v101', 101),
+            ('br-fdb-ui', 'fd-ui-v202', 'fd-src-v202', 202),
+            ('br-fdb-off', 'fd-ui-off', 'fd-src-off', 101),
+        ))
+        control = enable_fdb_scope(units, ovs, cleanup, [topology['bridge']['id']])
         eventually(lambda: call('/inventory')[0] == 200)
 
         private = fixture / 'fdb-browser-private.json'

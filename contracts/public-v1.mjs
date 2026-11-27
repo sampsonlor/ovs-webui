@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.33.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.34.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
 api.info.description += ' Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness.';
 api['x-review-status'] = 'implementation-review';
 api.info.description += ' Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable.';
@@ -493,6 +493,44 @@ s.FdbCoverage = closed({
 s.FdbCoverage.description = 'Bridge coverage applies after Bridge/Port scope selection. Entry counts describe all learned and static rows from sampled Bridges before MAC, VLAN, Port or free-text row filters. The total is the native count across sampled Bridges only.';
 s.Resource.properties.fdb = ref('FdbObservation');
 
+const endpointBasis = choices('fdb','neighbor','lldp');
+const endpointIP = {...string(45), description:'IPv4 or IPv6 address without an interface zone.'};
+const endpointAvailability = choices('complete','degraded','unavailable');
+s.EndpointEvidence = {
+ type:'object', additionalProperties:true,
+ properties:{
+  ref:ref('ResourceRef'), source:ref('Source'), state:string(),
+  ip:endpointIP, family:choices('ipv4','ipv6'), mac:fdbMAC, vlan:integer(0,4095),
+  ofport:integer(1,65534), port_name:string(64), port_resolution:choices('resolved','unmapped','ambiguous'),
+  chassis_id:ref('LldpIdentifier'), lldp_port_id:ref('LldpIdentifier'), system_name:string(255),
+  ttl_seconds:integer(1,65535), last_seen_at:ref('DateTime'),
+ },
+ required:['ref','source','state'],
+ description:'One retained evidence row and its source, using the exact resource reference of that observation. FDB last seen is an estimate from native age. LLDP last seen is the receive time of an advertisement.',
+};
+s.EndpointObservation = {
+ type:'object', additionalProperties:true,
+ properties:{
+  basis:endpointBasis, mac:fdbMAC, vlan:integer(0,4095), bridge_ref:ref('ResourceRef'), bridge_name:string(256),
+  port_ref:ref('ResourceRef'), port_name:string(256), interface_ref:ref('ResourceRef'), interface_name:string(15),
+  addresses:array(endpointIP,12), evidence:array(ref('EndpointEvidence'),12,1),
+  evidence_total:integer(1,2048), evidence_truncated:bool,
+ },
+ required:['basis','addresses','evidence','evidence_total','evidence_truncated'],
+ description:'Scoped endpoint evidence. FDB, Linux ARP/NDP and LLDP retain independent evidence and source authority. ARP/NDP may group reported usable MAC bindings on the very same managed local Interface. A matching value across protocols never establishes identity or VLAN association. Addresses describe the evidence shown.',
+};
+s.EndpointSourceCoverage = {
+ type:'object', additionalProperties:true,
+ properties:{
+  kind:endpointBasis, source:ref('Source'), availability:endpointAvailability, reason:string(128),
+  scope_reason:choices('VLAN_NOT_REPORTED','IP_NOT_REPORTED','MAC_NOT_VERIFIED'),
+  scope_unit:choices('bridge','interface'), eligible:integer(0,2048), observed:integer(0,2048), truncated:bool,
+ },
+ required:['kind','source','availability','scope_unit','eligible','observed','truncated'],
+ description:'Independent provider freshness and coverage for the selected topology. scope_reason means this provider cannot establish the requested exact row filter. Coverage counts are prior to row filtering.',
+};
+s.Resource.properties.endpoint = ref('EndpointObservation');
+
 const resources = [
  ['bridges','bridge','Bridge',36], ['interfaces','interface','Interface',36], ['vlans','vlan','Resource',42], ['bonds','bond','Bond',42],
  ['spanning-tree','spanning_tree','Resource',43], ['multicast','multicast','Resource',43], ['tunnels','tunnel','Resource',43], ['mirrors','mirror','Resource',43],
@@ -513,6 +551,19 @@ for (const [path, kind, schema, issue] of resources) {
 }
 Object.assign(s.InterfacePage.properties, { source: ref('Source'), availability: string(), reason: nullable({ type: 'string' }), coverage: { type: 'object', additionalProperties: true } });
 Object.assign(s.NeighborPage.properties, {source: ref('Source'), availability: string(), reason: nullable(string(128)), coverage: ref('NeighborCoverage')});
+Object.assign(s.EndpointPage.properties, {
+ availability:endpointAvailability, freshness:choices('fresh','stale','unavailable'),
+ matched:integer(0,4352), sources:array(ref('EndpointSourceCoverage'),3,3),
+});
+api.paths['/endpoints'].get.parameters.push(param('mac','query',fdbMAC),param('ip','query',endpointIP),param('vlan','query',integer(0,4095)),param('bridge','query',id),param('port','query',id));
+api.paths['/endpoints/{endpoint_id}'].get.parameters.push(param('ip','query',endpointIP));
+for(const path of ['/endpoints','/endpoints/{endpoint_id}']){
+ api.paths[path].get['x-service-state']='implemented';
+ api.paths[path].get.description='Read scoped FDB, ARP/NDP and LLDP evidence from shared observation caches. Requires inventory.read and state.read. Source gaps and provenance remain explicit. Browser reads do not invoke native collectors.';
+}
+api.paths['/endpoints'].get.description += ' Exact Bridge, Port, VLAN, MAC and IP filters require independent source evidence. Unqualified sources are excluded with explicit coverage explanations. Cursors bind filters and the current observation set. At most 50 rows per page and two evidence records per row.';
+api.paths['/endpoints/{endpoint_id}'].get.description += ' At most 12 evidence records. The optional IP parameter prioritizes matching address evidence within this bounded preview. Missing identities under incomplete coverage return 503.';
+api.info.description += ' Endpoints combines the view of FDB, ARP/NDP and LLDP while preserving independent scope, provenance and coverage.';
 Object.assign(s.FdbEntryPage.properties, {
  source:choices('ovs_fdb'), availability:choices('available','unavailable','degraded'), freshness:choices('fresh','stale','unavailable'),
  reason:choices('disabled','unsupported','not_ready','timeout','permission','source_unavailable','source_invalid','no_managed_bridges','partial','truncated','expired','epoch_changed'),
