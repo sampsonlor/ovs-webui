@@ -91,12 +91,14 @@ func deviceViewFresh(v *view, failure string, now time.Time) bool {
 	return age >= 0 && age <= FreshFor
 }
 
-// DeviceLinkEvents carries kernel invalidation hints or a discontinuity in their
-// delivery. Neither is evidence of a device's current fields or identity.
-type DeviceLinkEvents struct {
+// InterfaceEvents carries kernel invalidation hints or a discontinuity in their
+// delivery. The receiver independently observes current rows and identity.
+type InterfaceEvents struct {
 	Indices []int
 	Lost    bool
 }
+
+type DeviceLinkEvents = InterfaceEvents
 
 func (s *Service) HandleDeviceLinkEvents(events DeviceLinkEvents) {
 	s.mu.Lock()

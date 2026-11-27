@@ -678,11 +678,20 @@ func run() int {
 		go func() { defer close(devicesDone); inventoryService.RunDeviceObservations(providerCtx) }()
 		if *acceptEvidence == "" {
 			linkEventsDone := make(chan struct{})
+			neighborEventsDone := make(chan struct{})
 			go func() {
 				defer close(linkEventsDone)
 				linuxprovider.WatchDeviceLinks(providerCtx, inventoryService.HandleDeviceLinkEvents)
 			}()
-			defer func() { cancelProvider(); <-linkEventsDone }()
+			go func() {
+				defer close(neighborEventsDone)
+				linuxprovider.WatchNeighborEvents(providerCtx, inventoryService.HandleNeighborEvents)
+			}()
+			defer func() {
+				cancelProvider()
+				<-linkEventsDone
+				<-neighborEventsDone
+			}()
 		}
 		neighborsDone := make(chan struct{})
 		go func() { defer close(neighborsDone); inventoryService.RunNeighbors(providerCtx) }()
