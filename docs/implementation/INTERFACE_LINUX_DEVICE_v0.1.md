@@ -34,7 +34,11 @@ OVS stale、类型或 ifindex 不可证明、sysfs 不可用、设备消失、�
 
 `ovs-mgrd` 每秒启动一次有界采样轮次，每轮最多安排 24 个已确认的 Interface，两个 worker 共用 500ms 时间预算。采样按管理 ID 轮转，容量压力下继续轮到其余设备。每个 Interface 最多保留一份 RAM 样本，条目总数受库存 2048 行上限约束。详情读取共享结果，列表维持原有投影。页面刷新读取已发布的样本及其采样时间。
 
-管理 ID、原生 UUID、实例 generation、类型、名称、ifindex 及 OVS 连接连续性共同约束缓存。发生重新绑定或 OVS 断线时淘汰旧证据。设备读取失败时发布该次失败状态；无样本或样本超过六秒时隐藏字段并显示待采样或过期原因。服务重启后从空缓存开始。后续由 #44 继续跟踪 rtnetlink 事件采集、硬件角色证明及共享流通知。
+管理 ID、原生 UUID、实例 generation、类型、名称、ifindex 及 OVS 连接连续性共同约束缓存。发生重新绑定或 OVS 断线时淘汰旧证据。设备读取失败时发布该次失败状态；无样本或样本超过六秒时隐藏字段并显示待采样或过期原因。服务重启后从空缓存开始。
+
+mgrd 使用一个 `NETLINK_ROUTE` 的链路订阅接收内核 `RTM_NEWLINK` 和 `RTM_DELLINK` 通知。监听器校验数据报来源和结构，合并重复 ifindex，并按固定时间窗口、数据报数和索引数限制每批。命中已确认的 Interface 时，缓存立即进入待采样状态。下一轮的 24 个名额中最多 12 个优先用于受影响的 Interface，其余名额继续按管理 ID 轮转。发布仍以重新核验的 sysfs 样本为依据。在途样本跨越通知或可检测的通知缺口时会丢弃。
+
+通知溢出、截断或订阅中断会使 Linux 设备样本进入待采样状态，并由既有有界轮询重建。订阅带有上限的重试间隔。初次订阅不可用时，由周期采样提供当前状态。后续由 #44 继续跟踪邻居事件、硬件角色证明及共享流通知。 [rtnetlink 消息定义](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/rtnetlink.h) · [Netlink 通知与丢失](https://man7.org/linux/man-pages/man7/netlink.7.html)
 
 本地 Windows 检查不能运行 Linux 设备验收。双架构 native CI 使用真实 kernel sysfs loopback 和正式 Go/OVS 浏览器中的隔离 veth：验证 index、MTU、carrier up/down、消失、同名新设备拒绝、配置权限隐藏与原生 provider stale。PCI/USB/driver 的成功解析使用受限 sysfs 文件系统夹具，不能等同真实 NIC/DPDK/Offload 硬件 qualification。三份 OVS schema fixture 亦不代表三个 daemon 二进制版本。
 

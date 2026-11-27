@@ -676,6 +676,14 @@ func run() int {
 		go func() { defer close(statisticsDone); inventoryService.RunStatistics(providerCtx) }()
 		devicesDone := make(chan struct{})
 		go func() { defer close(devicesDone); inventoryService.RunDeviceObservations(providerCtx) }()
+		if *acceptEvidence == "" {
+			linkEventsDone := make(chan struct{})
+			go func() {
+				defer close(linkEventsDone)
+				linuxprovider.WatchDeviceLinks(providerCtx, inventoryService.HandleDeviceLinkEvents)
+			}()
+			defer func() { cancelProvider(); <-linkEventsDone }()
+		}
 		neighborsDone := make(chan struct{})
 		go func() { defer close(neighborsDone); inventoryService.RunNeighbors(providerCtx) }()
 		if *lldpInterfaces != "" {
