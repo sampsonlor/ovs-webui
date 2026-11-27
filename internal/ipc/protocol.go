@@ -42,7 +42,7 @@ func CurrentProtocol(software string) Protocol {
 		panic("invalid embedded protocol manifest")
 	}
 	sum := sha256.Sum256(compact.Bytes())
-	return Protocol{Major: 1, Minor: 6, Software: software, Digest: hex.EncodeToString(sum[:])}
+	return Protocol{Major: 1, Minor: 7, Software: software, Digest: hex.EncodeToString(sum[:])}
 }
 
 type HandshakeReply struct {
@@ -51,11 +51,22 @@ type HandshakeReply struct {
 }
 
 type Health struct {
-	State               string         `json:"state"`
-	Scope               string         `json:"scope"`
-	AuthenticationReady bool           `json:"authentication_ready"`
-	ConfigurationReady  bool           `json:"configuration_ready"`
-	Storage             *StorageHealth `json:"storage,omitempty"`
+	State               string            `json:"state"`
+	Scope               string            `json:"scope"`
+	AuthenticationReady bool              `json:"authentication_ready"`
+	ConfigurationReady  bool              `json:"configuration_ready"`
+	Storage             *StorageHealth    `json:"storage,omitempty"`
+	Components          []HealthComponent `json:"components,omitempty"`
+}
+
+type HealthComponent struct {
+	Key        string     `json:"key"`
+	State      string     `json:"state"`
+	Reason     string     `json:"reason"`
+	Authority  string     `json:"authority"`
+	ObservedAt *time.Time `json:"observed_at"`
+	Active     *int       `json:"active,omitempty"`
+	Capacity   *int       `json:"capacity,omitempty"`
 }
 
 type StorageHealth struct {

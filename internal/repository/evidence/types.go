@@ -87,10 +87,19 @@ type Record struct {
 	Correlation    string         `json:"correlation_id"`
 	Result         string         `json:"result"`
 	Reason         string         `json:"reason_code,omitempty"`
+	HealthChange   *HealthChange  `json:"health_change,omitempty"`
 	Created        time.Time      `json:"created_at"`
 	DedupKey       string         `json:"-"`
 	Critical       bool           `json:"-"`
 	Details        map[string]any `json:"-"`
+}
+
+// HealthChange is fixed state evidence. It carries no host message or output.
+type HealthChange struct {
+	Component   string `json:"component"`
+	Previous    string `json:"previous"`
+	Current     string `json:"current"`
+	Transitions int    `json:"transitions"`
 }
 
 var codePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)

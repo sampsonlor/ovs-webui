@@ -46,6 +46,13 @@ func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(conte
 		return health, nil
 	}}
 	if len(authentication) > 0 && authentication[0] != nil {
+		if inspector, ok := manager.(runtimeInspector); ok {
+			health, err := newRuntimeHealth(inspector, storage)
+			if err != nil {
+				return nil, nil, err
+			}
+			authentication[0].runtimeHealth = health
+		}
 		options.Authorizer = authentication[0]
 		options.Gateway = authentication[0]
 	}

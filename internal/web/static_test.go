@@ -46,6 +46,9 @@ func TestEmbeddedSPADeepLinksAndStaticSecurityBoundary(t *testing.T) {
 		{"/interfaces", 200}, {"/interfaces/11111111-1111-4111-8111-111111111111", 200}, {"/interfaces/not-an-identity", 404}, {"/interfaces/11111111-1111-4111-8111-111111111111/mtu", 200}, {"/interfaces/not-an-identity/mtu", 404},
 		{"/interfaces/11111111-1111-4111-8111-111111111111/policing", 200}, {"/interfaces/not-an-identity/policing", 404}, {"/interfaces/policing", 404}, {"/interfaces/11111111-1111-4111-8111-111111111111/policing/extra", 404},
 		{"/changes/transactions/11111111-1111-4111-8111-111111111111", 200}, {"/operations/jobs/11111111-1111-4111-8111-111111111111", 200},
+		{"/operations/health", 200}, {"/operations/health/extra", 404},
+		{"/admin/capabilities", 200}, {"/admin/capabilities/11111111-1111-4111-8111-111111111111", 200},
+		{"/admin/capabilities/not-an-identity", 404}, {"/admin/capabilities/11111111-1111-4111-8111-111111111111/extra", 404},
 		{"/assets/index-abc.js", 200}, {"/api/v1/unknown", 404}, {"/.env", 404}, {"/assets/../index.html", 404}, {"/assets/index.js.map", 404}, {"/unknown", 404},
 	} {
 		r := httptest.NewRecorder()

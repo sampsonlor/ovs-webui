@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ResourceRef } from '../../clients/typescript/public-v1.generated';
+  import type { HealthChange, ResourceRef } from '../../clients/typescript/public-v1.generated';
   import type { Model } from './model';
   import { navigate, refPath } from './model';
   import Link from './Link.svelte';
@@ -13,6 +13,7 @@
   const query = $derived(new URLSearchParams(model.query));
   const objectID = $derived(query.get('object_id'));
   const resource = $derived(model.resource.value);
+  const healthChange = $derived(resource?.operation === 'health.transition' ? resource.health_change as HealthChange | undefined : undefined);
   const records = $derived(Array.isArray(resource?.items) ? resource.items as Record<string, unknown>[] : []);
   const refs = $derived.by(() => {
     const values = Array.isArray(resource?.object_refs) ? resource.object_refs : [];
@@ -47,6 +48,17 @@
   {:else if objectID && !(Array.isArray(resource.object_refs) && resource.object_refs.some((ref) => ref?.id === objectID))}
     <p class="notice warning">This record does not contain the selected object identity. Return to the scoped list to review its retained records.</p>
   {:else}
+    {#if healthChange}
+      <section class="panel" aria-label="Health transition details">
+        <h2>Health transition</h2>
+        <dl>
+          <dt>Component</dt><dd>{healthChange.component}</dd>
+          <dt>Previous state</dt><dd><Status value={healthChange.previous} /></dd>
+          <dt>Current state</dt><dd><Status value={healthChange.current} /></dd>
+          <dt>Observed changes</dt><dd>{healthChange.transitions}</dd>
+        </dl>
+      </section>
+    {/if}
     <section class="panel"><h2>{text(resource.operation)}</h2><dl><dt>Result</dt><dd><Status value={text(resource.result)} /></dd><dt>Reason</dt><dd>{text(resource.reason_code)}</dd><dt>Origin</dt><dd>{text(resource.origin)}</dd><dt>Actor attribution</dt><dd>{text(resource.actor_state)}</dd><dt>Recorded at</dt><dd>{text(resource.occurred_at)}</dd><dt>Correlation</dt><dd class="mono">{text(resource.correlation_id)}</dd></dl><h3>Linked resources</h3>{#each refs as ref}<p><Link href={refPath(ref)!}>Open {ref.kind} · {ref.id.slice(0, 8)}</Link></p>{:else}<p>No linked identity was recorded.</p>{/each}<p class="muted">A lifecycle record preserves its own result. Follow the transaction for current commit, Applied, confirmation and recovery state.</p>{#if expert}<details><summary>Authorized evidence record</summary><pre>{JSON.stringify(resource, null, 2)}</pre></details>{/if}</section>
   {/if}
 {/if}

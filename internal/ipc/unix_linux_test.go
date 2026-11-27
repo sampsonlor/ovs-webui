@@ -76,6 +76,52 @@ func TestUnixHandshakeAndPerOperationAuthorization(t *testing.T) {
 	}
 }
 
+func TestRuntimeInspectionRequiresCurrentGrantAndSeparatesBootstrap(t *testing.T) {
+	var calls atomic.Int32
+	var revoked atomic.Bool
+	handler := NewHandler(CurrentProtocol("health-test"), authFunc(func(_ context.Context, grant string, op Operation) error {
+		if grant != "synthetic-state-grant" || op.Capability != "state.read" || revoked.Load() {
+			return ErrDenied
+		}
+		return nil
+	}), nil).WithRuntimeInspection(func(context.Context) (Health, error) {
+		calls.Add(1)
+		return Health{State: "ready", Scope: "runtime-inspection", Components: []HealthComponent{
+			{Key: "manager", State: "ready", Authority: "manager-runtime"},
+		}}, nil
+	})
+	for range cap(handler.budgets[Heavy].active) {
+		handler.budgets[Heavy].active <- struct{}{}
+	}
+	client, _ := testServer(t, handler, uint32(os.Geteuid()))
+	probe, err := client.Probe(t.Context())
+	if err != nil || probe.Scope != "runtime-bootstrap" || len(probe.Components) != 0 || calls.Load() != 0 {
+		t.Fatalf("bootstrap disclosed protected runtime state: %+v, %v", probe, err)
+	}
+	view, err := client.Inspect(t.Context(), "synthetic-state-grant")
+	if err != nil || view.Scope != "runtime-inspection" || len(view.Components) != 6 || calls.Load() != 1 {
+		t.Fatalf("protected runtime state omitted or duplicated: %+v, %v", view, err)
+	}
+	foundHeavy := false
+	for _, component := range view.Components {
+		if component.Key == "ipc-heavy" {
+			foundHeavy = true
+			if component.State != "degraded" || component.Active == nil || component.Capacity == nil || *component.Active != *component.Capacity {
+				t.Fatalf("health read did not observe actual independent queue pressure: %+v", component)
+			}
+		}
+	}
+	if !foundHeavy {
+		t.Fatal("Health did not report the saturated heavy queue")
+	}
+	revoked.Store(true)
+	_, err = client.Inspect(t.Context(), "synthetic-state-grant")
+	var remote *RemoteError
+	if !errors.As(err, &remote) || remote.Status != 403 || calls.Load() != 1 {
+		t.Fatalf("revocation did not withhold protected Health state: %v", err)
+	}
+}
+
 func TestPeerCredentialsCannotBeReplacedByHeaders(t *testing.T) {
 	handler := NewHandler(CurrentProtocol("test-build"), nil, nil)
 	client, _ := testServer(t, handler, uint32(os.Geteuid())+1)

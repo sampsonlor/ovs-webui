@@ -21,6 +21,7 @@ import { has } from './policy.ts';
 import { interfaceListPath, readInterfaceQuery } from './interface-query.ts';
 import type { InterfaceScope } from './interface-query';
 import { telemetryMessage } from './telemetry.ts';
+import { capabilitiesRoute, healthRoute } from './management-observation.ts';
 
 export type Load<T> = {
   status: 'loading' | 'ready' | 'unavailable' | 'denied';
@@ -101,6 +102,7 @@ export function refPath(ref: ResourceRef | null): string | null {
     lldp_neighbor: '/visibility/lldp',
     fdb_entry: '/visibility/fdb',
     endpoint: '/visibility/endpoints',
+    capability: capabilitiesRoute,
   };
   return base[ref.kind] ? `${base[ref.kind]}/${ref.id}` : null;
 }
@@ -362,7 +364,15 @@ export class Controller {
       else changes.transaction = empty();
       let resourceURL = '';
       let capability = '';
-      if (parts[0] === 'operations') {
+      if (path === healthRoute) {
+        resourceURL = '/health';
+        capability = 'state.read';
+      } else if (path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')) {
+        resourceURL = path === capabilitiesRoute
+          ? '/capabilities' + query
+          : '/capabilities/' + encodeURIComponent(path.slice(capabilitiesRoute.length + 1));
+        capability = has(session, 'state.read') ? 'capabilities.read' : 'state.read';
+      } else if (parts[0] === 'operations') {
         resourceURL =
           `/${parts.slice(1).join('/')}` + (parts.length === 2 ? query : '');
         capability =

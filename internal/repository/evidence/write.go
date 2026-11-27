@@ -44,6 +44,10 @@ func Append(ctx context.Context, tx *sql.Tx, r Record) (string, error) {
 	if (r.Collection != "event" && r.Collection != "audit") || (r.Origin != "Manager" && r.Origin != "External" && r.Origin != "Unknown") || !apitypes.ManagementID(r.ID) || !apitypes.ManagementID(r.Correlation) || !optionalID(r.Actor) || !optionalID(r.Credential) || !optionalID(r.ChangeSet) || !optionalID(r.Transaction) || !optionalID(r.Job) || !optionalID(r.RequestEpoch) || !optionalRequest(r.RequestID) || !validRef(r.Object) || !validRelated(r.RelatedObjects) || !code(r.Operation) || !code(r.Result) || (r.Reason != "" && !code(r.Reason)) || (r.Capability != "" && !code(r.Capability)) || (r.DedupKey != "" && !code(r.DedupKey)) || (r.RequestDomain != "" && r.RequestDomain != "management" && r.RequestDomain != "workspace") {
 		return "", apitypes.Fail(422, "INVALID_EVIDENCE")
 	}
+	if change := r.HealthChange; change != nil && (r.Collection != "event" || r.Origin != "Manager" || r.Operation != "health.transition" ||
+		!code(change.Component) || !code(change.Previous) || !code(change.Current) || change.Transitions < 1 || change.Transitions > 9999) {
+		return "", apitypes.Fail(422, "INVALID_HEALTH_CHANGE")
+	}
 	canonical := r
 	canonical.ID, canonical.Sequence, canonical.Created = "", "", time.Time{}
 	digest := hash(canonical)
