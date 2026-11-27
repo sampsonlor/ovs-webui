@@ -282,7 +282,11 @@ func (s *Service) prepareDeviceRound(v *view, epoch uint64) []deviceTarget {
 			if c.entries == nil {
 				c.entries = make(map[string]cachedDevice)
 			}
-			entry = cachedDevice{proof: proof, sample: deviceUnavailable("LINUX_OBSERVATION_PENDING")}
+			// Every newly installed association has its own epoch. If events
+			// were lost or the binding disappeared and then came back, an
+			// otherwise identical sample cannot revive the former epoch.
+			c.linkRevision++
+			entry = cachedDevice{proof: proof, sample: deviceUnavailable("LINUX_OBSERVATION_PENDING"), linkRevision: c.linkRevision}
 			c.entries[proof.managementID] = entry
 		}
 		if len(priority) != 0 {

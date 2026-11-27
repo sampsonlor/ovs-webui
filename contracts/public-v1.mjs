@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.37.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.38.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
 api.info.description += ' Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness.';
 api['x-review-status'] = 'implementation-review';
 api.info.description += ' Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable.';
@@ -545,6 +545,64 @@ s.HealthChange = closed({component:string(64), previous:string(32), current:stri
 s.Resource.properties.health_change = ref('HealthChange');
 s.ManagementDebugCommand = command({duration_seconds:{type:'integer',enum:[0,300,600,900]}});
 s.ManagementServiceRestartCommand = command({service:choices('manager','web')});
+s.LinkLACPDiagnosticCommand = command({target_ref:ref('ResourceRef'),sample_seconds:{type:'integer',enum:[5,10,15]},port_limit:integer(1,10)});
+s.LinkLACPDiagnosticMember = closed({interface_ref:ref('ResourceRef'),link:choices('up','down','unknown'),lacp_current:choices('current','not-current','not-applicable','unknown')});
+s.LinkLACPDiagnosticPort = closed({port_ref:ref('ResourceRef'),configured_lacp:choices('active','passive','off','unknown','withheld'),members:array(ref('LinkLACPDiagnosticMember'),64)});
+s.LinkLACPDiagnosticResult = closed({
+ template_id:{type:'string',const:'diag.net.link-lacp'},target_ref:ref('ResourceRef'),
+ state:choices('complete','partial','truncated','no-data','provider-unavailable','evidence-unavailable','operation-failed','cancelled','timed-out'),
+ reason_code:string(128),observed_at:ref('DateTime'),authority:{type:'string',const:'ovsdb-structured'},
+ ports:array(ref('LinkLACPDiagnosticPort'),10),partial:bool,truncated:bool,
+});
+s.LinkLACPDiagnosticResult.required = ['template_id','target_ref','state','ports','partial','truncated'];
+s.InterfaceCounterDiagnosticCommand = command({target_ref:ref('ResourceRef'),sample_seconds:{type:'integer',enum:[5,10,15]}});
+s.InterfaceCounterDiagnosticMember = closed({
+ interface_ref:ref('ResourceRef'),state:choices('observed','partial','unavailable'),reason_code:string(128),
+ deltas:closed(Object.fromEntries(['rx_bytes','tx_bytes','rx_packets','tx_packets','rx_errors','tx_errors','rx_dropped','tx_dropped']
+  .map(key => [key,nullable({...string(20),pattern:'^(0|[1-9][0-9]{0,19})$'})]))),
+});
+s.InterfaceCounterDiagnosticMember.required = ['interface_ref','state','deltas'];
+s.InterfaceCounterDiagnosticResult = closed({
+ template_id:{type:'string',const:'diag.host.interface-counters'},target_ref:ref('ResourceRef'),
+ state:choices('complete','partial','truncated','no-data','provider-unavailable','evidence-unavailable','operation-failed','cancelled','timed-out'),
+ reason_code:string(128),source:{type:'string',const:'ovsdb-statistics'},freshness:choices('fresh','unknown'),
+ instance_generation:id,first_sampled_at:ref('DateTime'),second_sampled_at:ref('DateTime'),
+ truncated:bool,members:array(ref('InterfaceCounterDiagnosticMember'),4),
+});
+s.InterfaceCounterDiagnosticResult.required = ['template_id','target_ref','state','source','freshness','truncated','members'];
+s.SupportBundleSection = closed({
+ kind:choices('runtime','ovs','health','events','audit'),
+ state:choices('included','partial','truncated','no-data','unavailable'),
+ file:string(64),bytes:integer(1,65536),sha256:{...string(64),pattern:'^[a-f0-9]{64}$'},reason:string(64),
+});
+s.SupportBundleSection.required = ['kind','state'];
+s.SupportBundleManifest = closed({
+ version:{type:'integer',const:1},created_at:ref('DateTime'),expires_at:ref('DateTime'),
+ sections:array(ref('SupportBundleSection'),5,1),
+ redaction:closed({policy:string(64),omitted:array(string(64),32)}),
+});
+s.SupportBundleMetadata = closed({
+ id,manifest:ref('SupportBundleManifest'),sha256:{...string(64),pattern:'^[a-f0-9]{64}$'},
+ bytes:integer(1,524288),parts:integer(1,22),
+});
+s.SupportBundlePart = closed({
+ id,part:integer(0,21),data_base64:{...string(32768),pattern:'^[A-Za-z0-9+/]+={0,2}$'},
+});
+s.CaptureArtifact = closed({
+ id,target_ref:ref('ResourceRef'),
+ profile:choices('arp-ethernet-headers','slow-protocol-ethernet-headers','lldp-ethernet-headers'),
+ state:choices('complete','partial','truncated','no-data'),reason_code:string(128),
+ packets:integer(0,4096),bytes:integer(24,1048576),parts:integer(1,43),
+ sha256:{...string(64),pattern:'^[a-f0-9]{64}$'},started_at:ref('DateTime'),
+ ended_at:ref('DateTime'),expires_at:ref('DateTime'),
+});
+s.CaptureArtifact.required = s.CaptureArtifact.required.filter(key => key !== 'reason_code');
+s.CapturePart = closed({
+ id,part:integer(0,42),data_base64:{...string(32768),pattern:'^[A-Za-z0-9+/]+={0,2}$'},
+});
+s.CaptureTargets = closed({policy_state:choices('enabled','disabled','unavailable'),
+ targets:array(closed({id,name:string(15)}),8),
+});
 
 const resources = [
  ['bridges','bridge','Bridge',36], ['interfaces','interface','Interface',36], ['vlans','vlan','Resource',42], ['bonds','bond','Bond',42],
@@ -651,6 +709,18 @@ api.paths['/health/debug'].post['x-service-state'] = 'implemented';
 api.paths['/health/debug'].post.description = 'Changes the manager diagnostic log level under a current elevated browser grant. A finite lease expires on the manager clock and startup begins at the normal redacted level.';
 api.paths['/health/service-restarts'].post['x-service-state'] = 'implemented';
 api.paths['/health/service-restarts'].post.description = 'Submits the restart of one qualified product service under a current elevated browser grant and the shared Safe Apply exclusion. Follow the durable Job to review dispatch and outcome evidence.';
+add('/diagnostics/link-lacp','post','runLinkLACPDiagnostic','Accepted','diagnostics.read',46,{domain:'management',body:'LinkLACPDiagnosticCommand'});
+add('/diagnostics/link-lacp/{job_id}','get','readLinkLACPDiagnostic','LinkLACPDiagnosticResult','diagnostics.read',46,{kind:'job'});
+api.paths['/diagnostics/link-lacp'].post['x-service-state'] = 'implemented';
+api.paths['/diagnostics/link-lacp'].post.description = 'Starts one bounded read-only observation of an active managed Port or Bridge, using a verified OVSDB snapshot. Requires inventory.read. The owner can recover the original Job using its request receipt.';
+api.paths['/diagnostics/link-lacp/{job_id}'].get['x-service-state'] = 'implemented';
+api.paths['/diagnostics/link-lacp/{job_id}'].get.description = 'Reads the original bounded Link/LACP evidence for at most fifteen minutes after completion, subject to current diagnostic and inventory permission and Job ownership.';
+add('/diagnostics/interface-counters','post','runInterfaceCounterDiagnostic','Accepted','diagnostics.active',46,{domain:'management',body:'InterfaceCounterDiagnosticCommand'});
+add('/diagnostics/interface-counters/{job_id}','get','readInterfaceCounterDiagnostic','InterfaceCounterDiagnosticResult','diagnostics.active',46,{kind:'job'});
+api.paths['/diagnostics/interface-counters'].post['x-service-state'] = 'implemented';
+api.paths['/diagnostics/interface-counters'].post.description = 'Starts a cancellable Active observation of up to four Interfaces under one current Port. Counter deltas require two adjacent existing shared OVSDB statistics samples and matching resource scope.';
+api.paths['/diagnostics/interface-counters/{job_id}'].get['x-service-state'] = 'implemented';
+api.paths['/diagnostics/interface-counters/{job_id}'].get.description = 'Reads the original owned Active diagnostic result, including explicit gaps, until the result expires.';
 for (const path of ['/capabilities','/capabilities/{capability_id}']) {
  api.paths[path].get['x-service-state'] = 'implemented';
  api.paths[path].get.description = 'The fixed management capability registry requires both state.read and capabilities.read. Entries explain readiness, prerequisites, current caller grants and scope of recovery evidence.';
@@ -691,6 +761,26 @@ for (const [path, op, body, cap, issue, options] of [
  ['/openflow/commands','executeOpenFlow','OpenFlowCommand','openflow.manage',53,{conditions:['expert','locally-managed','current-authority','validated-plan']}],
 ]) add(path, options.method ?? 'post', op, options.response ?? (options.secretResponse ? 'TokenCreated' : (options.status === 200 ? 'Metadata' : 'Accepted')), cap, issue, { domain: 'management', body, ...options });
 
+add('/support-bundles/{job_id}','get','readSupportBundle','SupportBundleMetadata','artifacts.read',46,{kind:'job'});
+add('/support-bundles/{job_id}/parts','get','readSupportBundlePart','SupportBundlePart','artifacts.read',46,{kind:'job',query:[param('part','query',integer(0,21),true)]});
+api.paths['/support-bundles'].post['x-service-state'] = 'implemented';
+api.paths['/support-bundles'].post.description = 'Builds an expiring sealed redacted archive from an explicit allowlist of currently authorized management observations. The accepted Job references the archive.';
+for (const path of ['/support-bundles/{job_id}','/support-bundles/{job_id}/parts']) {
+ api.paths[path].get['x-service-state'] = 'implemented';
+ api.paths[path].get.description = 'Returns metadata or one bounded part of the original Support Bundle for its current authorized owner, before the archive expires.';
+}
+add('/captures/{job_id}','get','readCaptureArtifact','CaptureArtifact','artifacts.read',46,{kind:'job'});
+add('/captures/{job_id}/parts','get','readCapturePart','CapturePart','artifacts.read',46,{kind:'job',query:[param('part','query',integer(0,42),true)]});
+add('/captures/targets','get','listCaptureTargets','CaptureTargets','diagnostics.disruptive',46);
+api.paths['/captures/targets'].get['x-service-state'] = 'implemented';
+api.paths['/captures/targets'].get.description = 'Lists only root-reviewed Interface management IDs with current native binding evidence for the fixed header capture facility. Requires inventory.read.';
+api.paths['/captures'].post['x-service-state'] = 'implemented';
+api.paths['/captures'].post.description = 'Starts an elevated, cancellable capture on one explicitly authorized active Interface with one fixed Ethernet-header-only ARP, Slow Protocol, or LLDP profile. Original packet payload is never stored. Output has independent packet, byte and time bounds.';
+for (const path of ['/captures/{job_id}','/captures/{job_id}/parts']) {
+ api.paths[path].get['x-service-state'] = 'implemented';
+ api.paths[path].get.description = 'Reads the original bounded PCAP metadata or one limited artifact part for its current authorized owner before expiry.';
+}
+
 // Artifact data is fetched separately from bounded JSON management responses.
 add('/artifacts/{artifact_id}','get','readArtifact','Resource','artifact.read',48);
 api['x-boundaries'] = { switching_changes: 'candidate-validation-transaction-evidence; public admission requires Safe Apply #40', websocket: 'notifications-only; REST resync is authoritative', dpdk_offload: 'observe', openflow_write: 'conditional service gate #53', authentication: 'mgrd per-operation authority #34', public_release: 'transport baseline does not claim product GA' };
@@ -708,8 +798,8 @@ export const pagePaths = {
  'SW-09':['/bonds','/candidate'], 'SW-10':['/spanning-tree','/candidate'], 'SW-11':['/multicast','/candidate'], 'SW-12':['/tunnels','/candidate'], 'SW-13':['/mirrors','/candidate'],
  'SW-14':['/qos','/candidate'], 'SW-15':['/isolation','/candidate'], 'SW-16':['/openflow/flows','/capabilities'], 'SW-17':['/openflow/flows','/openflow/preflights','/openflow/commands'],
  'SW-18':['/openflow/groups','/openflow/meters'], 'SW-19':['/openflow/controllers','/candidate'], 'VI-01':['/endpoints'], 'VI-02':['/fdb'], 'VI-03':['/neighbors'], 'VI-04':['/lldp'],
- 'VI-05':['/statistics','/stream'], 'VI-06':['/dpdk'], 'VI-07':['/offload'], 'VI-08':['/telemetry','/candidate'], 'OP-01':['/health'], 'OP-02':['/events'], 'OP-03':['/diagnostics/templates','/diagnostics','/captures'],
- 'OP-04':['/jobs'], 'OP-05':['/jobs/{job_id}','/jobs/{job_id}/cancellations'], 'OP-06':['/audit'], 'OP-07':['/support-bundles','/artifacts/{artifact_id}'],
+ 'VI-05':['/statistics','/stream'], 'VI-06':['/dpdk'], 'VI-07':['/offload'], 'VI-08':['/telemetry','/candidate'], 'OP-01':['/health'], 'OP-02':['/events'], 'OP-03':['/diagnostics/templates','/diagnostics','/diagnostics/link-lacp','/diagnostics/link-lacp/{job_id}','/diagnostics/interface-counters','/diagnostics/interface-counters/{job_id}','/captures','/captures/targets','/captures/{job_id}','/captures/{job_id}/parts'],
+ 'OP-04':['/jobs'], 'OP-05':['/jobs/{job_id}','/jobs/{job_id}/cancellations'], 'OP-06':['/audit'], 'OP-07':['/support-bundles','/support-bundles/{job_id}','/support-bundles/{job_id}/parts','/artifacts/{artifact_id}'],
  'CH-01':['/workspace','/candidate'], 'CH-02':['/validations','/validations/{validation_id}'], 'CH-03':['/transactions','/transactions/{transaction_id}','/transactions/{transaction_id}/decisions'],
  'CH-04':['/drift','/candidate'], 'CH-05':['/checkpoints'], 'AD-01':['/capabilities'], 'AD-02':['/management-network','/candidate'], 'AD-03':['/ovs-lifecycle','/ovs-lifecycle/commands'],
  'AD-04':['/backups','/restores'], 'AD-05':['/configuration/exports','/configuration/imports','/artifacts'], 'AD-06':['/users','/roles','/session'], 'AD-07':['/aaa'], 'AD-08':['/tokens'], 'AD-09':['/certificates'],
@@ -722,7 +812,7 @@ export const scopePaths = {
  'P1-SW-01':['/bridges','/ports','/interfaces','/candidate'], 'P1-SW-02':['/vlans','/candidate'], 'P1-SW-03':['/bonds','/candidate'], 'P1-SW-04':['/spanning-tree','/candidate'], 'P1-SW-05':['/multicast','/candidate'],
  'P1-SW-06':['/profiles','/drift','/candidate'], 'P1-SW-07':['/mirrors','/candidate'], 'P1-SW-08':['/qos','/candidate'], 'P1-SW-09':['/tunnels','/candidate'], 'P1-SW-10':['/isolation','/candidate'],
  'P1-SW-11':['/openflow/flows','/openflow/groups','/openflow/meters','/openflow/commands'], 'P1-SW-12':['/dpdk'], 'P1-SW-13':['/offload'], 'P1-SW-14':['/telemetry','/candidate'], 'P1-SW-15':['/endpoints','/fdb','/neighbors','/lldp'], 'P1-SW-16':['/management-network','/candidate'],
- 'P1-OPS-01':['/statistics','/health'], 'P1-OPS-02':['/events'], 'P1-OPS-03':['/health'], 'P1-OPS-04':['/diagnostics'], 'P1-OPS-05':['/captures'], 'P1-OPS-06':['/support-bundles'], 'P1-OPS-07':['/runtime','/health'], 'P1-OPS-08':['/stream','/ports'],
+ 'P1-OPS-01':['/statistics','/health'], 'P1-OPS-02':['/events'], 'P1-OPS-03':['/health'], 'P1-OPS-04':['/diagnostics','/diagnostics/link-lacp','/diagnostics/link-lacp/{job_id}','/diagnostics/interface-counters','/diagnostics/interface-counters/{job_id}'], 'P1-OPS-05':['/captures','/captures/targets','/captures/{job_id}','/captures/{job_id}/parts'], 'P1-OPS-06':['/support-bundles','/support-bundles/{job_id}','/support-bundles/{job_id}/parts'], 'P1-OPS-07':['/runtime','/health'], 'P1-OPS-08':['/stream','/ports'],
  'P1-SEC-01':['/sessions','/users'], 'P1-SEC-02':['/aaa'], 'P1-SEC-03':['/roles','/capabilities'], 'P1-SEC-04':['/sessions','/session'], 'P1-SEC-05':['/tokens'], 'P1-SEC-06':['/certificates'], 'P1-SEC-07':['/certificates','/tokens'], 'P1-SEC-08':['/audit'],
  'P1-API-01':['/contract'], 'P1-API-02':['/openapi.json'], 'P1-API-03':['/stream'], 'P1-API-04':['/contract'], 'P1-API-05':['/requests/{request_id}'], 'P1-API-06':['/jobs','/jobs/{job_id}'], 'P1-API-07':['/contract','/openapi.json'],
  'P1-LIFE-01':['/ovs-lifecycle/commands'], 'P1-LIFE-02':['/ovs-lifecycle/preflights'], 'P1-LIFE-03':['/checkpoints'], 'P1-LIFE-04':['/configuration/exports','/configuration/imports'], 'P1-LIFE-05':['/backups','/restores'], 'P1-LIFE-06':['/restores','/transactions/{transaction_id}/reconciliations'], 'P1-LIFE-07':['/runtime'],

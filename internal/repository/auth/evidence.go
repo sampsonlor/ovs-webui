@@ -111,6 +111,9 @@ func (r *Repository) InitializeEvidence(ctx context.Context) error {
 	if err := evidence.ImportLegacy(ctx, r.store, resolve); err != nil {
 		return err
 	}
+	if err := r.retireInterruptedDiagnostics(ctx, true); err != nil {
+		return err
+	}
 	return evidence.Recover(ctx, r.store, r.now())
 }
 func (r *Repository) MaintainEvidence(ctx context.Context) {
@@ -124,6 +127,15 @@ func (r *Repository) MaintainEvidence(ctx context.Context) {
 			// Retention shares the manager writer and does not invoke providers.
 			_ = evidence.Prune(ctx, r.store, r.now())
 			_ = r.receipts.Prune(ctx)
+			_ = r.pruneDiagnosticObservations(ctx)
+			_ = r.retireInterruptedDiagnostics(ctx, false)
+			_ = r.store.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+				now := r.now()
+				if err := pruneSupportBundles(ctx, tx, now); err != nil {
+					return err
+				}
+				return pruneCaptureArtifacts(ctx, tx, now)
+			})
 		}
 	}
 }

@@ -4,9 +4,18 @@ No production shell path is added. This proves preparation and review guards;
 neither schema fixtures nor configured values prove installed timers or Applied.
 """
 from pathlib import Path
+import re
 import uuid
 
 from authentication import request_id, run
+
+
+def set_unit_option(text, argument, environment_name, value):
+    prefix = f'--{argument}='
+    placeholder = prefix + '${' + environment_name + '}'
+    assert text.count(placeholder) == 1 and text.count(prefix) == 1
+    assert isinstance(value, str) and len(value) <= 4096 and re.fullmatch(r'[A-Za-z0-9_./=:,+@-]+', value)
+    return text.replace(placeholder, prefix + value, 1)
 
 
 def reconfigure_draft_fixture(unit_path, unit, text):

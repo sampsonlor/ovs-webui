@@ -2342,6 +2342,107 @@ type ManagementServiceRestartCommand struct {
 	RequestId RequestId `json:"request_id"`
 	Service   string    `json:"service"`
 }
+type LinkLACPDiagnosticCommand struct {
+	RequestId     RequestId   `json:"request_id"`
+	TargetRef     ResourceRef `json:"target_ref"`
+	SampleSeconds int64       `json:"sample_seconds"`
+	PortLimit     int64       `json:"port_limit"`
+}
+type LinkLACPDiagnosticMember struct {
+	InterfaceRef ResourceRef `json:"interface_ref"`
+	Link         string      `json:"link"`
+	LacpCurrent  string      `json:"lacp_current"`
+}
+type LinkLACPDiagnosticPort struct {
+	PortRef        ResourceRef                `json:"port_ref"`
+	ConfiguredLacp string                     `json:"configured_lacp"`
+	Members        []LinkLACPDiagnosticMember `json:"members"`
+}
+type LinkLACPDiagnosticResult struct {
+	TemplateId string                   `json:"template_id"`
+	TargetRef  ResourceRef              `json:"target_ref"`
+	State      string                   `json:"state"`
+	ReasonCode string                   `json:"reason_code,omitempty"`
+	ObservedAt DateTime                 `json:"observed_at,omitempty"`
+	Authority  string                   `json:"authority,omitempty"`
+	Ports      []LinkLACPDiagnosticPort `json:"ports"`
+	Partial    bool                     `json:"partial"`
+	Truncated  bool                     `json:"truncated"`
+}
+type InterfaceCounterDiagnosticCommand struct {
+	RequestId     RequestId   `json:"request_id"`
+	TargetRef     ResourceRef `json:"target_ref"`
+	SampleSeconds int64       `json:"sample_seconds"`
+}
+type InterfaceCounterDiagnosticMember struct {
+	InterfaceRef ResourceRef                `json:"interface_ref"`
+	State        string                     `json:"state"`
+	ReasonCode   string                     `json:"reason_code,omitempty"`
+	Deltas       map[string]json.RawMessage `json:"deltas"`
+}
+type InterfaceCounterDiagnosticResult struct {
+	TemplateId         string                             `json:"template_id"`
+	TargetRef          ResourceRef                        `json:"target_ref"`
+	State              string                             `json:"state"`
+	ReasonCode         string                             `json:"reason_code,omitempty"`
+	Source             string                             `json:"source"`
+	Freshness          string                             `json:"freshness"`
+	InstanceGeneration Id                                 `json:"instance_generation,omitempty"`
+	FirstSampledAt     DateTime                           `json:"first_sampled_at,omitempty"`
+	SecondSampledAt    DateTime                           `json:"second_sampled_at,omitempty"`
+	Truncated          bool                               `json:"truncated"`
+	Members            []InterfaceCounterDiagnosticMember `json:"members"`
+}
+type SupportBundleSection struct {
+	Kind   string `json:"kind"`
+	State  string `json:"state"`
+	File   string `json:"file,omitempty"`
+	Bytes  int64  `json:"bytes,omitempty"`
+	Sha256 string `json:"sha256,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+type SupportBundleManifest struct {
+	Version   int64                      `json:"version"`
+	CreatedAt DateTime                   `json:"created_at"`
+	ExpiresAt DateTime                   `json:"expires_at"`
+	Sections  []SupportBundleSection     `json:"sections"`
+	Redaction map[string]json.RawMessage `json:"redaction"`
+}
+type SupportBundleMetadata struct {
+	Id       Id                    `json:"id"`
+	Manifest SupportBundleManifest `json:"manifest"`
+	Sha256   string                `json:"sha256"`
+	Bytes    int64                 `json:"bytes"`
+	Parts    int64                 `json:"parts"`
+}
+type SupportBundlePart struct {
+	Id         Id     `json:"id"`
+	Part       int64  `json:"part"`
+	DataBase64 string `json:"data_base64"`
+}
+type CaptureArtifact struct {
+	Id         Id          `json:"id"`
+	TargetRef  ResourceRef `json:"target_ref"`
+	Profile    string      `json:"profile"`
+	State      string      `json:"state"`
+	ReasonCode string      `json:"reason_code,omitempty"`
+	Packets    int64       `json:"packets"`
+	Bytes      int64       `json:"bytes"`
+	Parts      int64       `json:"parts"`
+	Sha256     string      `json:"sha256"`
+	StartedAt  DateTime    `json:"started_at"`
+	EndedAt    DateTime    `json:"ended_at"`
+	ExpiresAt  DateTime    `json:"expires_at"`
+}
+type CapturePart struct {
+	Id         Id     `json:"id"`
+	Part       int64  `json:"part"`
+	DataBase64 string `json:"data_base64"`
+}
+type CaptureTargets struct {
+	PolicyState string                       `json:"policy_state"`
+	Targets     []map[string]json.RawMessage `json:"targets"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`

@@ -25,21 +25,29 @@ import (
 )
 
 type Repository struct {
-	runtimeRestart  *managementRestarter
-	store           *sqlite.Store
-	receipts        *requests.Repository
-	contract        *apicontract.Contract
-	key             []byte
-	gate, passwords chan struct{}
-	now             func() time.Time
-	tlsNow          func() tlscontrol.Clock
-	inventory       inventory.Reader
-	fields          *executions.Engine
-	debug           *runtimehealth.Debug
+	diagnosticsContext context.Context
+	supportHealth      func() ipc.Health
+	capture            *captureAuthority
+	runtimeRestart     *managementRestarter
+	store              *sqlite.Store
+	receipts           *requests.Repository
+	contract           *apicontract.Contract
+	key                []byte
+	gate, passwords    chan struct{}
+	now                func() time.Time
+	tlsNow             func() tlscontrol.Clock
+	inventory          inventory.Reader
+	fields             *executions.Engine
+	debug              *runtimehealth.Debug
 }
 
 func (r *Repository) WithInventory(reader inventory.Reader) *Repository {
 	r.inventory = reader
+	return r
+}
+
+func (r *Repository) WithDiagnosticsContext(ctx context.Context) *Repository {
+	r.diagnosticsContext = ctx
 	return r
 }
 

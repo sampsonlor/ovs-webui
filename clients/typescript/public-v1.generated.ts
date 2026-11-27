@@ -217,6 +217,20 @@ export type ManagementCapability = { "key": string; "label": string; "availabili
 export type HealthChange = { "component": string; "previous": string; "current": string; "transitions": number };
 export type ManagementDebugCommand = { "request_id": RequestId; "duration_seconds": 0 | 300 | 600 | 900 };
 export type ManagementServiceRestartCommand = { "request_id": RequestId; "service": "manager" | "web" };
+export type LinkLACPDiagnosticCommand = { "request_id": RequestId; "target_ref": ResourceRef; "sample_seconds": 5 | 10 | 15; "port_limit": number };
+export type LinkLACPDiagnosticMember = { "interface_ref": ResourceRef; "link": "up" | "down" | "unknown"; "lacp_current": "current" | "not-current" | "not-applicable" | "unknown" };
+export type LinkLACPDiagnosticPort = { "port_ref": ResourceRef; "configured_lacp": "active" | "passive" | "off" | "unknown" | "withheld"; "members": Array<LinkLACPDiagnosticMember> };
+export type LinkLACPDiagnosticResult = { "template_id": "diag.net.link-lacp"; "target_ref": ResourceRef; "state": "complete" | "partial" | "truncated" | "no-data" | "provider-unavailable" | "evidence-unavailable" | "operation-failed" | "cancelled" | "timed-out"; "reason_code"?: string; "observed_at"?: DateTime; "authority"?: "ovsdb-structured"; "ports": Array<LinkLACPDiagnosticPort>; "partial": boolean; "truncated": boolean };
+export type InterfaceCounterDiagnosticCommand = { "request_id": RequestId; "target_ref": ResourceRef; "sample_seconds": 5 | 10 | 15 };
+export type InterfaceCounterDiagnosticMember = { "interface_ref": ResourceRef; "state": "observed" | "partial" | "unavailable"; "reason_code"?: string; "deltas": { "rx_bytes": (string | null); "tx_bytes": (string | null); "rx_packets": (string | null); "tx_packets": (string | null); "rx_errors": (string | null); "tx_errors": (string | null); "rx_dropped": (string | null); "tx_dropped": (string | null) } };
+export type InterfaceCounterDiagnosticResult = { "template_id": "diag.host.interface-counters"; "target_ref": ResourceRef; "state": "complete" | "partial" | "truncated" | "no-data" | "provider-unavailable" | "evidence-unavailable" | "operation-failed" | "cancelled" | "timed-out"; "reason_code"?: string; "source": "ovsdb-statistics"; "freshness": "fresh" | "unknown"; "instance_generation"?: Id; "first_sampled_at"?: DateTime; "second_sampled_at"?: DateTime; "truncated": boolean; "members": Array<InterfaceCounterDiagnosticMember> };
+export type SupportBundleSection = { "kind": "runtime" | "ovs" | "health" | "events" | "audit"; "state": "included" | "partial" | "truncated" | "no-data" | "unavailable"; "file"?: string; "bytes"?: number; "sha256"?: string; "reason"?: string };
+export type SupportBundleManifest = { "version": 1; "created_at": DateTime; "expires_at": DateTime; "sections": Array<SupportBundleSection>; "redaction": { "policy": string; "omitted": Array<string> } };
+export type SupportBundleMetadata = { "id": Id; "manifest": SupportBundleManifest; "sha256": string; "bytes": number; "parts": number };
+export type SupportBundlePart = { "id": Id; "part": number; "data_base64": string };
+export type CaptureArtifact = { "id": Id; "target_ref": ResourceRef; "profile": "arp-ethernet-headers" | "slow-protocol-ethernet-headers" | "lldp-ethernet-headers"; "state": "complete" | "partial" | "truncated" | "no-data"; "reason_code"?: string; "packets": number; "bytes": number; "parts": number; "sha256": string; "started_at": DateTime; "ended_at": DateTime; "expires_at": DateTime };
+export type CapturePart = { "id": Id; "part": number; "data_base64": string };
+export type CaptureTargets = { "policy_state": "enabled" | "disabled" | "unavailable"; "targets": Array<{ "id": Id; "name": string }> };
 export type BridgePage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Bridge>; "next_cursor": (string | null); "truncated": boolean; [key: string]: unknown };
 export type InterfacePage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Interface>; "next_cursor": (string | null); "truncated": boolean; "source"?: Source; "availability"?: string; "reason"?: (string | null); "coverage"?: { [key: string]: unknown }; [key: string]: unknown };
 export type VlanPage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Resource>; "next_cursor": (string | null); "truncated": boolean; [key: string]: unknown };
@@ -378,6 +392,10 @@ export interface Operations {
   readTopology: { method: "GET"; path: "/topology"; body: never; response: Resource };
   setManagementDebug: { method: "POST"; path: "/health/debug"; body: ManagementDebugCommand; response: Accepted };
   restartManagementService: { method: "POST"; path: "/health/service-restarts"; body: ManagementServiceRestartCommand; response: Accepted };
+  runLinkLACPDiagnostic: { method: "POST"; path: "/diagnostics/link-lacp"; body: LinkLACPDiagnosticCommand; response: Accepted };
+  readLinkLACPDiagnostic: { method: "GET"; path: "/diagnostics/link-lacp/{job_id}"; body: never; response: LinkLACPDiagnosticResult };
+  runInterfaceCounterDiagnostic: { method: "POST"; path: "/diagnostics/interface-counters"; body: InterfaceCounterDiagnosticCommand; response: Accepted };
+  readInterfaceCounterDiagnostic: { method: "GET"; path: "/diagnostics/interface-counters/{job_id}"; body: never; response: InterfaceCounterDiagnosticResult };
   searchResources: { method: "GET"; path: "/search"; body: never; response: ResourcePage };
   changePassword: { method: "POST"; path: "/users/{user_id}/password"; body: PasswordCommand; response: Accepted };
   deleteUser: { method: "POST"; path: "/users/{user_id}/deletions"; body: EmptyCommand; response: Accepted };
@@ -397,5 +415,10 @@ export interface Operations {
   uploadArtifactPart: { method: "POST"; path: "/artifacts"; body: ArtifactCommand; response: Accepted };
   preflightOpenFlow: { method: "POST"; path: "/openflow/preflights"; body: OpenFlowPreflight; response: Accepted };
   executeOpenFlow: { method: "POST"; path: "/openflow/commands"; body: OpenFlowCommand; response: Accepted };
+  readSupportBundle: { method: "GET"; path: "/support-bundles/{job_id}"; body: never; response: SupportBundleMetadata };
+  readSupportBundlePart: { method: "GET"; path: "/support-bundles/{job_id}/parts"; body: never; response: SupportBundlePart };
+  readCaptureArtifact: { method: "GET"; path: "/captures/{job_id}"; body: never; response: CaptureArtifact };
+  readCapturePart: { method: "GET"; path: "/captures/{job_id}/parts"; body: never; response: CapturePart };
+  listCaptureTargets: { method: "GET"; path: "/captures/targets"; body: never; response: CaptureTargets };
   readArtifact: { method: "GET"; path: "/artifacts/{artifact_id}"; body: never; response: Resource };
 }

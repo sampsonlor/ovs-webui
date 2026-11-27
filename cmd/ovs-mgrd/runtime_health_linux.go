@@ -100,6 +100,12 @@ func (m *managerRuntimeHealth) snapshot(now time.Time) ipc.Health {
 		}
 		view.Components = append(view.Components, debug)
 	}
+	diagnostics := ipc.HealthComponent{Key: "diagnostics-executor", State: "unavailable",
+		Reason: "DIAGNOSTICS_EXECUTOR_UNAVAILABLE", Authority: "manager-diagnostic-executor", ObservedAt: healthTime(now)}
+	if m.authConfigured && m.inventory != nil {
+		diagnostics.State, diagnostics.Reason = "ready", ""
+	}
+	view.Components = append(view.Components, diagnostics)
 	for _, observation := range m.inventory.RuntimeHealth() {
 		view.Components = append(view.Components, ipc.HealthComponent{
 			Key: observation.Key, State: observation.State, Reason: observation.Reason, Authority: observation.Authority,

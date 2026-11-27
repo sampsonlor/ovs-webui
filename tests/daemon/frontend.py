@@ -8,7 +8,7 @@ import secrets
 import subprocess
 
 from authentication import request_id, run
-from spanning_tree_prepare import reconfigure_draft_fixture
+from spanning_tree_prepare import reconfigure_draft_fixture, set_unit_option
 
 
 def make_lldp_fixture(vsctl, call, get, eventually, cleanup):
@@ -20,16 +20,22 @@ def make_lldp_fixture(vsctl, call, get, eventually, cleanup):
     assert disabled['availability'] == 'unavailable'
     assert disabled['reason'] == 'LLDP_PROVIDER_DISABLED' and disabled['items'] == []
     bridge, namespace = 'br-lldp-ui', 'ovs-lldp-ui-peer'
+    ports = make_observation_ports(vsctl, get, eventually, cleanup, bridge, namespace,
+                                   [('capture', 'ld-ui-rx', 'ld-ui-src'), ('excluded', 'ld-ui-off', 'ld-ui-src2')])
+    return {'bridge': bridge, 'namespace': namespace, 'disabled': disabled, **ports}
+
+
+def make_observation_ports(vsctl, get, eventually, cleanup, bridge, namespace, port_specs):
     vsctl('add-br', bridge, '--', 'set', 'Bridge', bridge, 'datapath_type=system')
     cleanup.callback(vsctl, '--no-wait', '--if-exists', 'del-br', bridge)
     run('ip', 'netns', 'add', namespace)
     cleanup.callback(run, 'ip', 'netns', 'delete', namespace, check=False)
-    result = {'bridge': bridge, 'namespace': namespace, 'disabled': disabled}
-    for role, local, peer in [('capture', 'ld-ui-rx', 'ld-ui-src'), ('excluded', 'ld-ui-off', 'ld-ui-src2')]:
+    result = {}
+    for role, local, peer in port_specs:
         run('ip', 'link', 'add', local, 'type', 'veth', 'peer', 'name', peer)
         cleanup.callback(run, 'ip', 'link', 'del', local, check=False)
         run('ip', 'link', 'set', 'dev', peer, 'netns', namespace)
-        # No IP addressing or IPv6 discovery chatter is needed for the LLDP fixture.
+        # These isolated Ethernet fixtures do not need IP addressing or IPv6 discovery chatter.
         run('sysctl', '-q', '-w', f'net.ipv6.conf.{local}.disable_ipv6=1')
         run('ip', 'netns', 'exec', namespace, 'sysctl', '-q', '-w', f'net.ipv6.conf.{peer}.disable_ipv6=1')
         vsctl('add-port', bridge, local)
@@ -114,7 +120,8 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
                        ('browser-native-types', 'Reader'), ('browser-patch-observer', 'InterfaceObserver'),
                        ('browser-evidence-reader', 'Reader'), ('browser-evidence-observer', 'InterfaceObserver'),
                        ('browser-interface-config', 'Reader'), ('browser-interface-config-observer', 'InterfaceObserver'),
-                       ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin')]:
+                       ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin'),
+                       ('browser-capture', 'NetworkAdmin')]:
         secret = 'synthetic-browser-' + secrets.token_hex(16)
         credentials.append(secret)
         code, _, _ = call('/users', 'POST', {'request_id': request_id(), 'username': name, 'password': secret, 'role_ids': [roles[role]]})
@@ -194,6 +201,10 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
     telemetry_id = telemetry['bridge_ref']['id']
     telemetry_grant = telemetry_id+':netflow'
     lldp = make_lldp_fixture(vsctl, call, get, eventually, cleanup)
+    # The LLDP suite deletes its own links, so the later capture test owns its separate segment.
+    capture_port = make_observation_ports(vsctl, get, eventually, cleanup, 'br-pcap-ui', 'ovs-capture-ui-peer',
+                                          [('capture', 'pc-ui-data', 'pc-ui-src')])['capture']
+    capture_target = {'id': capture_port['id'], 'name': capture_port['interface']}
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -221,8 +232,9 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
                                         'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE\n')
     families = 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK'
     assert families + '\n' in mirror_unit
-    # Allow a filtered packet socket solely on this explicit LLDP fixture unit.
+    # Allow filtered packet sockets for the separately reviewed LLDP and Capture veth ports.
     fixture_unit = mirror_unit.replace(families + '\n', families + ' AF_PACKET\n')
+    fixture_unit = set_unit_option(fixture_unit, 'capture-interface-ids', 'CAPTURE_INTERFACE_IDS', capture_target['id'])
     unit_path.write_text(fixture_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
@@ -243,17 +255,19 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
                               'uuid': qos_attach_uuid, 'queue': qos_attach_queue},
                 'qosCreateName': qos_create_name,
                 'telemetryWrite': {'id': telemetry_id, 'bridge': telemetry_bridge},
-                'lldp': lldp}
+                'lldp': lldp, 'captureTarget': capture_target}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)
     try:
+        expected_capture = {'policy_state': 'enabled', 'targets': [capture_target]}
+        eventually(lambda: get('/captures/targets') == expected_capture)
         # The test runner prints test names and sanitized assertions only. No HAR,
         # network trace, storageState or fixture credentials are retained.
         env = dict(os.environ, OVS_FRONTEND_FIXTURE=str(path))
         result = subprocess.run([node, str(repo / 'node_modules/@playwright/test/cli.js'), 'test',
                                  '--config', str(repo / 'frontend/playwright.config.ts')],
-                                cwd=repo, env=env, timeout=600)
+                                cwd=repo, env=env, timeout=660)
         assert result.returncode == 0, 'formal frontend browser acceptance failed'
         return {'verified': True, 'network': network_metrics, 'backend': 'real ovs-webd / Unix IPC / ovs-mgrd / OVSDB / ovs-vswitchd',
                 'report': 'test-results/frontend.xml', 'screenshots': 'test-results/frontend-evidence',
