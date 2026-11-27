@@ -554,39 +554,44 @@ func (v Problem) MarshalJSON() ([]byte, error) {
 }
 
 type Resource struct {
-	Id                Id                         `json:"id"`
-	State             string                     `json:"state"`
-	Sequence          Sequence                   `json:"sequence"`
-	ResourceKind      string                     `json:"resource_kind"`
-	Source            Source                     `json:"source"`
-	AllowedActions    []string                   `json:"allowed_actions"`
-	NativeTunnel      StaticTunnelObservation    `json:"native_tunnel,omitempty"`
-	NativeMirror      MirrorObservation          `json:"native_mirror,omitempty"`
-	NativeQos         QoSObservation             `json:"native_qos,omitempty"`
-	LinuxQos          LinuxQoSObservation        `json:"linux_qos,omitempty"`
-	QosRateEdit       QoSRateEdit                `json:"qos_rate_edit,omitempty"`
-	QosDetach         QoSRateEdit                `json:"qos_detach,omitempty"`
-	QosAttach         QoSAttachStatus            `json:"qos_attach,omitempty"`
-	NativeTelemetry   TelemetryObservation       `json:"native_telemetry,omitempty"`
-	TelemetryWrite    TelemetryWrite             `json:"telemetry_write,omitempty"`
-	Statistics        Statistics                 `json:"statistics,omitempty"`
-	Name              string                     `json:"name,omitempty"`
-	InterfaceRef      ResourceRef                `json:"interface_ref,omitempty"`
-	PortRef           json.RawMessage            `json:"port_ref,omitempty"`
-	BridgeRef         json.RawMessage            `json:"bridge_ref,omitempty"`
-	PortName          json.RawMessage            `json:"port_name,omitempty"`
-	BridgeName        json.RawMessage            `json:"bridge_name,omitempty"`
-	NativeUuid        Id                         `json:"native_uuid,omitempty"`
-	Address           string                     `json:"address,omitempty"`
-	Mac               json.RawMessage            `json:"mac,omitempty"`
-	Family            string                     `json:"family,omitempty"`
-	Ifindex           int64                      `json:"ifindex,omitempty"`
-	InterfaceName     string                     `json:"interface_name,omitempty"`
-	Lldp              LldpAdvertisement          `json:"lldp,omitempty"`
-	Fdb               FdbObservation             `json:"fdb,omitempty"`
-	Endpoint          EndpointObservation        `json:"endpoint,omitempty"`
-	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
-	ExtraFields       map[string]json.RawMessage `json:"-"`
+	Id                  Id                         `json:"id"`
+	State               string                     `json:"state"`
+	Sequence            Sequence                   `json:"sequence"`
+	ResourceKind        string                     `json:"resource_kind"`
+	Source              Source                     `json:"source"`
+	AllowedActions      []string                   `json:"allowed_actions"`
+	NativeTunnel        StaticTunnelObservation    `json:"native_tunnel,omitempty"`
+	NativeMirror        MirrorObservation          `json:"native_mirror,omitempty"`
+	NativeQos           QoSObservation             `json:"native_qos,omitempty"`
+	LinuxQos            LinuxQoSObservation        `json:"linux_qos,omitempty"`
+	QosRateEdit         QoSRateEdit                `json:"qos_rate_edit,omitempty"`
+	QosDetach           QoSRateEdit                `json:"qos_detach,omitempty"`
+	QosAttach           QoSAttachStatus            `json:"qos_attach,omitempty"`
+	NativeTelemetry     TelemetryObservation       `json:"native_telemetry,omitempty"`
+	TelemetryWrite      TelemetryWrite             `json:"telemetry_write,omitempty"`
+	Statistics          Statistics                 `json:"statistics,omitempty"`
+	Name                string                     `json:"name,omitempty"`
+	InterfaceRef        ResourceRef                `json:"interface_ref,omitempty"`
+	PortRef             json.RawMessage            `json:"port_ref,omitempty"`
+	BridgeRef           json.RawMessage            `json:"bridge_ref,omitempty"`
+	PortName            json.RawMessage            `json:"port_name,omitempty"`
+	BridgeName          json.RawMessage            `json:"bridge_name,omitempty"`
+	NativeUuid          Id                         `json:"native_uuid,omitempty"`
+	Address             string                     `json:"address,omitempty"`
+	Mac                 json.RawMessage            `json:"mac,omitempty"`
+	Family              string                     `json:"family,omitempty"`
+	Ifindex             int64                      `json:"ifindex,omitempty"`
+	InterfaceName       string                     `json:"interface_name,omitempty"`
+	Lldp                LldpAdvertisement          `json:"lldp,omitempty"`
+	Fdb                 FdbObservation             `json:"fdb,omitempty"`
+	Endpoint            EndpointObservation        `json:"endpoint,omitempty"`
+	Components          []HealthComponent          `json:"components,omitempty"`
+	CapabilityEvidence  ManagementCapability       `json:"capability_evidence,omitempty"`
+	AuthenticationReady bool                       `json:"authentication_ready,omitempty"`
+	ConfigurationReady  bool                       `json:"configuration_ready,omitempty"`
+	HealthChange        HealthChange               `json:"health_change,omitempty"`
+	RelatedObjectRefs   []ResourceRef              `json:"related_object_refs,omitempty"`
+	ExtraFields         map[string]json.RawMessage `json:"-"`
 }
 
 func (v *Resource) UnmarshalJSON(data []byte) error {
@@ -2304,6 +2309,31 @@ func (v EndpointSourceCoverage) MarshalJSON() ([]byte, error) {
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
+type HealthComponent struct {
+	Key      string `json:"key"`
+	State    string `json:"state"`
+	Reason   string `json:"reason"`
+	Source   Source `json:"source"`
+	Active   int64  `json:"active,omitempty"`
+	Capacity int64  `json:"capacity,omitempty"`
+}
+type ManagementCapability struct {
+	Key                  string   `json:"key"`
+	Label                string   `json:"label"`
+	Availability         string   `json:"availability"`
+	Reason               string   `json:"reason"`
+	Authority            string   `json:"authority"`
+	Prerequisites        []string `json:"prerequisites"`
+	RequiredCapabilities []string `json:"required_capabilities"`
+	GrantState           string   `json:"grant_state"`
+	Recovery             string   `json:"recovery"`
+}
+type HealthChange struct {
+	Component   string `json:"component"`
+	Previous    string `json:"previous"`
+	Current     string `json:"current"`
+	Transitions int64  `json:"transitions"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`

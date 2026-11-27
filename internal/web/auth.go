@@ -21,10 +21,11 @@ import (
 const sessionCookie = "__Host-ovs_session"
 
 type Authentication struct {
-	manager      authn.Manager
-	sessions     *sessions.Repository
-	certificates *ManagedTLS
-	workspace    *Workspace
+	manager       authn.Manager
+	sessions      *sessions.Repository
+	certificates  *ManagedTLS
+	workspace     *Workspace
+	runtimeHealth *runtimeHealth
 }
 
 func NewAuthentication(manager authn.Manager, sessions *sessions.Repository) *Authentication {
@@ -116,6 +117,17 @@ func (a *Authentication) Revalidate(ctx context.Context, s publicapi.Subject) (p
 	return s, nil
 }
 func (a *Authentication) Allow(ctx context.Context, s publicapi.Subject, capability string, refs []apitypes.Ref) error {
+	if capability == "state.read" && len(refs) == 1 && refs[0].Kind == "capability" {
+		// Capability IDs are fixed by this registry and have no inventory row.
+		// Keep the manager's current credential and state.read checks.
+		if _, err := a.runtimeClaims(ctx, s, true); err != nil {
+			return err
+		}
+		if !isRuntimeCapability(refs[0].ID) {
+			return apitypes.Fail(404, "NOT_FOUND")
+		}
+		return nil
+	}
 	c, err := a.manager.CheckAuth(ctx, s.Credential, authn.Check{Capability: capability, Resources: refs})
 	if err != nil {
 		return authError(err)
@@ -196,6 +208,10 @@ func (a *Authentication) Session(ctx context.Context, s publicapi.Subject, q pub
 	return out, nil
 }
 func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q publicapi.Query) (publicapi.Response, error) {
+	switch q.Operation.ID {
+	case "readHealth", "listCapabilities", "readCapability":
+		return a.readRuntimeHealth(ctx, s, q)
+	}
 	if q.Operation.ID == "readCandidate" || q.Operation.ID == "readWorkspace" || q.Operation.ID == "readValidation" || q.Operation.ID == "readRequestReceipt" && q.Values.Get("domain") == "workspace" {
 		if a.workspace == nil {
 			return publicapi.Response{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")

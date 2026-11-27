@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
@@ -38,6 +39,21 @@ type Handler struct {
 
 func (h *Handler) WithAuthentication(manager authn.Manager) *Handler { h.auth = manager; return h }
 func (h *Handler) WithTLS(manager tlscontrol.Manager) *Handler       { h.tlsManager = manager; return h }
+
+// WithRuntimeInspection installs the authenticated readout, independently of
+// the transport's bootstrap probe. Its queue observations use channel lengths
+// and never acquire a second admission slot.
+func (h *Handler) WithRuntimeInspection(inspect func(context.Context) (Health, error)) *Handler {
+	h.inspect = func(ctx context.Context) (Health, error) {
+		view, err := inspect(ctx)
+		if err != nil {
+			return Health{}, err
+		}
+		view.Components = append(view.Components, h.queueHealth(time.Now().UTC())...)
+		return view, nil
+	}
+	return h
+}
 
 func NewHandler(protocol Protocol, authorizer Authorizer, logger *slog.Logger, probes ...func(context.Context) Health) *Handler {
 	if authorizer == nil {

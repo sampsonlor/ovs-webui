@@ -30,6 +30,7 @@ import (
 	registry "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/secrets"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
+	"github.com/sampsonlor/ovs-webui/internal/runtimehealth"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
 	"github.com/sampsonlor/ovs-webui/internal/safety"
 	"github.com/sampsonlor/ovs-webui/internal/secret"
@@ -237,6 +238,7 @@ func run() int {
 		logger.Error("service_start_failed", "code", "SECRET_KEY_UNAVAILABLE")
 		return 1
 	}
+	secretCheckedAt := time.Now()
 	if *rotateSecret {
 		if privileged == nil {
 			logger.Error("security_action_failed", "code", "SECRET_KEY_UNAVAILABLE")
@@ -783,6 +785,11 @@ func run() int {
 		authorizer = authentication
 		authService = authentication
 	}
+	runtimeHealth := &managerRuntimeHealth{
+		storage: store.Status, inventory: inventoryService, secretCheckedAt: secretCheckedAt,
+		secretConfigured: privileged != nil, authConfigured: authentication != nil,
+		safetyConfigured: authentication != nil && authentication.SafetyAvailable(),
+	}
 	handler := ipc.NewHandler(ipc.CurrentProtocol(buildinfo.SoftwareVersion()), authorizer, logger, func(ctx context.Context) ipc.Health {
 		health := ipc.BootstrapHealth()
 		status := store.Probe(ctx)
@@ -793,7 +800,9 @@ func run() int {
 		}
 		health.ConfigurationReady = authentication != nil && authentication.SafetyAvailable() && status.Writable
 		return health
-	}).WithAuthentication(authService)
+	}).WithAuthentication(authService).WithRuntimeInspection(func(context.Context) (ipc.Health, error) {
+		return runtimeHealth.snapshot(time.Now()), nil
+	})
 	if inventoryService != nil {
 		handler.WithStatisticVersions(inventoryService.StatisticVersions)
 	}
@@ -803,6 +812,16 @@ func run() int {
 			return 1
 		}
 		handler.WithTLS(authentication)
+		go runtimehealth.RunTransitions(ctx, store, func() []runtimehealth.State {
+			components := runtimeHealth.snapshot(time.Now()).Components
+			states := make([]runtimehealth.State, 0, len(components))
+			for _, component := range components {
+				if component.Reason != "STATE_CACHE_BUSY" {
+					states = append(states, runtimehealth.State{Key: component.Key, State: component.State})
+				}
+			}
+			return states
+		})
 		go authentication.MaintainTLS(ctx)
 		go authentication.MaintainEvidence(ctx)
 	}
@@ -827,10 +846,15 @@ func run() int {
 					err = fields.SafetyTick(cycle)
 				}
 			}
-			if err == nil && store.Status().Writable {
-				_ = runtimehost.Notify("WATCHDOG=1")
+			writable := store.Status().Writable
+			var notifyErr error
+			if err == nil && writable {
+				notifyErr = runtimehost.Notify("WATCHDOG=1")
 			}
 			cancel()
+			if ctx.Err() == nil {
+				runtimeHealth.recordWatchdog(time.Now(), writable, err, notifyErr)
+			}
 		}
 	}()
 	if err := runtimehost.Notify("READY=1"); err != nil {

@@ -31,6 +31,9 @@
   import Lldp from './Lldp.svelte';
   import Fdb from './Fdb.svelte';
   import Endpoints from './Endpoints.svelte';
+  import Health from './Health.svelte';
+  import Capabilities from './Capabilities.svelte';
+  import { capabilitiesRoute, healthRoute } from './management-observation';
 
   const controller = start();
   const model = controller.store;
@@ -229,6 +232,8 @@
             href={domain.href}
             current={path === domain.href ||
               (domain.name === 'Visibility' && path.startsWith('/visibility/')) ||
+              (domain.name === 'Operations' && path.startsWith('/operations/')) ||
+              (domain.name === 'Administration' && path.startsWith('/admin/')) ||
               (domain.name === 'Switching' &&
                 (path.startsWith('/switching/') || path.startsWith('/ports/') ||
                   path.startsWith('/bridges/') ||
@@ -256,6 +261,15 @@
         <Link href="/visibility/endpoints" current={path === '/visibility/endpoints' || path.startsWith('/visibility/endpoints/')}>Endpoints</Link>
         <Link href="/visibility/fdb" current={path === '/visibility/fdb' || path.startsWith('/visibility/fdb/')}>FDB</Link>
       </nav>
+      {#if $model.sessionReady && has($model.session, 'state.read')}
+        <nav aria-label="Management views" class="nav-section">
+          <p class="eyebrow">Management</p>
+          <Link href={healthRoute} current={path === healthRoute}>System Health</Link>
+          {#if has($model.session, 'capabilities.read')}
+            <Link href={capabilitiesRoute} current={path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')}>Capabilities</Link>
+          {/if}
+        </nav>
+      {/if}
       <nav aria-label="Change Control" class="nav-section">
         <p class="eyebrow">Shared Change Control</p>
         <Link href="/changes/candidate" current={path.includes('/candidate')}
@@ -573,6 +587,10 @@
           {:else}<InterfaceDetail model={$model} {expert} {desktop} />{/if}
         {:else if path.startsWith('/changes/') && path !== '/changes/transactions'}
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
+        {:else if path === healthRoute}
+          <Health model={$model} {expert} />
+        {:else if path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')}
+          <Capabilities model={$model} {expert} />
         {:else if path.startsWith('/operations/events') || path.startsWith('/operations/audit')}
           <Evidence model={$model} {expert} />
         {:else if path.startsWith('/operations/') || path === '/changes/transactions' || path === '/bridges' || path.startsWith('/bridges/')}
