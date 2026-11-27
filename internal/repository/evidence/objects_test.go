@@ -131,7 +131,11 @@ func TestObjectIndexMigrationPreservesLegacyCoverageAndCascadesPruning(t *testin
 		t.Fatal(err)
 	}
 	steps := migrations.For(repository.Manager)
-	for _, m := range steps[:len(steps)-1] {
+	const objectIndexVersion = 12
+	if len(steps) < objectIndexVersion || steps[objectIndexVersion-1].Version != objectIndexVersion {
+		t.Fatal("evidence object index migration is missing")
+	}
+	for _, m := range steps[:objectIndexVersion-1] {
 		if _, err = db.Exec(m.SQL); err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +144,7 @@ func TestObjectIndexMigrationPreservesLegacyCoverageAndCascadesPruning(t *testin
 	if _, err = db.Exec("INSERT INTO evidence_records(id,collection,created_at_ms,correlation_id,operation,object_id,source,fingerprint,document) VALUES(?,'audit',0,?,'legacy',?,'Unknown','legacy',?)", id, repository.NewID(), primary, []byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(steps[len(steps)-1].SQL); err != nil {
+	if _, err = db.Exec(steps[objectIndexVersion-1].SQL); err != nil {
 		t.Fatal(err)
 	}
 	var count int

@@ -277,6 +277,12 @@ jobs:
           sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema" \
             outputs/runtime/execution.test -test.run '^TestNativeNeighborEventCache$' -test.v -test.timeout=90s \
             | go tool test2json -p native-neighbor-events | tee test-results/go-neighbor-events.json
+      - name: Typed product-only systemd restart with live OVS forwarding
+        if: runner.environment == 'github-hosted'
+        run: |
+          go test -c -o outputs/runtime/systemd-restart.test ./internal/runtimecontrol
+          sudo -- env OVS_CI_SYSTEMD_RESTART=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            python3 tests/daemon/smoke.py --bin-dir outputs/runtime --systemd-restart-probe
       - name: Build separately qualified Mirror runtime for formal browser acceptance
         env:
           MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -423,12 +429,6 @@ jobs:
           go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
-      - name: Typed product-only systemd restart with live OVS forwarding
-        if: runner.environment == 'github-hosted'
-        run: |
-          go test -c -o outputs/runtime/systemd-restart.test ./internal/runtimecontrol
-          sudo -- env OVS_CI_SYSTEMD_RESTART=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
-            python3 tests/daemon/smoke.py --bin-dir outputs/runtime --systemd-restart-probe
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
         run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
       - name: Encrypted TLS identity, fresh connection confirmation and real recovery deadline
