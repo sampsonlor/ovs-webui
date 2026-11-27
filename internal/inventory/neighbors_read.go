@@ -106,6 +106,7 @@ type neighborStatus struct {
 func statusNeighbors(v *view, failure string, c neighborCache, now time.Time, selection neighborSelection) neighborStatus {
 	status := neighborStatus{availability: "unavailable", freshness: "unavailable"}
 	covered := make(map[DeviceRequest]bool, len(c.covered))
+	pending := false
 	for _, request := range c.covered {
 		covered[request] = true
 	}
@@ -116,6 +117,7 @@ func statusNeighbors(v *view, failure string, c neighborCache, now time.Time, se
 				if covered[binding.request] {
 					status.observed++
 				}
+				pending = pending || c.pending[binding.request.IfIndex] != 0
 			}
 		}
 	}
@@ -132,6 +134,8 @@ func statusNeighbors(v *view, failure string, c neighborCache, now time.Time, se
 		status.reason = "NEIGHBORS_RESYNCING"
 	case now.Sub(c.observedAt) > neighborFreshFor || now.Before(c.observedAt):
 		status.reason, status.freshness, status.observed = "NEIGHBORS_EXPIRED", "stale", 0
+	case status.observed == 0 && pending:
+		status.reason = "NEIGHBORS_RESYNCING"
 	case status.observed == 0:
 		status.reason = "NEIGHBORS_NO_PROVEN_SCOPE"
 	case status.observed < status.eligible:
@@ -153,7 +157,7 @@ func neighborSource(c neighborCache, status neighborStatus) map[string]any {
 		}
 	}
 	var at any
-	if !c.observedAt.IsZero() {
+	if !c.observedAt.IsZero() && status.reason != "NEIGHBORS_RESYNCING" {
 		at = c.observedAt.UTC()
 	}
 	return map[string]any{"provider_id": "linux", "authority": "linux-rtnetlink-neighbors", "freshness": status.freshness, "confidence": confidence, "observed_at": at}

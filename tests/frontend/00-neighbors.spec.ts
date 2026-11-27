@@ -288,17 +288,41 @@ test('Native ARP and NDP use one shared read-only snapshot with scoped navigatio
         .items,
     ).toEqual([]);
 
+    // The dynamic entries above prove ARP and NDP learning. Keep those same
+    // fixture rows stable while exercising snapshot-bound navigation.
+    for (const [family, address] of [
+      ['-4', ipv4],
+      ['-6', ipv6],
+    ]) {
+      ip(
+        family,
+        'neigh',
+        'replace',
+        address,
+        'lladdr',
+        peerMAC,
+        'nud',
+        'permanent',
+        'dev',
+        managed,
+      );
+    }
     await expect
-      .poll(async () => {
-        const first = await read<NeighborPage>(page, scopedPath);
-        const next = await read<NeighborPage>(page, scopedPath);
-        return [
-          first.source?.freshness,
-          first.snapshot_id === next.snapshot_id,
-          first.source?.observed_at === next.source?.observed_at,
-        ];
-      })
-      .toEqual(['fresh', true, true]);
+      .poll(
+        async () => {
+          const first = await read<NeighborPage>(page, scopedPath);
+          const next = await read<NeighborPage>(page, scopedPath);
+          return [
+            first.source?.freshness,
+            first.items.find((item) => item.address === ipv4)?.state,
+            first.items.find((item) => item.address === ipv6)?.state,
+            first.snapshot_id === next.snapshot_id,
+            first.source?.observed_at === next.source?.observed_at,
+          ];
+        },
+        { timeout: 20000 },
+      )
+      .toEqual(['fresh', 'permanent', 'permanent', true, true]);
 
     await page.goto(`${href}?${scope}&family=ipv4&limit=1`);
     await expect(

@@ -25,7 +25,7 @@ func TestLinuxDeviceLinkIndicesDecodeOnlyLinkNotifications(t *testing.T) {
 		deviceLinkNotification(unix.RTM_NEWLINK, -1, nil),
 		deviceLinkNotification(unix.RTM_DELLINK, 21, nil),
 	}, nil)
-	indices, ok := decodeDeviceLinkIndices(data, nil)
+	indices, ok := decodeRouteEventIndices(data, nil, deviceLinkEventIndex)
 	if !ok || !slices.Equal(indices, []int{7, 21}) {
 		t.Fatalf("got indices %v, accepted %v", indices, ok)
 	}
@@ -41,11 +41,11 @@ func TestLinuxDeviceLinkIndicesRejectIncompleteDatagrams(t *testing.T) {
 		"missing attr alignment":      deviceLinkNotification(unix.RTM_NEWLINK, 7, []byte{5, 0, 1, 0, 9}),
 		"overrun after valid message": append(slices.Clone(valid), tcMessage(unix.NLMSG_OVERRUN, 0, 0, nil)...),
 		"unexpected control error":    tcMessage(unix.NLMSG_ERROR, 0, 0, nil),
-		"too many messages":           bytes.Repeat(valid, linkEventBatch+1),
+		"too many messages":           bytes.Repeat(valid, routeEventBatch+1),
 	}
 	for name, data := range tests {
 		t.Run(name, func(t *testing.T) {
-			if indices, ok := decodeDeviceLinkIndices(data, nil); ok || len(indices) != 0 {
+			if indices, ok := decodeRouteEventIndices(data, nil, deviceLinkEventIndex); ok || len(indices) != 0 {
 				t.Fatalf("bad datagram delivered %v, accepted %v", indices, ok)
 			}
 		})
@@ -53,7 +53,7 @@ func TestLinuxDeviceLinkIndicesRejectIncompleteDatagrams(t *testing.T) {
 }
 
 func TestLinuxDeviceLinkRequiresKernelMulticastSender(t *testing.T) {
-	if !kernelDeviceLinkSender(&unix.SockaddrNetlink{Family: unix.AF_NETLINK, Groups: unix.RTMGRP_LINK}) {
+	if !kernelRouteEventSender(&unix.SockaddrNetlink{Family: unix.AF_NETLINK, Groups: unix.RTMGRP_LINK}, unix.RTMGRP_LINK) {
 		t.Fatal("kernel link multicast denied")
 	}
 	for _, addr := range []unix.Sockaddr{
@@ -63,14 +63,19 @@ func TestLinuxDeviceLinkRequiresKernelMulticastSender(t *testing.T) {
 		&unix.SockaddrNetlink{Family: unix.AF_NETLINK, Groups: unix.RTMGRP_LINK << 1},
 		&unix.SockaddrNetlink{Family: unix.AF_NETLINK},
 	} {
-		if kernelDeviceLinkSender(addr) {
+		if kernelRouteEventSender(addr, unix.RTMGRP_LINK) {
 			t.Fatalf("accepted unexpected sender %#v", addr)
 		}
 	}
 }
 
 func TestLinuxDeviceLinkSubscriberBoundAndCancelable(t *testing.T) {
-	fd, err := openDeviceLinkSocket()
+	assertRouteEventSubscription(t, unix.RTMGRP_LINK, deviceLinkEventIndex)
+}
+
+func assertRouteEventSubscription(t *testing.T, group uint32, decode routeEventIndex) {
+	t.Helper()
+	fd, err := openInterfaceEventSocket(group)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,20 +84,20 @@ func TestLinuxDeviceLinkSubscriberBoundAndCancelable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if peer, ok := addr.(*unix.SockaddrNetlink); !ok || peer.Groups != unix.RTMGRP_LINK {
-		t.Fatalf("unexpected link subscription %#v", addr)
+	if peer, ok := addr.(*unix.SockaddrNetlink); !ok || peer.Groups != group {
+		t.Fatalf("expected netlink multicast group %d, got %#v", group, addr)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		receiveDeviceLinkEvents(ctx, fd, func(inventory.DeviceLinkEvents) {})
+		receiveInterfaceEvents(ctx, fd, group, decode, func(inventory.InterfaceEvents) {})
 	}()
 	cancel()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("link subscriber did not stop after cancellation")
+		t.Fatal("subscriber did not stop after cancellation")
 	}
 }
 

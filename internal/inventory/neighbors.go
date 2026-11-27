@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"errors"
+	"maps"
 	"net"
 	"net/netip"
 	"slices"
@@ -133,15 +134,19 @@ type neighborEntry struct {
 }
 
 type neighborCache struct {
-	observer    NeighborObserver
-	collecting  bool
-	epoch       uint64
-	id, failure string
-	sequence    uint64
-	observedAt  time.Time
-	entries     []neighborEntry
-	covered     []DeviceRequest
-	truncated   bool
+	observer                          NeighborObserver
+	collecting                        bool
+	epoch                             uint64
+	eventRevision, collectingRevision uint64
+	id, failure                       string
+	sequence                          uint64
+	observedAt                        time.Time
+	entries                           []neighborEntry
+	covered                           []DeviceRequest
+	truncated                         bool
+	// Readers hold snapshots outside Service.mu. Replace this map on writes,
+	// as with the published rows and coverage.
+	pending map[int]uint64
 }
 
 // Service.mu protects publication and snapshots only. A failed or interrupted
@@ -152,6 +157,7 @@ func (c *neighborCache) invalidate(reason string) {
 	c.observedAt = time.Time{}
 	c.entries, c.covered = nil, nil
 	c.truncated = false
+	c.pending = nil
 }
 
 func (s *Service) SetNeighborObserver(observer NeighborObserver) {
@@ -159,6 +165,61 @@ func (s *Service) SetNeighborObserver(observer NeighborObserver) {
 	defer s.mu.Unlock()
 	s.neighbors.observer = observer
 	s.neighbors.invalidate("NEIGHBORS_RESYNCING")
+}
+
+// HandleNeighborEvents removes evidence invalidated by kernel notifications.
+// The existing collector remains the only source of rows and coverage.
+func (s *Service) HandleNeighborEvents(events InterfaceEvents) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := &s.neighbors
+	if c.observer == nil {
+		return
+	}
+	if events.Lost {
+		c.invalidate("NEIGHBORS_RESYNCING")
+		return
+	}
+	v := s.current
+	if len(events.Indices) == 0 || v == nil || v.decision.State != "confirmed" || len(v.neighborScope.bindings) > MaxRows {
+		return
+	}
+	indices := make(map[int]bool, len(events.Indices))
+	for _, index := range events.Indices {
+		indices[index] = true
+	}
+	var pending map[int]uint64
+	for _, binding := range v.neighborScope.bindings {
+		index := binding.request.IfIndex
+		if !indices[index] {
+			continue
+		}
+		if rev, exists := c.pending[index]; exists && (!c.collecting || rev > c.collectingRevision) {
+			continue
+		}
+		if pending == nil {
+			pending = maps.Clone(c.pending)
+			if pending == nil {
+				pending = make(map[int]uint64)
+			}
+			c.eventRevision++
+		}
+		pending[index] = c.eventRevision
+	}
+	if pending == nil {
+		return
+	}
+	c.pending = pending
+	if slices.ContainsFunc(c.covered, func(req DeviceRequest) bool { return pending[req.IfIndex] != 0 }) {
+		c.entries, c.covered = omitPendingNeighbors(slices.Clone(c.entries), slices.Clone(c.covered), pending)
+		c.id = repository.NewID()
+		c.sequence++
+	}
+}
+
+func omitPendingNeighbors(entries []neighborEntry, covered []DeviceRequest, pending map[int]uint64) ([]neighborEntry, []DeviceRequest) {
+	return slices.DeleteFunc(entries, func(row neighborEntry) bool { return pending[row.Binding.request.IfIndex] != 0 }),
+		slices.DeleteFunc(covered, func(req DeviceRequest) bool { return pending[req.IfIndex] != 0 })
 }
 
 func (s *Service) RunNeighbors(ctx context.Context) {
@@ -185,6 +246,8 @@ func (s *Service) SampleNeighbors(ctx context.Context) {
 		return
 	}
 	s.neighbors.collecting = true
+	revision := s.neighbors.eventRevision
+	s.neighbors.collectingRevision = revision
 	s.mu.Unlock()
 
 	requests := make([]DeviceRequest, 0, len(v.neighborScope.bindings))
@@ -215,6 +278,19 @@ func (s *Service) SampleNeighbors(ctx context.Context) {
 		c.invalidate(neighborFailure(err))
 		return
 	}
+	var pending map[int]uint64
+	for index, changed := range c.pending {
+		if changed > revision {
+			if pending == nil {
+				pending = make(map[int]uint64)
+			}
+			pending[index] = changed
+		}
+	}
+	if len(pending) != 0 {
+		entries, covered = omitPendingNeighbors(entries, covered, pending)
+	}
+	c.pending = pending
 	if c.id == "" || !slices.Equal(c.entries, entries) || !slices.Equal(c.covered, covered) || c.truncated != observation.Truncated {
 		c.id = repository.NewID()
 		c.sequence++

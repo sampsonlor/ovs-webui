@@ -271,6 +271,12 @@ jobs:
           sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema" \
             outputs/runtime/execution.test -test.run '^TestNativeDeviceLinkCache$' -test.v -test.timeout=90s \
             | go tool test2json -p native-device-link-cache | tee test-results/go-device-link-cache.json
+      - name: Native Linux neighbor events and shared neighbor cache
+        run: |
+          set -o pipefail
+          sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_EXECUTION_SCHEMA="$PWD/internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema" \
+            outputs/runtime/execution.test -test.run '^TestNativeNeighborEventCache$' -test.v -test.timeout=90s \
+            | go tool test2json -p native-neighbor-events | tee test-results/go-neighbor-events.json
       - name: Build separately qualified Mirror runtime for formal browser acceptance
         env:
           MIRROR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -451,6 +457,7 @@ jobs:
             test-results/go-telemetry-write-*.json
             test-results/go-statistics-*.json
             test-results/go-device-link-cache.json
+            test-results/go-neighbor-events.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
             test-results/go-auth-smoke.json

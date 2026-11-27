@@ -210,10 +210,11 @@ test('Endpoints correlate only verified scope with native FDB, ARP/NDP and LLDP 
   run('ping', '-4', '-I', fixture.l3.interface, '-c', '1', '-W', '2', ipv4);
   run('ping', '-6', '-I', fixture.l3.interface, '-c', '1', '-W', '2', ipv6);
 
-  for (const [family, destination] of [
+  const neighborAddresses = [
     ['-4', ipv4],
     ['-6', ipv6],
-  ]) {
+  ];
+  for (const [family, destination] of neighborAddresses) {
     const native: { dst: string; lladdr?: string }[] = JSON.parse(
       run('ip', '-j', family, 'neigh', 'show', 'dev', fixture.l3.interface),
     );
@@ -234,8 +235,18 @@ test('Endpoints correlate only verified scope with native FDB, ARP/NDP and LLDP 
       .toBe(true);
   }
 
+  const neighborStates = (endpoint?: EndpointObservation) =>
+    neighborAddresses.map(
+      ([, ip]) =>
+        endpoint?.evidence.find(
+          (item) =>
+            item.ref.kind === 'neighbor' && item.ip === ip && item.mac === mac,
+        )?.state,
+    );
+
   // A LLDP advertised chassis may match all three learned MAC observations and
   // both L3 records. Neither the protocol ID nor a shared Bridge is a join key.
+  let learnedNeighborID: string | undefined;
   await expect
     .poll(async () => {
       const data = await readPage(page);
@@ -251,21 +262,55 @@ test('Endpoints correlate only verified scope with native FDB, ARP/NDP and LLDP 
         for (const remotePort of lldpPorts)
           advertise(fixture.ports[0], remotePort);
       }
+      learnedNeighborID = rows.find(
+        (row) =>
+          row.endpoint.basis === 'neighbor' &&
+          row.endpoint.mac === mac &&
+          neighborStates(row.endpoint).every(
+            (state) => state && state !== 'permanent',
+          ),
+      )?.id;
       return {
         fdb: rows.filter(
           (row) => row.endpoint.basis === 'fdb' && row.endpoint.mac === mac,
         ).length,
-        neighbor: rows.some(
-          (row) =>
-            row.endpoint.basis === 'neighbor' &&
-            row.endpoint.mac === mac &&
-            row.endpoint.addresses.includes(ipv4) &&
-            row.endpoint.addresses.includes(ipv6),
-        ),
+        neighbor: learnedNeighborID !== undefined,
         lldp: observed.length,
       };
     }, samplePoll)
     .toEqual({ fdb: 2, neighbor: true, lldp: lldpPorts.length });
+
+  // The dynamic entries already proved native learning. Keep just those two
+  // entries stable while testing direct reads and snapshot-bound navigation.
+  for (const [family, destination] of neighborAddresses) {
+    run(
+      'ip',
+      family,
+      'neigh',
+      'replace',
+      destination,
+      'lladdr',
+      mac,
+      'nud',
+      'permanent',
+      'dev',
+      fixture.l3.interface,
+    );
+  }
+  await expect
+    .poll(async () => {
+      const data = await readPage(page);
+      const neighbor = data.items.find(
+        (row) => row.id === learnedNeighborID,
+      )?.endpoint;
+      const { authority, freshness } = source(data, 'neighbor').source;
+      return { authority, freshness, states: neighborStates(neighbor) };
+    }, samplePoll)
+    .toEqual({
+      authority: 'linux-rtnetlink-neighbors',
+      freshness: 'fresh',
+      states: ['permanent', 'permanent'],
+    });
 
   const main = await readPage(page);
   const rows = main.items.map(observation);
