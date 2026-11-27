@@ -78,7 +78,7 @@ func (f *statisticsFixture) waitStatisticsSource() {
 	})
 }
 
-func (f *statisticsFixture) interfaceBinding(name string) candidate.Binding {
+func (f *fixture) interfaceBinding(name string) candidate.Binding {
 	f.t.Helper()
 	uuid := f.vs("get", "Interface", name, "_uuid")
 	var b candidate.Binding

@@ -15,6 +15,7 @@ const (
 	deviceObservationBudget   = 500 * time.Millisecond
 	deviceObservationBatch    = 24
 	deviceObservationWorkers  = 2
+	deviceEventBatch          = deviceObservationBatch / 2
 )
 
 type deviceProof struct {
@@ -25,24 +26,34 @@ type deviceProof struct {
 }
 
 type cachedDevice struct {
-	proof    deviceProof
-	sample   DeviceSample
-	cachedAt time.Time
+	proof        deviceProof
+	sample       DeviceSample
+	cachedAt     time.Time
+	linkRevision uint64
+	dirty        bool
+}
+
+type deviceTarget struct {
+	deviceProof
+	linkRevision uint64
+	priority     bool
 }
 
 // Service.mu guards the cache and the OVS view used for its bindings. Only the
 // manager's observation worker calls the provider, outside that lock.
 type deviceCache struct {
-	observer DeviceObserver
-	sampling bool
-	epoch    uint64
-	after    string
-	entries  map[string]cachedDevice
+	observer     DeviceObserver
+	sampling     bool
+	epoch        uint64
+	after        string
+	dirtyAfter   string
+	entries      map[string]cachedDevice
+	linkRevision uint64
 }
 
 func (c *deviceCache) invalidate() {
 	c.epoch++
-	c.after = ""
+	c.after, c.dirtyAfter = "", ""
 	c.entries = nil
 }
 
@@ -80,6 +91,57 @@ func deviceViewFresh(v *view, failure string, now time.Time) bool {
 	return age >= 0 && age <= FreshFor
 }
 
+// DeviceLinkEvents carries kernel invalidation hints or a discontinuity in their
+// delivery. Neither is evidence of a device's current fields or identity.
+type DeviceLinkEvents struct {
+	Indices []int
+	Lost    bool
+}
+
+func (s *Service) HandleDeviceLinkEvents(events DeviceLinkEvents) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := &s.devices
+	if c.observer == nil {
+		return
+	}
+	if events.Lost {
+		// Keep the periodic rotation, but clear all Linux samples immediately.
+		// No in-flight job can recreate an entry. Any targeted hint that
+		// recreates one has a new link revision.
+		c.entries = nil
+		c.dirtyAfter = ""
+		return
+	}
+	v := s.current
+	// The last confirmed view may briefly age out and then recover with the
+	// same binding. Invalidate it now so an earlier Linux sample cannot revive.
+	if len(events.Indices) == 0 || v == nil || v.decision.State != "confirmed" || len(v.observation.Rows["Interface"]) > MaxRows {
+		return
+	}
+	indices := make(map[int]bool, len(events.Indices))
+	for _, index := range events.Indices {
+		indices[index] = true
+	}
+	var pending DeviceSample
+	for uuid := range v.observation.Rows["Interface"] {
+		proof, ok := deviceBinding(v, uuid)
+		if !ok || !indices[proof.request.IfIndex] {
+			continue
+		}
+		if pending.Availability == "" {
+			c.linkRevision++
+			pending = deviceUnavailable("LINUX_OBSERVATION_PENDING")
+			if c.entries == nil {
+				c.entries = make(map[string]cachedDevice)
+			}
+		}
+		c.entries[proof.managementID] = cachedDevice{
+			proof: proof, sample: pending, linkRevision: c.linkRevision, dirty: true,
+		}
+	}
+}
+
 func (s *Service) cachedDevice(proof deviceProof, epoch uint64) DeviceSample {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -105,14 +167,15 @@ func (s *Service) cachedDevice(proof deviceProof, epoch uint64) DeviceSample {
 }
 
 func (s *Service) RunDeviceObservations(ctx context.Context) {
-	ticker := time.NewTicker(DeviceObservationInterval)
-	defer ticker.Stop()
-	for {
+	next := time.NewTimer(DeviceObservationInterval)
+	defer next.Stop()
+	for ctx.Err() == nil {
 		s.SampleDevices(ctx)
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-next.C:
+			next.Reset(DeviceObservationInterval)
 		}
 	}
 }
@@ -124,7 +187,7 @@ func (s *Service) SampleDevices(ctx context.Context) {
 		return
 	}
 	s.mu.Lock()
-	v, observer, epoch, after := s.current, s.devices.observer, s.devices.epoch, s.devices.after
+	v, observer, epoch := s.current, s.devices.observer, s.devices.epoch
 	if observer == nil || s.devices.sampling || !deviceViewFresh(v, s.failure, s.now()) {
 		s.mu.Unlock()
 		return
@@ -139,7 +202,7 @@ func (s *Service) SampleDevices(ctx context.Context) {
 
 	round, cancel := context.WithTimeout(ctx, deviceObservationBudget)
 	defer cancel()
-	targets := s.prepareDeviceRound(v, epoch, after)
+	targets := s.prepareDeviceRound(v, epoch)
 	if len(targets) == 0 {
 		return
 	}
@@ -153,20 +216,25 @@ func (s *Service) SampleDevices(ctx context.Context) {
 	if s.devices.epoch != epoch || !deviceViewFresh(s.current, s.failure, now) {
 		return
 	}
-	for i, proof := range targets[:attempted] {
-		entry, ok := s.devices.entries[proof.managementID]
-		// An intervening install can drop this entry even if the same binding
-		// reappears before the Linux observer returns. Never recreate it here.
-		if ok && entry.proof == proof {
+	for i, target := range targets[:attempted] {
+		entry, ok := s.devices.entries[target.managementID]
+		// Rebinding or link invalidation can happen during the provider read.
+		// Publish only to the same binding at the same link revision.
+		if ok && entry.proof == target.deviceProof && entry.linkRevision == target.linkRevision {
 			entry.sample = samples[i]
 			entry.cachedAt = now
-			s.devices.entries[proof.managementID] = entry
+			entry.dirty = false
+			s.devices.entries[target.managementID] = entry
+		}
+		if target.priority {
+			s.devices.dirtyAfter = target.managementID
+		} else {
+			s.devices.after = target.managementID
 		}
 	}
-	s.devices.after = targets[attempted-1].managementID
 }
 
-func (s *Service) prepareDeviceRound(v *view, epoch uint64, after string) []deviceProof {
+func (s *Service) prepareDeviceRound(v *view, epoch uint64) []deviceTarget {
 	rows := v.observation.Rows["Interface"]
 	if len(rows) > MaxRows {
 		return nil
@@ -178,32 +246,54 @@ func (s *Service) prepareDeviceRound(v *view, epoch uint64, after string) []devi
 		}
 	}
 	slices.SortFunc(proofs, func(a, b deviceProof) int { return strings.Compare(a.managementID, b.managementID) })
-	start := sort.Search(len(proofs), func(i int) bool { return proofs[i].managementID > after })
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.devices.epoch != epoch || !deviceViewFresh(s.current, s.failure, s.now()) {
 		return nil
 	}
+	c := &s.devices
 	limit := min(len(proofs), deviceObservationBatch)
-	targets := make([]deviceProof, 0, limit)
-	for i := 0; i < len(proofs) && len(targets) < limit; i++ {
+	priority := make([]deviceTarget, 0, min(limit, deviceEventBatch))
+	selected := make(map[string]bool, cap(priority))
+	dirtyStart := sort.Search(len(proofs), func(i int) bool { return proofs[i].managementID > c.dirtyAfter })
+	for i := 0; i < len(proofs) && len(priority) < cap(priority); i++ {
+		proof := proofs[(dirtyStart+i)%len(proofs)]
+		if entry := c.entries[proof.managementID]; entry.dirty && entry.proof == proof {
+			priority = append(priority, deviceTarget{deviceProof: proof, linkRevision: entry.linkRevision, priority: true})
+			selected[proof.managementID] = true
+		}
+	}
+
+	// Keep separate rotations and interleave work so a tight deadline still
+	// admits both event-driven and regular reads.
+	targets := make([]deviceTarget, 0, limit)
+	start := sort.Search(len(proofs), func(i int) bool { return proofs[i].managementID > c.after })
+	regularLimit := limit - len(priority)
+	for i, regular := 0, 0; i < len(proofs) && regular < regularLimit; i++ {
 		proof := proofs[(start+i)%len(proofs)]
 		current, ok := deviceBinding(s.current, proof.ovsUUID)
-		if !ok || proof != current {
+		if !ok || proof != current || selected[proof.managementID] {
 			continue
 		}
-		if s.devices.entries == nil {
-			s.devices.entries = make(map[string]cachedDevice)
+		entry, exists := c.entries[proof.managementID]
+		if !exists {
+			if c.entries == nil {
+				c.entries = make(map[string]cachedDevice)
+			}
+			entry = cachedDevice{proof: proof, sample: deviceUnavailable("LINUX_OBSERVATION_PENDING")}
+			c.entries[proof.managementID] = entry
 		}
-		if _, exists := s.devices.entries[proof.managementID]; !exists {
-			s.devices.entries[proof.managementID] = cachedDevice{proof: proof, sample: deviceUnavailable("LINUX_OBSERVATION_PENDING")}
+		if len(priority) != 0 {
+			targets = append(targets, priority[0])
+			priority = priority[1:]
 		}
-		targets = append(targets, proof)
+		targets = append(targets, deviceTarget{deviceProof: proof, linkRevision: entry.linkRevision})
+		regular++
 	}
-	return targets
+	return append(targets, priority...)
 }
 
-func observeDeviceRound(ctx context.Context, observer DeviceObserver, targets []deviceProof) ([]DeviceSample, int) {
+func observeDeviceRound(ctx context.Context, observer DeviceObserver, targets []deviceTarget) ([]DeviceSample, int) {
 	samples := make([]DeviceSample, len(targets))
 	work := make(chan int)
 	var workers sync.WaitGroup
