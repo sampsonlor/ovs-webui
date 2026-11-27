@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.32.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted."
+    "version": "1.33.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted. Native FDB observation is opt-in with a qualified bounded OVS witness. Filters, paging and bounded export operate on cached observations."
   },
   "servers": [
     {
@@ -12198,7 +12198,7 @@
         "summary": "listFdb",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "fdb_entry",
         "parameters": [
           {
@@ -12230,6 +12230,43 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1024
+            }
+          },
+          {
+            "name": "mac",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 17,
+              "maxLength": 17,
+              "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$|^([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}$"
+            }
+          },
+          {
+            "name": "vlan",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4095
+            }
+          },
+          {
+            "name": "bridge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
             }
           }
         ],
@@ -12394,7 +12431,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read native OVS FDB observations. Requires state.read and inventory.read and an independent, root-reviewed bounded FDB witness configuration. No write, Linux neighbor inference, or OVS command on request. Sample at most eight enabled Bridges and keep at most 256 entries per Bridge. Pages contain up to 50 sampled rows. Filters and cursors apply to a single immutable sample. observed_at is the oldest included Bridge sample; individual rows preserve their own sample time. Truncated, unavailable, stale and partial coverage remain explicit."
       }
     },
     "/fdb/{fdb_entry_id}": {
@@ -12403,7 +12441,7 @@
         "summary": "readFdbEntry",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "fdb_entry",
         "parameters": [
           {
@@ -12576,7 +12614,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read native OVS FDB observations. Requires state.read and inventory.read and an independent, root-reviewed bounded FDB witness configuration. No write, Linux neighbor inference, or OVS command on request."
       }
     },
     "/neighbors": {
@@ -30682,6 +30721,9 @@
           "lldp": {
             "$ref": "#/components/schemas/LldpAdvertisement"
           },
+          "fdb": {
+            "$ref": "#/components/schemas/FdbObservation"
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -38108,6 +38150,105 @@
         ],
         "additionalProperties": false
       },
+      "FdbObservation": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "mac": {
+            "type": "string",
+            "minLength": 17,
+            "maxLength": 17,
+            "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$|^([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}$"
+          },
+          "vlan": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "bridge_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
+          "bridge_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "port_resolution": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "unmapped",
+              "ambiguous"
+            ]
+          },
+          "port_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "ofport": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65534
+          },
+          "port_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "age_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "last_seen_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "required": [
+          "mac",
+          "vlan",
+          "bridge_name",
+          "bridge_ref",
+          "port_resolution"
+        ],
+        "description": "A sampled native FDB row. The OpenFlow number may be the representative member of a Bond. A Port reference requires an exact logical Port association. Last seen is an estimate derived from the sampled whole-second age. Static rows omit both age and last seen."
+      },
+      "FdbCoverage": {
+        "type": "object",
+        "properties": {
+          "bridges_sampled": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "bridges_total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "entries_sampled": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "entries_total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 34359738360
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bridges_sampled",
+          "bridges_total",
+          "entries_sampled",
+          "entries_total",
+          "truncated"
+        ],
+        "additionalProperties": false,
+        "description": "Bridge coverage applies after Bridge/Port scope selection. Entry counts describe all learned and static rows from sampled Bridges before MAC, VLAN, Port or free-text row filters. The total is the native count across sampled Bridges only."
+      },
       "BridgePage": {
         "type": "object",
         "properties": {
@@ -38906,6 +39047,51 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ovs_fdb"
+            ]
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "degraded"
+            ]
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "unsupported",
+              "not_ready",
+              "timeout",
+              "permission",
+              "source_unavailable",
+              "source_invalid",
+              "no_managed_bridges",
+              "partial",
+              "truncated",
+              "expired",
+              "epoch_changed"
+            ]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/FdbCoverage"
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
           }
         },
         "required": [

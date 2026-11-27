@@ -583,6 +583,7 @@ type Resource struct {
 	Ifindex           int64                      `json:"ifindex,omitempty"`
 	InterfaceName     string                     `json:"interface_name,omitempty"`
 	Lldp              LldpAdvertisement          `json:"lldp,omitempty"`
+	Fdb               FdbObservation             `json:"fdb,omitempty"`
 	RelatedObjectRefs []ResourceRef              `json:"related_object_refs,omitempty"`
 	ExtraFields       map[string]json.RawMessage `json:"-"`
 }
@@ -2184,6 +2185,36 @@ type LldpCoverage struct {
 	ReturnedEntries      int64  `json:"returned_entries"`
 	MaxEntries           int64  `json:"max_entries"`
 }
+type FdbObservation struct {
+	Mac            string                     `json:"mac"`
+	Vlan           int64                      `json:"vlan"`
+	BridgeName     string                     `json:"bridge_name"`
+	BridgeRef      ResourceRef                `json:"bridge_ref"`
+	PortResolution string                     `json:"port_resolution"`
+	PortName       string                     `json:"port_name,omitempty"`
+	Ofport         int64                      `json:"ofport,omitempty"`
+	PortRef        ResourceRef                `json:"port_ref,omitempty"`
+	AgeSeconds     int64                      `json:"age_seconds,omitempty"`
+	LastSeenAt     DateTime                   `json:"last_seen_at,omitempty"`
+	ExtraFields    map[string]json.RawMessage `json:"-"`
+}
+
+func (v *FdbObservation) UnmarshalJSON(data []byte) error {
+	type plain FdbObservation
+	return decodeOpen(data, (*plain)(v), &v.ExtraFields)
+}
+func (v FdbObservation) MarshalJSON() ([]byte, error) {
+	type plain FdbObservation
+	return encodeOpen(plain(v), v.ExtraFields)
+}
+
+type FdbCoverage struct {
+	BridgesSampled int64 `json:"bridges_sampled"`
+	BridgesTotal   int64 `json:"bridges_total"`
+	EntriesSampled int64 `json:"entries_sampled"`
+	EntriesTotal   int64 `json:"entries_total"`
+	Truncated      bool  `json:"truncated"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`
@@ -2465,6 +2496,12 @@ type FdbEntryPage struct {
 	Items              []Resource                 `json:"items"`
 	NextCursor         json.RawMessage            `json:"next_cursor"`
 	Truncated          bool                       `json:"truncated"`
+	Source             string                     `json:"source,omitempty"`
+	Availability       string                     `json:"availability,omitempty"`
+	Freshness          string                     `json:"freshness,omitempty"`
+	Reason             string                     `json:"reason,omitempty"`
+	Coverage           FdbCoverage                `json:"coverage,omitempty"`
+	ObservedAt         DateTime                   `json:"observed_at,omitempty"`
 	ExtraFields        map[string]json.RawMessage `json:"-"`
 }
 

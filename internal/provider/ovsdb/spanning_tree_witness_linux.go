@@ -177,6 +177,12 @@ func attestNativeBuild(ctx context.Context, conn net.Conn, uid uint32, pin Spann
 // checks current authorization before and after each source/build inspection.
 // It has no retry, subprocess, discovery, cache, setter or lock request.
 func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeControl, database Options, expected inventory.Evidence, build SpanningTreeWitnessBuild, bridgeUUID string, authorize func(context.Context) error) (SpanningTreeWitnessSample, error) {
+	return readBoundSpanningTreeWitness(ctx, control, database, expected, build, bridgeUUID, authorize, attestWitnessBuild)
+}
+
+type witnessAttestation func(context.Context, net.Conn, uint32, SpanningTreeWitnessBuild) (string, string, error)
+
+func readBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeControl, database Options, expected inventory.Evidence, build SpanningTreeWitnessBuild, bridgeUUID string, authorize func(context.Context) error, attest witnessAttestation) (SpanningTreeWitnessSample, error) {
 	empty := SpanningTreeWitnessSample{}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -221,7 +227,7 @@ func ReadBoundSpanningTreeWitness(ctx context.Context, control SpanningTreeContr
 			return err
 		}
 		treeEvidenceStep(ctx, "witness-build")
-		attestation, schema, err := attestWitnessBuild(ctx, conn, control.PeerUID, build)
+		attestation, schema, err := attest(ctx, conn, control.PeerUID, build)
 		if err != nil {
 			return err
 		}

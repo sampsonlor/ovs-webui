@@ -49,7 +49,9 @@ def main():
     parser.add_argument('--witness-bin-dir')
     parser.add_argument('--mirror-bin-dir')
     parser.add_argument('--frontend-spanning-execution', action='store_true')
+    parser.add_argument('--fdb-browser', action='store_true')
     args = parser.parse_args()
+    assert not args.fdb_browser or (args.frontend_spanning_execution and args.witness_bin_dir)
     assert os.geteuid() == 0 and Path('/run/systemd/system').is_dir()
     repo = Path(__file__).resolve().parents[2]
     source = Path(args.bin_dir).resolve()
@@ -86,7 +88,8 @@ def main():
         ovs_env['PATH'] = str(binary_dir) + ':' + os.environ['PATH']
         os.environ['PATH'] = ovs_env['PATH']
         if args.witness_bin_dir:
-            profile = repo / 'internal/ovswitness/build-profile-mirror-3.3.9.json'
+            profile = repo / ('internal/fdbbuild/build-profile-fdb-3.3.9.json' if args.fdb_browser else
+                              'internal/ovswitness/build-profile-mirror-3.3.9.json')
             manifest = {'format':'ovs-webui.stp-build.v1', 'profile_sha256':hashlib.sha256(profile.read_bytes()).hexdigest(),
                         'architecture':{'x86_64':'amd64','aarch64':'arm64'}[os.uname().machine], 'variant':'enabled',
                         'executable_sha256':hashlib.sha256((binary_dir / 'ovs-vswitchd').read_bytes()).hexdigest()}
@@ -435,8 +438,15 @@ def main():
                 if args.frontend_spanning_execution:
                     from spanning_tree_frontend import verify_spanning_tree_frontend
                     def exercise(network_metrics):
-                        return verify_spanning_tree_frontend(repo, fixture, args.browser_node, origin, password, call, get,
-                                                             vsctl, units, ovs, manager_db, credentials, network_metrics, eventually)
+                        result = verify_spanning_tree_frontend(
+                            repo, fixture, args.browser_node, origin, password, call, get,
+                            vsctl, units, ovs, manager_db, credentials, network_metrics, eventually)
+                        if args.fdb_browser:
+                            from fdb_frontend import verify_fdb_frontend
+                            result['fdb'] = verify_fdb_frontend(
+                                repo, fixture, args.browser_node, origin, password, call, get,
+                                vsctl, units, ovs, credentials, eventually)
+                        return result
                 else:
                     from frontend import verify_frontend
                     def exercise(network_metrics):

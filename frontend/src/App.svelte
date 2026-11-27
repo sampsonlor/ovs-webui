@@ -25,6 +25,7 @@
   import Statistics from './Statistics.svelte';
   import Neighbors from './Neighbors.svelte';
   import Lldp from './Lldp.svelte';
+  import Fdb from './Fdb.svelte';
 
   const controller = start();
   const model = controller.store;
@@ -191,6 +192,7 @@
         <Link href="/visibility/statistics" current={path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')}>Statistics</Link>
         <Link href="/visibility/neighbors" current={path === '/visibility/neighbors' || path.startsWith('/visibility/neighbors/')}>Neighbors</Link>
         <Link href="/visibility/lldp" current={path === '/visibility/lldp' || path.startsWith('/visibility/lldp/')}>LLDP</Link>
+        <Link href="/visibility/fdb" current={path === '/visibility/fdb' || path.startsWith('/visibility/fdb/')}>FDB</Link>
       </nav>
       <nav aria-label="Change Control" class="nav-section">
         <p class="eyebrow">Shared Change Control</p>
@@ -404,7 +406,7 @@
                 </div>
                 <Status value={port.vlan.source.freshness} />
               </header>
-              <p class="actions"><Link href={`/visibility/statistics?port_id=${encodeURIComponent(port.management_id)}`}>Review member Interface statistics</Link></p>
+              <p class="actions"><Link href={`/visibility/statistics?port_id=${encodeURIComponent(port.management_id)}`}>Review member Interface statistics</Link><Link href={`/visibility/fdb?port=${encodeURIComponent(port.management_id)}`}>Review Port FDB</Link></p>
               <section class="panel">
                 <h2>Bridge → Port → Interface</h2>
                 <div class="topology">
@@ -489,6 +491,8 @@
           <Neighbors model={$model} {expert} />
         {:else if path === '/visibility/lldp' || path.startsWith('/visibility/lldp/')}
           <Lldp model={$model} {expert} />
+        {:else if path === '/visibility/fdb' || path.startsWith('/visibility/fdb/')}
+          <Fdb model={$model} {expert} />
         {:else if path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')}
           <Tunnels model={$model} {expert} {desktop}/>
         {:else if path === '/switching/multicast' || path.startsWith('/switching/multicast/')}
@@ -529,7 +533,7 @@
             <button onclick={() => controller.refresh()}>Refresh resource</button>
           </header>
           {#if path === '/bridges'}<p>Select a Bridge to review its Interfaces, or <Link href="/interfaces">review all Interfaces</Link>.</p>{/if}
-          {#if path.startsWith('/bridges/') && $model.resource.value}<p class="actions"><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link><Link href={`/visibility/telemetry/${String($model.resource.value.id)}`}>Review Telemetry</Link><Link href={`/visibility/statistics?bridge_id=${String($model.resource.value.id)}`}>Review Bridge statistics</Link></p>{/if}
+          {#if path.startsWith('/bridges/') && $model.resource.value}<p class="actions"><Link href={`/switching/spanning-tree/${String($model.resource.value.id)}`}>Review STP / RSTP</Link><Link href={`/visibility/telemetry/${String($model.resource.value.id)}`}>Review Telemetry</Link><Link href={`/visibility/statistics?bridge_id=${String($model.resource.value.id)}`}>Review Bridge statistics</Link><Link href={`/visibility/fdb?bridge=${String($model.resource.value.id)}`}>Review Bridge FDB</Link></p>{/if}
           <LoadNotice load={$model.resource} />
           {#if $model.resource.value}
             {@const resource = $model.resource.value}
@@ -706,6 +710,11 @@
             <h2>LLDP</h2>
             <p>Review advertisements received on opted-in managed Interfaces.</p>
             <Link href="/visibility/lldp">Open LLDP</Link>
+          </section>
+          <section class="panel">
+            <h2>FDB</h2>
+            <p>Review native forwarding entries on managed Bridges.</p>
+            <Link href="/visibility/fdb">Open FDB</Link>
           </section>
           <Link href="/operations/events">Inspect current Events →</Link>
         {:else}<h1>Page unavailable</h1>

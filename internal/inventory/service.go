@@ -28,6 +28,7 @@ type view struct {
 	sequence      uint64
 }
 type Service struct {
+	fdb                            fdbCache
 	lldp                           lldpCache
 	neighbors                      neighborCache
 	statisticsMu                   sync.Mutex
@@ -116,6 +117,7 @@ func (s *Service) install(o Observation, d Decision) {
 			}
 		}
 	}
+	s.fdb.install(v)
 	s.current = v
 	s.failure = ""
 	s.devices.prune(v)
@@ -128,6 +130,7 @@ func (s *Service) Unavailable(code string) {
 	s.devices.invalidate()
 	s.neighbors.invalidate("NEIGHBORS_RESYNCING")
 	s.lldp.invalidate("OVS_ASSOCIATION_STALE")
+	s.fdb.invalidate()
 }
 func (s *Service) Accept(ctx context.Context, digest, reason string) error {
 	s.mu.RLock()
@@ -173,6 +176,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	}
 	if op == "listNeighbors" || op == "readNeighbor" {
 		return s.readNeighbors(op, path, q, c)
+	}
+	if op == "listFdb" || op == "readFdbEntry" {
+		return s.readFDB(op, path, q, c)
 	}
 	if op == "listLldp" || op == "readLldpNeighbor" {
 		return s.readLLDP(op, path, q, c)

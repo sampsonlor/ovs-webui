@@ -53,7 +53,7 @@ func (r *Repository) checkOperation(ctx context.Context, q querier, credential s
 	}
 	// Receipt/job access checks ownership in its domain. Observation readers check
 	// inventory permission and resolve volatile IDs in their scoped samples.
-	if op.ID != "readRequestReceipt" && op.ID != "readNeighbor" && op.ID != "readLldpNeighbor" && !evidence.Operation(op.ID) {
+	if op.ID != "readRequestReceipt" && op.ID != "readNeighbor" && op.ID != "readLldpNeighbor" && op.ID != "readFdbEntry" && !evidence.Operation(op.ID) {
 		if err = checkRefs(ctx, q, c, refs); err != nil {
 			return c, err
 		}

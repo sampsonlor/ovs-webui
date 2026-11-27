@@ -1,0 +1,39 @@
+{
+  "abi": "ovs-webui.fdb-sample.v1",
+  "archive_sha256": "64e2d425eb34cafc405b641ca6ecacf2453ee37b9aa50b4b17dfb88aa9e7a52e",
+  "cflags": "-O1 -g -Werror",
+  "configure": [
+    "--enable-ssl",
+    "--disable-libcapng",
+    "--disable-shared",
+    "--enable-static",
+    "--enable-ovs-webui-witness",
+    "--enable-ovs-webui-mirror-fix"
+  ],
+  "database_schema_digest": "7f80147dcd380ce8534ae2db44f6250bc6d39736cf00aa950385e266f690dd49",
+  "files": {
+    "extensions/ovs-witness/3.3.9/fdb.patch": "5adf791c3fe9127a6267023f162a280add7836016b22a9a9b5c593852b9c89a2",
+    "extensions/ovs-witness/apply_fdb.py": "be24253a9ba353463bc15b82a324c11e8917059d9318dca11c2cf74b2f9fb792",
+    "extensions/ovs-witness/fdb-overlay/lib/ovs-webui-fdb.h": "0a6214dd7e6dff581a5bf15cc0d4481c70725806befecafa190915cc7cbfa0cb",
+    "extensions/ovs-witness/fdb-overlay/ofproto/ovs-webui-fdb-snapshot.inc": "ca20e0f69595d33dc1e6274bd4fdc7986ecf7d313e85d626afb424376844c9cb",
+    "extensions/ovs-witness/fdb-overlay/vswitchd/ovs-webui-fdb-sample.inc": "fe4145e9e347d744ba1a91987eb10f19f8eee0094ce4975e446e92caeb55050e"
+  },
+  "format": "ovs-webui.fdb-build-profile.v1",
+  "libs": "-lm",
+  "native_mirror_profile_sha256": "e7a20b370a13b933fb40fe0156f1f2057a592e4bd87e14b0236bf1f4479d5788",
+  "parent_profile_sha256": "5257eb830326b56e410d5ecd59b5806bd5a11296cd0090c4da5c5e820ceaa23d",
+  "runtime": "3.3.9",
+  "upstream_commit": "1a3fefbcd0b0f70ced621b92e286fef3dffaac09",
+  "variants": {
+    "enabled": {},
+    "sanitized": {
+      "cflags": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+      "ldflags": "-fsanitize=address,undefined"
+    }
+  },
+  "witness_inputs": {
+    "configure.ac": "0bd5cfc2a7281a096d5bac913ca9b41ef79a419cc0eb92f1ffe05c9227ddafef",
+    "ofproto/ofproto-dpif.c": "a39531a6ae58c2ca9743ba8723cac4d6d21ebf41acc282d6f60d70036296f6b2",
+    "vswitchd/bridge.c": "70aef8d81d8e3455f3f1910b709e4b3b1d3006e91625ca76487e0c4bcb8ff45c"
+  }
+}

@@ -9,6 +9,7 @@ import socket
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -17,7 +18,7 @@ import uuid
 VERSION = os.environ["OVS_WITNESS_VERSION"]
 assert VERSION in ["3.3.9", "3.7.1", "4.0.0"]
 EXTENSION = Path("extensions/ovs-witness") / VERSION
-PROFILE = Path("internal/ovswitness") / ("build-profile-mirror-" + VERSION + ".json")
+PROFILE = Path("internal/fdbbuild") / ("build-profile-fdb-" + VERSION + ".json")
 
 def control(path, method, args):
     with socket.socket(socket.AF_UNIX) as sock:
@@ -181,7 +182,7 @@ def mirror_write(f, mode, report):
     if mode == 'default':
         env['OVS_MIRROR_REPRODUCE_UNFIXED']='1'
     else:
-        env['OVS_MIRROR_BUILD_PROFILE']=hashlib.sha256((Path('extensions/ovs-mirror-delete')/VERSION/'build-profile.json').read_bytes()).hexdigest()
+        env['OVS_MIRROR_BUILD_PROFILE']=hashlib.sha256(PROFILE.read_bytes()).hexdigest()
         env['OVS_MIRROR_BUILD_VARIANT']='witness-'+mode
     writer_ns = 'ow-mi-'+uuid.uuid4().hex[:8]
     subprocess.run(['ip', 'netns', 'add', writer_ns], check=True, timeout=5)
@@ -694,6 +695,82 @@ def extended(f, report):
     case("real_database_disconnect_and_reconnect_do_not_reuse_authority_epoch", connection_reset)
 
 
+def fdb_sample_fixture(f, report):
+    """Check the native command on disposable Linux Bridges and one veth."""
+    bridge, port, peer = "br-fdb", "fdb-port", "fdb-peer"
+    method = "ovs-webui/fdb-sample-v1"
+    ctl = f.root / "vsd.ctl"
+    f.vsctl("add-br", bridge)
+    bridge_uuid = f.vsctl("get", "Bridge", bridge, "_uuid")
+
+    def sample():
+        outer = control(ctl, method, [bridge_uuid, bridge])
+        assert outer.get("error") is None, outer
+        value = json.loads(outer["result"])
+        assert set(value) == {"version", "bridge_uuid", "bridge_name", "total", "rows"}
+        assert value["version"] == 1 and value["bridge_uuid"] == bridge_uuid and value["bridge_name"] == bridge
+        assert len(value["rows"]) == min(value["total"], 256)
+        for row in value["rows"]:
+            assert set(row) == {"mac", "vlan", "ofport", "port_name", "age_seconds"}
+        return value
+
+    assert sample()["total"] == 0
+    for params in [[bridge_uuid], [bridge_uuid, bridge, "1"], [f.bridge_uuid, bridge],
+                   [bridge_uuid, "br-witness"], [bridge_uuid.upper(), bridge], [bridge_uuid, "../sock"]]:
+        response = control(ctl, method, params)
+        assert response.get("error") and response.get("result") is None, response
+    report["cases"].append({"name": "fdb_fixed_bridge_binding_and_empty_sample", "status": "pass"})
+
+    f.network("link", "add", port, "type", "veth", "peer", "name", peer)
+    f.vsctl("add-port", bridge, port, "--", "set", "Port", port, "tag=27")
+    f.network("link", "set", port, "up")
+    f.network("link", "set", peer, "up")
+    ofport = int(f.vsctl("get", "Interface", port, "ofport"))
+    assert ofport > 0
+    static, learned = "02:00:70:10:00:01", "02:00:70:10:00:02"
+    response = control(ctl, "fdb/add", [bridge, port, "27", static])
+    assert response.get("error") is None, response
+    frame = bytes.fromhex("ff ff ff ff ff ff 02 00 70 10 00 02 88 b5") + bytes(46)
+    code = ("import socket; "
+            "s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x88b5)); "
+            "s.bind((" + repr(peer) + ", 0x88b5)); s.send(bytes.fromhex(" + repr(frame.hex()) + "))")
+    subprocess.run(["ip", "netns", "exec", f.ns, sys.executable, "-c", code],
+                   check=True, timeout=5)
+    deadline = time.monotonic() + 5
+    while True:
+        rows = {row["mac"]: row for row in sample()["rows"]}
+        if learned in rows:
+            break
+        assert time.monotonic() < deadline, "OVS did not learn the isolated veth frame"
+        time.sleep(.05)
+    assert static in rows and rows[static]["age_seconds"] is None
+    assert isinstance(rows[learned]["age_seconds"], int) and rows[learned]["age_seconds"] >= 0
+    for mac in [static, learned]:
+        row = rows[mac]
+        assert (row["vlan"], row["port_name"], row["ofport"]) == (27, port, ofport), row
+    report["cases"].append({"name": "fdb_static_and_learned_veth_rows", "status": "pass"})
+
+    for i in range(260):
+        mac = f"02:00:70:11:{i >> 8:02x}:{i & 255:02x}"
+        response = control(ctl, "fdb/add", [bridge, port, "27", mac])
+        assert response.get("error") is None, response
+    bounded = sample()
+    assert bounded["total"] >= 262 and len(bounded["rows"]) == 256
+    assert len({(r["mac"], r["vlan"]) for r in bounded["rows"]}) == 256
+    report["fdb_sample"] = {"native_total": bounded["total"], "returned_rows": len(bounded["rows"])}
+    report["cases"].append({"name": "fdb_native_cap_has_explicit_total", "status": "pass"})
+
+    f.vsctl("del-br", bridge)
+    f.vsctl("add-br", bridge)
+    replacement = f.vsctl("get", "Bridge", bridge, "_uuid")
+    assert replacement != bridge_uuid
+    wrong = control(ctl, method, [bridge_uuid, bridge])
+    assert wrong.get("error") and wrong.get("result") is None, wrong
+    f.vsctl("del-br", bridge)
+    f.network("link", "del", port)
+    report["cases"].append({"name": "fdb_same_name_replacement_cannot_reuse_uuid", "status": "pass"})
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ["build", "source", "mode", "report"]:
@@ -724,6 +801,8 @@ def main():
                 report["cases"].append({"name": "kernel_rstp_exclusive_local_snapshot", "status": "pass"})
                 extended(f, report)
                 multicast_groups(f,args.mode,report)
+                assert "ovs-webui/fdb-sample-v1" in listing
+                fdb_sample_fixture(f, report)
             multicast_write(f,args.mode,report)
             static_tunnel_write(f,args.mode,report)
             mirror_write(f,args.mode,report)

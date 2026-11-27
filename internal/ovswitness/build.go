@@ -6,6 +6,8 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+
+	"github.com/sampsonlor/ovs-webui/internal/fdbbuild"
 )
 
 //go:embed build-profile.json build-profile-3.7.1.json build-profile-4.0.0.json build-profile-mirror-*.json
@@ -62,5 +64,12 @@ func LookupBuildProfile(digest string) (QualifiedBuildProfile, bool) {
 			return QualifiedBuildProfile{Version: version, Digest: digest, Schema: p.Schema}, true
 		}
 	}
-	return QualifiedBuildProfile{}, false
+	return LookupFDBBuildProfile(digest)
+}
+
+// LookupFDBBuildProfile admits only profiles containing the reviewed optional
+// FDB patch. Older witnesses may still attest their original read operations.
+func LookupFDBBuildProfile(digest string) (QualifiedBuildProfile, bool) {
+	p, ok := fdbbuild.Lookup(digest)
+	return QualifiedBuildProfile{Version: p.Version, Digest: p.Digest, Schema: p.Schema}, ok
 }

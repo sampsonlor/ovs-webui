@@ -103,6 +103,11 @@ func run() int {
 	localQoSCreate := flag.String("local-qos-create-names", "", "Reviewed comma-separated names for creating unbound QoS profiles")
 	localTelemetry := flag.String("local-telemetry-bindings", "", "Reviewed comma-separated Bridge management ID:protocol pairs for Telemetry configuration")
 	lldpInterfaces := flag.String("lldp-observe-interfaces", "", "Opt-in passive LLDP on up to 16 exact Interface management IDs, separated by commas")
+	fdbBridges := flag.String("fdb-observe-bridges", "", "Opt-in native FDB observation for up to eight exact Bridge management IDs, separated by commas")
+	fdbControl := flag.String("fdb-witness-socket", "", "Explicit local ovs-vswitchd control socket for the bounded FDB witness")
+	fdbExecutable := flag.String("fdb-witness-executable", "", "Root-owned executable of the qualified optional FDB witness build")
+	fdbManifest := flag.String("fdb-witness-manifest", "", "Root-owned manifest of the exact FDB witness build")
+	fdbManifestDigest := flag.String("fdb-witness-manifest-sha256", "", "Reviewed SHA256 of the exact optional FDB witness build manifest")
 	localInternalPortDeleteTargets := flag.String("local-internal-port-delete-targets", "", "Reviewed Bridge management-id:managed-internal-port-name deletion grants; independent of creation authority")
 	localInternalPortTargets := flag.String("local-internal-port-targets", "", "Reviewed existing Bridge management-id:new-internal-port-name pairs; independent of VLAN/Bond/Bridge authority")
 	localBridgeNames := flag.String("local-bridge-create-names", "", "Reviewed names for NEW isolated system Bridges only; never adopts an existing object")
@@ -115,6 +120,11 @@ func run() int {
 		return 0
 	}
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
+	fdbConfigured := *fdbBridges != "" || *fdbControl != "" || *fdbExecutable != "" || *fdbManifest != "" || *fdbManifestDigest != ""
+	if fdbConfigured && (*fdbBridges == "" || *fdbControl == "" || *fdbExecutable == "" || *fdbManifest == "" || *fdbManifestDigest == "") {
+		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_FDB_WITNESS_CONFIGURATION")
+		return 2
+	}
 	multicastGroupsConfigured := *multicastControl != "" || *multicastExecutable != "" || *multicastManifest != "" || *multicastManifestDigest != ""
 	if multicastGroupsConfigured && (*multicastControl == "" || *multicastExecutable == "" || *multicastManifest == "" || *multicastManifestDigest == "") {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_MULTICAST_GROUP_SOURCE")
@@ -638,8 +648,24 @@ func run() int {
 				return 2
 			}
 		}
+		if fdbConfigured {
+			build := ovsprovider.SpanningTreeWitnessBuild{Executable: *fdbExecutable, Manifest: *fdbManifest, ManifestDigest: *fdbManifestDigest}
+			observer, observeErr := provider.FDBObserver(*fdbControl, uint32(*ovsUID), build)
+			if observeErr == nil {
+				observeErr = inventoryService.SetFDBObserver(observer, strings.Split(*fdbBridges, ","))
+			}
+			if observeErr != nil {
+				logger.Error("service_start_failed", "code", "INVALID_FDB_WITNESS_CONFIGURATION")
+				return 2
+			}
+		}
 		providerCtx, cancelProvider := context.WithCancel(ctx)
 		defer cancelProvider()
+		if fdbConfigured && *acceptEvidence == "" {
+			fdbDone := make(chan struct{})
+			go func() { defer close(fdbDone); inventoryService.RunFDB(providerCtx) }()
+			defer func() { cancelProvider(); <-fdbDone }()
+		}
 		providerDone := make(chan struct{})
 		go func() { defer close(providerDone); provider.Run(providerCtx, inventoryService) }()
 		if err = inventoryService.ConfigureStatistics(provider); err != nil {
