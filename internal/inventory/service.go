@@ -177,6 +177,9 @@ func (s *Service) Read(ctx context.Context, op string, path map[string]string, q
 	if op == "listNeighbors" || op == "readNeighbor" {
 		return s.readNeighbors(op, path, q, c)
 	}
+	if op == "listEndpoints" || op == "readEndpoint" {
+		return s.readEndpoints(op, path, q, c)
+	}
 	if op == "listFdb" || op == "readFdbEntry" {
 		return s.readFDB(op, path, q, c)
 	}

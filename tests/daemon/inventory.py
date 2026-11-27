@@ -442,10 +442,15 @@ def main():
                             repo, fixture, args.browser_node, origin, password, call, get,
                             vsctl, units, ovs, manager_db, credentials, network_metrics, eventually)
                         if args.fdb_browser:
-                            from fdb_frontend import verify_fdb_frontend
+                            from fdb_frontend import prepare_observer_accounts, verify_fdb_frontend
+                            from endpoints_frontend import verify_endpoints_frontend
+                            accounts = prepare_observer_accounts(password, call, get, credentials)
                             result['fdb'] = verify_fdb_frontend(
-                                repo, fixture, args.browser_node, origin, password, call, get,
-                                vsctl, units, ovs, credentials, eventually)
+                                repo, fixture, args.browser_node, origin, accounts, call, get,
+                                vsctl, units, ovs, eventually)
+                            result['endpoints'] = verify_endpoints_frontend(
+                                repo, fixture, args.browser_node, origin, accounts, call, get,
+                                vsctl, units, ovs, eventually)
                         return result
                 else:
                     from frontend import verify_frontend

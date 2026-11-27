@@ -44,13 +44,21 @@ func selectFDB(v *view, q url.Values) (fdbSelection, error) {
 		}
 		selection.limit = limit
 	}
-	for _, id := range []string{selection.bridge, selection.port} {
+	bridge, err := selectManagedBridgePort(v, selection.bridge, selection.port, "INVALID_FDB_FILTER")
+	selection.bridge = bridge
+	return selection, err
+}
+
+// Scope by the current managed topology before either observation is projected.
+func selectManagedBridgePort(v *view, bridge, port, invalidCode string) (string, error) {
+	invalid := apitypes.Fail(422, invalidCode)
+	for _, id := range []string{bridge, port} {
 		if id != "" && !apitypes.ManagementID(id) {
-			return selection, invalid
+			return "", invalid
 		}
 	}
 	roots := refs(v.observation.Rows["Open_vSwitch"][v.observation.Evidence.Root].Values["bridges"])
-	if selection.port != "" {
+	if port != "" {
 		parent := ""
 		for _, uuid := range roots {
 			b := v.decision.Bindings[Key("Bridge", uuid)]
@@ -59,30 +67,30 @@ func selectFDB(v *view, q url.Values) (fdbSelection, error) {
 			}
 			for _, pid := range refs(v.observation.Rows["Bridge"][uuid].Values["ports"]) {
 				p := v.decision.Bindings[Key("Port", pid)]
-				if p.State != "active" || p.ManagementID != selection.port {
+				if p.State != "active" || p.ManagementID != port {
 					continue
 				}
 				if parent != "" && parent != b.ManagementID {
-					return selection, invalid
+					return "", invalid
 				}
 				parent = b.ManagementID
 			}
 		}
 		if parent == "" {
-			return selection, apitypes.Fail(404, "NOT_FOUND")
+			return "", apitypes.Fail(404, "NOT_FOUND")
 		}
-		if selection.bridge != "" && selection.bridge != parent {
-			return selection, invalid
+		if bridge != "" && bridge != parent {
+			return "", invalid
 		}
-		selection.bridge = parent
+		bridge = parent
 	}
-	if selection.bridge != "" && !slices.ContainsFunc(roots, func(uuid string) bool {
+	if bridge != "" && !slices.ContainsFunc(roots, func(uuid string) bool {
 		b := v.decision.Bindings[Key("Bridge", uuid)]
-		return b.State == "active" && b.ManagementID == selection.bridge
+		return b.State == "active" && b.ManagementID == bridge
 	}) {
-		return selection, apitypes.Fail(404, "NOT_FOUND")
+		return "", apitypes.Fail(404, "NOT_FOUND")
 	}
-	return selection, nil
+	return bridge, nil
 }
 
 func (s fdbSelection) matches(e fdbEntry) bool {

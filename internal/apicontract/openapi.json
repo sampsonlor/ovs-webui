@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.33.0",
-    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted. Native FDB observation is opt-in with a qualified bounded OVS witness. Filters, paging and bounded export operate on cached observations."
+    "version": "1.34.0",
+    "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted. Endpoints combines the view of FDB, ARP/NDP and LLDP while preserving independent scope, provenance and coverage. Native FDB observation is opt-in with a qualified bounded OVS witness. Filters, paging and bounded export operate on cached observations."
   },
   "servers": [
     {
@@ -11811,7 +11811,7 @@
         "summary": "listEndpoints",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "endpoint",
         "parameters": [
           {
@@ -11843,6 +11843,54 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 1024
+            }
+          },
+          {
+            "name": "mac",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 17,
+              "maxLength": 17,
+              "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$|^([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}$"
+            }
+          },
+          {
+            "name": "ip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 45,
+              "description": "IPv4 or IPv6 address without an interface zone."
+            }
+          },
+          {
+            "name": "vlan",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4095
+            }
+          },
+          {
+            "name": "bridge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
             }
           }
         ],
@@ -12007,7 +12055,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read scoped FDB, ARP/NDP and LLDP evidence from shared observation caches. Requires inventory.read and state.read. Source gaps and provenance remain explicit. Browser reads do not invoke native collectors. Exact Bridge, Port, VLAN, MAC and IP filters require independent source evidence. Unqualified sources are excluded with explicit coverage explanations. Cursors bind filters and the current observation set. At most 50 rows per page and two evidence records per row."
       }
     },
     "/endpoints/{endpoint_id}": {
@@ -12016,7 +12065,7 @@
         "summary": "readEndpoint",
         "x-capability": "state.read",
         "x-service-issue": 44,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "endpoint",
         "parameters": [
           {
@@ -12025,6 +12074,17 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "ip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 45,
+              "description": "IPv4 or IPv6 address without an interface zone."
             }
           }
         ],
@@ -12189,7 +12249,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Read scoped FDB, ARP/NDP and LLDP evidence from shared observation caches. Requires inventory.read and state.read. Source gaps and provenance remain explicit. Browser reads do not invoke native collectors. At most 12 evidence records. The optional IP parameter prioritizes matching address evidence within this bounded preview. Missing identities under incomplete coverage return 503."
       }
     },
     "/fdb": {
@@ -30724,6 +30785,9 @@
           "fdb": {
             "$ref": "#/components/schemas/FdbObservation"
           },
+          "endpoint": {
+            "$ref": "#/components/schemas/EndpointObservation"
+          },
           "related_object_refs": {
             "type": "array",
             "items": {
@@ -38249,6 +38313,242 @@
         "additionalProperties": false,
         "description": "Bridge coverage applies after Bridge/Port scope selection. Entry counts describe all learned and static rows from sampled Bridges before MAC, VLAN, Port or free-text row filters. The total is the native count across sampled Bridges only."
       },
+      "EndpointEvidence": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "ip": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 45,
+            "description": "IPv4 or IPv6 address without an interface zone."
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "ipv4",
+              "ipv6"
+            ]
+          },
+          "mac": {
+            "type": "string",
+            "minLength": 17,
+            "maxLength": 17,
+            "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$|^([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}$"
+          },
+          "vlan": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "ofport": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65534
+          },
+          "port_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "port_resolution": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "unmapped",
+              "ambiguous"
+            ]
+          },
+          "chassis_id": {
+            "$ref": "#/components/schemas/LldpIdentifier"
+          },
+          "lldp_port_id": {
+            "$ref": "#/components/schemas/LldpIdentifier"
+          },
+          "system_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "ttl_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "last_seen_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "required": [
+          "ref",
+          "source",
+          "state"
+        ],
+        "description": "One retained evidence row and its source, using the exact resource reference of that observation. FDB last seen is an estimate from native age. LLDP last seen is the receive time of an advertisement."
+      },
+      "EndpointObservation": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "fdb",
+              "neighbor",
+              "lldp"
+            ]
+          },
+          "mac": {
+            "type": "string",
+            "minLength": 17,
+            "maxLength": 17,
+            "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$|^([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}$"
+          },
+          "vlan": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "bridge_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "bridge_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "port_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "port_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "interface_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "interface_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 45,
+              "description": "IPv4 or IPv6 address without an interface zone."
+            },
+            "minItems": 0,
+            "maxItems": 12
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EndpointEvidence"
+            },
+            "minItems": 1,
+            "maxItems": 12
+          },
+          "evidence_total": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2048
+          },
+          "evidence_truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "basis",
+          "addresses",
+          "evidence",
+          "evidence_total",
+          "evidence_truncated"
+        ],
+        "description": "Scoped endpoint evidence. FDB, Linux ARP/NDP and LLDP retain independent evidence and source authority. ARP/NDP may group reported usable MAC bindings on the very same managed local Interface. A matching value across protocols never establishes identity or VLAN association. Addresses describe the evidence shown."
+      },
+      "EndpointSourceCoverage": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fdb",
+              "neighbor",
+              "lldp"
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "scope_reason": {
+            "type": "string",
+            "enum": [
+              "VLAN_NOT_REPORTED",
+              "IP_NOT_REPORTED",
+              "MAC_NOT_VERIFIED"
+            ]
+          },
+          "scope_unit": {
+            "type": "string",
+            "enum": [
+              "bridge",
+              "interface"
+            ]
+          },
+          "eligible": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "observed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2048
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "availability",
+          "scope_unit",
+          "eligible",
+          "observed",
+          "truncated"
+        ],
+        "description": "Independent provider freshness and coverage for the selected topology. scope_reason means this provider cannot establish the requested exact row filter. Coverage counts are prior to row filtering."
+      },
       "BridgePage": {
         "type": "object",
         "properties": {
@@ -38998,6 +39298,35 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "degraded",
+              "unavailable"
+            ]
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "matched": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4352
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EndpointSourceCoverage"
+            },
+            "minItems": 3,
+            "maxItems": 3
           }
         },
         "required": [
