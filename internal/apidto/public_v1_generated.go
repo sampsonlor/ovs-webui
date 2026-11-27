@@ -856,6 +856,7 @@ type LinuxDeviceObservation struct {
 	Ifindex      json.RawMessage            `json:"ifindex"`
 	Source       Source                     `json:"source"`
 	Fields       map[string]json.RawMessage `json:"fields"`
+	Hardware     LinuxHardwareObservation   `json:"hardware,omitempty"`
 	ExtraFields  map[string]json.RawMessage `json:"-"`
 }
 
@@ -868,6 +869,17 @@ func (v LinuxDeviceObservation) MarshalJSON() ([]byte, error) {
 	return encodeOpen(plain(v), v.ExtraFields)
 }
 
+type LinuxHardwareField struct {
+	Value        json.RawMessage `json:"value"`
+	Availability string          `json:"availability"`
+	Reason       string          `json:"reason"`
+	Source       Source          `json:"source"`
+}
+type LinuxHardwareObservation struct {
+	PciFunction LinuxHardwareField `json:"pci_function"`
+	SwitchPort  LinuxHardwareField `json:"switch_port"`
+	Connector   LinuxHardwareField `json:"connector"`
+}
 type LinuxPolicingAction struct {
 	FilterKind       string                     `json:"filter_kind"`
 	Priority         int64                      `json:"priority"`

@@ -308,6 +308,10 @@ func statisticAssociation(v *view, binding Binding) string {
 	}
 	slices.Sort(ports)
 	slices.Sort(bridges)
-	row := v.observation.Rows["Interface"][binding.UUID]
+	return statisticAssociationDigest(v, binding.UUID, ports, bridges)
+}
+
+func statisticAssociationDigest(v *view, uuid string, ports, bridges []string) string {
+	row := v.observation.Rows["Interface"][uuid]
 	return Digest([]any{ports, bridges, row.Values["ifindex"], row.Values["ofport"], row.Values["name"], row.Values["type"], v.observation.Evidence.Peer})
 }

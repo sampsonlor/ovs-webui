@@ -30,6 +30,12 @@ OVS stale、类型或 ifindex 不可证明、sysfs 不可用、设备消失、�
 
 设备本身已证明、但没有硬件关联的字段使用中性 unavailable 标记，避免把正常虚拟接口缺少 PCI 信息呈现为设备故障；关联不匹配、来源不可用等真实例外仍明确提示。
 
+## #44 硬件角色证据
+
+Interface 详情的可选 `linux_device.hardware` 报告三个独立字段，分别记录采集时间、新鲜度和权威来源。`pci_function` 由实际 PCI 元数据确认 SR-IOV PF 或 VF。`switch_port` 从该 netdevice 的 `RTM_GETLINK` 句柄定位 devlink 对象，以只读 `PORT_GET` 核对 devlink 句柄、端口索引、Ethernet netdevice 名称和 ifindex 后，呈现内核声明的物理端口或 PF/VF/SF representor。`connector` 在同一 devlink 物理端口证明内读取 ethtool `LINKINFO` 介质。链路句柄在读取前后都要匹配，设备关联由原有 sysfs 检查复核。 [PCI sysfs ABI](https://www.kernel.org/doc/html/v5.13/admin-guide/abi-testing.html#file-sysfs-bus-pci) · [Linux devlink 端口类型](https://www.kernel.org/doc/html/latest/networking/devlink/devlink-port.html) · [ethtool LINKINFO](https://docs.kernel.org/networking/ethtool-netlink.html#linkinfo-get)
+
+观察复用共享 Interface 样本及现有采集预算，每个接口的 devlink 与 ethtool 查询共同使用 45ms 截止时间。缺少匹配的内核证据时显示 Unknown。介质表示驱动报告，机箱端口号与线缆连接状态仍需现场证据。虚拟网卡、PCI 子系统归属、Linux carrier 和 OVS link state 各有独立语义。真实 veth 验证缺少硬件证据时的表现。对应物理端口、SR-IOV 设备及 representor 仍需现场独立验收。
+
 ## #44 共享采样
 
 `ovs-mgrd` 每秒启动一次有界采样轮次，每轮最多安排 24 个已确认的 Interface，两个 worker 共用 500ms 时间预算。采样按管理 ID 轮转，容量压力下继续轮到其余设备。每个 Interface 最多保留一份 RAM 样本，条目总数受库存 2048 行上限约束。详情读取共享结果，列表维持原有投影。页面刷新读取已发布的样本及其采样时间。
@@ -38,7 +44,7 @@ OVS stale、类型或 ifindex 不可证明、sysfs 不可用、设备消失、�
 
 mgrd 使用一个 `NETLINK_ROUTE` 的链路订阅接收内核 `RTM_NEWLINK` 和 `RTM_DELLINK` 通知。监听器校验数据报来源和结构，合并重复 ifindex，并按固定时间窗口、数据报数和索引数限制每批。命中已确认的 Interface 时，缓存立即进入待采样状态。下一轮的 24 个名额中最多 12 个优先用于受影响的 Interface，其余名额继续按管理 ID 轮转。发布仍以重新核验的 sysfs 样本为依据。在途样本跨越通知或可检测的通知缺口时会丢弃。
 
-通知溢出、截断或订阅中断会使 Linux 设备样本进入待采样状态，并由既有有界轮询重建。订阅带有上限的重试间隔。初次订阅不可用时，由周期采样提供当前状态。后续由 #44 继续跟踪邻居事件、硬件角色证明及共享流通知。 [rtnetlink 消息定义](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/rtnetlink.h) · [Netlink 通知与丢失](https://man7.org/linux/man-pages/man7/netlink.7.html)
+通知溢出、截断或订阅中断会使 Linux 设备样本进入待采样状态，并由既有有界轮询重建。订阅带有上限的重试间隔。初次订阅不可用时，由周期采样提供当前状态。ARP/NDP 使用独立的邻居事件订阅，Statistics 详情使用共享流提示。 [rtnetlink 消息定义](https://github.com/torvalds/linux/blob/v6.8/include/uapi/linux/rtnetlink.h) · [Netlink 通知与丢失](https://man7.org/linux/man-pages/man7/netlink.7.html)
 
 本地 Windows 检查不能运行 Linux 设备验收。双架构 native CI 使用真实 kernel sysfs loopback 和正式 Go/OVS 浏览器中的隔离 veth：验证 index、MTU、carrier up/down、消失、同名新设备拒绝、配置权限隐藏与原生 provider stale。PCI/USB/driver 的成功解析使用受限 sysfs 文件系统夹具，不能等同真实 NIC/DPDK/Offload 硬件 qualification。三份 OVS schema fixture 亦不代表三个 daemon 二进制版本。
 

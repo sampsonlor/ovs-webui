@@ -77,6 +77,40 @@ func (f *statisticsTest) read(t *testing.T) map[string]any {
 	return out.(map[string]any)["statistics"].(map[string]any)
 }
 
+func TestStatisticVersionsMatchAuthorizedReadsWithoutSampling(t *testing.T) {
+	f := newStatisticsTest(t)
+	f.claims.Capabilities = []string{"inventory.read", "state.read"}
+	f.set("rx_bytes", "10")
+	f.sample(t, 0)
+	id, absent := f.binding.ManagementID, repository.NewID()
+	assertVersion := func() string {
+		t.Helper()
+		version := f.service.StatisticVersions([]string{id, absent})
+		value, err := f.service.Read(t.Context(), "readStatistic", map[string]string{"statistic_id": id}, nil, f.claims)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(version) != 1 || version[id] == "" || version[id] != value.(map[string]any)["resource_version"] {
+			t.Fatalf("private hint must match the REST version of just the known scope: %v", version)
+		}
+		return version[id]
+	}
+	first := assertVersion()
+	if repeat := assertVersion(); repeat != first || f.reads != 1 {
+		t.Fatal("reading versions changed the cache or launched another round")
+	}
+	f.set("rx_bytes", "11")
+	f.sample(t, StatisticsInterval)
+	updated := assertVersion()
+	if updated == first || f.reads != 2 {
+		t.Fatal("a published round did not advance its scoped version")
+	}
+	f.now = f.now.Add(statisticsFreshFor + time.Second)
+	if stale := assertVersion(); stale == updated || f.reads != 2 {
+		t.Fatal("expired evidence did not advance the version without sampling")
+	}
+}
+
 func TestStatisticsExactDeltaResetMissingAndSharedReads(t *testing.T) {
 	f := newStatisticsTest(t)
 	f.claims.Capabilities = []string{"inventory.read", "state.read"}

@@ -19,12 +19,20 @@ type DeviceField struct {
 	Availability string `json:"availability"`
 	Reason       string `json:"reason"`
 }
+type DeviceHardwareField struct {
+	Value, Availability, Reason, Authority string
+	ObservedAt                             time.Time
+}
+type DeviceHardwareObservation struct {
+	PCIFunction, SwitchPort, Connector DeviceHardwareField
+}
 type DeviceSample struct {
 	Availability string
 	Reason       string
 	ObservedAt   time.Time
 	IfIndex      int
 	Fields       map[string]DeviceField
+	Hardware     *DeviceHardwareObservation
 }
 type DeviceObserver interface {
 	Observe(context.Context, DeviceRequest) DeviceSample
@@ -65,8 +73,9 @@ func (s *Service) readDevice(v *view, b Binding, fresh string, epoch uint64) map
 	if !sample.ObservedAt.IsZero() {
 		at = sample.ObservedAt.UTC()
 	}
+	now := s.now()
 	if sample.Availability == "known" {
-		age := s.now().Sub(sample.ObservedAt)
+		age := now.Sub(sample.ObservedAt)
 		if sample.IfIndex != proof.request.IfIndex || sample.ObservedAt.IsZero() || age < 0 || age > FreshFor {
 			sample = deviceUnavailable("LINUX_OBSERVATION_EXPIRED")
 			at = nil
@@ -74,8 +83,38 @@ func (s *Service) readDevice(v *view, b Binding, fresh string, epoch uint64) map
 			confidence, freshness, index = "proven", "fresh", sample.IfIndex
 		}
 	}
-	return map[string]any{
+	view := map[string]any{
 		"availability": sample.Availability, "reason": sample.Reason, "ifindex": index, "fields": maps.Clone(sample.Fields),
 		"source": map[string]any{"provider_id": "linux", "authority": "linux-sysfs-observation", "observed_at": at, "freshness": freshness, "confidence": confidence},
+	}
+	if sample.Hardware != nil && sample.Availability == "known" {
+		view["hardware"] = map[string]any{
+			"pci_function": hardwareFieldResource(sample.Hardware.PCIFunction, "linux-sysfs-pci", now),
+			"switch_port":  hardwareFieldResource(sample.Hardware.SwitchPort, "linux-devlink-port", now),
+			"connector":    hardwareFieldResource(sample.Hardware.Connector, "linux-ethtool-linkinfo", now),
+		}
+	}
+	return view
+}
+
+func hardwareFieldResource(field DeviceHardwareField, authority string, now time.Time) map[string]any {
+	availability, confidence, freshness := "unknown", "unknown", "unavailable"
+	reason := "LINUX_HARDWARE_ROLE_UNPROVEN"
+	var value, at any
+	age := now.Sub(field.ObservedAt)
+	if field.Authority == authority && !field.ObservedAt.IsZero() && age >= 0 && age <= FreshFor {
+		at, freshness = field.ObservedAt.UTC(), "fresh"
+		if field.Reason != "" {
+			reason = field.Reason
+		}
+		if field.Availability == "known" && field.Value != "" {
+			value, availability, confidence, reason = field.Value, "known", "proven", ""
+		}
+	} else if field.Authority == authority && !field.ObservedAt.IsZero() && age > FreshFor {
+		freshness, reason = "stale", "LINUX_OBSERVATION_EXPIRED"
+	}
+	return map[string]any{
+		"value": value, "availability": availability, "reason": reason,
+		"source": map[string]any{"provider_id": "linux", "authority": authority, "observed_at": at, "freshness": freshness, "confidence": confidence},
 	}
 }

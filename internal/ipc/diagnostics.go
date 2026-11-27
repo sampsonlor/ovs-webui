@@ -23,7 +23,7 @@ func diagnosticOperation(path string) string {
 	case "runtime.inspect", "auth.authenticate", "auth.inspect", "auth.check",
 		"auth.reauthenticate", "auth.revoke", "security.read", "security.execute",
 		"inventory.read", "candidate.prepare", "candidate.read", "candidate.validate",
-		"safe.admit", "safe.resolve", "safe.decide", "tls.execute", "tls.state":
+		"safe.admit", "safe.resolve", "safe.decide", "tls.execute", "tls.state", statisticVersionsOperation:
 		return op
 	}
 	switch path {

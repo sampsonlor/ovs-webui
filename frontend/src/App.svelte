@@ -23,6 +23,10 @@
   import QoS from './QoS.svelte';
   import Telemetry from './Telemetry.svelte';
   import Statistics from './Statistics.svelte';
+  import {
+    statisticDetailID,
+    watchStatisticNotifications,
+  } from './statistic-notifications';
   import Neighbors from './Neighbors.svelte';
   import Lldp from './Lldp.svelte';
   import Fdb from './Fdb.svelte';
@@ -34,6 +38,8 @@
   let dark = $state(false);
   let width = $state(window.innerWidth);
   let tick = $state(performance.now());
+  let visible = $state(document.visibilityState === 'visible');
+  let statisticFeedReady = $state(false);
   let username = $state('');
   let password = $state('');
   let provider = $state<'local' | 'tacacs'>('local');
@@ -41,6 +47,18 @@
   const desktop = $derived(width >= 1100);
   const mobile = $derived(width < 700);
   const path = $derived($model.path);
+  const statisticView = $derived.by(() => {
+    const id = statisticDetailID(path);
+    const { session, sessionReady, query, resource } = $model;
+    return id && sessionReady && resource.status === 'ready' && resource.value?.id === id &&
+      has(session, 'inventory.read') && has(session, 'state.read')
+      ? path + query
+      : null;
+  });
+  const statisticSession = $derived($model.session?.csrf_token);
+  const statisticPrincipal = $derived($model.session?.principal_id);
+  const statisticEpoch = $derived($model.session?.request_epochs.management);
+  const statisticWorkspaceEpoch = $derived($model.session?.request_epochs.workspace);
   const port = $derived($model.port.value);
   const candidate = $derived($model.workspace.value?.candidate);
   const transaction = $derived($model.transaction.value);
@@ -77,13 +95,50 @@
     password = '';
     await controller.login({ username, password: secret, provider });
   }
+  $effect(() => {
+    const view = statisticView;
+    const csrf = statisticSession;
+    const principal = statisticPrincipal;
+    const epoch = statisticEpoch;
+    const workspaceEpoch = statisticWorkspaceEpoch;
+    if (!visible || !view || !csrf || !principal || !epoch || !workspaceEpoch) return;
+    const id = statisticDetailID(path);
+    if (!id) return;
+    const active = () => {
+      const { path, query, session, sessionReady, resource } = controller.state;
+      return (
+        document.visibilityState === 'visible' &&
+        path + query === view &&
+        resource.status === 'ready' &&
+        resource.value?.id === id &&
+        sessionReady &&
+        session?.principal_id === principal &&
+        session.csrf_token === csrf &&
+        session.request_epochs.management === epoch &&
+        session.request_epochs.workspace === workspaceEpoch &&
+        has(session, 'inventory.read') &&
+        has(session, 'state.read')
+      );
+    };
+    return watchStatisticNotifications(
+      id,
+      active,
+      () => {
+        if (!controller.state.busy) void controller.refresh();
+      },
+      (ready) => {
+        statisticFeedReady = ready;
+      },
+    );
+  });
+
   onMount(() => {
     dark = localStorage.getItem('ovs.theme') === 'dark';
     expert = localStorage.getItem('ovs.depth') === 'expert';
     void controller.refresh();
     const timer = window.setInterval(() => {
       tick = performance.now();
-      if (document.visibilityState === 'visible' && !$model.busy)
+      if (document.visibilityState === 'visible' && !$model.busy && !statisticFeedReady)
         void controller.refresh();
     }, 2000);
     return () => clearInterval(timer);
@@ -103,6 +158,11 @@
     if (event.key?.startsWith('ovs.pending.v1.')) void controller.refresh();
   }}
 />
+<svelte:document onvisibilitychange={() => {
+  visible = document.visibilityState === 'visible';
+  if (visible && statisticDetailID(controller.state.path) && !controller.state.busy)
+    void controller.refresh();
+}} />
 <a class="skip-link" href="#main">Skip to content</a>
 {#if !$model.session}
   <main id="main" class="login-layout">

@@ -217,8 +217,7 @@ func statisticResource(v *view, failure string, epoch uint64, binding Binding, c
 	sample := statisticPointValue(statisticPoint{})
 	var at any
 	history := []statisticSample{}
-	eligible := entry.binding == binding && entry.generation == v.decision.Generation && entry.schema == v.observation.Schema.Digest &&
-		entry.association == statisticAssociation(v, binding)
+	eligible := statisticEntryMatches(v, binding, entry, statisticAssociation(v, binding))
 	if eligible {
 		for _, point := range entry.samples {
 			if !point.at.Before(now.Add(-StatisticsRetention)) {
@@ -243,7 +242,7 @@ func statisticResource(v *view, failure string, epoch uint64, binding Binding, c
 		} else if reason == "" {
 			reason = "STATISTICS_COUNTERS_UNREPORTED"
 		}
-		if !statisticViewFresh(v, failure, now) || entry.sourceEpoch != epoch || reason != "" || now.Sub(sample.SampledAt) < 0 || now.Sub(sample.SampledAt) > statisticsFreshFor {
+		if !statisticSampleFresh(v, failure, epoch, entry, reason, sample.SampledAt, now) {
 			fresh = "stale"
 			sample.Rates = emptyStatisticRates()
 			if reason == "" {
@@ -267,6 +266,6 @@ func statisticResource(v *view, failure string, epoch uint64, binding Binding, c
 		stats["history"] = history
 	}
 	item["statistics"], item["source"], item["state"] = stats, statsSource, fresh
-	item["resource_version"] = Digest([]any{cache.revision, binding, entry.association, fresh})
+	item["resource_version"] = statisticResourceVersion(cache.revision, binding, entry, fresh)
 	return item
 }
