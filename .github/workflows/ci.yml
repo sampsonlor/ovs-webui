@@ -423,6 +423,12 @@ jobs:
           go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
+      - name: Typed product-only systemd restart with live OVS forwarding
+        if: runner.environment == 'github-hosted'
+        run: |
+          go test -c -o outputs/runtime/systemd-restart.test ./internal/runtimecontrol
+          sudo -- env OVS_CI_SYSTEMD_RESTART=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            python3 tests/daemon/smoke.py --bin-dir outputs/runtime --systemd-restart-probe
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
         run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
       - name: Encrypted TLS identity, fresh connection confirmation and real recovery deadline
@@ -460,6 +466,8 @@ jobs:
             test-results/go-neighbor-events.json
             test-results/go-runtime-smoke.json
             test-results/go-runtime-journal.log
+            test-results/go-systemd-restart.json
+            test-results/go-systemd-restart-journal.log
             test-results/go-auth-smoke.json
             test-results/go-auth-journal.log
             test-results/go-tls-smoke.json

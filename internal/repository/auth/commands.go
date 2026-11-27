@@ -77,6 +77,12 @@ func (r *Repository) ExecuteAuth(ctx context.Context, credential string, input a
 	if op.ID == "cancelJob" {
 		return r.cancelJob(ctx, credential, input)
 	}
+	if op.ID == "restartManagementService" {
+		return r.restartManagementService(ctx, credential, input)
+	}
+	if op.ID == "setManagementDebug" {
+		return r.setManagementDebug(ctx, credential, input, op, path, query)
+	}
 	if op.ID == "reconcileTransaction" {
 		return r.reconcileFields(ctx, credential, input)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/evidence"
 	"github.com/sampsonlor/ovs-webui/internal/repository/requests"
+	"github.com/sampsonlor/ovs-webui/internal/repository/runtimeops"
 	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
 
@@ -101,6 +102,9 @@ func (r *Repository) ExecuteTLS(ctx context.Context, credential string, input tl
 			}
 		case "activateCertificate":
 			if err = revision(ctx, tx, "tls_certificates", "id", id, input.Precondition); err != nil {
+				return result, err
+			}
+			if err := runtimeops.RequireNoRestart(ctx, tx); err != nil {
 				return result, err
 			}
 			if s.TrialID != "" || s.ActiveID == id {

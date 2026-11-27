@@ -72,6 +72,7 @@ type healthReadResource struct {
 }
 
 var managerHealthKeys = []string{
+	"management-debug", "management-restart",
 	"manager", "manager-db", "manager-secret-store", "ovsdb", "cache-interface-devices",
 	"cache-statistics", "cache-neighbors", "cache-lldp", "cache-fdb", "safety-watchdog",
 	"ipc-auth", "ipc-control", "ipc-read", "ipc-heavy", "ipc-observation",

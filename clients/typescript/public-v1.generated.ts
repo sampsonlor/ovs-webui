@@ -215,6 +215,8 @@ export type EndpointSourceCoverage = { "kind": "fdb" | "neighbor" | "lldp"; "sou
 export type HealthComponent = { "key": string; "state": string; "reason": string; "source": Source; "active"?: number; "capacity"?: number };
 export type ManagementCapability = { "key": string; "label": string; "availability": string; "reason": string; "authority": string; "prerequisites": Array<string>; "required_capabilities": Array<string>; "grant_state": string; "recovery": string };
 export type HealthChange = { "component": string; "previous": string; "current": string; "transitions": number };
+export type ManagementDebugCommand = { "request_id": RequestId; "duration_seconds": 0 | 300 | 600 | 900 };
+export type ManagementServiceRestartCommand = { "request_id": RequestId; "service": "manager" | "web" };
 export type BridgePage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Bridge>; "next_cursor": (string | null); "truncated": boolean; [key: string]: unknown };
 export type InterfacePage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Interface>; "next_cursor": (string | null); "truncated": boolean; "source"?: Source; "availability"?: string; "reason"?: (string | null); "coverage"?: { [key: string]: unknown }; [key: string]: unknown };
 export type VlanPage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Resource>; "next_cursor": (string | null); "truncated": boolean; [key: string]: unknown };
@@ -374,6 +376,8 @@ export interface Operations {
   changeSettings: { method: "PATCH"; path: "/settings"; body: SettingsCommand; response: Metadata };
   readAbout: { method: "GET"; path: "/about"; body: never; response: Resource };
   readTopology: { method: "GET"; path: "/topology"; body: never; response: Resource };
+  setManagementDebug: { method: "POST"; path: "/health/debug"; body: ManagementDebugCommand; response: Accepted };
+  restartManagementService: { method: "POST"; path: "/health/service-restarts"; body: ManagementServiceRestartCommand; response: Accepted };
   searchResources: { method: "GET"; path: "/search"; body: never; response: ResourcePage };
   changePassword: { method: "POST"; path: "/users/{user_id}/password"; body: PasswordCommand; response: Accepted };
   deleteUser: { method: "POST"; path: "/users/{user_id}/deletions"; body: EmptyCommand; response: Accepted };

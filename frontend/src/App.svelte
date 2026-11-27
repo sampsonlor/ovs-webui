@@ -588,7 +588,7 @@
         {:else if path.startsWith('/changes/') && path !== '/changes/transactions'}
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
         {:else if path === healthRoute}
-          <Health model={$model} {expert} />
+          <Health model={$model} {expert} {desktop} />
         {:else if path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')}
           <Capabilities model={$model} {expert} />
         {:else if path.startsWith('/operations/events') || path.startsWith('/operations/audit')}

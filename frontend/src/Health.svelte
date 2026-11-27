@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Resource } from '../../clients/typescript/public-v1.generated';
+  import type { ManagementServiceRestartCommand, Resource } from '../../clients/typescript/public-v1.generated';
   import Link from './Link.svelte';
   import LoadNotice from './LoadNotice.svelte';
   import Status from './Status.svelte';
@@ -11,13 +11,32 @@
     observationReason,
   } from './management-observation';
 
-  let { model, expert }: { model: Model; expert: boolean } = $props();
+  let { model, expert, desktop }: { model: Model; expert: boolean; desktop: boolean } = $props();
+  let password = $state('');
+  let duration = $state<300 | 600 | 900>(300);
+  let service = $state<ManagementServiceRestartCommand['service']>('web');
+  let armed = $state(false);
+  let elevated = $state(false);
   const health = $derived(
     model.resource.status === 'ready'
       ? (model.resource.value as Resource | null)
       : null,
   );
   const components = $derived(health?.components ?? []);
+  const debug = $derived(components.find((item) => item.key === 'management-debug'));
+  const restart = $derived(components.find((item) => item.key === 'management-restart'));
+  const mayDebug = $derived(desktop && has(model.session, 'management.debug.write'));
+  const mayRestart = $derived(desktop && has(model.session, 'management.services.control'));
+  $effect(() => {
+    const expiresAt = model.session?.elevated_until;
+    const remaining = typeof expiresAt === 'string' ? Date.parse(expiresAt) - Date.now() : 0;
+    const current = remaining > 0;
+    elevated = current;
+    if (!current) return;
+    const timer = window.setTimeout(() => (elevated = false), remaining);
+    return () => window.clearTimeout(timer);
+  });
+  const blocked = $derived(!model.sessionReady || model.busy || !!model.pending);
   const routes = [
     { label: 'Jobs', href: '/operations/jobs', permission: 'jobs.read' },
     { label: 'Events', href: '/operations/events', permission: 'events.read' },
@@ -28,6 +47,12 @@
   const evidenceLinks = $derived(
     routes.filter((route) => has(model.session, route.permission)),
   );
+  async function authorize(event: SubmitEvent) {
+    event.preventDefault();
+    const secret = password;
+    password = '';
+    await controller.elevate(secret);
+  }
 </script>
 
 <header class="page-heading">
@@ -110,6 +135,48 @@
       </div>
     {/if}
   </section>
+
+  {#if mayDebug || mayRestart}
+    <section class="panel" aria-labelledby="management-controls-heading">
+      <h2 id="management-controls-heading">Management service controls</h2>
+      {#if !elevated}
+        <form onsubmit={authorize}>
+          <label for="management-control-password">Confirm your password</label>
+          <input id="management-control-password" type="password" autocomplete="current-password" required bind:value={password} />
+          <button disabled={blocked}>Reauthenticate</button>
+        </form>
+      {/if}
+      {#if mayDebug && debug}
+        <h3>Temporary manager Debug</h3>
+        <p>Debug logs use the normal redacted journal and return to the default level at expiry.</p>
+        <label for="management-debug-duration">Duration</label>
+        <select id="management-debug-duration" bind:value={duration}>
+          <option value={300}>5 minutes</option><option value={600}>10 minutes</option><option value={900}>15 minutes</option>
+        </select>
+        <button disabled={blocked || !elevated} onclick={() => controller.setManagementDebug(duration)}>Enable Debug</button>
+        {#if debug.state === 'ready'}
+          <button disabled={blocked || !elevated} onclick={() => controller.setManagementDebug(0)}>End Debug</button>
+        {/if}
+      {/if}
+      {#if mayRestart && restart}
+        <h3>Restart a management service</h3>
+        {#if restart.state === 'ready'}
+          <p>Restarting an OVS WebUI service can interrupt the console connection. Review the Job after reconnecting.</p>
+          <label for="management-restart-service">Service</label>
+          <select id="management-restart-service" bind:value={service} onchange={() => (armed = false)}>
+            <option value="web">OVS WebUI web service</option><option value="manager">OVS WebUI manager</option>
+          </select>
+          <label><input type="checkbox" bind:checked={armed} /> I reviewed the selected service</label>
+          <button disabled={blocked || !elevated || !armed} onclick={() => {
+            armed = false;
+            void controller.restartManagementService(service);
+          }}>Request restart</button>
+        {:else}
+          <p>{observationReason(restart.reason || 'MANAGEMENT_RESTART_UNAVAILABLE')}</p>
+        {/if}
+      {/if}
+    </section>
+  {/if}
 
   {#if model.sessionReady && evidenceLinks.length}
     <nav class="actions" aria-label="Related operational evidence">

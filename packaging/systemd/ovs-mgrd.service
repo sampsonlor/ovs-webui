@@ -11,8 +11,9 @@ WatchdogSec=10s
 TimeoutAbortSec=2s
 User=root
 Group=ovs-webui-web
+Environment=MANAGEMENT_SERVICE_RESTART=false
 EnvironmentFile=/etc/ovs-webui/runtime.env
-ExecStart=/usr/libexec/ovs-mgrd --socket=${MANAGER_SOCKET} --webd-uid=${WEBD_UID} --webd-gid=${WEBD_GID} --database=${MANAGER_DATABASE}
+ExecStart=/usr/libexec/ovs-mgrd --socket=${MANAGER_SOCKET} --webd-uid=${WEBD_UID} --webd-gid=${WEBD_GID} --database=${MANAGER_DATABASE} --allow-management-service-restart=${MANAGEMENT_SERVICE_RESTART}
 StateDirectory=ovs-webui/manager
 StateDirectoryMode=0700
 RuntimeDirectory=ovs-webui

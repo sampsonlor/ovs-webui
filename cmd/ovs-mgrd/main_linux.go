@@ -30,10 +30,12 @@ import (
 	registry "github.com/sampsonlor/ovs-webui/internal/repository/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/repository/secrets"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
+	"github.com/sampsonlor/ovs-webui/internal/runtimecontrol"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehealth"
 	"github.com/sampsonlor/ovs-webui/internal/runtimehost"
 	"github.com/sampsonlor/ovs-webui/internal/safety"
 	"github.com/sampsonlor/ovs-webui/internal/secret"
+	"github.com/sampsonlor/ovs-webui/internal/tlscontrol"
 )
 
 func main() { os.Exit(run()) }
@@ -42,6 +44,7 @@ func run() int {
 	uid := flag.Uint("webd-uid", 0, "Required fixed non-root ovs-webd UID")
 	gid := flag.Uint("webd-gid", 0, "Required ovs-webd socket group GID")
 	version := flag.Bool("version", false, "Print build version")
+	allowServiceRestart := flag.Bool("allow-management-service-restart", false, "Opt in to an authorized restart of the two qualified OVS WebUI systemd services")
 	database := flag.String("database", "/var/lib/ovs-webui/manager/manager.db", "Private manager database path")
 	initialize := flag.Bool("init-database", false, "Explicitly initialize a new database and exit; never overwrite")
 	authKeyPath := flag.String("auth-key-file", "", "Private authentication key (default: auth.key beside manager.db)")
@@ -120,7 +123,8 @@ func run() int {
 		fmt.Println(buildinfo.SoftwareVersion())
 		return 0
 	}
-	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-mgrd")
+	managementDebug := runtimehealth.NewDebug(runtimehealth.DebugBootTime)
+	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: managementDebug}))).With("service", "ovs-mgrd")
 	fdbConfigured := *fdbBridges != "" || *fdbControl != "" || *fdbExecutable != "" || *fdbManifest != "" || *fdbManifestDigest != ""
 	if fdbConfigured && (*fdbBridges == "" || *fdbControl == "" || *fdbExecutable == "" || *fdbManifest == "" || *fdbManifestDigest == "") {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_FDB_WITNESS_CONFIGURATION")
@@ -785,10 +789,12 @@ func run() int {
 		authorizer = authentication
 		authService = authentication
 	}
+	restartBoot := tlscontrol.Now().BootID
 	runtimeHealth := &managerRuntimeHealth{
 		storage: store.Status, inventory: inventoryService, secretCheckedAt: secretCheckedAt,
 		secretConfigured: privileged != nil, authConfigured: authentication != nil,
 		safetyConfigured: authentication != nil && authentication.SafetyAvailable(),
+		debug:            managementDebug, restartConfigured: *allowServiceRestart, restartBootKnown: restartBoot != "",
 	}
 	handler := ipc.NewHandler(ipc.CurrentProtocol(buildinfo.SoftwareVersion()), authorizer, logger, func(ctx context.Context) ipc.Health {
 		health := ipc.BootstrapHealth()
@@ -807,6 +813,8 @@ func run() int {
 		handler.WithStatisticVersions(inventoryService.StatisticVersions)
 	}
 	if authentication != nil {
+		authentication.WithManagementDebug(managementDebug)
+		authentication.WithRuntimeRestart(runtimecontrol.NewSystemd(), *allowServiceRestart, restartBoot)
 		if err := authentication.InitializeEvidence(ctx); err != nil {
 			logger.Error("service_start_failed", "code", auth.ErrorCode(err))
 			return 1
@@ -824,6 +832,9 @@ func run() int {
 		})
 		go authentication.MaintainTLS(ctx)
 		go authentication.MaintainEvidence(ctx)
+		go authentication.MaintainRuntimeRestarts(ctx)
+		go authentication.MaintainManagementDebug(ctx)
+		go authentication.SampleManagementDebug(ctx, logger)
 	}
 	server := ipc.HTTPServer(handler)
 	// Recovery progresses independently from every HTTP/IPC admission queue.
