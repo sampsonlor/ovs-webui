@@ -4900,6 +4900,22 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
       'unavailable',
     );
     expect(iface.linux_device.fields.pci_address.value).toBeNull();
+    const hardwareRows = [
+      ['pci_function', 'PCI function', 'linux-sysfs-pci'],
+      ['switch_port', 'Switch port type', 'linux-devlink-port'],
+      ['connector', 'Connector medium', 'linux-ethtool-linkinfo'],
+    ].map(([key, label, authority]) => ({
+      label,
+      authority,
+      field: iface.linux_device.hardware?.[key],
+    }));
+    for (const { authority, field } of hardwareRows) {
+      expect(field).toMatchObject({
+        value: null,
+        availability: 'unknown',
+        source: { provider_id: 'linux', authority },
+      });
+    }
     expect(iface.allowed_operations).toEqual([]);
     const path = '/interfaces/' + iface.management_id;
     // The independent reads can straddle a refresh, so check for agreement
@@ -4915,7 +4931,9 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
             shared:
               first.source.observed_at === second.source.observed_at &&
               first.fields.carrier?.value === second.fields.carrier?.value &&
-              first.fields.mtu?.value === second.fields.mtu?.value,
+              first.fields.mtu?.value === second.fields.mtu?.value &&
+              JSON.stringify(first.hardware) ===
+                JSON.stringify(second.hardware),
           };
         },
         { timeout: 10000 },
@@ -4933,11 +4951,41 @@ test('Linux device detail separates real kernel carrier and MTU, hardware absenc
     await expect(
       linuxRow(page, 'Host PCI association').locator('.badge'),
     ).toHaveAttribute('data-tone', 'neutral');
+    for (const { label, field } of hardwareRows) {
+      const row = linuxRow(page, label);
+      await expect(row.getByRole('cell').first()).toHaveText('Unknown');
+      await expect(row.locator('.badge')).toHaveAttribute(
+        'data-tone',
+        'neutral',
+      );
+      await expect(
+        row.getByText(
+          field.source.provider_id + ' · ' + field.source.authority,
+          { exact: true },
+        ),
+      ).toHaveCount(0);
+    }
     await screen(page, 'interface-linux-standard');
     await page.getByRole('button', { name: 'Standard', exact: true }).click();
     await expect(
       page.getByText('Linux association evidence', { exact: true }),
     ).toBeVisible();
+    for (const { label, field } of hardwareRows) {
+      const row = linuxRow(page, label);
+      await expect(
+        row.getByText(
+          field.source.provider_id + ' · ' + field.source.authority,
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        row.getByText(
+          field.source.observed_at
+            ? /^Sampled \d{4}-\d{2}-\d{2}T/
+            : 'Not sampled',
+        ),
+      ).toBeVisible();
+    }
     await screen(page, 'interface-linux-expert');
     await page
       .getByRole('button', { name: 'Toggle color theme', exact: true })

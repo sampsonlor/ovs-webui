@@ -12,6 +12,7 @@ const (
 	Control
 	Read
 	Heavy
+	Observation
 )
 
 var ErrQueueFull = errors.New("queue full")
@@ -49,5 +50,8 @@ func (b *budget) acquire(ctx context.Context) (func(), error) {
 }
 
 func defaultBudgets() map[Class]*budget {
-	return map[Class]*budget{Auth: newBudget(4, 8), Control: newBudget(4, 8), Read: newBudget(8, 16), Heavy: newBudget(2, 16)}
+	return map[Class]*budget{
+		Auth: newBudget(4, 8), Control: newBudget(4, 8), Read: newBudget(8, 16), Heavy: newBudget(2, 16),
+		Observation: newBudget(1, 0),
+	}
 }

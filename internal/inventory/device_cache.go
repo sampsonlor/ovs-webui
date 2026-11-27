@@ -312,6 +312,10 @@ func observeDeviceRound(ctx context.Context, observer DeviceObserver, targets []
 				} else {
 					sample.Fields = maps.Clone(sample.Fields)
 				}
+				if sample.Hardware != nil {
+					hardware := *sample.Hardware
+					sample.Hardware = &hardware
+				}
 				samples[i] = sample
 			}
 		})

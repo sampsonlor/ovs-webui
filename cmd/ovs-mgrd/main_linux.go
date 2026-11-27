@@ -794,6 +794,9 @@ func run() int {
 		health.ConfigurationReady = authentication != nil && authentication.SafetyAvailable() && status.Writable
 		return health
 	}).WithAuthentication(authService)
+	if inventoryService != nil {
+		handler.WithStatisticVersions(inventoryService.StatisticVersions)
+	}
 	if authentication != nil {
 		if err := authentication.InitializeEvidence(ctx); err != nil {
 			logger.Error("service_start_failed", "code", auth.ErrorCode(err))

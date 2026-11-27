@@ -30,6 +30,13 @@ type nativeLinkObservation struct {
 		Fields               map[string]struct {
 			Value json.RawMessage
 		}
+		Hardware map[string]struct {
+			Value        *string
+			Availability string
+			Source       struct {
+				Authority, Confidence string
+			}
+		}
 		Source struct {
 			Freshness  string
 			ObservedAt *time.Time `json:"observed_at"`
@@ -45,7 +52,7 @@ func (v nativeLinkObservation) matches(index, mtu int) bool {
 
 func (v nativeLinkObservation) unavailable(reason string) bool {
 	return v.Device.Availability == "unavailable" && v.Device.Reason == reason &&
-		v.Device.Index == nil && len(v.Device.Fields) == 0 &&
+		v.Device.Index == nil && len(v.Device.Fields) == 0 && len(v.Device.Hardware) == 0 &&
 		v.Device.Source.Freshness == "unavailable" && v.Device.Source.ObservedAt == nil
 }
 
@@ -134,6 +141,17 @@ func TestNativeDeviceLinkCache(t *testing.T) {
 		return value
 	}
 	first := sample(original.ManagementID, link.Index, link.MTU)
+	for field, authority := range map[string]string{
+		"pci_function": "linux-sysfs-pci",
+		"switch_port":  "linux-devlink-port",
+		"connector":    "linux-ethtool-linkinfo",
+	} {
+		observed := first.Device.Hardware[field]
+		if observed.Value != nil || observed.Availability != "unknown" ||
+			observed.Source.Authority != authority || observed.Source.Confidence != "unknown" {
+			t.Fatalf("native veth incorrectly proved %s: %+v", field, observed)
+		}
+	}
 	if other := read(original.ManagementID, reader.Grant); !other.matches(link.Index, link.MTU) ||
 		!other.Device.Source.ObservedAt.Equal(*first.Device.Source.ObservedAt) {
 		t.Fatal("the second principal did not receive the original shared observation", other)

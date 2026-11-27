@@ -25,14 +25,15 @@ type authenticatedConn interface {
 }
 
 type Handler struct {
-	auth       authn.Manager
-	tlsManager tlscontrol.Manager
-	protocol   Protocol
-	authorizer Authorizer
-	budgets    map[Class]*budget
-	inspect    func(context.Context) (Health, error)
-	logger     *slog.Logger
-	health     func(context.Context) Health
+	auth              authn.Manager
+	tlsManager        tlscontrol.Manager
+	statisticVersions func([]string) map[string]string
+	protocol          Protocol
+	authorizer        Authorizer
+	budgets           map[Class]*budget
+	inspect           func(context.Context) (Health, error)
+	logger            *slog.Logger
+	health            func(context.Context) Health
 }
 
 func (h *Handler) WithAuthentication(manager authn.Manager) *Handler { h.auth = manager; return h }
@@ -83,6 +84,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	r = r.WithContext(ctx)
 	switch r.URL.Path {
+	case statisticVersionsPath:
+		if !state.negotiated.Load() {
+			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")
+			return
+		}
+		h.statisticVersionsOperation(w, r)
 	case "/ipc/v1/operations/safe.admit", "/ipc/v1/operations/safe.resolve", "/ipc/v1/operations/safe.decide":
 		if !state.negotiated.Load() {
 			h.problem(w, r, 409, "IPC_HANDSHAKE_REQUIRED")

@@ -32,5 +32,15 @@ The list and detail require both inventory.read and state.read. Desktop,
 tablet and mobile share observation permissions. Expert mode adds native
 identity and source detail. The interface exposes no configuration commands.
 
-This batch contributes to #26 and #44. The shared stream transport and remaining
-Linux/provider domains continue under their existing acceptance tasks.
+Statistics detail uses the existing `ovs.v1` WebSocket. It subscribes to the
+selected Interface's statistic identity. A single worker in `ovs-webd` batches
+the distinct subscribed identities and checks for changed versions once per
+second. The negotiated Unix operation has one background slot and returns only
+the opaque REST resource versions of matching active Interfaces. It reads the
+published cache, sharing the five-second collection round across all clients.
+
+Each public push passes the existing resource and authorization checks. Counter
+hints retain the one-second coalescing and bounded subscriber queue. The detail
+page responds to a hint or resync by reading REST, and resumes its ordinary
+refresh timer when the socket is unavailable. Statistics lists continue to use
+their cursor and scheduled REST refresh.

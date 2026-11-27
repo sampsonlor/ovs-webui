@@ -5,6 +5,8 @@ import type {
   Statistic,
   StatisticPage,
   Statistics,
+  StreamEnvelope,
+  Subscription,
 } from '../../clients/typescript/public-v1.generated';
 
 type ObservedStatistic = Statistic & { statistics: Statistics };
@@ -76,6 +78,23 @@ async function capture(page: Page, name: string) {
 test('Native Statistics shares exact Interface counters and RAM trends through responsive authenticated reads', async ({
   page,
 }) => {
+  const subscriptions: Subscription[] = [];
+  const notifications: StreamEnvelope[] = [];
+  let opened = 0;
+  let closed = 0;
+  page.on('websocket', (socket) => {
+    if (new URL(socket.url()).pathname !== '/api/v1/stream') return;
+    opened++;
+    socket.on('framesent', ({ payload }) => {
+      if (typeof payload === 'string') subscriptions.push(JSON.parse(payload));
+    });
+    socket.on('framereceived', ({ payload }) => {
+      if (typeof payload === 'string') notifications.push(JSON.parse(payload));
+    });
+    socket.on('close', () => {
+      closed++;
+    });
+  });
   await login(page, 'browser-statistics-observer');
   const writes: string[] = [];
   page.on('request', (request) => {
@@ -149,14 +168,49 @@ test('Native Statistics shares exact Interface counters and RAM trends through r
     (await read(page, row.id)).statistics.counters.rx_packets + ' packets',
   );
   await capture(page, 'list');
+  expect(opened).toBe(0);
   await link.focus();
   await expect(link).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp('/visibility/statistics/' + row.id));
-  await page
-    .getByRole('button', { name: 'Refresh statistics', exact: true })
-    .click();
-  const current = await read(page, row.id);
+  await expect.poll(() => subscriptions).toEqual([
+    { resources: [{ kind: 'statistic', id: row.id }], cursor: null },
+  ]);
+  await expect.poll(() => notifications[0]?.type).toBe('resync.required');
+
+  const detailBefore = await read(page, row.id);
+  const priorCount = BigInt(detailBefore.statistics.counters.rx_packets!);
+  const previousHints = notifications.length;
+  const updatedDetail = page.waitForResponse(
+    async (response) => {
+      if (
+        response.url() !== detail ||
+        response.request().method() !== 'GET' ||
+        response.status() !== 200 ||
+        !notifications.slice(previousHints).some(
+          (hint) =>
+            hint.type === 'state.coalesced' &&
+            hint.resource_ref?.kind === 'statistic' &&
+            hint.resource_ref.id === row.id &&
+            !!hint.resource_version,
+        )
+      )
+        return false;
+      const latest: ObservedStatistic = await response.json();
+      const count = latest.statistics.counters.rx_packets;
+      return count !== null && BigInt(count) >= priorCount + BigInt(2);
+    },
+    { timeout: 25000 },
+  );
+  execFileSync('ovs-appctl', [
+    '-t',
+    fixture.ovsDirectory + '/switch.ctl',
+    'netdev-dummy/receive',
+    'inv-p1',
+    packet,
+    packet,
+  ]);
+  const current: ObservedStatistic = await (await updatedDetail).json();
   expect(current.statistics.interval_ms).toBe(5000);
   expect(current.statistics.retention_seconds).toBe(300);
   expect(current.statistics.sample_count).toBeLessThanOrEqual(60);
@@ -222,6 +276,9 @@ test('Native Statistics shares exact Interface counters and RAM trends through r
   await capture(page, 'mobile');
   expect(writes).toEqual([]);
   expect((await page.request.get(detail)).status()).toBe(200);
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Statistics', exact: true })).toBeVisible();
+  await expect.poll(() => closed).toBe(opened);
 });
 
 test('Statistics permission denial and unavailable provider views withhold counter detail', async ({

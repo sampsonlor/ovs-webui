@@ -100,6 +100,118 @@ func TestLinuxDeviceSysfsAssociation(t *testing.T) {
 	}
 }
 
+func fixtureSysfsLink(t *testing.T, target, link string) {
+	t.Helper()
+	relative, err := filepath.Rel(filepath.Dir(link), target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(relative, link); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLinuxDeviceSRIOVRoleRequiresIndexedStablePCIEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name                  string
+		link, total, expected string
+	}{
+		{name: "bare PCI device"},
+		{name: "supported physical function", total: "8", expected: "sr-iov-pf"},
+		{name: "zero reported capacity", total: "0"},
+		{name: "invalid capacity", total: "65536"},
+		{name: "noncanonical capacity", total: "+4"},
+		{name: "virtual function", link: "pf", expected: "sr-iov-vf"},
+		{name: "dangling physical function", link: "dangling", total: "8"},
+		{name: "wrong indexed target", link: "mismatched"},
+		{name: "self-referential physical function", link: "self"},
+		{name: "malformed physical function link", link: "file", total: "8"},
+		{name: "counterpart is a virtual function", link: "chained"},
+		{name: "conflicting physical and virtual evidence", link: "pf", total: "8"},
+		{name: "unindexed PCI parent", link: "unindexed", total: "8"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, device := sysfs(t, "pci")
+			parent := filepath.Dir(filepath.Dir(filepath.Join(root, device)))
+			index := filepath.Join(root, "bus", "pci", "devices")
+			if err := os.MkdirAll(index, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if tc.link != "unindexed" {
+				fixtureSysfsLink(t, parent, filepath.Join(index, filepath.Base(parent)))
+			}
+			pf := filepath.Join(filepath.Dir(parent), "0000:01:00.1")
+			if tc.link == "pf" || tc.link == "chained" || tc.link == "mismatched" {
+				if err := os.Mkdir(pf, 0700); err != nil {
+					t.Fatal(err)
+				}
+				fixtureSysfsLink(t, filepath.Join(root, "bus", "pci"), filepath.Join(pf, "subsystem"))
+				indexTarget := pf
+				if tc.link == "mismatched" {
+					indexTarget = parent
+				}
+				fixtureSysfsLink(t, indexTarget, filepath.Join(index, filepath.Base(pf)))
+			}
+			if tc.link == "chained" {
+				fixtureSysfsLink(t, parent, filepath.Join(pf, "physfn"))
+			}
+			switch tc.link {
+			case "pf", "chained", "mismatched", "dangling":
+				fixtureSysfsLink(t, pf, filepath.Join(parent, "physfn"))
+			case "self":
+				fixtureSysfsLink(t, parent, filepath.Join(parent, "physfn"))
+			case "file":
+				if err := os.WriteFile(filepath.Join(parent, "physfn"), []byte(filepath.Base(pf)), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.total != "" {
+				if err := os.WriteFile(filepath.Join(parent, "sriov_totalvfs"), []byte(tc.total+"\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			sample := newProvider(root).Observe(t.Context(), inventory.DeviceRequest{Name: "synthetic0", IfIndex: 7})
+			if sample.Availability != "known" || sample.Hardware == nil {
+				t.Fatalf("PCI role probing changed the normal device association: %+v", sample)
+			}
+			role := sample.Hardware.PCIFunction
+			if role.Value != tc.expected || role.Authority != "linux-sysfs-pci" ||
+				role.ObservedAt.IsZero() || role.ObservedAt.After(sample.ObservedAt) {
+				t.Fatalf("unexpected PCI role evidence: %+v", role)
+			}
+			if tc.expected == "" && (role.Availability != "unknown" || role.Reason != "LINUX_PCI_ROLE_UNPROVEN") ||
+				tc.expected != "" && (role.Availability != "known" || role.Reason != "") {
+				t.Fatalf("unexpected PCI role disposition: %+v", role)
+			}
+			if sample.Hardware.SwitchPort.Value != "" || sample.Hardware.Connector.Value != "" {
+				t.Fatalf("PCI role fabricated other hardware evidence: %+v", sample.Hardware)
+			}
+		})
+	}
+}
+
+func TestLinuxDeviceUnrelatedPCIControllerDoesNotProveRole(t *testing.T) {
+	root, _ := sysfs(t, "usb")
+	parent := filepath.Join(root, "devices", "pci0000:00", "0000:01:00.0")
+	index := filepath.Join(root, "bus", "pci", "devices")
+	if err := os.MkdirAll(index, 0700); err != nil {
+		t.Fatal(err)
+	}
+	fixtureSysfsLink(t, parent, filepath.Join(index, filepath.Base(parent)))
+	if err := os.WriteFile(filepath.Join(parent, "sriov_totalvfs"), []byte("8\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	sample := newProvider(root).Observe(t.Context(), inventory.DeviceRequest{Name: "synthetic0", IfIndex: 7})
+	if sample.Availability != "known" || sample.Hardware == nil {
+		t.Fatalf("the USB link association was lost: %+v", sample)
+	}
+	role := sample.Hardware.PCIFunction
+	if role.Value != "" || role.Availability != "unavailable" || role.Authority != "linux-sysfs-pci" {
+		t.Fatalf("a USB link inherited role evidence from the PCI controller above it: %+v", role)
+	}
+}
+
 func TestLinuxDeviceRejectsUnprovenBindingsAndEscapes(t *testing.T) {
 	root, path := sysfs(t, "virtual")
 	p := newProvider(root)
@@ -172,7 +284,7 @@ func TestLinuxDeviceReadBudgetAndCancellation(t *testing.T) {
 	blocked, done := make(chan struct{}), make(chan struct{}, 2)
 	defer close(blocked)
 	var calls atomic.Int32
-	p.collect = func(inventory.DeviceRequest) inventory.DeviceSample {
+	p.collect = func(context.Context, inventory.DeviceRequest) inventory.DeviceSample {
 		calls.Add(1)
 		<-blocked
 		done <- struct{}{}
@@ -204,5 +316,8 @@ func TestLinuxDeviceHostObservation(t *testing.T) {
 	s := New().Observe(context.Background(), inventory.DeviceRequest{Name: iface.Name, IfIndex: iface.Index})
 	if s.Availability != "known" || s.Fields["mtu"].Value != int64(iface.MTU) || s.Fields["pci_address"].Value != nil {
 		t.Fatal(s)
+	}
+	if s.Hardware == nil || s.Hardware.PCIFunction.Value != "" || s.Hardware.PCIFunction.Availability != "unavailable" {
+		t.Fatalf("kernel loopback unexpectedly reports a PCI function: %+v", s.Hardware)
 	}
 }

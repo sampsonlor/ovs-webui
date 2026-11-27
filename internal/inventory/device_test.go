@@ -80,6 +80,49 @@ func expectDeviceUnavailable(t *testing.T, device map[string]any, reason string)
 	}
 }
 
+func TestInterfaceLinuxHardwareEvidenceKeepsIndependentProvenance(t *testing.T) {
+	f := newDeviceTest(t)
+	f.claims.Capabilities = []string{"inventory.read", "state.read"}
+	hardware := &DeviceHardwareObservation{
+		PCIFunction: DeviceHardwareField{Value: "sr-iov-vf", Availability: "known", Authority: "linux-sysfs-pci", ObservedAt: f.now},
+		SwitchPort:  DeviceHardwareField{Availability: "unknown", Reason: "LINUX_DEVLINK_PORT_UNPROVEN", Authority: "linux-devlink-port", ObservedAt: f.now},
+		Connector:   DeviceHardwareField{Value: "fibre", Availability: "known", Authority: "linux-ethtool-linkinfo", ObservedAt: f.now.Add(-FreshFor - time.Second)},
+	}
+	f.service.SetDeviceObserver(deviceObserverFunc(func(context.Context, DeviceRequest) DeviceSample {
+		return DeviceSample{Availability: "known", IfIndex: 7, ObservedAt: f.now, Hardware: hardware}
+	}))
+	f.service.SampleDevices(t.Context())
+	hardware.PCIFunction.Value = "sr-iov-pf"
+	item := f.read(t, f.binding.ManagementID, f.claims)
+	fields := item["linux_device"].(map[string]any)["hardware"].(map[string]any)
+	for key, check := range map[string]struct {
+		value                any
+		authority, freshness string
+	}{
+		"pci_function": {"sr-iov-vf", "linux-sysfs-pci", "fresh"},
+		"switch_port":  {nil, "linux-devlink-port", "fresh"},
+		"connector":    {nil, "linux-ethtool-linkinfo", "stale"},
+	} {
+		field := fields[key].(map[string]any)
+		source := field["source"].(map[string]any)
+		if field["value"] != check.value || source["authority"] != check.authority || source["freshness"] != check.freshness {
+			t.Errorf("unexpected %s evidence: %v", key, field)
+		}
+	}
+	contract, err := apicontract.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, _, _ := contract.Match("GET", "/api/v1/interfaces/"+f.binding.ManagementID)
+	body, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := operation.ValidateResponse(200, body); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestInterfaceLinuxDeviceSharedReadsAndPermissionSeparation(t *testing.T) {
 	f := newDeviceTest(t)
 	f.claims.Capabilities = []string{"inventory.read", "state.read"}

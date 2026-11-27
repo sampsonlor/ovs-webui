@@ -53,6 +53,11 @@ func PublicHandler(ctx context.Context, manager ManagerProbe, storage func(conte
 	if err != nil {
 		return nil, nil, err
 	}
+	if source, ok := manager.(interface {
+		StatisticVersions(context.Context, []string) (map[string]string, error)
+	}); ok && options.Authorizer != nil {
+		go api.Hub().RunStatisticFeed(source.StatisticVersions)
+	}
 	bootstrap := BootstrapHandler(manager, storage)
 	ui := staticHandler(staticAssets)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
