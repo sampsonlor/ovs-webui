@@ -11,7 +11,7 @@ from authentication import run
 from spanning_tree_prepare import reconfigure_draft_fixture, set_unit_option
 
 
-def verify_openflow_frontend(repo, fixture, node, origin, accounts, call, get, vsctl, units, ovs, eventually):
+def verify_openflow_frontend(repo, fixture, node, origin, accounts, call, vsctl, units, ovs, eventually):
     assert node and Path(node).is_file()
     bridge = 'br-oflow-ui'
     cookie = '0xf123456789abcdef'
@@ -19,8 +19,17 @@ def verify_openflow_frontend(repo, fixture, node, origin, accounts, call, get, v
         vsctl('add-br', bridge, '--', 'set', 'Bridge', bridge, 'datapath_type=system',
               'protocols=OpenFlow13', 'other_config:datapath-id=0277685511223355')
         cleanup.callback(vsctl, '--no-wait', '--if-exists', 'del-br', bridge)
-        binding = eventually(lambda: next((row for row in get('/bridges?filter=' + bridge)['items']
-                                           if row['name'] == bridge), None))
+        bridge_uuid = vsctl('get', 'Bridge', bridge, '_uuid').strip()
+
+        def inventory_binding():
+            status, payload, _ = call('/bridges?filter=' + bridge)
+            if status == 503:
+                return None
+            assert status == 200, f'qualified Bridge inventory returned HTTP {status}'
+            return next((row for row in payload['items']
+                         if row['name'] == bridge and row['ovs_uuid'] == bridge_uuid), None)
+
+        binding = eventually(inventory_binding)
         bridge_id = binding['management_id']
         endpoint = f'/openflow/bridges/{bridge_id}/snapshots?table=7'
         code, problem, _ = call(endpoint)

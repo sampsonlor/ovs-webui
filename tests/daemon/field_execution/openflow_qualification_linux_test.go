@@ -229,22 +229,63 @@ func TestNativeQualifiedOpenFlow(t *testing.T) {
 	})
 
 	t.Run("controller_reference_is_outside_this_witness", func(t *testing.T) {
-		controller := filepath.Join(f.root, "fixture-controller.mgmt")
+		before, err := inv.OpenFlowSource(ctx, bridgeID)
+		must(t, err)
+		// OVS accepts a passive controller in its own runtime directory
+		// only when the filename starts with this Bridge's name and a dot.
+		controller := filepath.Join(f.root, name+".controller.mgmt")
 		target := "punix:" + controller
 		f.run(ovsVsctl, "--timeout=5", db, "set-controller", name, target)
-		defer f.run(ovsVsctl, "--timeout=5", db, "del-controller", name)
 		if got := f.run(ovsVsctl, "--timeout=5", "--no-wait", db, "get-controller", name); got != target {
 			t.Fatal("isolated controller target was not configured")
 		}
+		waitFor(t, func() bool {
+			info, err := os.Lstat(controller)
+			if err != nil || info.Mode()&os.ModeSocket == 0 {
+				return false
+			}
+			current, err := inv.OpenFlowSource(ctx, bridgeID)
+			return err == nil && current.Bridge == before.Bridge && current.Generation == before.Generation &&
+				current.DatapathID == before.DatapathID && current.Evidence.ObservedAt.After(before.Evidence.ObservedAt)
+		})
 		outside := qualified
 		outside.BridgeSockets = map[string]string{bridgeID: controller}
 		controllerObserver, err := provider.QualifiedOpenFlowObserver(inv, outside)
 		must(t, err)
 		requireNativeOpenFlowDenied(t, controllerObserver, query, "OPENFLOW_IDENTITY_UNPROVEN")
+		// The approved Bridge witness is scoped to Bridges without an
+		// explicit controller. The original management listener is still
+		// present, but gives no qualified rows while that controller exists.
+		if info, err := os.Lstat(socket); err != nil || info.Mode()&os.ModeSocket == 0 {
+			t.Fatal("the original management socket disappeared during the controller fixture")
+		}
+		requireNativeOpenFlowDenied(t, observer, query, "OPENFLOW_IDENTITY_UNPROVEN")
 
-		got, err := observer.ObserveFlows(ctx, query)
-		must(t, err)
-		if got.BridgeID != bridgeID || got.Source != "openflow-1.3-unix" || got.Ownership != "unknown" {
+		f.run(ovsVsctl, "--timeout=5", db, "del-controller", name)
+		if got := f.run(ovsVsctl, "--timeout=5", "--no-wait", db, "get-controller", name); got != "" {
+			t.Fatal("isolated controller target was not removed")
+		}
+
+		var got ovsdb.OpenFlowSnapshot
+		// The original source must requalify after the removal is applied.
+		waitFor(t, func() bool {
+			if _, err := os.Lstat(controller); !errors.Is(err, os.ErrNotExist) {
+				return false
+			}
+			observed, err := observer.ObserveFlows(ctx, query)
+			var problem *apitypes.Problem
+			if errors.As(err, &problem) && problem.Status == 503 &&
+				(problem.Code == "OPENFLOW_IDENTITY_UNPROVEN" || problem.Code == "OPENFLOW_INVENTORY_UNAVAILABLE") {
+				t.Logf("post-controller witness is still settling: %s", problem.Code)
+				return false
+			}
+			must(t, err)
+			got = observed
+			return true
+		})
+		if got.BridgeID != bridgeID || got.InstanceGeneration != before.Generation ||
+			got.Source != "openflow-1.3-unix" || got.Ownership != "unknown" ||
+			len(got.Rows) != 1 || got.Rows[0].Cookie != "0xf123456789abcdef" {
 			t.Fatalf("the witnessed local observer misstated scope or controller ownership: %+v", got)
 		}
 	})

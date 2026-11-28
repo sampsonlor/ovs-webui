@@ -456,7 +456,7 @@ def main():
                                 vsctl, units, ovs, eventually)
                             from openflow_frontend import verify_openflow_frontend
                             result['openflow'] = verify_openflow_frontend(
-                                repo, fixture, args.browser_node, origin, accounts, call, get,
+                                repo, fixture, args.browser_node, origin, accounts, call,
                                 vsctl, units, ovs, eventually)
                         return result
                 else:
