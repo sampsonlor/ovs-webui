@@ -54,8 +54,9 @@ func TestDeviceLinkEventsOnlyInvalidateMatchingManagedDevices(t *testing.T) {
 	read := func(binding Binding) map[string]any {
 		return f.read(t, binding.ManagementID, f.claims)["linux_device"].(map[string]any)
 	}
+	initialRevision := f.service.devices.linkRevision
 	f.service.HandleDeviceLinkEvents(DeviceLinkEvents{Indices: []int{1234}})
-	if f.device(t)["availability"] != "known" || f.service.devices.linkRevision != 0 {
+	if f.device(t)["availability"] != "known" || f.service.devices.linkRevision != initialRevision {
 		t.Fatal("an unmanaged index invalidated observations or set pending work")
 	}
 	for range 10 {

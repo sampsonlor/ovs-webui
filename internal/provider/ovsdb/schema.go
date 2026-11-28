@@ -27,7 +27,7 @@ var selected = map[string][]string{
 	"Datapath":     {"capabilities"},
 	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "mcast_snooping_enable", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "protected", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
-	"Interface":    {"name", "type", "options", "link_state", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
+	"Interface":    {"name", "type", "options", "link_state", "lacp_current", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
 var required = map[string][]string{"Open_vSwitch": {"bridges"}, "Bridge": {"name", "ports"}, "Port": {"name", "interfaces"}, "Interface": {"name"}}
 
@@ -105,6 +105,10 @@ func discover(data []byte) (discovered, error) {
 				c.Monitored = c.Monitored && c.SpanningTreeCompatible
 			}
 			c.PatchCompatible = patchColumnConstraint(t, name, col)
+			if t == "Interface" && name == "lacp_current" {
+				c.Monitored = c.Monitored && col.TypeObj.Key.Type == native.TypeBoolean && col.TypeObj.Value == nil &&
+					col.TypeObj.Min() == 0 && col.TypeObj.Max() == 1
+			}
 			if t == "Interface" && name == "mtu_request" {
 				c.MTUCompatible = mtuConstraint(col)
 			}

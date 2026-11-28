@@ -77,6 +77,16 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 			value, err = r.certificate(ctx, tx, path["certificate_id"])
 		case "readRequestReceipt":
 			value, err = r.receipt(ctx, tx, c, path["request_id"], query)
+		case "readLinkLACPDiagnostic":
+			value, err = r.readLinkLACPResult(ctx, tx, c, path["job_id"])
+		case "readInterfaceCounterDiagnostic":
+			value, err = r.readInterfaceCounterResult(ctx, tx, c, path["job_id"])
+		case "readSupportBundle", "readSupportBundlePart":
+			value, err = r.getSupportBundle(ctx, tx, c, path["job_id"], query.Get("part"))
+		case "readCaptureArtifact", "readCapturePart":
+			value, err = r.readCapture(ctx, tx, c, path["job_id"], query.Get("part"))
+		case "listCaptureTargets":
+			value, err = r.readCaptureTargets(ctx, c)
 		case "listTransactions", "readTransaction":
 			value, err = executions.Read(ctx, tx, c, op.ID, path, query, r.key, r.now(), r.SafetyAvailable())
 		default:

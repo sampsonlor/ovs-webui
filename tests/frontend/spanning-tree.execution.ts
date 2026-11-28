@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import type { Transaction } from '../../clients/typescript/public-v1.generated';
 
 if (!process.env.OVS_SPANNING_TREE_FRONTEND_FIXTURE)
   throw new Error('Requires the qualified native OVS / production service fixture.');
@@ -15,6 +16,20 @@ async function get(context: BrowserContext, path: string) {
   const r = await context.request.get(fixture.origin + '/api/v1' + path);
   expect(r.status(), path).toBe(200);
   return r.json();
+}
+async function waitForTransaction(context: BrowserContext, path: string, state: string) {
+  let transaction: Transaction | undefined;
+  await expect.poll(async () => {
+    const response = await context.request.get(fixture.origin + '/api/v1' + path);
+    if (response.status() === 503) return 'temporarily-unavailable';
+    expect(response.status(), path).toBe(200);
+    const current: Transaction = await response.json();
+    expect(`/transactions/${current.id}`).toBe(path);
+    if (current.safe_apply === state) transaction = current;
+    return current.safe_apply;
+  }).toBe(state);
+  if (!transaction) throw new Error(`Missing transaction evidence for ${state}`);
+  return transaction;
 }
 async function screen(page: Page, name: string) {
   mkdirSync(output, { recursive: true });
@@ -54,8 +69,7 @@ async function apply(page: Page) {
   await page.getByRole('button', { name: 'Start Safe Apply', exact: true }).click();
   await expect(page).toHaveURL(/\/changes\/transactions\/[0-9a-f-]+$/);
   const path = new URL(page.url()).pathname.replace('/changes', '');
-  await expect.poll(async () => (await get(page.context(), path)).safe_apply).toBe('awaiting-confirmation');
-  const transaction = await get(page.context(), path);
+  const transaction = await waitForTransaction(page.context(), path, 'awaiting-confirmation');
   expect(transaction.applied_outcome).toBe('applied');
   expect(transaction.applied_evidence.next_cfg_target).not.toBeNull();
   await expect(page.getByTestId('safe-state')).toHaveText('awaiting-confirmation');
@@ -135,7 +149,7 @@ test('qualified native execution reviews responsive UI and confirms actual insta
   await screen(page, 'native-tree-awaiting-confirmation');
   await expect(page.getByRole('button', { name: 'Confirm configuration', exact: true })).toBeEnabled();
   await confirm(page);
-  await expect.poll(async () => (await get(page.context(), path)).safe_apply).toBe('confirmed');
+  await waitForTransaction(page.context(), path, 'confirmed');
   await expect(page.getByTestId('safe-state')).toHaveText('confirmed');
   const row = await get(page.context(), source);
   expect(row.spanning_tree.protocol).toBe('rstp');
@@ -154,7 +168,7 @@ test('actual management path loss restores captured native flags and raw paramet
   } finally {
     execFileSync('ip', ['link', 'set', fixture.probeInterface, 'up']);
   }
-  await expect.poll(async () => (await get(page.context(), path)).safe_apply).toBe('rolled-back');
+  await waitForTransaction(page.context(), path, 'rolled-back');
   await expect(page.getByTestId('safe-state')).toHaveText('rolled-back');
   const counter = () => execFileSync(fixture.nativeBinary,
     ['--timeout=5',`--db=unix:${fixture.dbSocket}`,'get','Open_vSwitch','.','next_cfg'],{encoding:'utf8'}).trim();

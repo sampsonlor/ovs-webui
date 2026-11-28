@@ -8,6 +8,13 @@ import {
   receiptURL,
 } from '../../clients/typescript/recovery.ts';
 import type { RecoveryIdentity } from '../../clients/typescript/recovery';
+import {
+  interfaceCounterPath,
+  interfaceCounterPortID,
+  linkLACPPath,
+} from './diagnostics.ts';
+import { supportBundlePath } from './support-bundles.ts';
+import { captureCancellationID, capturePath } from './packet-capture.ts';
 
 export class APIError extends Error {
   status: number;
@@ -32,7 +39,11 @@ export function requestID(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-export type Pending = RecoveryIdentity & { principal_id: string; path: string };
+export type Pending = RecoveryIdentity & {
+  principal_id: string;
+  path: string;
+  target_port_id?: string;
+};
 export type StoragePort = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const debugPath = '/health/debug';
@@ -40,7 +51,7 @@ const restartPath = '/health/service-restarts';
 const managementHealthID = '31fa3492-67e6-4a39-bfce-000000000001';
 
 // No credentials, CSRF tokens, form data or native configuration are persisted.
-// Only a principal-bound command identity survives navigation and browser restart.
+// The principal-bound command identity and its original Port reference survive navigation and restart.
 export class API {
   session: Session | null = null;
   private transport: typeof fetch;
@@ -61,7 +72,9 @@ export class API {
       p.principal_id !== this.session.principal_id ||
       !/^[0-9a-f-]{36}$/.test(p.request_id) ||
       !/^[0-9a-f-]{36}$/.test(p.request_epoch) ||
-      !['workspace', 'management'].includes(p.request_domain)
+      !['workspace', 'management'].includes(p.request_domain) ||
+      (p.path === interfaceCounterPath &&
+        !interfaceCounterPortID({ kind: 'port', id: p.target_port_id }))
     ) {
       throw new Error('RECOVERY_IDENTITY_INVALID');
     }
@@ -143,12 +156,19 @@ export class API {
     const session = this.session;
     if (!session) throw new Error('SESSION_REQUIRED');
     if (this.pending()) throw new Error('REQUEST_RECOVERY_REQUIRED');
+    const submitted = (body as { target_ref?: { kind: string; id: string } })
+      .target_ref;
+    const counterTarget =
+      path === interfaceCounterPath ? interfaceCounterPortID(submitted) : null;
+    if (path === interfaceCounterPath && !counterTarget)
+      throw new Error('INVALID_DIAGNOSTIC_TARGET');
     const pending: Pending = {
       principal_id: session.principal_id,
       path,
       request_id: requestID(),
       request_domain: domain,
       request_epoch: session.request_epochs[domain],
+      ...(counterTarget ? { target_port_id: counterTarget } : {}),
     };
     const key = this.key(session.principal_id);
     // A storage failure must stop dispatch, not turn a lost reply into a new POST.
@@ -175,6 +195,12 @@ export class API {
     const data = result as Record<string, unknown> | undefined;
     const uuid = (value: unknown) =>
       typeof value === 'string' && /^[0-9a-f-]{14}4[0-9a-f-]{21}$/.test(value);
+    const submittedInterface = (body as { interface_id?: unknown })
+      .interface_id;
+    const accepted = data?.resource_ref as
+      | { kind?: unknown; id?: unknown }
+      | null
+      | undefined;
     if (
       !data ||
       (domain === 'management'
@@ -182,7 +208,12 @@ export class API {
           data.request_domain !== domain ||
           data.request_epoch !== pending.request_epoch ||
           !uuid(data.job_id) ||
-          !this.resourceMatches(path, data.resource_ref, data.job_id)
+          !this.resourceMatches(path, data.resource_ref, data.job_id) ||
+          ((path === linkLACPPath || path === interfaceCounterPath) &&
+            (accepted?.kind !== submitted?.kind ||
+              accepted?.id !== submitted?.id)) ||
+          (path === supportBundlePath && accepted?.id !== data.job_id) ||
+          (path === capturePath && accepted?.id !== submittedInterface)
         : !uuid(data.id) ||
           !uuid(data.revision) ||
           !Array.isArray(data.intents))
@@ -205,13 +236,24 @@ export class API {
       throw new Error('RECEIPT_IDENTITY_MISMATCH');
     // Unknown future receipt states cannot unlock another configuration command.
     if (['accepted', 'completed'].includes(receipt.state)) {
-      const job = receipt.job_ref;
       if (
-        ((pending.path === debugPath || pending.path === restartPath) &&
-          (job?.kind !== 'job' ||
-            typeof job.id !== 'string' ||
-            !/^[0-9a-f-]{14}4[0-9a-f-]{21}$/.test(job.id))) ||
-        !this.resourceMatches(pending.path, receipt.resource_ref, job?.id)
+        !this.resourceMatches(
+          pending.path,
+          receipt.resource_ref,
+          receipt.job_ref?.id,
+        ) ||
+        ((pending.path === linkLACPPath ||
+          pending.path === interfaceCounterPath ||
+          pending.path === capturePath ||
+          pending.path === debugPath ||
+          pending.path === restartPath) &&
+          !this.referenceMatches('job', receipt.job_ref)) ||
+        (pending.path === interfaceCounterPath &&
+          interfaceCounterPortID(receipt.resource_ref) !==
+            pending.target_port_id) ||
+        (pending.path === supportBundlePath &&
+          (!this.referenceMatches('job', receipt.job_ref) ||
+            receipt.resource_ref?.id !== receipt.job_ref?.id))
       )
         throw new Error('RECEIPT_RESOURCE_MISMATCH');
       this.forget(pending);
@@ -223,13 +265,30 @@ export class API {
     value: unknown,
     jobID?: unknown,
   ): boolean {
-    if (!value || typeof value !== 'object') return false;
-    const ref = value as Record<string, unknown>;
     if (path === debugPath)
-      return ref.kind === 'health' && ref.id === managementHealthID;
+      return (
+        this.referenceMatches('health', value) &&
+        (value as { id: string }).id === managementHealthID
+      );
     if (path === restartPath)
       return (
-        ref.kind === 'job' && typeof jobID === 'string' && ref.id === jobID
+        this.referenceMatches('job', value) &&
+        (value as { id: string }).id === jobID
+      );
+    if (path === interfaceCounterPath) return !!interfaceCounterPortID(value);
+    if (path === linkLACPPath)
+      return (
+        this.referenceMatches('bridge', value) ||
+        this.referenceMatches('port', value)
+      );
+    if (path === supportBundlePath)
+      return this.referenceMatches('artifact', value);
+    if (path === capturePath) return this.referenceMatches('interface', value);
+    const cancelled = captureCancellationID(path);
+    if (cancelled)
+      return (
+        this.referenceMatches('job', value) &&
+        (value as { id: string }).id === cancelled
       );
     const kind =
       path === '/candidate'
@@ -239,8 +298,12 @@ export class API {
           : path.startsWith('/transactions')
             ? 'transaction'
             : '';
+    return !!kind && this.referenceMatches(kind, value);
+  }
+  private referenceMatches(kind: string, value: unknown): boolean {
+    if (!value || typeof value !== 'object') return false;
+    const ref = value as Record<string, unknown>;
     return (
-      !!kind &&
       ref.kind === kind &&
       typeof ref.id === 'string' &&
       /^[0-9a-f-]{14}4[0-9a-f-]{21}$/.test(ref.id)

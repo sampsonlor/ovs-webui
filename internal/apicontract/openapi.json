@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.37.0",
+    "version": "1.38.0",
     "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted. Endpoints combines the view of FDB, ARP/NDP and LLDP while preserving independent scope, provenance and coverage. Native FDB observation is opt-in with a qualified bounded OVS witness. Filters, paging and bounded export operate on cached observations."
   },
   "servers": [
@@ -24638,6 +24638,796 @@
         "description": "Submits the restart of one qualified product service under a current elevated browser grant and the shared Safe Apply exclusion. Follow the durable Job to review dispatch and outcome evidence."
       }
     },
+    "/diagnostics/link-lacp": {
+      "post": {
+        "operationId": "runLinkLACPDiagnostic",
+        "summary": "runLinkLACPDiagnostic",
+        "x-capability": "diagnostics.read",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Durable receipt and Job; retrieve REST resources to resolve outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-request-domain": "management",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkLACPDiagnosticCommand"
+              }
+            }
+          }
+        },
+        "description": "Starts one bounded read-only observation of an active managed Port or Bridge, using a verified OVSDB snapshot. Requires inventory.read. The owner can recover the original Job using its request receipt."
+      }
+    },
+    "/diagnostics/link-lacp/{job_id}": {
+      "get": {
+        "operationId": "readLinkLACPDiagnostic",
+        "summary": "readLinkLACPDiagnostic",
+        "x-capability": "diagnostics.read",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkLACPDiagnosticResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reads the original bounded Link/LACP evidence for at most fifteen minutes after completion, subject to current diagnostic and inventory permission and Job ownership."
+      }
+    },
+    "/diagnostics/interface-counters": {
+      "post": {
+        "operationId": "runInterfaceCounterDiagnostic",
+        "summary": "runInterfaceCounterDiagnostic",
+        "x-capability": "diagnostics.active",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RequestId"
+            }
+          },
+          {
+            "name": "X-OVS-Request-Epoch",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "X-OVS-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Durable receipt and Job; retrieve REST resources to resolve outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-request-domain": "management",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterfaceCounterDiagnosticCommand"
+              }
+            }
+          }
+        },
+        "description": "Starts a cancellable Active observation of up to four Interfaces under one current Port. Counter deltas require two adjacent existing shared OVSDB statistics samples and matching resource scope."
+      }
+    },
+    "/diagnostics/interface-counters/{job_id}": {
+      "get": {
+        "operationId": "readInterfaceCounterDiagnostic",
+        "summary": "readInterfaceCounterDiagnostic",
+        "x-capability": "diagnostics.active",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterfaceCounterDiagnosticResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reads the original owned Active diagnostic result, including explicit gaps, until the result expires."
+      }
+    },
     "/search": {
       "get": {
         "operationId": "searchResources",
@@ -26206,7 +26996,7 @@
         "summary": "createCapture",
         "x-capability": "capture.run",
         "x-service-issue": 46,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "",
         "parameters": [
           {
@@ -26408,7 +27198,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Starts an elevated, cancellable capture on one explicitly authorized active Interface with one fixed Ethernet-header-only ARP, Slow Protocol, or LLDP profile. Original packet payload is never stored. Output has independent packet, byte and time bounds."
       }
     },
     "/support-bundles": {
@@ -26417,7 +27208,7 @@
         "summary": "createSupportBundle",
         "x-capability": "support.export",
         "x-service-issue": 46,
-        "x-service-state": "service-pending",
+        "x-service-state": "implemented",
         "x-resource-kind": "",
         "parameters": [
           {
@@ -26619,7 +27410,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Builds an expiring sealed redacted archive from an explicit allowlist of currently authorized management observations. The accepted Job references the archive."
       }
     },
     "/jobs/{job_id}/cancellations": {
@@ -28757,6 +29549,932 @@
           "current-authority",
           "validated-plan"
         ]
+      }
+    },
+    "/support-bundles/{job_id}": {
+      "get": {
+        "operationId": "readSupportBundle",
+        "summary": "readSupportBundle",
+        "x-capability": "artifacts.read",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportBundleMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns metadata or one bounded part of the original Support Bundle for its current authorized owner, before the archive expires."
+      }
+    },
+    "/support-bundles/{job_id}/parts": {
+      "get": {
+        "operationId": "readSupportBundlePart",
+        "summary": "readSupportBundlePart",
+        "x-capability": "artifacts.read",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 21
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportBundlePart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns metadata or one bounded part of the original Support Bundle for its current authorized owner, before the archive expires."
+      }
+    },
+    "/captures/{job_id}": {
+      "get": {
+        "operationId": "readCaptureArtifact",
+        "summary": "readCaptureArtifact",
+        "x-capability": "artifacts.read",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureArtifact"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reads the original bounded PCAP metadata or one limited artifact part for its current authorized owner before expiry."
+      }
+    },
+    "/captures/{job_id}/parts": {
+      "get": {
+        "operationId": "readCapturePart",
+        "summary": "readCapturePart",
+        "x-capability": "artifacts.read",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapturePart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reads the original bounded PCAP metadata or one limited artifact part for its current authorized owner before expiry."
+      }
+    },
+    "/captures/targets": {
+      "get": {
+        "operationId": "listCaptureTargets",
+        "summary": "listCaptureTargets",
+        "x-capability": "diagnostics.disruptive",
+        "x-service-issue": 46,
+        "x-service-state": "implemented",
+        "x-resource-kind": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureTargets"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Lists only root-reviewed Interface management IDs with current native binding evidence for the fixed header capture facility. Requires inventory.read."
       }
     },
     "/artifacts/{artifact_id}": {
@@ -39241,6 +40959,715 @@
         "required": [
           "request_id",
           "service"
+        ],
+        "additionalProperties": false
+      },
+      "LinkLACPDiagnosticCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "target_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "sample_seconds": {
+            "type": "integer",
+            "enum": [
+              5,
+              10,
+              15
+            ]
+          },
+          "port_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "request_id",
+          "target_ref",
+          "sample_seconds",
+          "port_limit"
+        ],
+        "additionalProperties": false
+      },
+      "LinkLACPDiagnosticMember": {
+        "type": "object",
+        "properties": {
+          "interface_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "link": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "lacp_current": {
+            "type": "string",
+            "enum": [
+              "current",
+              "not-current",
+              "not-applicable",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "interface_ref",
+          "link",
+          "lacp_current"
+        ],
+        "additionalProperties": false
+      },
+      "LinkLACPDiagnosticPort": {
+        "type": "object",
+        "properties": {
+          "port_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "configured_lacp": {
+            "type": "string",
+            "enum": [
+              "active",
+              "passive",
+              "off",
+              "unknown",
+              "withheld"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkLACPDiagnosticMember"
+            },
+            "minItems": 0,
+            "maxItems": 64
+          }
+        },
+        "required": [
+          "port_ref",
+          "configured_lacp",
+          "members"
+        ],
+        "additionalProperties": false
+      },
+      "LinkLACPDiagnosticResult": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "const": "diag.net.link-lacp"
+          },
+          "target_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "truncated",
+              "no-data",
+              "provider-unavailable",
+              "evidence-unavailable",
+              "operation-failed",
+              "cancelled",
+              "timed-out"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "authority": {
+            "type": "string",
+            "const": "ovsdb-structured"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkLACPDiagnosticPort"
+            },
+            "minItems": 0,
+            "maxItems": 10
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "template_id",
+          "target_ref",
+          "state",
+          "ports",
+          "partial",
+          "truncated"
+        ],
+        "additionalProperties": false
+      },
+      "InterfaceCounterDiagnosticCommand": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "$ref": "#/components/schemas/RequestId"
+          },
+          "target_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "sample_seconds": {
+            "type": "integer",
+            "enum": [
+              5,
+              10,
+              15
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "target_ref",
+          "sample_seconds"
+        ],
+        "additionalProperties": false
+      },
+      "InterfaceCounterDiagnosticMember": {
+        "type": "object",
+        "properties": {
+          "interface_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "partial",
+              "unavailable"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "deltas": {
+            "type": "object",
+            "properties": {
+              "rx_bytes": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tx_bytes": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rx_packets": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tx_packets": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rx_errors": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tx_errors": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rx_dropped": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tx_dropped": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "rx_bytes",
+              "tx_bytes",
+              "rx_packets",
+              "tx_packets",
+              "rx_errors",
+              "tx_errors",
+              "rx_dropped",
+              "tx_dropped"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "interface_ref",
+          "state",
+          "deltas"
+        ],
+        "additionalProperties": false
+      },
+      "InterfaceCounterDiagnosticResult": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "const": "diag.host.interface-counters"
+          },
+          "target_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "truncated",
+              "no-data",
+              "provider-unavailable",
+              "evidence-unavailable",
+              "operation-failed",
+              "cancelled",
+              "timed-out"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "type": "string",
+            "const": "ovsdb-statistics"
+          },
+          "freshness": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "unknown"
+            ]
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "first_sampled_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "second_sampled_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterfaceCounterDiagnosticMember"
+            },
+            "minItems": 0,
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "template_id",
+          "target_ref",
+          "state",
+          "source",
+          "freshness",
+          "truncated",
+          "members"
+        ],
+        "additionalProperties": false
+      },
+      "SupportBundleSection": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "runtime",
+              "ovs",
+              "health",
+              "events",
+              "audit"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "included",
+              "partial",
+              "truncated",
+              "no-data",
+              "unavailable"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65536
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "kind",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "SupportBundleManifest": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 1
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "expires_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportBundleSection"
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "redaction": {
+            "type": "object",
+            "properties": {
+              "policy": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "omitted": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "minItems": 0,
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "policy",
+              "omitted"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "version",
+          "created_at",
+          "expires_at",
+          "sections",
+          "redaction"
+        ],
+        "additionalProperties": false
+      },
+      "SupportBundleMetadata": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/SupportBundleManifest"
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 524288
+          },
+          "parts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 22
+          }
+        },
+        "required": [
+          "id",
+          "manifest",
+          "sha256",
+          "bytes",
+          "parts"
+        ],
+        "additionalProperties": false
+      },
+      "SupportBundlePart": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "part": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 21
+          },
+          "data_base64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768,
+            "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+          }
+        },
+        "required": [
+          "id",
+          "part",
+          "data_base64"
+        ],
+        "additionalProperties": false
+      },
+      "CaptureArtifact": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "target_ref": {
+            "$ref": "#/components/schemas/ResourceRef"
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "arp-ethernet-headers",
+              "slow-protocol-ethernet-headers",
+              "lldp-ethernet-headers"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "truncated",
+              "no-data"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "packets": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4096
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 24,
+            "maximum": 1048576
+          },
+          "parts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 43
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "started_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "ended_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "expires_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        },
+        "required": [
+          "id",
+          "target_ref",
+          "profile",
+          "state",
+          "packets",
+          "bytes",
+          "parts",
+          "sha256",
+          "started_at",
+          "ended_at",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "CapturePart": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "part": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 42
+          },
+          "data_base64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768,
+            "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+          }
+        },
+        "required": [
+          "id",
+          "part",
+          "data_base64"
+        ],
+        "additionalProperties": false
+      },
+      "CaptureTargets": {
+        "type": "object",
+        "properties": {
+          "policy_state": {
+            "type": "string",
+            "enum": [
+              "enabled",
+              "disabled",
+              "unavailable"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/Id"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 15
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 8
+          }
+        },
+        "required": [
+          "policy_state",
+          "targets"
         ],
         "additionalProperties": false
       },

@@ -19,6 +19,7 @@ import (
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
+	"github.com/sampsonlor/ovs-webui/internal/capture"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	linuxprovider "github.com/sampsonlor/ovs-webui/internal/provider/linux"
@@ -107,6 +108,7 @@ func run() int {
 	localQoSCreate := flag.String("local-qos-create-names", "", "Reviewed comma-separated names for creating unbound QoS profiles")
 	localTelemetry := flag.String("local-telemetry-bindings", "", "Reviewed comma-separated Bridge management ID:protocol pairs for Telemetry configuration")
 	lldpInterfaces := flag.String("lldp-observe-interfaces", "", "Opt-in passive LLDP on up to 16 exact Interface management IDs, separated by commas")
+	captureInterfaces := flag.String("capture-interface-ids", "", "Opt in to fixed Ethernet-header capture on up to eight exact Interface management IDs")
 	fdbBridges := flag.String("fdb-observe-bridges", "", "Opt-in native FDB observation for up to eight exact Bridge management IDs, separated by commas")
 	fdbControl := flag.String("fdb-witness-socket", "", "Explicit local ovs-vswitchd control socket for the bounded FDB witness")
 	fdbExecutable := flag.String("fdb-witness-executable", "", "Root-owned executable of the qualified optional FDB witness build")
@@ -125,6 +127,11 @@ func run() int {
 	}
 	managementDebug := runtimehealth.NewDebug(runtimehealth.DebugBootTime)
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: managementDebug}))).With("service", "ovs-mgrd")
+	captureAllowed, captureErr := parseCaptureInterfaces(*captureInterfaces)
+	if captureErr != nil {
+		logger.Error("invalid_process_configuration", "code", auth.ErrorCode(captureErr))
+		return 2
+	}
 	fdbConfigured := *fdbBridges != "" || *fdbControl != "" || *fdbExecutable != "" || *fdbManifest != "" || *fdbManifestDigest != ""
 	if fdbConfigured && (*fdbBridges == "" || *fdbControl == "" || *fdbExecutable == "" || *fdbManifest == "" || *fdbManifestDigest == "") {
 		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_FDB_WITNESS_CONFIGURATION")
@@ -737,7 +744,10 @@ func run() int {
 			return 0
 		}
 		if authentication != nil {
-			authentication.WithInventory(inventoryService)
+			authentication.WithInventory(inventoryService).WithDiagnosticsContext(ctx)
+			authentication.WithCapture(func(ctx context.Context, id string) (capture.Binding, error) {
+				return inventoryService.ResolveCaptureBinding(ctx, id, captureAllowed)
+			}, captureAllowed)
 			if multicastGroupsConfigured {
 				observer, observeErr := provider.MulticastGroupObserver(ovsprovider.MulticastGroupOptions{ControlSocket: *multicastControl, Executable: *multicastExecutable, Manifest: *multicastManifest, ManifestDigest: *multicastManifestDigest, PeerUID: uint32(*ovsUID)})
 				if observeErr != nil {
@@ -815,6 +825,7 @@ func run() int {
 	if authentication != nil {
 		authentication.WithManagementDebug(managementDebug)
 		authentication.WithRuntimeRestart(runtimecontrol.NewSystemd(), *allowServiceRestart, restartBoot)
+		authentication.WithSupportHealth(func() ipc.Health { return runtimeHealth.snapshot(time.Now()) })
 		if err := authentication.InitializeEvidence(ctx); err != nil {
 			logger.Error("service_start_failed", "code", auth.ErrorCode(err))
 			return 1

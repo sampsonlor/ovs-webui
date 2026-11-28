@@ -77,6 +77,18 @@ func (r *Repository) ExecuteAuth(ctx context.Context, credential string, input a
 	if op.ID == "cancelJob" {
 		return r.cancelJob(ctx, credential, input)
 	}
+	if op.ID == linkDiagnosticOperation {
+		return r.runLinkLACPDiagnostic(ctx, credential, input)
+	}
+	if op.ID == interfaceCounterOperation {
+		return r.runInterfaceCounterDiagnostic(ctx, credential, input)
+	}
+	if op.ID == supportOperation {
+		return r.createSupportBundle(ctx, credential, input)
+	}
+	if op.ID == captureOperation {
+		return r.prepareCapture(ctx, credential, input)
+	}
 	if op.ID == "restartManagementService" {
 		return r.restartManagementService(ctx, credential, input)
 	}

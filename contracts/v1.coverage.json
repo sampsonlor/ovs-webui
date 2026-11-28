@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.37.0",
+  "contract_version": "1.38.0",
   "scope": [
     {
       "id": "P1-PLAT-01",
@@ -428,10 +428,18 @@
       "id": "P1-OPS-04",
       "name": "Diagnostics",
       "paths": [
-        "/diagnostics"
+        "/diagnostics",
+        "/diagnostics/link-lacp",
+        "/diagnostics/link-lacp/{job_id}",
+        "/diagnostics/interface-counters",
+        "/diagnostics/interface-counters/{job_id}"
       ],
       "operations": [
-        "createDiagnostic"
+        "createDiagnostic",
+        "runLinkLACPDiagnostic",
+        "readLinkLACPDiagnostic",
+        "runInterfaceCounterDiagnostic",
+        "readInterfaceCounterDiagnostic"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -439,10 +447,16 @@
       "id": "P1-OPS-05",
       "name": "Packet Capture",
       "paths": [
-        "/captures"
+        "/captures",
+        "/captures/targets",
+        "/captures/{job_id}",
+        "/captures/{job_id}/parts"
       ],
       "operations": [
-        "createCapture"
+        "createCapture",
+        "listCaptureTargets",
+        "readCaptureArtifact",
+        "readCapturePart"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -450,10 +464,14 @@
       "id": "P1-OPS-06",
       "name": "Support Bundle",
       "paths": [
-        "/support-bundles"
+        "/support-bundles",
+        "/support-bundles/{job_id}",
+        "/support-bundles/{job_id}/parts"
       ],
       "operations": [
-        "createSupportBundle"
+        "createSupportBundle",
+        "readSupportBundle",
+        "readSupportBundlePart"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -1167,12 +1185,26 @@
       "paths": [
         "/diagnostics/templates",
         "/diagnostics",
-        "/captures"
+        "/diagnostics/link-lacp",
+        "/diagnostics/link-lacp/{job_id}",
+        "/diagnostics/interface-counters",
+        "/diagnostics/interface-counters/{job_id}",
+        "/captures",
+        "/captures/targets",
+        "/captures/{job_id}",
+        "/captures/{job_id}/parts"
       ],
       "operations": [
         "listDiagnosticsTemplates",
         "createDiagnostic",
-        "createCapture"
+        "runLinkLACPDiagnostic",
+        "readLinkLACPDiagnostic",
+        "runInterfaceCounterDiagnostic",
+        "readInterfaceCounterDiagnostic",
+        "createCapture",
+        "listCaptureTargets",
+        "readCaptureArtifact",
+        "readCapturePart"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -1216,10 +1248,14 @@
       "name": "Support Bundle",
       "paths": [
         "/support-bundles",
+        "/support-bundles/{job_id}",
+        "/support-bundles/{job_id}/parts",
         "/artifacts/{artifact_id}"
       ],
       "operations": [
         "createSupportBundle",
+        "readSupportBundle",
+        "readSupportBundlePart",
         "readArtifact"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"

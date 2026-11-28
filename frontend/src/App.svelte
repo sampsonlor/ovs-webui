@@ -32,8 +32,23 @@
   import Fdb from './Fdb.svelte';
   import Endpoints from './Endpoints.svelte';
   import Health from './Health.svelte';
+  import Diagnostics from './Diagnostics.svelte';
+  import InterfaceCounterResult from './InterfaceCounterResult.svelte';
+  import LinkLACPResult from './LinkLACPResult.svelte';
+  import SupportBundles from './SupportBundles.svelte';
+  import PacketCapture from './PacketCapture.svelte';
+  import CaptureResult from './CaptureResult.svelte';
   import Capabilities from './Capabilities.svelte';
   import { capabilitiesRoute, healthRoute } from './management-observation';
+  import {
+    canObserveDiagnostics,
+    canSampleInterfaceCounters,
+    diagnosticsRoute,
+    interfaceCounterJobPortID,
+    isLinkLACPJob,
+  } from './diagnostics';
+  import { supportBundleOperation, supportBundleResultRoute, supportBundleRoute } from './support-bundles';
+  import { capturePermission, captureRoute, isCaptureJob } from './packet-capture';
 
   const controller = start();
   const model = controller.store;
@@ -280,6 +295,15 @@
           href="/operations/events"
           current={path.includes('/events')}>Events</Link
         ><Link href="/operations/audit" current={path.includes('/audit')}>Audit</Link>
+        {#if $model.sessionReady && (canObserveDiagnostics($model.session) || canSampleInterfaceCounters($model.session))}
+          <Link href={diagnosticsRoute} current={path === diagnosticsRoute}>Diagnostics</Link>
+        {/if}
+        {#if $model.sessionReady && has($model.session, 'support_bundle.create')}
+          <Link href={supportBundleRoute} current={path === supportBundleRoute}>Support Bundle</Link>
+        {/if}
+        {#if $model.sessionReady && capturePermission($model.session)}
+          <Link href={captureRoute} current={path === captureRoute}>Packet Capture</Link>
+        {/if}
       </nav>
       <p class="sidebar-footer">
         {mobile
@@ -589,6 +613,12 @@
           {#key path}<Changes model={$model} {expert} {desktop} {mobile} {tick} />{/key}
         {:else if path === healthRoute}
           <Health model={$model} {expert} {desktop} />
+        {:else if path === diagnosticsRoute}
+          {#key $model.query}<Diagnostics model={$model} {expert} {mobile} />{/key}
+        {:else if path === supportBundleRoute}
+          {#key $model.query}<SupportBundles model={$model} {expert} />{/key}
+        {:else if path === captureRoute}
+          {#key $model.query}<PacketCapture model={$model} {desktop} {expert} />{/key}
         {:else if path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')}
           <Capabilities model={$model} {expert} />
         {:else if path.startsWith('/operations/events') || path.startsWith('/operations/audit')}
@@ -695,11 +725,27 @@
                       >Transaction</Link
                     >
                   </p>{/if}
+                {#if path.startsWith('/operations/jobs/') && resource.operation === supportBundleOperation &&
+                    resource.owner_id === $model.session?.principal_id && $model.sessionReady &&
+                    has($model.session, 'support_bundle.create') && typeof resource.id === 'string'}
+                  {@const bundle = supportBundleResultRoute(resource.id)}
+                  {#if bundle}<p><Link href={bundle}>Review Support Bundle</Link></p>{/if}
+                {/if}
                 {#if expert}<details>
                     <summary>Authorized native resource</summary>
                     <pre>{JSON.stringify(resource, null, 2)}</pre>
                   </details>{/if}
               </section>
+              {#if $model.sessionReady && path.startsWith('/operations/jobs/') && canObserveDiagnostics($model.session) && isLinkLACPJob(resource, $model.session)}
+                <LinkLACPResult state={resource.state} load={$model.linkLACPResult} {expert} />
+              {/if}
+              {#if $model.sessionReady && path.startsWith('/operations/jobs/') && canSampleInterfaceCounters($model.session) && interfaceCounterJobPortID(resource, $model.session)}
+                <InterfaceCounterResult state={resource.state} load={$model.interfaceCounterResult} {expert} />
+              {/if}
+              {#if $model.sessionReady && path.startsWith('/operations/jobs/') && capturePermission($model.session) &&
+                  isCaptureJob(resource, $model.session) && typeof resource.id === 'string'}
+                <CaptureResult id={resource.id} model={$model} {expert} job={resource} />
+              {/if}
             {/if}
           {/if}
         {:else if path === '/overview'}

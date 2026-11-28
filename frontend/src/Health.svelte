@@ -5,6 +5,7 @@
   import Status from './Status.svelte';
   import { controller, type Model } from './model';
   import { has } from './policy';
+  import { canObserveDiagnostics, diagnosticsRoute } from './diagnostics';
   import {
     capabilitiesRoute,
     componentName,
@@ -178,8 +179,9 @@
     </section>
   {/if}
 
-  {#if model.sessionReady && evidenceLinks.length}
+  {#if model.sessionReady && (evidenceLinks.length || canObserveDiagnostics(model.session))}
     <nav class="actions" aria-label="Related operational evidence">
+      {#if canObserveDiagnostics(model.session)}<Link href={diagnosticsRoute}>Diagnostics</Link>{/if}
       {#each evidenceLinks as route (route.href)}
         <Link href={route.href}>{route.label}</Link>
       {/each}

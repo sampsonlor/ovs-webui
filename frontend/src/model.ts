@@ -2,7 +2,13 @@ import { writable } from 'svelte/store';
 import type {
   Accepted,
   Candidate,
+  CaptureArtifact,
+  CaptureTargets,
+  InterfaceCounterDiagnosticCommand,
+  InterfaceCounterDiagnosticResult,
   Login,
+  LinkLACPDiagnosticCommand,
+  LinkLACPDiagnosticResult,
   ManagementDebugCommand,
   ManagementServiceRestartCommand,
   Interface,
@@ -11,6 +17,7 @@ import type {
   PortsPage,
   ResourceRef,
   Session,
+  SupportBundleMetadata,
   Transaction,
   Validation,
   VlanInput,
@@ -24,6 +31,45 @@ import { interfaceListPath, readInterfaceQuery } from './interface-query.ts';
 import type { InterfaceScope } from './interface-query';
 import { telemetryMessage } from './telemetry.ts';
 import { capabilitiesRoute, healthRoute } from './management-observation.ts';
+import {
+  canObserveDiagnostics,
+  canSampleInterfaceCounters,
+  diagnosticResultID,
+  diagnosticResultRoute,
+  diagnosticsRoute,
+  diagnosticTargetQuery,
+  diagnosticTargets,
+  diagnosticTemplate,
+  interfaceCounterJobPortID,
+  interfaceCounterPath,
+  interfaceCounterPortID,
+  interfaceCounterResultRoute,
+  interfaceCounterResultTarget,
+  isLinkLACPJob,
+  linkLACPPath,
+  matchesInterfaceCounterResult,
+  terminalDiagnosticJob,
+} from './diagnostics.ts';
+import {
+  authorizedSupportScopes,
+  supportBundleID,
+  supportBundlePath,
+  supportBundleResultRoute,
+  supportBundleRoute,
+  type SupportKind,
+} from './support-bundles.ts';
+import {
+  canCancelCapture,
+  captureElevationExpiry,
+  captureInputsValid,
+  capturePath,
+  capturePermission,
+  captureResultID,
+  captureResultRoute,
+  captureRoute,
+  isCaptureJob,
+  type CaptureProfile,
+} from './packet-capture.ts';
 
 export type Load<T> = {
   status: 'loading' | 'ready' | 'unavailable' | 'denied';
@@ -37,6 +83,19 @@ export const empty = <T>(): Load<T> => ({
   error: '',
   received: 0,
 });
+function checkedCounterResult(
+  load: Load<InterfaceCounterDiagnosticResult>,
+  target: string,
+): Load<InterfaceCounterDiagnosticResult> {
+  if (load.status !== 'ready' || matchesInterfaceCounterResult(load.value, target))
+    return load;
+  return {
+    ...load,
+    status: 'unavailable',
+    value: null,
+    error: 'DIAGNOSTIC_RESULT_IDENTITY_MISMATCH',
+  };
+}
 type RecordValue = Record<string, unknown>;
 export type Model = {
   session: Session | null;
@@ -60,6 +119,11 @@ export type Model = {
   validation: Load<Validation>;
   transaction: Load<Transaction>;
   resource: Load<RecordValue>;
+  linkLACPResult: Load<LinkLACPDiagnosticResult>;
+  interfaceCounterResult: Load<InterfaceCounterDiagnosticResult>;
+  supportBundle: Load<SupportBundleMetadata>;
+  captureTargets: Load<CaptureTargets>;
+  captureArtifact: Load<CaptureArtifact>;
 };
 function route(value: string) {
   const [path, query = ''] = value.split('?', 2);
@@ -83,6 +147,11 @@ function initial(path: string): Model {
     validation: empty(),
     transaction: empty(),
     resource: empty(),
+    linkLACPResult: empty(),
+    interfaceCounterResult: empty(),
+    supportBundle: empty(),
+    captureTargets: empty(),
+    captureArtifact: empty(),
   };
 }
 export function refPath(ref: ResourceRef | null): string | null {
@@ -117,7 +186,8 @@ export function errorText(error: unknown): string {
     return 'The transaction changed before this decision was accepted. Review the refreshed evidence and choose again.';
   if (error instanceof APIError) {
     const code = error.problem.code;
-    if (code && /^(?:INVALID_)?TELEMETRY_/.test(code)) return telemetryMessage(code, error.message);
+    if (code && /^(?:INVALID_)?TELEMETRY_/.test(code))
+      return telemetryMessage(code, error.message);
   }
   return error instanceof Error ? error.message : 'UNKNOWN_ERROR';
 }
@@ -218,6 +288,11 @@ export class Controller {
       validation: empty(),
       transaction: empty(),
       resource: empty(),
+      linkLACPResult: empty(),
+      interfaceCounterResult: empty(),
+      supportBundle: empty(),
+      captureTargets: empty(),
+      captureArtifact: empty(),
       message: '',
     });
     void this.refresh();
@@ -369,11 +444,89 @@ export class Controller {
       if (path === healthRoute) {
         resourceURL = '/health';
         capability = 'state.read';
-      } else if (path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')) {
-        resourceURL = path === capabilitiesRoute
-          ? '/capabilities' + query
-          : '/capabilities/' + encodeURIComponent(path.slice(capabilitiesRoute.length + 1));
-        capability = has(session, 'state.read') ? 'capabilities.read' : 'state.read';
+      } else if (path === captureRoute) {
+        const id = captureResultID(query);
+        if (id) {
+          const required = capturePermission(session)
+            ? 'artifacts.read'
+            : 'diagnostics.disruptive';
+          tasks.push(
+            read<CaptureArtifact>(`${capturePath}/${id}`, required).then(
+              (captureArtifact) => {
+                changes.captureArtifact = captureArtifact;
+              },
+            ),
+          );
+        } else
+          tasks.push(
+            read<CaptureTargets>(
+              `${capturePath}/targets`,
+              'diagnostics.disruptive',
+            ).then((captureTargets) => {
+              changes.captureTargets = captureTargets;
+            }),
+          );
+      } else if (path === supportBundleRoute) {
+        const id = supportBundleID(query);
+        if (id) {
+          const required = has(session, 'support_bundle.create')
+            ? 'artifacts.read'
+            : 'support_bundle.create';
+          tasks.push(
+            read<SupportBundleMetadata>(
+              `${supportBundlePath}/${id}`,
+              required,
+            ).then((supportBundle) => {
+              changes.supportBundle = supportBundle;
+            }),
+          );
+        }
+      } else if (path === diagnosticsRoute) {
+        const template = diagnosticTemplate(query, session);
+        const authorization =
+          template === 'interface-counters' ? 'diagnostics.active' : 'diagnostics.read';
+        capability = has(session, authorization) ? 'inventory.read' : authorization;
+        const jobID = diagnosticResultID(query);
+        if (jobID && template === 'interface-counters') {
+          const target = interfaceCounterResultTarget(query);
+          if (target && canSampleInterfaceCounters(session))
+            tasks.push(
+              read<InterfaceCounterDiagnosticResult>(
+                `${interfaceCounterPath}/${jobID}`,
+                'diagnostics.active',
+              ).then((result) => {
+                changes.interfaceCounterResult = checkedCounterResult(result, target);
+              }),
+            );
+          else
+            changes.interfaceCounterResult = {
+              status: 'unavailable',
+              value: null,
+              error: 'DIAGNOSTIC_RESULT_TARGET_UNKNOWN',
+              received: 0,
+            };
+        } else if (jobID)
+          tasks.push(
+            read<LinkLACPDiagnosticResult>(
+              `${linkLACPPath}/${jobID}`,
+              capability,
+            ).then((result) => {
+              changes.linkLACPResult = result;
+            }),
+          );
+        else resourceURL = diagnosticTargetQuery(query, template).inventory;
+      } else if (
+        path === capabilitiesRoute ||
+        path.startsWith(capabilitiesRoute + '/')
+      ) {
+        resourceURL =
+          path === capabilitiesRoute
+            ? '/capabilities' + query
+            : '/capabilities/' +
+              encodeURIComponent(path.slice(capabilitiesRoute.length + 1));
+        capability = has(session, 'state.read')
+          ? 'capabilities.read'
+          : 'state.read';
       } else if (parts[0] === 'operations') {
         resourceURL =
           `/${parts.slice(1).join('/')}` + (parts.length === 2 ? query : '');
@@ -385,51 +538,120 @@ export class Controller {
               audit: 'audit.read',
             } as Record<string, string>
           )[parts[1]] ?? 'unavailable';
-      } else if (path === '/switching/mirrors' || path.startsWith('/switching/mirrors/')) {
-        resourceURL = path === '/switching/mirrors/new' ? '/inventory/topology?domain=mirror' : parts.length===2 ? '/mirrors'+query : `/mirrors/${encodeURIComponent(parts[2])}`;
+      } else if (
+        path === '/switching/mirrors' ||
+        path.startsWith('/switching/mirrors/')
+      ) {
+        resourceURL =
+          path === '/switching/mirrors/new'
+            ? '/inventory/topology?domain=mirror'
+            : parts.length === 2
+              ? '/mirrors' + query
+              : `/mirrors/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';
-      } else if (path === '/switching/tunnels' || path.startsWith('/switching/tunnels/')) {
-        resourceURL = path === '/switching/tunnels/new' ? '/inventory/topology' : parts.length===2 ? '/tunnels'+query : `/tunnels/${encodeURIComponent(parts[2])}`;
+      } else if (
+        path === '/switching/tunnels' ||
+        path.startsWith('/switching/tunnels/')
+      ) {
+        resourceURL =
+          path === '/switching/tunnels/new'
+            ? '/inventory/topology'
+            : parts.length === 2
+              ? '/tunnels' + query
+              : `/tunnels/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';
-      } else if (path === '/switching/qos' || path.startsWith('/switching/qos/')) {
-        resourceURL = parts.length === 2 ? '/qos' + query : `/qos/${encodeURIComponent(parts[2])}`;
+      } else if (
+        path === '/switching/qos' ||
+        path.startsWith('/switching/qos/')
+      ) {
+        resourceURL =
+          parts.length === 2
+            ? '/qos' + query
+            : `/qos/${encodeURIComponent(parts[2])}`;
         capability = 'configuration.read';
-      } else if (path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')) {
+      } else if (
+        path === '/visibility/statistics' ||
+        path.startsWith('/visibility/statistics/')
+      ) {
         const statisticQuery = new URLSearchParams(query);
         if (!statisticQuery.has('limit')) statisticQuery.set('limit', '25');
-        resourceURL = parts.length === 2 ? `/statistics?${statisticQuery}` : `/statistics/${encodeURIComponent(parts[2])}`;
-        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
-      } else if (path === '/visibility/neighbors' || path.startsWith('/visibility/neighbors/')) {
+        resourceURL =
+          parts.length === 2
+            ? `/statistics?${statisticQuery}`
+            : `/statistics/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read')
+          ? 'state.read'
+          : 'inventory.read';
+      } else if (
+        path === '/visibility/neighbors' ||
+        path.startsWith('/visibility/neighbors/')
+      ) {
         const neighborQuery = new URLSearchParams(query);
         if (!neighborQuery.has('limit')) neighborQuery.set('limit', '25');
-        resourceURL = parts.length === 2 ? `/neighbors?${neighborQuery}` : `/neighbors/${encodeURIComponent(parts[2])}`;
-        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
-      } else if (path === '/visibility/lldp' || path.startsWith('/visibility/lldp/')) {
+        resourceURL =
+          parts.length === 2
+            ? `/neighbors?${neighborQuery}`
+            : `/neighbors/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read')
+          ? 'state.read'
+          : 'inventory.read';
+      } else if (
+        path === '/visibility/lldp' ||
+        path.startsWith('/visibility/lldp/')
+      ) {
         const lldpQuery = new URLSearchParams(query);
         if (!lldpQuery.has('limit')) lldpQuery.set('limit', '25');
-        resourceURL = parts.length === 2 ? `/lldp?${lldpQuery}` : `/lldp/${encodeURIComponent(parts[2])}`;
-        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
-      } else if (path === '/visibility/endpoints' || path.startsWith('/visibility/endpoints/')) {
+        resourceURL =
+          parts.length === 2
+            ? `/lldp?${lldpQuery}`
+            : `/lldp/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read')
+          ? 'state.read'
+          : 'inventory.read';
+      } else if (
+        path === '/visibility/endpoints' ||
+        path.startsWith('/visibility/endpoints/')
+      ) {
         const endpointQuery = new URLSearchParams(query);
         if (parts.length === 2) {
           if (!endpointQuery.has('limit')) endpointQuery.set('limit', '25');
           resourceURL = '/endpoints?' + endpointQuery;
         } else {
           const ip = endpointQuery.get('ip');
-          const detailQuery = ip === null ? '' : '?' + new URLSearchParams({ ip });
-          resourceURL = '/endpoints/' + encodeURIComponent(parts[2]) + detailQuery;
+          const detailQuery =
+            ip === null ? '' : '?' + new URLSearchParams({ ip });
+          resourceURL =
+            '/endpoints/' + encodeURIComponent(parts[2]) + detailQuery;
         }
-        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
-      } else if (path === '/visibility/fdb' || path.startsWith('/visibility/fdb/')) {
+        capability = has(session, 'inventory.read')
+          ? 'state.read'
+          : 'inventory.read';
+      } else if (
+        path === '/visibility/fdb' ||
+        path.startsWith('/visibility/fdb/')
+      ) {
         const fdbQuery = new URLSearchParams(query);
         if (!fdbQuery.has('limit')) fdbQuery.set('limit', '25');
-        resourceURL = parts.length === 2 ? `/fdb?${fdbQuery}` : `/fdb/${encodeURIComponent(parts[2])}`;
-        capability = has(session, 'inventory.read') ? 'state.read' : 'inventory.read';
-      } else if (path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')) {
+        resourceURL =
+          parts.length === 2
+            ? `/fdb?${fdbQuery}`
+            : `/fdb/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read')
+          ? 'state.read'
+          : 'inventory.read';
+      } else if (
+        path === '/visibility/telemetry' ||
+        path.startsWith('/visibility/telemetry/')
+      ) {
         const telemetryQuery = new URLSearchParams(query);
         if (!telemetryQuery.has('limit')) telemetryQuery.set('limit', '25');
-        resourceURL = parts.length === 2 ? `/telemetry?${telemetryQuery}` : `/telemetry/${encodeURIComponent(parts[2])}`;
-        capability = has(session, 'inventory.read') ? 'configuration.read' : 'inventory.read';
+        resourceURL =
+          parts.length === 2
+            ? `/telemetry?${telemetryQuery}`
+            : `/telemetry/${encodeURIComponent(parts[2])}`;
+        capability = has(session, 'inventory.read')
+          ? 'configuration.read'
+          : 'inventory.read';
       } else if (path === '/switching/topology') {
         resourceURL = '/inventory/topology';
         capability = 'configuration.read';
@@ -442,13 +664,25 @@ export class Controller {
             ? '/inventory/spanning-tree' + query
             : `/bridges/${encodeURIComponent(parts[2])}/spanning-tree`;
         capability = 'inventory.read';
-        } else if(path==='/switching/multicast'||path.startsWith('/switching/multicast/')) {
- resourceURL=parts.length===2?'/bridges'+query:`/bridges/${encodeURIComponent(parts[2])}`;
- capability='inventory.read';
- } else if (path === '/switching/isolation' || path.startsWith('/switching/isolation/')) {
-          resourceURL = parts.length===2 ? '/ports'+query : `/ports/${encodeURIComponent(parts[2])}`;
-          capability = 'inventory.read';
-        } else if (parts[0] === 'bridges') {
+      } else if (
+        path === '/switching/multicast' ||
+        path.startsWith('/switching/multicast/')
+      ) {
+        resourceURL =
+          parts.length === 2
+            ? '/bridges' + query
+            : `/bridges/${encodeURIComponent(parts[2])}`;
+        capability = 'inventory.read';
+      } else if (
+        path === '/switching/isolation' ||
+        path.startsWith('/switching/isolation/')
+      ) {
+        resourceURL =
+          parts.length === 2
+            ? '/ports' + query
+            : `/ports/${encodeURIComponent(parts[2])}`;
+        capability = 'inventory.read';
+      } else if (parts[0] === 'bridges') {
         resourceURL = path + (parts.length === 1 ? query : '');
         capability = 'inventory.read';
       } else if (path === '/interfaces' && selectedBridge) {
@@ -460,8 +694,51 @@ export class Controller {
       } else if (path === '/overview') resourceURL = '/runtime';
       if (resourceURL)
         tasks.push(
-          read<RecordValue>(resourceURL, capability).then((resource) => {
+          read<RecordValue>(resourceURL, capability).then(async (resource) => {
             changes.resource = resource;
+            if (
+              parts[0] !== 'operations' ||
+              parts[1] !== 'jobs' ||
+              parts.length !== 3
+            )
+              return;
+            const job = resource.value;
+            changes.linkLACPResult = empty();
+            changes.interfaceCounterResult = empty();
+            changes.captureArtifact = empty();
+            if (
+              !valid() ||
+              !job ||
+              job.id !== parts[2] ||
+              !terminalDiagnosticJob(job.state)
+            )
+              return;
+            const target = canSampleInterfaceCounters(session)
+              ? interfaceCounterJobPortID(job, session)
+              : null;
+            if (target) {
+              changes.interfaceCounterResult = checkedCounterResult(
+                await read<InterfaceCounterDiagnosticResult>(
+                  `${interfaceCounterPath}/${job.id}`,
+                  'diagnostics.active',
+                ),
+                target,
+              );
+            } else if (canObserveDiagnostics(session) && isLinkLACPJob(job, session)) {
+              changes.linkLACPResult = await read<LinkLACPDiagnosticResult>(
+                `${linkLACPPath}/${job.id}`,
+                'diagnostics.read',
+              );
+            } else if (
+              capturePermission(session) &&
+              has(session, 'artifacts.read') &&
+              isCaptureJob(job, session)
+            ) {
+              changes.captureArtifact = await read<CaptureArtifact>(
+                `${capturePath}/${job.id}`,
+                'artifacts.read',
+              );
+            }
           }),
         );
       await Promise.all(tasks);
@@ -492,6 +769,11 @@ export class Controller {
           validation: empty(),
           transaction: empty(),
           resource: empty(),
+          linkLACPResult: empty(),
+          interfaceCounterResult: empty(),
+          supportBundle: empty(),
+          captureTargets: empty(),
+          captureArtifact: empty(),
         });
       }
     } finally {
@@ -557,16 +839,189 @@ export class Controller {
     }
   }
   setManagementDebug(duration: ManagementDebugCommand['duration_seconds']) {
-    if (this.state.path !== healthRoute || !has(this.state.session, 'management.debug.write')) return;
-    return this.mutate(() => this.api.command<Accepted>(
-      '/health/debug', 'POST', 'management', { duration_seconds: duration },
-    ));
+    if (
+      this.state.path !== healthRoute ||
+      !has(this.state.session, 'management.debug.write')
+    )
+      return;
+    return this.mutate(() =>
+      this.api.command<Accepted>('/health/debug', 'POST', 'management', {
+        duration_seconds: duration,
+      }),
+    );
   }
-  restartManagementService(service: ManagementServiceRestartCommand['service']) {
-    if (this.state.path !== healthRoute || !has(this.state.session, 'management.services.control')) return;
+  restartManagementService(
+    service: ManagementServiceRestartCommand['service'],
+  ) {
+    if (
+      this.state.path !== healthRoute ||
+      !has(this.state.session, 'management.services.control')
+    )
+      return;
     return this.mutate(
-      () => this.api.command<Accepted>('/health/service-restarts', 'POST', 'management', { service }),
+      () =>
+        this.api.command<Accepted>(
+          '/health/service-restarts',
+          'POST',
+          'management',
+          { service },
+        ),
       (response) => '/operations/jobs/' + (response as Accepted).job_id,
+    );
+  }
+  runLinkLACP(
+    target: ResourceRef,
+    duration: LinkLACPDiagnosticCommand['sample_seconds'],
+    portLimit: number,
+  ) {
+    if (
+      this.state.path !== diagnosticsRoute ||
+      diagnosticResultID(this.state.query) ||
+      diagnosticTemplate(this.state.query, this.state.session) !== 'link-lacp' ||
+      !canObserveDiagnostics(this.state.session)
+    )
+      return;
+    const { kind } = diagnosticTargetQuery(this.state.query);
+    const available = diagnosticTargets(this.state.resource.value, kind);
+    if (
+      !available?.some(
+        ({ ref }) => ref.id === target.id && ref.kind === target.kind,
+      ) ||
+      ![5, 10, 15].includes(duration) ||
+      !Number.isInteger(portLimit) ||
+      portLimit < 1 ||
+      portLimit > 10
+    )
+      return;
+    return this.mutate(
+      () =>
+        this.api.command<Accepted>(linkLACPPath, 'POST', 'management', {
+          target_ref: { kind: target.kind, id: target.id },
+          sample_seconds: duration,
+          port_limit: portLimit,
+        }),
+      (response) =>
+        this.state.path === diagnosticsRoute
+          ? diagnosticResultRoute(
+              (response as Accepted).job_id,
+              this.state.session,
+            )
+          : null,
+    );
+  }
+  runInterfaceCounters(
+    target: ResourceRef,
+    duration: InterfaceCounterDiagnosticCommand['sample_seconds'],
+  ) {
+    const { path, query, session, resource } = this.state;
+    const portID = interfaceCounterPortID(target);
+    if (
+      path !== diagnosticsRoute ||
+      diagnosticResultID(query) ||
+      diagnosticTemplate(query, session) !== 'interface-counters' ||
+      !canSampleInterfaceCounters(session) ||
+      !portID ||
+      resource.status !== 'ready' ||
+      !diagnosticTargets(resource.value, 'port')?.some(
+        ({ ref }) => ref.id === portID,
+      ) ||
+      ![5, 10, 15].includes(duration)
+    )
+      return;
+    return this.mutate(
+      () =>
+        this.api.command<Accepted>(interfaceCounterPath, 'POST', 'management', {
+          target_ref: { kind: 'port', id: portID },
+          sample_seconds: duration,
+        }),
+      (response) =>
+        this.state.path === path &&
+        this.state.query === query &&
+        canSampleInterfaceCounters(this.state.session)
+          ? interfaceCounterResultRoute(
+              (response as Accepted).job_id,
+              portID,
+              this.state.session,
+            )
+          : null,
+    );
+  }
+  createSupportBundle(kinds: readonly SupportKind[]) {
+    if (
+      this.state.path !== supportBundleRoute ||
+      supportBundleID(this.state.query) ||
+      !has(this.state.session, 'support_bundle.create') ||
+      !authorizedSupportScopes(kinds, this.state.session)
+    )
+      return;
+    return this.mutate(
+      () =>
+        this.api.command<Accepted>(supportBundlePath, 'POST', 'management', {
+          include_kinds: [...kinds],
+          redact: true,
+        }),
+      (response) =>
+        this.state.path === supportBundleRoute
+          ? supportBundleResultRoute((response as Accepted).job_id)
+          : null,
+    );
+  }
+  startCapture(
+    interfaceID: string,
+    duration: number,
+    bytes: number,
+    profile: CaptureProfile,
+    acknowledged: boolean,
+    desktop: boolean,
+  ) {
+    const { session, path, query, captureTargets } = this.state;
+    if (
+      path !== captureRoute ||
+      captureResultID(query) ||
+      !desktop ||
+      !acknowledged ||
+      !capturePermission(session) ||
+      !(captureElevationExpiry(session) > Date.now()) ||
+      !captureInputsValid(interfaceID, duration, bytes, profile) ||
+      captureTargets.status !== 'ready' ||
+      captureTargets.value?.policy_state !== 'enabled' ||
+      !captureTargets.value.targets.some((target) => target.id === interfaceID)
+    )
+      return;
+    return this.mutate(
+      () =>
+        this.api.command<Accepted>(capturePath, 'POST', 'management', {
+          interface_id: interfaceID,
+          duration_seconds: duration,
+          max_bytes: bytes,
+          filter: profile,
+        }),
+      (response) =>
+        this.state.path === captureRoute
+          ? captureResultRoute(
+              (response as Accepted).job_id,
+              this.state.session,
+            )
+          : null,
+    );
+  }
+  cancelCapture(id: string) {
+    const { session, path, resource } = this.state;
+    if (
+      path !== `/operations/jobs/${id}` ||
+      resource.value?.id !== id ||
+      resource.status !== 'ready' ||
+      !capturePermission(session) ||
+      !canCancelCapture(resource.value, session)
+    )
+      return;
+    return this.mutate(() =>
+      this.api.command<Accepted>(
+        `/jobs/${id}/cancellations`,
+        'POST',
+        'management',
+        {},
+      ),
     );
   }
   stage(port: Port, value: VlanInput) {
@@ -697,7 +1152,10 @@ export class Controller {
     if (!c) return;
     const existing = c.intents.find(
       (i) =>
-        i.operation === (executable ? 'bridge.spanning-tree.configure' : 'bridge.spanning-tree.prepare') &&
+        i.operation ===
+          (executable
+            ? 'bridge.spanning-tree.configure'
+            : 'bridge.spanning-tree.prepare') &&
         i.object.management_id === item.management_id,
     );
     return this.mutate(
@@ -711,7 +1169,9 @@ export class Controller {
             intents: [
               {
                 intent_id: existing?.intent_id ?? crypto.randomUUID(),
-                operation: executable ? 'bridge.spanning-tree.configure' : 'bridge.spanning-tree.prepare',
+                operation: executable
+                  ? 'bridge.spanning-tree.configure'
+                  : 'bridge.spanning-tree.prepare',
                 object: {
                   management_id: item.management_id,
                   ovs_uuid: item.ovs_uuid,
@@ -798,6 +1258,7 @@ export class Controller {
   async recover() {
     if (this.state.busy || !this.state.sessionReady) return;
     const context = this.context;
+    const pendingPath = this.state.pending?.path;
     this.update({ busy: true });
     try {
       const receipt = await this.api.recover();
@@ -806,7 +1267,39 @@ export class Controller {
         pending: this.api.pending(),
         message: `Original receipt: ${receipt.state}. No command was resubmitted.`,
       });
-      const path = refPath(receipt.resource_ref);
+      let path: string | null = null;
+      if (pendingPath === supportBundlePath) {
+        if (
+          receipt.job_ref?.kind === 'job' &&
+          has(this.state.session, 'support_bundle.create')
+        )
+          path = supportBundleResultRoute(receipt.job_ref.id);
+      } else if (pendingPath === capturePath) {
+        if (
+          receipt.job_ref?.kind === 'job' &&
+          capturePermission(this.state.session)
+        )
+          path = captureResultRoute(receipt.job_ref.id, this.state.session);
+      } else if (pendingPath === interfaceCounterPath) {
+        const portID = interfaceCounterPortID(receipt.resource_ref);
+        if (
+          ['accepted', 'completed'].includes(receipt.state) &&
+          receipt.job_ref?.kind === 'job' &&
+          portID &&
+          canSampleInterfaceCounters(this.state.session)
+        )
+          path = interfaceCounterResultRoute(
+            receipt.job_ref.id,
+            portID,
+            this.state.session,
+          );
+      } else if (pendingPath === linkLACPPath) {
+        if (
+          receipt.job_ref?.kind === 'job' &&
+          canObserveDiagnostics(this.state.session)
+        )
+          path = diagnosticResultRoute(receipt.job_ref.id, this.state.session);
+      } else path = refPath(receipt.resource_ref);
       if (path) navigate(path);
     } catch (e) {
       if (context === this.context)

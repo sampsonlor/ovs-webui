@@ -189,6 +189,46 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch build-essential autoconf automake libtool pkg-config libssl-dev python3-six
+      - name: Bounded Ethernet-header capture on a disposable Linux network
+        if: runner.environment == 'github-hosted'
+        run: |
+          set -o pipefail
+          go test -c -o outputs/runtime/capture.test ./internal/capture
+          sudo -- env OVS_CAPTURE_HOSTED_FIXTURE=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            outputs/runtime/capture.test -test.run '^TestNativeCaptureInIsolatedNamespace$' -test.v -test.timeout=40s \
+            | go tool test2json -p native-capture | tee test-results/go-native-capture.json
+      - name: Vet and native race tests
+        env:
+          CGO_ENABLED: '1'
+        run: |
+          set -o pipefail
+          go vet ./...
+          go mod verify
+          mkdir -p test-results
+          # Keep production Argon2id cost and the existing per-group deadline.
+          # The growing auth package exceeded 180s cumulatively on arm64. The
+          # complementary filters retain every existing auth test, exactly once.
+          # Keep switching authority separate from core account tests so growing
+          # native coverage does not consume another test's remaining deadline.
+          # Other packages retain the complete normal suite, with no global skip.
+          auth_package=$(go list ./internal/repository/auth)
+          mapfile -t all_packages <<< "$(go list ./...)"
+          runtime_packages=()
+          for package in "${all_packages[@]}"; do
+            if [[ "$package" != "$auth_package" ]]; then runtime_packages+=("$package"); fi
+          done
+          go test -json -race -count=1 -timeout=180s "${runtime_packages[@]}" | tee test-results/go-tests.json
+          auth_services='^(TestFormalValidation|TestShared|TestRunningCancellation|TestEvidence|TestLegacy|TestExecution|TestTLS|TestVerifiedAuth|TestLinkLACPDiagnostic|TestSupportBundle|TestAuthSupportBundle)'
+          mirror_authority='^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$'
+          switching_authority='^(TestIsolation|TestInterface|TestTopology|TestMulticast|TestSpanningTree|TestStaticTunnel)'
+          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply|$mirror_authority|$switching_authority" "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run "$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
+          go test -json -race -count=1 -timeout=180s -run "$switching_authority" "$auth_package" | tee -a test-results/go-tests.json
+          # Force the worker-held-lock admission regression repeatedly without
+          # increasing timeouts or counting these runs as unique suite tests.
+          go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
       - name: Native spanning-tree independent authority and daemon database source
         run: |
           set -o pipefail
@@ -395,38 +435,6 @@ jobs:
               outputs/runtime/execution.test -test.run '^TestNativeIsolatedBridge$' -test.v -test.timeout=180s \
               | go tool test2json -p "native-isolated-bridge-$schema" | tee "test-results/go-isolated-bridge-$schema.json"
           done
-      - name: Vet and native race tests
-        env:
-          CGO_ENABLED: '1'
-        run: |
-          set -o pipefail
-          go vet ./...
-          go mod verify
-          mkdir -p test-results
-          # Keep production Argon2id cost and the existing per-group deadline.
-          # The growing auth package exceeded 180s cumulatively on arm64. The
-          # complementary filters retain every existing auth test, exactly once.
-          # Keep switching authority separate from core account tests so growing
-          # native coverage does not consume another test's remaining deadline.
-          # Other packages retain the complete normal suite, with no global skip.
-          auth_package=$(go list ./internal/repository/auth)
-          mapfile -t all_packages <<< "$(go list ./...)"
-          runtime_packages=()
-          for package in "${all_packages[@]}"; do
-            if [[ "$package" != "$auth_package" ]]; then runtime_packages+=("$package"); fi
-          done
-          go test -json -race -count=1 -timeout=180s "${runtime_packages[@]}" | tee test-results/go-tests.json
-          auth_services='^(TestFormalValidation|TestShared|TestRunningCancellation|TestEvidence|TestLegacy|TestExecution|TestTLS|TestVerifiedAuth)'
-          mirror_authority='^TestMirrorKeepsExplicitCapabilityCurrentCeilingAndRootAuthority$'
-          switching_authority='^(TestIsolation|TestInterface|TestTopology|TestMulticast|TestSpanningTree|TestStaticTunnel)'
-          go test -json -race -count=1 -timeout=180s -skip "$auth_services|^TestSafeApply|$mirror_authority|$switching_authority" "$auth_package" | tee -a test-results/go-tests.json
-          go test -json -race -count=1 -timeout=180s -run "$auth_services" "$auth_package" | tee -a test-results/go-tests.json
-          go test -json -race -count=1 -timeout=180s -run '^TestSafeApply' "$auth_package" | tee -a test-results/go-tests.json
-          go test -json -race -count=1 -timeout=180s -run "$mirror_authority" "$auth_package" | tee -a test-results/go-tests.json
-          go test -json -race -count=1 -timeout=180s -run "$switching_authority" "$auth_package" | tee -a test-results/go-tests.json
-          # Force the worker-held-lock admission regression repeatedly without
-          # increasing timeouts or counting these runs as unique suite tests.
-          go test -json -race -count=10 -timeout=180s -run '^TestSafeApplyAppliedGateConfirmAndSingleLKG$' "$auth_package" | tee test-results/go-safe-admission.json
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
@@ -468,6 +476,7 @@ jobs:
             test-results/go-runtime-journal.log
             test-results/go-systemd-restart.json
             test-results/go-systemd-restart-journal.log
+            test-results/go-native-capture.json
             test-results/go-auth-smoke.json
             test-results/go-auth-journal.log
             test-results/go-tls-smoke.json

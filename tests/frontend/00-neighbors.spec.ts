@@ -355,9 +355,49 @@ test('Native ARP and NDP use one shared read-only snapshot with scoped navigatio
       port_id: port,
       bridge_id: parent,
     });
-    await page
-      .getByRole('link', { name: 'Next neighbor page', exact: true })
-      .click();
+    let pageTwo: NeighborPage | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const next = page.getByRole('link', {
+        name: 'Next neighbor page',
+        exact: true,
+      });
+      const link = await next.getAttribute('href');
+      const cursor = new URL(link ?? '', href).searchParams.get('cursor');
+      expect(cursor).toBeTruthy();
+      const request = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.origin === fixture.origin &&
+          url.pathname === '/api/v1/neighbors' &&
+          url.searchParams.get('cursor') === cursor &&
+          response.request().method() === 'GET'
+        );
+      });
+      await next.click();
+      const response = await request;
+      if (response.status() === 200) {
+        pageTwo = await response.json();
+        break;
+      }
+      // A kernel publication can retire a cursor between rendering and the
+      // click. Follow the same explicit recovery offered to the operator.
+      expect(response.status()).toBe(410);
+      expect((await response.json()).code).toBe('CURSOR_EXPIRED');
+      ip('-4', 'neigh', 'replace', unresolved, 'nud', 'failed', 'dev', managed);
+      await expect
+        .poll(async () =>
+          (await read<NeighborPage>(page, scopedPath)).items.some(
+            (item) => item.address === unresolved && item.state === 'failed',
+          ),
+        )
+        .toBe(true);
+      await page
+        .getByRole('link', { name: 'First neighbor page', exact: true })
+        .click();
+    }
+    expect(pageTwo?.items).toMatchObject([
+      { address: unresolved, mac: null, state: 'failed' },
+    ]);
     const unresolvedRow = table(page)
       .getByRole('row')
       .filter({
