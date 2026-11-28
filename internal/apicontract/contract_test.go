@@ -53,3 +53,42 @@ func TestCompiledContract(t *testing.T) {
 		t.Fatal("valid exact number rejected", err)
 	}
 }
+
+func TestOpenFlowBooleanParametersAreExact(t *testing.T) {
+	contract, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "00000000-0000-4000-8000-000000000001"
+	for _, tc := range []struct {
+		name, path, parameter string
+		query                 url.Values
+	}{
+		{"observe", "/api/v1/openflow/bridges/" + id + "/snapshots", "raw_fields",
+			url.Values{"table": {"7"}, "groups_meters": {"true"}}},
+		{"export", "/api/v1/openflow/snapshots/" + id, "export", url.Values{"offset": {"0"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			operation, path, _ := contract.Match("GET", tc.path)
+			if operation == nil {
+				t.Fatal("missing OpenFlow route")
+			}
+			for _, value := range []string{"true", "false"} {
+				tc.query.Set(tc.parameter, value)
+				if err := operation.ValidateParameters(path, tc.query, http.Header{}.Values); err != nil {
+					t.Fatalf("rejected %s=%s: %v", tc.parameter, value, err)
+				}
+			}
+			for _, value := range []string{"True", "1", "", "false "} {
+				tc.query.Set(tc.parameter, value)
+				if err := operation.ValidateParameters(path, tc.query, http.Header{}.Values); err == nil {
+					t.Fatalf("accepted %s=%q", tc.parameter, value)
+				}
+			}
+			tc.query[tc.parameter] = []string{"true", "false"}
+			if err := operation.ValidateParameters(path, tc.query, http.Header{}.Values); err == nil {
+				t.Fatalf("accepted duplicate %s", tc.parameter)
+			}
+		})
+	}
+}

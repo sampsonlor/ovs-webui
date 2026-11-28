@@ -210,12 +210,19 @@ func (o *Operation) ValidateParameters(path map[string]string, query url.Values,
 			continue
 		}
 		var value any = values[0]
-		if p.Schema["type"] == "integer" {
+		switch p.Schema["type"] {
+		case "integer":
 			n, err := strconv.ParseInt(values[0], 10, 64)
 			if err != nil {
 				return apitypes.Fail(422, "INVALID_PARAMETER")
 			}
 			value = n
+		case "boolean":
+			raw := values[0]
+			if raw != "true" && raw != "false" {
+				return apitypes.Fail(422, "INVALID_PARAMETER")
+			}
+			value = raw == "true"
 		}
 		if err := p.compiled.Validate(value); err != nil {
 			return apitypes.Fail(422, "INVALID_PARAMETER")
