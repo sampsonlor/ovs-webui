@@ -107,12 +107,13 @@
     {:else}
       <form class="actions" onsubmit={filterTargets} aria-label="Filter diagnostic targets">
         {#if !counters}
-          <label>Target type
-            <select name="kind" value={scope.kind}>
+          <div>
+            <label for="diagnostic-kind">Target type</label>
+            <select id="diagnostic-kind" name="kind" value={scope.kind}>
               <option value="bridge">Bridge</option>
               <option value="port">Port</option>
             </select>
-          </label>
+          </div>
         {/if}
         <label>Target name <input name="filter" maxlength="128" value={scope.filter} /></label>
         <button>Find targets</button>
