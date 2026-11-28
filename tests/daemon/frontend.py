@@ -20,22 +20,16 @@ def make_lldp_fixture(vsctl, call, get, eventually, cleanup):
     assert disabled['availability'] == 'unavailable'
     assert disabled['reason'] == 'LLDP_PROVIDER_DISABLED' and disabled['items'] == []
     bridge, namespace = 'br-lldp-ui', 'ovs-lldp-ui-peer'
-    ports = make_observation_ports(vsctl, get, eventually, cleanup, bridge, namespace,
-                                   [('capture', 'ld-ui-rx', 'ld-ui-src'), ('excluded', 'ld-ui-off', 'ld-ui-src2')])
-    return {'bridge': bridge, 'namespace': namespace, 'disabled': disabled, **ports}
-
-
-def make_observation_ports(vsctl, get, eventually, cleanup, bridge, namespace, port_specs):
     vsctl('add-br', bridge, '--', 'set', 'Bridge', bridge, 'datapath_type=system')
     cleanup.callback(vsctl, '--no-wait', '--if-exists', 'del-br', bridge)
     run('ip', 'netns', 'add', namespace)
     cleanup.callback(run, 'ip', 'netns', 'delete', namespace, check=False)
-    result = {}
-    for role, local, peer in port_specs:
+    result = {'bridge': bridge, 'namespace': namespace, 'disabled': disabled}
+    for role, local, peer in [('capture', 'ld-ui-rx', 'ld-ui-src'), ('excluded', 'ld-ui-off', 'ld-ui-src2')]:
         run('ip', 'link', 'add', local, 'type', 'veth', 'peer', 'name', peer)
         cleanup.callback(run, 'ip', 'link', 'del', local, check=False)
         run('ip', 'link', 'set', 'dev', peer, 'netns', namespace)
-        # These isolated Ethernet fixtures do not need IP addressing or IPv6 discovery chatter.
+        # No IP addressing or IPv6 discovery chatter is needed for the LLDP fixture.
         run('sysctl', '-q', '-w', f'net.ipv6.conf.{local}.disable_ipv6=1')
         run('ip', 'netns', 'exec', namespace, 'sysctl', '-q', '-w', f'net.ipv6.conf.{peer}.disable_ipv6=1')
         vsctl('add-port', bridge, local)
@@ -169,6 +163,8 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
     assert len(mirror_ids) == 10
     qos_bridge, qos_port, qos_peer = 'br-qos-edit', 'qos-ui-port', 'qos-ui-peer'
     run('ip', 'link', 'add', qos_port, 'type', 'veth', 'peer', 'name', qos_peer)
+    for endpoint in (qos_port, qos_peer):
+        run('sysctl', '-q', '-w', f'net.ipv6.conf.{endpoint}.disable_ipv6=1')
     run('ip', 'link', 'set', qos_port, 'up')
     run('ip', 'link', 'set', qos_peer, 'up')
     vsctl('add-br', qos_bridge, '--', 'set', 'Bridge', qos_bridge, 'datapath_type=system', '--', 'add-port', qos_bridge, qos_port)
@@ -201,10 +197,11 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
     telemetry_id = telemetry['bridge_ref']['id']
     telemetry_grant = telemetry_id+':netflow'
     lldp = make_lldp_fixture(vsctl, call, get, eventually, cleanup)
-    # The LLDP suite deletes its own links, so the later capture test owns its separate segment.
-    capture_port = make_observation_ports(vsctl, get, eventually, cleanup, 'br-pcap-ui', 'ovs-capture-ui-peer',
-                                          [('capture', 'pc-ui-data', 'pc-ui-src')])['capture']
-    capture_target = {'id': capture_port['id'], 'name': capture_port['interface']}
+    # Reuse the exact no-IP fixture veth. Adding another Bridge would truncate
+    # the shared topology and disable the existing tunnel creation workflow.
+    capture_interface, = qos_port_for_edit['interface_refs']
+    assert capture_interface['kind'] == 'interface'
+    capture_target = {'id': capture_interface['id'], 'name': qos_port}
     unit_path = Path('/etc/systemd/system') / units['mgrd']
     unit_original = unit_path.read_text()
     needle = '--database=${MANAGER_DATABASE}'
@@ -232,7 +229,7 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
                                         'CapabilityBoundingSet=CAP_CHOWN CAP_NET_RAW CAP_SYS_PTRACE\n')
     families = 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK'
     assert families + '\n' in mirror_unit
-    # Allow filtered packet sockets for the separately reviewed LLDP and Capture veth ports.
+    # Allow filtered packet sockets for the explicitly selected fixture veth ports.
     fixture_unit = mirror_unit.replace(families + '\n', families + ' AF_PACKET\n')
     fixture_unit = set_unit_option(fixture_unit, 'capture-interface-ids', 'CAPTURE_INTERFACE_IDS', capture_target['id'])
     unit_path.write_text(fixture_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
