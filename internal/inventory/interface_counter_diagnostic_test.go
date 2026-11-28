@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
@@ -171,6 +172,61 @@ func TestInterfaceCounterDiagnosticConsumesActualSchedulerPublications(t *testin
 		out.Members[0].Deltas["rx_bytes"] == nil || *out.Members[0].Deltas["rx_bytes"] != "33" {
 		t.Fatalf("actual scheduler points were not consumed exactly once: %+v, %v, %d", out, err, reads)
 	}
+}
+
+func TestStatisticsSchedulerPublishesAdjacentDiagnosticSamples(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const startDelay = 100 * time.Millisecond
+		const collectionTime = 200 * time.Millisecond
+
+		f := newCounterWindow(t, 1)
+		start, reads := true, 0
+		f.service.now = func() time.Time {
+			if start {
+				start = false
+				// Model startup scheduling delay after the scheduler begins but
+				// before SampleStatistics records its first admission clock.
+				time.Sleep(startDelay)
+			}
+			return time.Now()
+		}
+		observer := publishedCounterObserver(func(_ context.Context, req StatRequest) (StatObservation, error) {
+			reads++
+			time.Sleep(collectionTime)
+			value := fmt.Sprint(100 + 33*(reads-1))
+			return StatObservation{
+				ObservedAt: time.Now(), Root: req.Root, Schema: req.Schema,
+				Counters: map[string]map[string]*string{f.members[0].UUID: {"rx_bytes": &value}},
+			}, nil
+		})
+		if err := f.service.ConfigureStatistics(observer); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go f.service.RunStatistics(ctx)
+		time.Sleep(startDelay + collectionTime)
+		synctest.Wait()
+
+		out := InterfaceCounterDiagnostic{Target: f.query.Target}
+		var run interfaceCounterWindow
+		if done, err := f.service.interfaceCounterPoll(ctx, &run, &out); done || err != nil || run.first.IsZero() || reads != 1 {
+			t.Fatalf("first scheduled publication was not available as a baseline: %v, %v, %d", done, err, reads)
+		}
+		time.Sleep(StatisticsInterval - time.Millisecond)
+		synctest.Wait()
+		if reads != 1 {
+			t.Fatalf("scheduler attempted another collection before the full interval: %d", reads)
+		}
+		time.Sleep(time.Millisecond + collectionTime)
+		synctest.Wait()
+		done, err := f.service.interfaceCounterPoll(ctx, &run, &out)
+		if !done || err != nil || reads != 2 || out.Freshness != "fresh" || out.State != "partial" || len(out.Members) != 1 ||
+			out.SecondSampledAt == nil || out.SecondSampledAt.Sub(run.first) != StatisticsInterval+collectionTime ||
+			out.Members[0].Deltas["rx_bytes"] == nil || *out.Members[0].Deltas["rx_bytes"] != "33" {
+			t.Fatalf("second scheduled publication could not be compared to its adjacent baseline: %+v, %v, %d", out, err, reads)
+		}
+	})
 }
 
 func TestInterfaceCounterDiagnosticRejectsResetGapAndChangedSource(t *testing.T) {

@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ovswitness"
@@ -306,10 +305,12 @@ func newNativeOpenFlowFixture(t *testing.T, buildDir string) (*fixture, ovsdb.Sp
 	}
 	schemaData, err := os.ReadFile(schemaPath)
 	must(t, err)
-	var schema native.DatabaseSchema
-	must(t, json.Unmarshal(schemaData, &schema))
-	if schema.Name != "Open_vSwitch" || inventory.Digest(schema) != profile.Schema {
-		t.Fatal("fixture schema did not match the reviewed build profile")
+	// The source file pin covers the reviewed schema before ovsdb-tool
+	// normalizes it. The build's database pin covers the live RPC result.
+	const sourceSchemaSHA256 = "c18c754664bdb880c73d7ba49553fc898c43b1b8fbc80b6c0e53162b3cd36fba"
+	sourceDigest := sha256.Sum256(schemaData)
+	if hex.EncodeToString(sourceDigest[:]) != sourceSchemaSHA256 {
+		t.Fatal("fixture source schema differs from the reviewed OVS 3.3.9 source")
 	}
 
 	root, err := os.MkdirTemp("/var/lib", "ovs-openflow-test-")
@@ -334,6 +335,14 @@ func newNativeOpenFlowFixture(t *testing.T, buildDir string) (*fixture, ovsdb.Sp
 	f.run(filepath.Join(buildDir, "ovsdb", "ovsdb-tool"), "create", f.conf, schemaPath)
 	f.run(dbserver, f.conf, "--remote=punix:"+f.dbSocket, "--pidfile="+filepath.Join(root, "db.pid"),
 		"--unixctl="+filepath.Join(root, "db.ctl"), "--detach", "--no-chdir")
+	liveSchema := f.run(filepath.Join(buildDir, "ovsdb", "ovsdb-client"), "--timeout=5", "get-schema", "unix:"+f.dbSocket, "Open_vSwitch")
+	var schema map[string]any
+	decoder := json.NewDecoder(strings.NewReader(liveSchema))
+	decoder.UseNumber()
+	must(t, decoder.Decode(&schema))
+	if schema["name"] != "Open_vSwitch" || inventory.Digest(schema) != profile.Schema {
+		t.Fatal("live database schema differs from the reviewed build profile")
+	}
 	f.run(filepath.Join(buildDir, "utilities", "ovs-vsctl"), "--timeout=5", "--no-wait", "--db=unix:"+f.dbSocket, "init")
 	f.run(vswitchd, "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"),
 		"--detach", "--no-chdir", "unix:"+f.dbSocket)

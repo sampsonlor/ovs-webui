@@ -89,15 +89,18 @@ func (s *Service) ConfigureStatistics(observer StatisticsObserver) error {
 }
 
 func (s *Service) RunStatistics(ctx context.Context) {
-	ticker := time.NewTicker(StatisticsInterval)
-	defer ticker.Stop()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	for {
-		_ = s.SampleStatistics(ctx)
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
 		}
+		_ = s.SampleStatistics(ctx)
+		// Space rounds from the completed collection. A fixed ticker can
+		// fire before SampleStatistics' admission interval after a late start.
+		timer.Reset(StatisticsInterval)
 	}
 }
 
