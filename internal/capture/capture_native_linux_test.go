@@ -101,14 +101,23 @@ func TestNativeCaptureFixtureChild(t *testing.T) {
 	if err != nil || !os.SameFile(created, current) {
 		t.Fatalf("child is outside the test network namespace: %v", err)
 	}
-	links, err := net.Interfaces()
-	if err != nil || len(links) != 3 {
-		t.Fatalf("fixture doesn't contain exactly loopback and the synthetic veth pair: %v", err)
-	}
 	receiver := nativeCaptureLink(t, captureReceiver, "02:46:00:00:00:01")
 	sender := nativeCaptureLink(t, captureSender, "02:46:00:00:00:02")
-	if _, err := net.InterfaceByName("lo"); err != nil {
+	loopback, err := net.InterfaceByName("lo")
+	if err != nil || loopback.Flags&net.FlagLoopback == 0 {
+		t.Fatalf("fixture loopback is unproven: %v", err)
+	}
+	links, err := net.Interfaces()
+	if err != nil {
 		t.Fatal(err)
+	}
+	for _, link := range links {
+		// The kernel can instantiate down tunnel placeholders in a new
+		// namespace. Only the fixture veth pair may be active off loopback.
+		if link.Index != loopback.Index && link.Index != receiver.Index &&
+			link.Index != sender.Index && link.Flags&net.FlagUp != 0 {
+			t.Fatalf("unexpected active link in the isolated capture fixture: %s", link.Name)
+		}
 	}
 	binding := capture.Binding{
 		InterfaceID: "00000000-0000-4000-8000-000000000046",

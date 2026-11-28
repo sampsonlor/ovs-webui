@@ -189,6 +189,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y openvswitch-switch build-essential autoconf automake libtool pkg-config libssl-dev python3-six
+      - name: Bounded Ethernet-header capture on a disposable Linux network
+        if: runner.environment == 'github-hosted'
+        run: |
+          set -o pipefail
+          go test -c -o outputs/runtime/capture.test ./internal/capture
+          sudo -- env OVS_CAPTURE_HOSTED_FIXTURE=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            outputs/runtime/capture.test -test.run '^TestNativeCaptureInIsolatedNamespace$' -test.v -test.timeout=40s \
+            | go tool test2json -p native-capture | tee test-results/go-native-capture.json
       - name: Vet and native race tests
         env:
           CGO_ENABLED: '1'
@@ -429,14 +437,6 @@ jobs:
           done
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
-      - name: Bounded Ethernet-header capture on a disposable Linux network
-        if: runner.environment == 'github-hosted'
-        run: |
-          set -o pipefail
-          go test -c -o outputs/runtime/capture.test ./internal/capture
-          sudo -- env OVS_CAPTURE_HOSTED_FIXTURE=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
-            outputs/runtime/capture.test -test.run '^TestNativeCaptureInIsolatedNamespace$' -test.v -test.timeout=40s \
-            | go tool test2json -p native-capture | tee test-results/go-native-capture.json
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
         run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
       - name: Encrypted TLS identity, fresh connection confirmation and real recovery deadline
