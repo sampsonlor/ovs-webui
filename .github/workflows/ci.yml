@@ -437,6 +437,19 @@ jobs:
           done
       - name: Real systemd, Unix peers and isolated OVS forwarding smoke test
         run: sudo -- python3 tests/daemon/smoke.py --bin-dir outputs/runtime
+      - name: Offline paired backup and per-owner staged recovery with live OVS forwarding
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo -- env OVS_CI_SYSTEMD_RESTART=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            python3 tests/daemon/smoke.py --bin-dir outputs/runtime --offline-pair-probe
+      - name: Independent owner-locked VLAN checkpoint publication and verification
+        if: runner.environment == 'github-hosted'
+        run: |
+          set -o pipefail
+          go test -c -o outputs/runtime/vlan-checkpoint.test ./internal/repository/sqlite
+          sudo -- outputs/runtime/vlan-checkpoint.test \
+            -test.run '^TestVLANCheckpoint(OfflinePublicationAndIndependentVerification|InterruptedStagingPreservesVerifiedCheckpoint)$' -test.v -test.timeout=120s \
+            | go tool test2json -p native-vlan-checkpoint | tee test-results/go-offline-vlan-checkpoint.json
       - name: Real authentication, encrypted sessions and revocation across daemon restarts
         run: sudo -- python3 tests/daemon/authentication.py --bin-dir outputs/runtime
       - name: Encrypted TLS identity, fresh connection confirmation and real recovery deadline
@@ -477,6 +490,9 @@ jobs:
             test-results/go-systemd-restart.json
             test-results/go-systemd-restart-journal.log
             test-results/go-native-capture.json
+            test-results/go-offline-backup-proof.json
+            test-results/go-offline-vlan-checkpoint.json
+            test-results/go-offline-backup-journal.log
             test-results/go-auth-smoke.json
             test-results/go-auth-journal.log
             test-results/go-tls-smoke.json

@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.39.0",
+  "contract_version": "1.40.0",
   "scope": [
     {
       "id": "P1-PLAT-01",
@@ -1401,11 +1401,15 @@
       "paths": [
         "/configuration/exports",
         "/configuration/imports",
+        "/configuration/vlan-export",
+        "/configuration/vlan-imports",
         "/artifacts"
       ],
       "operations": [
         "exportConfiguration",
         "importConfiguration",
+        "readVLANConfigurationExport",
+        "importVLANConfiguration",
         "uploadArtifactPart"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"

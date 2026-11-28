@@ -47,6 +47,10 @@ func (s *Store) Backup(ctx context.Context) (string, error) {
 }
 func (s *Store) backup(ctx context.Context, version int) (string, error) {
 	directory := filepath.Join(filepath.Dir(s.options.Path), "backup-"+repository.NewID())
+	return s.backupAt(ctx, directory, version)
+}
+
+func (s *Store) backupAt(ctx context.Context, directory string, version int) (string, error) {
 	if err := os.Mkdir(directory, 0700); err != nil {
 		return "", err
 	}
@@ -85,7 +89,7 @@ func (s *Store) backup(ctx context.Context, version int) (string, error) {
 		return "", err
 	}
 	_ = f.Close()
-	hash, err := fileHash(destination)
+	hash, err := fileHash(ctx, destination)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +120,7 @@ func (s *Store) backup(ctx context.Context, version int) (string, error) {
 	}
 	return directory, nil
 }
-func fileHash(path string) (string, error) {
+func fileHash(ctx context.Context, path string) (string, error) {
 	if err := checkPrivateFile(path); err != nil {
 		return "", err
 	}
@@ -126,15 +130,29 @@ func fileHash(path string) (string, error) {
 	}
 	defer f.Close()
 	hash := sha256.New()
-	if _, err = io.Copy(hash, f); err != nil {
+	if _, err = io.Copy(hash, backupReader{ctx: ctx, source: f}); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+type backupReader struct {
+	ctx    context.Context
+	source io.Reader
+}
+
+func (r backupReader) Read(data []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.source.Read(data)
+}
+
 // Verification is an offline prerequisite for the later recovery workflow. It
 // never restores over a live database or reactivates backed-up grants/sessions.
 func VerifyBackup(ctx context.Context, directory string, kind repository.Kind) (BackupManifest, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	var manifest BackupManifest
 	fail := func() (BackupManifest, error) { return BackupManifest{}, repository.ErrUnavailable }
 	path := filepath.Join(directory, "manifest.json")
@@ -171,12 +189,10 @@ func VerifyBackup(ctx context.Context, directory string, kind repository.Kind) (
 			return fail()
 		}
 	}
-	hash, err := fileHash(path)
+	hash, err := fileHash(ctx, path)
 	if err != nil || hash != manifest.SHA256 {
 		return fail()
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 	db, err := connect(path, true, 1)
 	if err != nil {
 		return fail()

@@ -115,7 +115,8 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
                        ('browser-evidence-reader', 'Reader'), ('browser-evidence-observer', 'InterfaceObserver'),
                        ('browser-interface-config', 'Reader'), ('browser-interface-config-observer', 'InterfaceObserver'),
                        ('browser-internal-port', 'NetworkAdmin'), ('browser-internal-delete', 'NetworkAdmin'),
-                       ('browser-capture', 'NetworkAdmin')]:
+                       ('browser-capture', 'NetworkAdmin'), ('browser-vlan-transfer', 'NetworkAdmin'),
+                       ('browser-vlan-restore', 'NetworkAdmin'), ('browser-vlan-rollback', 'NetworkAdmin')]:
         secret = 'synthetic-browser-' + secrets.token_hex(16)
         credentials.append(secret)
         code, _, _ = call('/users', 'POST', {'request_id': request_id(), 'username': name, 'password': secret, 'role_ids': [roles[role]]})
@@ -131,6 +132,12 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
     vsctl('add-br','br-iso-ui','--','set','Bridge','br-iso-ui','datapath_type=system','--','add-port','br-iso-ui','iso-ui-data','--','set','Interface','iso-ui-data','type=internal')
     isolation = eventually(lambda: next((p for p in get('/ports?filter=iso-ui-data')['items'] if p['name']=='iso-ui-data'),None))
     vsctl('add-br','br-mcast-ui','--','set','Bridge','br-mcast-ui','datapath_type=system','other_config:multicast-opaque=preserve','--','add-port','br-mcast-ui','mcast-ui-data','--','set','Interface','mcast-ui-data','type=internal')
+    # The transfer test stages changes only. Use this already isolated,
+    # standalone internal Port so the shared topology remains complete.
+    vlan_port = 'mcast-ui-data'
+    vsctl('set', 'Port', vlan_port, 'vlan_mode=access', 'tag=10', 'external_ids:transfer-opaque=preserve')
+    vlan_transfer = eventually(lambda: next((p for p in get('/ports?filter=' + vlan_port)['items']
+                                             if p['name'] == vlan_port), None))
     multicast = eventually(lambda: next((b for b in get('/bridges?filter=br-mcast-ui')['items'] if b['name']=='br-mcast-ui'),None))
     vsctl('add-br','br-tunnel-ui','--','set','Bridge','br-tunnel-ui','datapath_type=system','other_config:tunnel-foreign=preserve',
           '--','add-port','br-tunnel-ui','tun-ui-data','--','set','Interface','tun-ui-data','type=vxlan','options:remote_ip=192.0.2.20','options:key=1001','external_ids:tunnel-foreign=preserve')
@@ -232,6 +239,12 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
     # Allow filtered packet sockets for the explicitly selected fixture veth ports.
     fixture_unit = mirror_unit.replace(families + '\n', families + ' AF_PACKET\n')
     fixture_unit = set_unit_option(fixture_unit, 'capture-interface-ids', 'CAPTURE_INTERFACE_IDS', capture_target['id'])
+    # Extend the disposable fixture's reviewed VLAN scope, preserving prior grants.
+    vlan_id = vlan_transfer['management_id']
+    if '--local-vlan-ports=' in fixture_unit:
+        fixture_unit = fixture_unit.replace('--local-vlan-ports=', '--local-vlan-ports=' + vlan_id + ',', 1)
+    else:
+        fixture_unit = fixture_unit.replace(needle, needle + ' --local-vlan-ports=' + vlan_id, 1)
     unit_path.write_text(fixture_unit.replace(needle, needle + mirror_flags + ' --local-spanning-tree-bridges=' + tree['management_id']+' --local-isolation-ports='+isolation['management_id']+' --local-multicast-bridges='+multicast['management_id']
                                               +' --local-tunnel-objects='+','.join(tunnel_ids)+' --local-tunnel-create-targets='+tunnel_bridge['management_id']+':tun-ui-new'
                                               +' --local-mirror-objects='+','.join(mirror_ids)+' --local-mirror-create-targets='+mirror_bridge['management_id']+':mi-ui-new'
@@ -252,7 +265,7 @@ def _verify_frontend(repo, fixture, node, origin, password, call, get, vsctl, un
                               'uuid': qos_attach_uuid, 'queue': qos_attach_queue},
                 'qosCreateName': qos_create_name,
                 'telemetryWrite': {'id': telemetry_id, 'bridge': telemetry_bridge},
-                'lldp': lldp, 'captureTarget': capture_target}
+                'lldp': lldp, 'captureTarget': capture_target, 'vlanTransfer': {'id': vlan_id, 'port': vlan_port}}
     path = fixture / 'browser-private.json'
     path.write_text(json.dumps(metadata))
     path.chmod(0o600)

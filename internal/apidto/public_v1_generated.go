@@ -2532,6 +2532,17 @@ type OpenFlowReadPage struct {
 	Offset     int64                     `json:"offset"`
 	NextOffset int64                     `json:"next_offset,omitempty"`
 }
+type VLANConfigurationExport struct {
+	DocumentBase64 string `json:"document_base64"`
+	Sha256         string `json:"sha256"`
+}
+type VLANConfigurationImportCommand struct {
+	RequestId          RequestId                    `json:"request_id"`
+	DocumentBase64     string                       `json:"document_base64"`
+	ExpectedGeneration Id                           `json:"expected_generation"`
+	Mode               string                       `json:"mode,omitempty"`
+	Mappings           []map[string]json.RawMessage `json:"mappings"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`

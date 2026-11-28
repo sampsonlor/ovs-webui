@@ -242,6 +242,8 @@ export type OpenFlowReadMeter = { "meter_id": number; "flags": number; "bands": 
 export type OpenFlowReadEvidence = { "bridge_id": Id; "instance_generation": Id; "query": OpenFlowReadQuery; "observed_at": DateTime; "source": "openflow-1.3-unix"; "ownership": "unknown"; "field_coverage": string; "groups": string; "group_reason"?: string; "group_rows"?: Array<OpenFlowReadGroup>; "meters": string; "meter_reason"?: string; "meter_rows"?: Array<OpenFlowReadMeter>; "group_meter_statistics"?: string; "rows": Array<OpenFlowReadRow>; "truncated": boolean };
 export type OpenFlowSnapshotReference = { "id": Id; "bridge_id": Id; "instance_generation": Id; "observed_at": DateTime; "expires_at": DateTime; "retained_rows": number; "truncated": boolean };
 export type OpenFlowReadPage = { "snapshot": OpenFlowSnapshotReference; "evidence": OpenFlowReadEvidence; "offset": number; "next_offset"?: number };
+export type VLANConfigurationExport = { "document_base64": string; "sha256": string };
+export type VLANConfigurationImportCommand = { "request_id": RequestId; "document_base64": string; "expected_generation": Id; "mode"?: "merge" | "exact-restore"; "mappings": Array<{ "source_id": Id; "destination_id": Id; "destination_member_id"?: Id }> };
 export type BridgePage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Bridge>; "next_cursor": (string | null); "truncated": boolean; [key: string]: unknown };
 export type InterfacePage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Interface>; "next_cursor": (string | null); "truncated": boolean; "source"?: Source; "availability"?: string; "reason"?: (string | null); "coverage"?: { [key: string]: unknown }; [key: string]: unknown };
 export type VlanPage = { "snapshot_id": Id; "instance_generation": (Id | null); "items": Array<Resource>; "next_cursor": (string | null); "truncated": boolean; [key: string]: unknown };
@@ -404,6 +406,8 @@ export interface Operations {
   readRuntimeAcceleration: { method: "GET"; path: "/runtime/acceleration"; body: never; response: RuntimeAccelerationEvidence };
   observeOpenFlowSnapshot: { method: "GET"; path: "/openflow/bridges/{bridge_id}/snapshots"; body: never; response: OpenFlowReadPage };
   readOpenFlowSnapshot: { method: "GET"; path: "/openflow/snapshots/{snapshot_id}"; body: never; response: OpenFlowReadPage };
+  readVLANConfigurationExport: { method: "GET"; path: "/configuration/vlan-export"; body: never; response: VLANConfigurationExport };
+  importVLANConfiguration: { method: "POST"; path: "/configuration/vlan-imports"; body: VLANConfigurationImportCommand; response: Candidate };
   setManagementDebug: { method: "POST"; path: "/health/debug"; body: ManagementDebugCommand; response: Accepted };
   restartManagementService: { method: "POST"; path: "/health/service-restarts"; body: ManagementServiceRestartCommand; response: Accepted };
   runLinkLACPDiagnostic: { method: "POST"; path: "/diagnostics/link-lacp"; body: LinkLACPDiagnosticCommand; response: Accepted };

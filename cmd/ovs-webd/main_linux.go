@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/sampsonlor/ovs-webui/internal/authn"
+	"github.com/sampsonlor/ovs-webui/internal/backupop"
 	"github.com/sampsonlor/ovs-webui/internal/buildinfo"
 	"github.com/sampsonlor/ovs-webui/internal/ipc"
 	"github.com/sampsonlor/ovs-webui/internal/redact"
@@ -46,6 +47,7 @@ func run() int {
 	printCertificate := flag.Bool("print-tls-certificate", false, "Print only the current managed public certificate and exit")
 	rotate := flag.String("rotate-secret-key", "", "Offline key rotation: tls or session; retains old key versions")
 	restore := flag.Bool("prepare-restore-security", false, "Offline: revoke restored browser contexts and discard pending TLS trial; run with mgrd reconciliation")
+	backupComponent := flag.Bool("backup-component-stdout", false, "Internal offline backup command authenticated by the web owner and coordinator pipes")
 	proxyPeers := flag.String("trusted-proxy-cidrs", "", "Comma-separated immediate trusted proxy CIDRs")
 	proxyHeaders := flag.String("trusted-proxy-headers", "", "Explicit allowlist: X-Forwarded-Proto,X-Forwarded-Host")
 	flag.Parse()
@@ -55,7 +57,7 @@ func run() int {
 	}
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, nil))).With("service", "ovs-webd")
 	actions := 0
-	for _, enabled := range []bool{*initialize, *initSessionKey, *bootstrapTLS, *printCertificate, *restore, *rotate != ""} {
+	for _, enabled := range []bool{*initialize, *initSessionKey, *bootstrapTLS, *printCertificate, *restore, *rotate != "", *backupComponent} {
 		if enabled {
 			actions++
 		}
@@ -65,6 +67,16 @@ func run() int {
 		return 2
 	}
 	syscall.Umask(0077)
+	if *backupComponent {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+		options := sqlite.Options{Path: *database, Kind: repository.Web, SoftwareVersion: buildinfo.SoftwareVersion()}
+		if err := backupop.WebComponent(ctx, options, os.Stdin, os.Stdout); err != nil {
+			logger.Error("backup_component_unavailable", "code", "BACKUP_WEB_COMPONENT_UNAVAILABLE")
+			return 1
+		}
+		return 0
+	}
 	if *sessionKeyPath == "" {
 		*sessionKeyPath = filepath.Join(filepath.Dir(*database), "session.key")
 	}
@@ -99,7 +111,11 @@ func run() int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	store, storageErr := sqlite.Open(ctx, options)
+	openStore := sqlite.Open
+	if *restore {
+		openStore = sqlite.OpenCurrentSchema
+	}
+	store, storageErr := openStore(ctx, options)
 	defer store.Close()
 	if storageErr != nil {
 		logger.Error("storage_degraded", "code", store.Status().Code)

@@ -73,14 +73,23 @@ func (r *Repository) candidateCommand(input authn.Command, id string) (*apicontr
 }
 func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in plan.PrepareRequest) (plan.Envelope, error) {
 	var out plan.Envelope
-	_, body, err := r.candidateCommand(in.Command, "changeCandidate")
+	op, _, _, err := r.operation(in.Command.Method, in.Command.URI)
+	if err != nil {
+		return out, err
+	}
+	importing := op.ID == importVLANOperation
+	operation := "changeCandidate"
+	if importing {
+		operation = importVLANOperation
+	}
+	_, body, err := r.candidateCommand(in.Command, operation)
 	if err != nil {
 		return out, err
 	}
 	var cmd plan.Command
 	// The frozen union includes future operations. Reject every operation not
 	// implemented by this typed service, even if it passes the public schema.
-	if json.Unmarshal(body, &cmd) != nil {
+	if !importing && json.Unmarshal(body, &cmd) != nil {
 		return out, apitypes.Fail(422, "INVALID_INTENT")
 	}
 	unlock, err := r.lock(ctx)
@@ -100,6 +109,16 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 	}
 	if in.Command.Epoch != in.Envelope.Epoch {
 		return out, apitypes.Fail(410, "REQUEST_EPOCH_CHANGED")
+	}
+	var snapshot plan.Snapshot
+	if importing {
+		if !canStageVLANImport(c) {
+			return out, apitypes.Fail(403, "CAPABILITY_DENIED")
+		}
+		cmd, snapshot, err = r.buildVLANImport(ctx, c, in.Envelope, in.Command.RequestID, body)
+		if err != nil {
+			return out, err
+		}
 	}
 	treeDraft := hasTreeCapability(plan.Capabilities(in.Envelope.Candidate)) || slices.ContainsFunc(cmd.Intents, func(i plan.Intent) bool {
 		return plan.IsMirrorOperation(i.Operation) || plan.IsTunnelOperation(i.Operation) || plan.IsSpanningTreeOperation(i.Operation) || i.Operation == plan.PortIsolationSet || i.Operation == plan.BridgeMulticastSet || plan.IsQoSOperation(i.Operation) || plan.IsTelemetryOperation(i.Operation)
@@ -133,8 +152,7 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 	if treeStage && (!slices.Contains(c.Capabilities, "configuration.read") || !slices.Contains(c.Capabilities, treeCapability)) {
 		return out, apitypes.Fail(403, "CAPABILITY_DENIED")
 	}
-	var snapshot plan.Snapshot
-	if cmd.Operation == "stage" || cmd.Operation == "rebase" {
+	if !importing && (cmd.Operation == "stage" || cmd.Operation == "rebase") {
 		bindings := plan.Bindings(in.Envelope.Candidate)
 		for _, i := range cmd.Intents {
 			if i.Operation == plan.QoSCreate {
@@ -155,6 +173,9 @@ func (r *Repository) PrepareCandidate(ctx context.Context, credential string, in
 		currentClaims, err := r.candidateClaims(ctx, tx, credential, "config.stage")
 		if err != nil {
 			return err
+		}
+		if importing && !canStageVLANImport(currentClaims) {
+			return apitypes.Fail(403, "CAPABILITY_DENIED")
 		}
 		if treeStage && (!slices.Contains(currentClaims.Capabilities, "configuration.read") || !slices.Contains(currentClaims.Capabilities, treeCapability)) {
 			return apitypes.Fail(403, "CAPABILITY_DENIED")

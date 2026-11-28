@@ -71,8 +71,8 @@ func (w *Workspace) envelope(ctx context.Context, owner string) (candidate.Envel
 	})
 	return e, err
 }
-func (w *Workspace) authorize(ctx context.Context, s publicapi.Subject, cap string) error {
-	for _, capability := range []string{cap, "configuration.read", "inventory.read"} {
+func (w *Workspace) authorize(ctx context.Context, s publicapi.Subject, capabilities ...string) error {
+	for _, capability := range append(capabilities, "configuration.read", "inventory.read") {
 		c, err := w.auth.CheckAuth(ctx, s.Credential, authn.Check{Capability: capability})
 		if err != nil {
 			return err
@@ -218,18 +218,20 @@ func (w *Workspace) Execute(ctx context.Context, s publicapi.Subject, q publicap
 	if q.Operation.ID == "createTransaction" {
 		return w.applySafely(ctx, s, c)
 	}
-	cap := "config.stage"
+	capabilities := []string{"config.stage"}
 	if q.Operation.ID == "createValidation" {
-		cap = "config.validate"
+		capabilities = []string{"config.validate"}
+	} else if q.Operation.ID == "importVLANConfiguration" {
+		capabilities = []string{"configuration.import", "workspace.write", "ovs.port.vlan.write"}
 	}
-	authorize := func(ctx context.Context) error { return w.authorize(ctx, s, cap) }
+	authorize := func(ctx context.Context) error { return w.authorize(ctx, s, capabilities...) }
 	if err := authorize(ctx); err != nil {
 		return out, err
 	}
 	if q.Operation.ID == "createValidation" {
 		return w.validate(ctx, s, c)
 	}
-	if q.Operation.ID != "changeCandidate" || c.Domain != "workspace" || c.Principal != s.ID {
+	if q.Operation.ID != "changeCandidate" && q.Operation.ID != "importVLANConfiguration" || c.Domain != "workspace" || c.Principal != s.ID {
 		return out, apitypes.Fail(403, "OPERATION_DENIED")
 	}
 	if prior, found, err := w.receipts.Replay(ctx, c, authorize); err != nil || found {
