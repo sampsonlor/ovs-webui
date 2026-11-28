@@ -3,6 +3,7 @@ import type { Page, BrowserContext, Request } from '@playwright/test';
 import type {
   InterfacePage,
   TopologyNode,
+  Transaction,
 } from '../../clients/typescript/public-v1.generated';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -2959,9 +2960,73 @@ test('managed internal Port deletion preserves its parent and restores fresh chi
   await page.goto(fixture.origin + '/changes/candidate');
   await validate(page);
   await prepareApply(page, account);
+  const creation = page.waitForResponse(
+    (reply) =>
+      reply.request().method() === 'POST' &&
+      reply.url() === fixture.origin + '/api/v1/transactions',
+  );
   await page
     .getByRole('button', { name: 'Start Safe Apply', exact: true })
     .click();
+  const created = await creation;
+  expect(created.status()).toBe(202);
+  const { resource_ref: ref } = await created.json();
+  expect(ref).toMatchObject({
+    kind: 'transaction',
+    id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+  });
+  const transactionURL = fixture.origin + '/changes/transactions/' + ref.id;
+  const evidenceURL = fixture.origin + '/api/v1/transactions/' + ref.id;
+  await expect(page).toHaveURL(transactionURL);
+  await awaiting(page);
+
+  // Wait for a second watchdog reachability proof for the exact creation
+  // transaction while it still offers Confirm at the same version.
+  let previous: { transaction: Transaction; observed: number } | undefined;
+  await expect
+    .poll(async () => {
+      const reply = await context.request.get(evidenceURL, { timeout: 5_000 });
+      if (reply.status() === 503) {
+        previous = undefined;
+        return false;
+      }
+      expect(reply.status()).toBe(200);
+      const current: Transaction = await reply.json();
+      const observed = typeof current.reachability_observed_at === 'string'
+        ? Date.parse(current.reachability_observed_at)
+        : NaN;
+      // The server offers Confirm only while its current observation is fresh.
+      if (
+        current.id !== ref.id ||
+        current.safe_apply !== 'awaiting-confirmation' ||
+        current.knowledge !== 'known' ||
+        current.commit_outcome !== 'committed' ||
+        current.applied_outcome !== 'applied' ||
+        current.health !== 'healthy' ||
+        !current.allowed_actions.includes('confirm') ||
+        !Number.isFinite(observed) ||
+        observed > Date.parse(current.server_time) ||
+        current.confirmation_deadline === null
+      ) {
+        previous = undefined;
+        return false;
+      }
+      const advanced =
+        previous !== undefined &&
+        previous.transaction.sequence === current.sequence &&
+        previous.transaction.instance_generation === current.instance_generation &&
+        previous.transaction.confirmation_deadline === current.confirmation_deadline &&
+        observed > previous.observed;
+      previous = { transaction: current, observed };
+      return advanced;
+    }, { timeout: 8_000, intervals: [250] })
+    .toBe(true);
+  await expect(page).toHaveURL(transactionURL);
+  const refreshed = page.waitForResponse((reply) =>
+    reply.request().method() === 'GET' && reply.url() === evidenceURL,
+  );
+  await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click();
+  expect((await refreshed).status()).toBe(200);
   await awaiting(page);
   await chooseDecision(page, 'Confirm configuration', 'confirmed');
   c = await get(context, '/candidate');

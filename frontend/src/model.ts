@@ -16,6 +16,8 @@ import type {
   Port,
   PortsPage,
   ResourceRef,
+  OpenFlowReadPage,
+  RuntimeAccelerationEvidence,
   Session,
   SupportBundleMetadata,
   Transaction,
@@ -24,6 +26,8 @@ import type {
   Workspace,
 } from '../../clients/typescript/public-v1.generated';
 import { ResponseFence } from '../../clients/typescript/recovery.ts';
+import { accelerationKind } from './acceleration.ts';
+import { openFlowBridgePage, openFlowLocation, openFlowRoute, openFlowSnapshotPath, validOpenFlowPage } from './openflow.ts';
 import { API, APIError } from './api.ts';
 import type { Pending } from './api';
 import { has } from './policy.ts';
@@ -124,6 +128,8 @@ export type Model = {
   supportBundle: Load<SupportBundleMetadata>;
   captureTargets: Load<CaptureTargets>;
   captureArtifact: Load<CaptureArtifact>;
+  acceleration: Load<RuntimeAccelerationEvidence>;
+  openFlowSnapshot: Load<OpenFlowReadPage>;
 };
 function route(value: string) {
   const [path, query = ''] = value.split('?', 2);
@@ -152,6 +158,8 @@ function initial(path: string): Model {
     supportBundle: empty(),
     captureTargets: empty(),
     captureArtifact: empty(),
+    acceleration: empty(),
+    openFlowSnapshot: empty(),
   };
 }
 export function refPath(ref: ResourceRef | null): string | null {
@@ -293,6 +301,8 @@ export class Controller {
       supportBundle: empty(),
       captureTargets: empty(),
       captureArtifact: empty(),
+      acceleration: empty(),
+      openFlowSnapshot: empty(),
       message: '',
     });
     void this.refresh();
@@ -441,7 +451,24 @@ export class Controller {
       else changes.transaction = empty();
       let resourceURL = '';
       let capability = '';
-      if (path === healthRoute) {
+      if (path === openFlowRoute) {
+        const location = openFlowLocation(query);
+        capability = has(session, 'state.read') ? 'inventory.read' : 'state.read';
+        if (location.kind === 'inventory') {
+          resourceURL = openFlowBridgePage(location.filter, location.cursor);
+        } else if (location.kind === 'snapshot') {
+          tasks.push(read<OpenFlowReadPage>(openFlowSnapshotPath(location.id, location.offset), capability).then((snapshot) => {
+            changes.openFlowSnapshot = snapshot.status === 'ready' && !validOpenFlowPage(snapshot.value, location.id, location.offset)
+              ? { status: 'unavailable', value: null, error: 'OPENFLOW_VIEW_MISMATCH', received: snapshot.received }
+              : snapshot;
+          }));
+        }
+      } else if (accelerationKind(path)) {
+        const required = has(session, 'state.read') ? 'inventory.read' : 'state.read';
+        tasks.push(read<RuntimeAccelerationEvidence>('/runtime/acceleration', required).then((acceleration) => {
+          changes.acceleration = acceleration;
+        }));
+      } else if (path === healthRoute) {
         resourceURL = '/health';
         capability = 'state.read';
       } else if (path === captureRoute) {
@@ -774,6 +801,8 @@ export class Controller {
           supportBundle: empty(),
           captureTargets: empty(),
           captureArtifact: empty(),
+          acceleration: empty(),
+          openFlowSnapshot: empty(),
         });
       }
     } finally {

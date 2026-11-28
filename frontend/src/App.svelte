@@ -23,6 +23,9 @@
   import QoS from './QoS.svelte';
   import Telemetry from './Telemetry.svelte';
   import Statistics from './Statistics.svelte';
+  import Acceleration from './Acceleration.svelte';
+  import { accelerationKind, canReadAcceleration, dpdkRoute, offloadRoute } from './acceleration';
+  import { canReadOpenFlow, openFlowRoute } from './openflow';
   import {
     statisticDetailID,
     watchStatisticNotifications,
@@ -65,6 +68,7 @@
   const desktop = $derived(width >= 1100);
   const mobile = $derived(width < 700);
   const path = $derived($model.path);
+  const accelerationView = $derived(accelerationKind(path));
   const statisticView = $derived.by(() => {
     const id = statisticDetailID(path);
     const { session, sessionReady, query, resource } = $model;
@@ -265,10 +269,17 @@
         <Link href="/switching/mirrors" current={path.startsWith('/switching/mirrors')}>Mirrors</Link>
         <Link href="/switching/qos" current={path.startsWith('/switching/qos')}>QoS &amp; Queues</Link>
         <Link href="/switching/isolation" current={path.startsWith('/switching/isolation')}>Port isolation</Link>
+        {#if $model.sessionReady && canReadOpenFlow($model.session)}
+          <Link href={openFlowRoute} current={path === openFlowRoute}>OpenFlow</Link>
+        {/if}
         {#if expert}<Link href="/interfaces" current={path.startsWith('/interfaces')}>Interfaces</Link>{/if}
       </div>
       <nav aria-label="Visibility views" class="nav-section">
         <p class="eyebrow">Visibility</p>
+        {#if $model.sessionReady && canReadAcceleration($model.session)}
+          <Link href={dpdkRoute} current={path === dpdkRoute}>DPDK</Link>
+          <Link href={offloadRoute} current={path === offloadRoute}>Hardware Offload</Link>
+        {/if}
         <Link href="/visibility/telemetry" current={path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}>Telemetry</Link>
         <Link href="/visibility/statistics" current={path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')}>Statistics</Link>
         <Link href="/visibility/neighbors" current={path === '/visibility/neighbors' || path.startsWith('/visibility/neighbors/')}>Neighbors</Link>
@@ -379,7 +390,15 @@
               >Recover original request</button
             >
           </section>{/if}
-        {#if path === '/switching/topology'}
+        {#if path === openFlowRoute}
+          {#await import('./OpenFlow.svelte')}
+            <p class="notice" role="status">Loading OpenFlow viewer…</p>
+          {:then { default: OpenFlow }}
+            {#key $model.query}<OpenFlow model={$model} {expert} />{/key}
+          {:catch}
+            <p class="notice warning" role="alert">The OpenFlow viewer could not load. Reload the page to try again.</p>
+          {/await}
+        {:else if path === '/switching/topology'}
           <TopologyEditor model={$model} {desktop} {expert}/>
         {:else if path === '/ports'}
           <header class="page-heading">
@@ -583,6 +602,8 @@
           <Mirrors model={$model} {expert} {desktop}/>
         {:else if path === '/switching/qos' || path.startsWith('/switching/qos/')}
           <QoS model={$model} {expert} {desktop} />
+        {:else if accelerationView}
+          <Acceleration kind={accelerationView} load={$model.acceleration} {expert} />
         {:else if path === '/visibility/telemetry' || path.startsWith('/visibility/telemetry/')}
           <Telemetry model={$model} {expert} {desktop} />
         {:else if path === '/visibility/statistics' || path.startsWith('/visibility/statistics/')}

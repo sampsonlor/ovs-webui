@@ -234,10 +234,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		refs := []apitypes.Ref{}
-		for _, id := range path {
-			// Receipt domains and the Linux observation caches resolve their own
-			// identities. Neither resource has a duplicate row in manager.db.
-			if op.ID != "readRequestReceipt" && op.ID != "readNeighbor" && op.ID != "readLldpNeighbor" && op.ID != "readFdbEntry" && op.ID != "readEndpoint" {
+		switch op.ID {
+		case "readRequestReceipt", "readNeighbor", "readLldpNeighbor", "readFdbEntry", "readEndpoint", "readOpenFlowSnapshot":
+			// These domains resolve their own resource identities. A retained
+			// OpenFlow snapshot also rechecks its original grant and live Bridge.
+		default:
+			for _, id := range path {
 				refs = append(refs, apitypes.Ref{Kind: op.ResourceKind, ID: id})
 			}
 		}

@@ -2443,6 +2443,95 @@ type CaptureTargets struct {
 	PolicyState string                       `json:"policy_state"`
 	Targets     []map[string]json.RawMessage `json:"targets"`
 }
+type AccelerationOVSObservation struct {
+	InstanceGeneration    Id                         `json:"instance_generation"`
+	ObservedAt            DateTime                   `json:"observed_at"`
+	ConfigurationSource   string                     `json:"configuration_source"`
+	ReportedRuntimeSource string                     `json:"reported_runtime_source"`
+	Dpdk                  map[string]json.RawMessage `json:"dpdk"`
+	Offload               map[string]json.RawMessage `json:"offload"`
+}
+type AccelerationOVSEvidence struct {
+	State       string                     `json:"state"`
+	ReasonCode  string                     `json:"reason_code,omitempty"`
+	Observation AccelerationOVSObservation `json:"observation,omitempty"`
+}
+type AccelerationHostEvidence struct {
+	State           string                       `json:"state"`
+	ReasonCode      string                       `json:"reason_code,omitempty"`
+	Source          string                       `json:"source"`
+	ObservedAt      DateTime                     `json:"observed_at,omitempty"`
+	OnlineNumaNodes map[string]json.RawMessage   `json:"online_numa_nodes"`
+	HugePages       []map[string]json.RawMessage `json:"huge_pages"`
+}
+type RuntimeAccelerationEvidence struct {
+	Ovs  AccelerationOVSEvidence  `json:"ovs"`
+	Host AccelerationHostEvidence `json:"host,omitempty"`
+}
+type OpenFlowReadQuery struct {
+	Table               int64  `json:"table,omitempty"`
+	Cookie              string `json:"cookie,omitempty"`
+	Limit               int64  `json:"limit"`
+	IncludeGroupsMeters bool   `json:"include_groups_meters,omitempty"`
+	RawFields           bool   `json:"raw_fields,omitempty"`
+}
+type OpenFlowReadRow struct {
+	Table               int64                        `json:"table"`
+	Priority            int64                        `json:"priority"`
+	Cookie              string                       `json:"cookie"`
+	DurationSeconds     int64                        `json:"duration_seconds"`
+	DurationNanoseconds int64                        `json:"duration_nanoseconds"`
+	Packets             json.RawMessage              `json:"packets"`
+	Bytes               json.RawMessage              `json:"bytes"`
+	MatchFields         []map[string]json.RawMessage `json:"match_fields"`
+	Instructions        []map[string]json.RawMessage `json:"instructions"`
+	MetadataTruncated   bool                         `json:"metadata_truncated"`
+}
+type OpenFlowReadGroup struct {
+	GroupId           int64                        `json:"group_id"`
+	TypeCode          int64                        `json:"type_code"`
+	Buckets           []map[string]json.RawMessage `json:"buckets"`
+	MetadataTruncated bool                         `json:"metadata_truncated"`
+}
+type OpenFlowReadMeter struct {
+	MeterId           int64                        `json:"meter_id"`
+	Flags             int64                        `json:"flags"`
+	Bands             []map[string]json.RawMessage `json:"bands"`
+	MetadataTruncated bool                         `json:"metadata_truncated"`
+}
+type OpenFlowReadEvidence struct {
+	BridgeId             Id                  `json:"bridge_id"`
+	InstanceGeneration   Id                  `json:"instance_generation"`
+	Query                OpenFlowReadQuery   `json:"query"`
+	ObservedAt           DateTime            `json:"observed_at"`
+	Source               string              `json:"source"`
+	Ownership            string              `json:"ownership"`
+	FieldCoverage        string              `json:"field_coverage"`
+	Groups               string              `json:"groups"`
+	GroupReason          string              `json:"group_reason,omitempty"`
+	GroupRows            []OpenFlowReadGroup `json:"group_rows,omitempty"`
+	Meters               string              `json:"meters"`
+	MeterReason          string              `json:"meter_reason,omitempty"`
+	MeterRows            []OpenFlowReadMeter `json:"meter_rows,omitempty"`
+	GroupMeterStatistics string              `json:"group_meter_statistics,omitempty"`
+	Rows                 []OpenFlowReadRow   `json:"rows"`
+	Truncated            bool                `json:"truncated"`
+}
+type OpenFlowSnapshotReference struct {
+	Id                 Id       `json:"id"`
+	BridgeId           Id       `json:"bridge_id"`
+	InstanceGeneration Id       `json:"instance_generation"`
+	ObservedAt         DateTime `json:"observed_at"`
+	ExpiresAt          DateTime `json:"expires_at"`
+	RetainedRows       int64    `json:"retained_rows"`
+	Truncated          bool     `json:"truncated"`
+}
+type OpenFlowReadPage struct {
+	Snapshot   OpenFlowSnapshotReference `json:"snapshot"`
+	Evidence   OpenFlowReadEvidence      `json:"evidence"`
+	Offset     int64                     `json:"offset"`
+	NextOffset int64                     `json:"next_offset,omitempty"`
+}
 type BridgePage struct {
 	SnapshotId         Id                         `json:"snapshot_id"`
 	InstanceGeneration json.RawMessage            `json:"instance_generation"`

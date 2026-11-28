@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.38.0",
+  "contract_version": "1.39.0",
   "scope": [
     {
       "id": "P1-PLAT-01",
@@ -312,13 +312,17 @@
         "/openflow/flows",
         "/openflow/groups",
         "/openflow/meters",
-        "/openflow/commands"
+        "/openflow/commands",
+        "/openflow/bridges/{bridge_id}/snapshots",
+        "/openflow/snapshots/{snapshot_id}"
       ],
       "operations": [
         "listOpenflowFlows",
         "listOpenflowGroups",
         "listOpenflowMeters",
-        "executeOpenFlow"
+        "executeOpenFlow",
+        "observeOpenFlowSnapshot",
+        "readOpenFlowSnapshot"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -1014,10 +1018,14 @@
       "name": "OpenFlow Overview",
       "paths": [
         "/openflow/flows",
+        "/openflow/bridges/{bridge_id}/snapshots",
+        "/openflow/snapshots/{snapshot_id}",
         "/capabilities"
       ],
       "operations": [
         "listOpenflowFlows",
+        "observeOpenFlowSnapshot",
+        "readOpenFlowSnapshot",
         "listCapabilities"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
@@ -1042,11 +1050,13 @@
       "name": "Groups & Meters",
       "paths": [
         "/openflow/groups",
-        "/openflow/meters"
+        "/openflow/meters",
+        "/openflow/snapshots/{snapshot_id}"
       ],
       "operations": [
         "listOpenflowGroups",
-        "listOpenflowMeters"
+        "listOpenflowMeters",
+        "readOpenFlowSnapshot"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -1125,10 +1135,12 @@
       "id": "VI-06",
       "name": "DPDK",
       "paths": [
-        "/dpdk"
+        "/dpdk",
+        "/runtime/acceleration"
       ],
       "operations": [
-        "listDpdk"
+        "listDpdk",
+        "readRuntimeAcceleration"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },
@@ -1136,10 +1148,12 @@
       "id": "VI-07",
       "name": "Hardware Offload",
       "paths": [
-        "/offload"
+        "/offload",
+        "/runtime/acceleration"
       ],
       "operations": [
-        "listOffload"
+        "listOffload",
+        "readRuntimeAcceleration"
       ],
       "status": "transport-contract; service acceptance remains with linked engineering issue"
     },

@@ -50,6 +50,8 @@ func TestEmbeddedSPADeepLinksAndStaticSecurityBoundary(t *testing.T) {
 		{"/operations/diagnostics", 200}, {"/operations/diagnostics/extra", 404},
 		{"/operations/support-bundles", 200}, {"/operations/support-bundles/extra", 404},
 		{"/operations/packet-capture", 200}, {"/operations/packet-capture/extra", 404},
+		{"/visibility/dpdk", 200}, {"/visibility/offload", 200}, {"/visibility/dpdk/extra", 404},
+		{"/switching/openflow", 200}, {"/switching/openflow/extra", 404},
 		{"/admin/capabilities", 200}, {"/admin/capabilities/11111111-1111-4111-8111-111111111111", 200},
 		{"/admin/capabilities/not-an-identity", 404}, {"/admin/capabilities/11111111-1111-4111-8111-111111111111/extra", 404},
 		{"/assets/index-abc.js", 200}, {"/api/v1/unknown", 404}, {"/.env", 404}, {"/assets/../index.html", 404}, {"/assets/index.js.map", 404}, {"/unknown", 404},
