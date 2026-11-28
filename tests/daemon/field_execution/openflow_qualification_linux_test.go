@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	native "github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"github.com/sampsonlor/ovs-webui/internal/apitypes"
 	"github.com/sampsonlor/ovs-webui/internal/inventory"
 	"github.com/sampsonlor/ovs-webui/internal/ovswitness"
@@ -336,12 +337,10 @@ func newNativeOpenFlowFixture(t *testing.T, buildDir string) (*fixture, ovsdb.Sp
 	f.run(dbserver, f.conf, "--remote=punix:"+f.dbSocket, "--pidfile="+filepath.Join(root, "db.pid"),
 		"--unixctl="+filepath.Join(root, "db.ctl"), "--detach", "--no-chdir")
 	liveSchema := f.run(filepath.Join(buildDir, "ovsdb", "ovsdb-client"), "--timeout=5", "get-schema", "unix:"+f.dbSocket, "Open_vSwitch")
-	var schema map[string]any
-	decoder := json.NewDecoder(strings.NewReader(liveSchema))
-	decoder.UseNumber()
-	must(t, decoder.Decode(&schema))
-	if schema["name"] != "Open_vSwitch" || inventory.Digest(schema) != profile.Schema {
-		t.Fatal("live database schema differs from the reviewed build profile")
+	var schema native.DatabaseSchema
+	must(t, json.Unmarshal([]byte(liveSchema), &schema))
+	if got := inventory.Digest(schema); schema.Name != "Open_vSwitch" || got != profile.Schema {
+		t.Fatalf("live database schema differs from the reviewed build profile: got %s, want %s", got, profile.Schema)
 	}
 	f.run(filepath.Join(buildDir, "utilities", "ovs-vsctl"), "--timeout=5", "--no-wait", "--db=unix:"+f.dbSocket, "init")
 	f.run(vswitchd, "--pidfile="+filepath.Join(root, "switch.pid"), "--unixctl="+filepath.Join(root, "switch.ctl"),

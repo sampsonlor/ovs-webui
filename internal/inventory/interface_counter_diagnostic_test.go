@@ -180,10 +180,10 @@ func TestStatisticsSchedulerPublishesAdjacentDiagnosticSamples(t *testing.T) {
 		const collectionTime = 200 * time.Millisecond
 
 		f := newCounterWindow(t, 1)
-		start, reads := true, 0
+		var started atomic.Bool
+		var reads atomic.Int32
 		f.service.now = func() time.Time {
-			if start {
-				start = false
+			if !started.Swap(true) {
 				// Model startup scheduling delay after the scheduler begins but
 				// before SampleStatistics records its first admission clock.
 				time.Sleep(startDelay)
@@ -191,9 +191,9 @@ func TestStatisticsSchedulerPublishesAdjacentDiagnosticSamples(t *testing.T) {
 			return time.Now()
 		}
 		observer := publishedCounterObserver(func(_ context.Context, req StatRequest) (StatObservation, error) {
-			reads++
+			read := reads.Add(1)
 			time.Sleep(collectionTime)
-			value := fmt.Sprint(100 + 33*(reads-1))
+			value := fmt.Sprint(100 + 33*(read-1))
 			return StatObservation{
 				ObservedAt: time.Now(), Root: req.Root, Schema: req.Schema,
 				Counters: map[string]map[string]*string{f.members[0].UUID: {"rx_bytes": &value}},
@@ -210,21 +210,22 @@ func TestStatisticsSchedulerPublishesAdjacentDiagnosticSamples(t *testing.T) {
 
 		out := InterfaceCounterDiagnostic{Target: f.query.Target}
 		var run interfaceCounterWindow
-		if done, err := f.service.interfaceCounterPoll(ctx, &run, &out); done || err != nil || run.first.IsZero() || reads != 1 {
-			t.Fatalf("first scheduled publication was not available as a baseline: %v, %v, %d", done, err, reads)
+		done, err := f.service.interfaceCounterPoll(ctx, &run, &out)
+		if count := reads.Load(); done || err != nil || run.first.IsZero() || count != 1 {
+			t.Fatalf("first scheduled publication was not available as a baseline: %v, %v, %d", done, err, count)
 		}
 		time.Sleep(StatisticsInterval - time.Millisecond)
 		synctest.Wait()
-		if reads != 1 {
-			t.Fatalf("scheduler attempted another collection before the full interval: %d", reads)
+		if count := reads.Load(); count != 1 {
+			t.Fatalf("scheduler attempted another collection before the full interval: %d", count)
 		}
 		time.Sleep(time.Millisecond + collectionTime)
 		synctest.Wait()
-		done, err := f.service.interfaceCounterPoll(ctx, &run, &out)
-		if !done || err != nil || reads != 2 || out.Freshness != "fresh" || out.State != "partial" || len(out.Members) != 1 ||
+		done, err = f.service.interfaceCounterPoll(ctx, &run, &out)
+		if count := reads.Load(); !done || err != nil || count != 2 || out.Freshness != "fresh" || out.State != "partial" || len(out.Members) != 1 ||
 			out.SecondSampledAt == nil || out.SecondSampledAt.Sub(run.first) != StatisticsInterval+collectionTime ||
 			out.Members[0].Deltas["rx_bytes"] == nil || *out.Members[0].Deltas["rx_bytes"] != "33" {
-			t.Fatalf("second scheduled publication could not be compared to its adjacent baseline: %+v, %v, %d", out, err, reads)
+			t.Fatalf("second scheduled publication could not be compared to its adjacent baseline: %+v, %v, %d", out, err, count)
 		}
 	})
 }
