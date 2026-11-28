@@ -252,7 +252,8 @@ func (a *Authentication) Read(ctx context.Context, s publicapi.Subject, q public
 	return publicapi.Response{Status: result.Status, Body: result.Body, ETag: result.ETag}, nil
 }
 func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q publicapi.Query, c requests.Command) (apitypes.Result, error) {
-	if q.Operation.ID == "changeCandidate" || q.Operation.ID == "createValidation" || q.Operation.ID == "createTransaction" {
+	switch q.Operation.ID {
+	case "changeCandidate", "createValidation", "createTransaction", "importVLANConfiguration":
 		if a.workspace == nil {
 			return apitypes.Result{}, apitypes.Fail(503, "WORKSPACE_UNAVAILABLE")
 		}
@@ -264,6 +265,12 @@ func (a *Authentication) Execute(ctx context.Context, s publicapi.Subject, q pub
 		if q.Operation.ID == "changeCandidate" && errors.As(err, &problem) {
 			switch problem.Code {
 			case "ETAG_MISMATCH", "CONFLICT_SNAPSHOT_CHANGED", "RESOLUTION_REQUIRED", "INVALID_RESOLUTION", "INVALID_INTENT", "UNSUPPORTED_CONFIGURATION", "INTENT_BINDING_MISMATCH", "DUPLICATE_FIELD_INTENT", "OBJECT_BINDING_CHANGED", "NATIVE_CONFIGURATION_UNKNOWN", "CANDIDATE_RESERVED", "CANDIDATE_CONSUMED":
+				problem.CommandEffect = "not-started"
+			}
+		}
+		if q.Operation.ID == "importVLANConfiguration" && errors.As(err, &problem) && problem.Status == 422 {
+			switch problem.Code {
+			case "CONFIG_DOCUMENT_INVALID", "CONFIG_DOCUMENT_LIMIT", "CONFIG_SCOPE_INVALID", "CONFIG_MAPPING_INVALID", "CONFIG_MAPPING_REQUIRED", "CONFIG_EXACT_FIELDS_REQUIRED":
 				problem.CommandEffect = "not-started"
 			}
 		}

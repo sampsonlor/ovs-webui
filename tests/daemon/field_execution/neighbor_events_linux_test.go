@@ -5,10 +5,14 @@ package fieldexecution
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +42,34 @@ type nativeNeighborPage struct {
 		Eligible int `json:"eligible_interfaces"`
 		Observed int `json:"observed_interfaces"`
 	}
+}
+
+type kernelFixtureNeighbor struct {
+	Address string   `json:"dst"`
+	MAC     string   `json:"lladdr"`
+	State   []string `json:"state"`
+}
+
+func (f *fixture) fixtureNeighborRows(family, address, device string) ([]kernelFixtureNeighbor, error) {
+	ctx, cancel := context.WithTimeout(f.ctx, 2*time.Second)
+	defer cancel()
+	raw, err := exec.CommandContext(ctx, "ip", "-j", family, "neigh", "show", "to", address, "dev", device).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("read kernel fixture neighbor on %s: %w: %s", device, err, raw)
+	}
+	var rows []kernelFixtureNeighbor
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return nil, fmt.Errorf("kernel fixture neighbor read did not return an array")
+	}
+	return rows, nil
+}
+
+func fixturePermanentNeighbor(rows []kernelFixtureNeighbor, address, mac string) bool {
+	return len(rows) == 1 && rows[0].Address == address && rows[0].MAC == mac &&
+		slices.Contains(rows[0].State, "PERMANENT")
 }
 
 func (p nativeNeighborPage) complete() bool {
@@ -90,13 +122,31 @@ func TestNativeNeighborEventCache(t *testing.T) {
 		name, peerName := prefix+suffix, "c"+prefix+suffix
 		f.run("ip", "link", "add", name, "type", "veth", "peer", "name", peerName)
 		t.Cleanup(func() { _ = exec.Command("ip", "link", "del", name).Run() })
-		f.vs("add-port", bridge, name)
 		f.run("ip", "link", "set", peerName, "up")
 		f.run("ip", "link", "set", name, "up")
-		link, err := net.InterfaceByName(name)
+		before, err := net.InterfaceByName(name)
 		must(t, err)
 		peer, err = net.InterfaceByName(peerName)
 		must(t, err)
+		if before.Index <= 0 || peer.Index <= 0 || before.Index == peer.Index ||
+			before.Flags&net.FlagUp == 0 || peer.Flags&net.FlagUp == 0 {
+			t.Fatal("fixture veth must be up before native attachment", before, peer)
+		}
+		// Wait for ovs-vswitchd to process the port addition before seeding
+		// the neighbor table. The shared fixture's f.vs uses --no-wait.
+		f.run("ovs-vsctl", "--timeout=5", "--db=unix:"+f.dbSocket, "add-port", bridge, name)
+		link, err = net.InterfaceByName(name)
+		must(t, err)
+		ovsLink := f.vs("get", "Interface", name, "ifindex", "ofport", "error")
+		fields := strings.Split(ovsLink, "\n")
+		if link.Index != before.Index || link.Flags&net.FlagUp == 0 || len(fields) != 3 ||
+			strings.Trim(fields[0], "[]") != strconv.Itoa(link.Index) || fields[2] != "[]" {
+			t.Fatalf("native attachment did not retain the fixture link ifindex %d: %q", before.Index, ovsLink)
+		}
+		ofport, err := strconv.Atoi(strings.Trim(fields[1], "[]"))
+		if err != nil || ofport <= 0 {
+			t.Fatalf("native attachment did not admit an OVS ofport: %q", ovsLink)
+		}
 		return link, peer
 	}
 	firstLink, peer := addPort("pna")
@@ -106,9 +156,22 @@ func TestNativeNeighborEventCache(t *testing.T) {
 	replace := func(family, address, mac, device string) {
 		f.run("ip", family, "neigh", "replace", address, "lladdr", mac, "nud", "permanent", "dev", device)
 	}
-	replace("-4", ipv4, macA, firstLink.Name)
-	replace("-6", ipv6, macA, firstLink.Name)
-	replace("-4", other, macA, secondLink.Name)
+	expected := []struct{ family, address, device string }{
+		{"-4", ipv4, firstLink.Name}, {"-6", ipv6, firstLink.Name}, {"-4", other, secondLink.Name},
+	}
+	for _, row := range expected {
+		existing, err := f.fixtureNeighborRows(row.family, row.address, row.device)
+		must(t, err)
+		if len(existing) != 0 {
+			t.Fatalf("fixture neighbor existed before permanent setup: %+v", existing)
+		}
+		replace(row.family, row.address, macA, row.device)
+		installed, err := f.fixtureNeighborRows(row.family, row.address, row.device)
+		must(t, err)
+		if !fixturePermanentNeighbor(installed, row.address, macA) {
+			t.Fatalf("kernel did not retain the exact permanent fixture row %s on %s: %+v", row.address, row.device, installed)
+		}
+	}
 	firstID := f.interfaceBinding(firstLink.Name).ManagementID
 	secondID := f.interfaceBinding(secondLink.Name).ManagementID
 	firstScope := url.Values{"interface_id": {firstID}}
@@ -120,6 +183,27 @@ func TestNativeNeighborEventCache(t *testing.T) {
 	}
 
 	var initial, unaffected nativeNeighborPage
+	var initialized bool
+	t.Cleanup(func() {
+		if initialized {
+			return
+		}
+		t.Logf("initial Neighbor cache first={availability:%s reason:%s freshness:%s coverage:%+v IPv4:%+v IPv6:%+v} second={availability:%s reason:%s freshness:%s coverage:%+v IPv4:%+v}",
+			initial.Availability, initial.Reason, initial.Source.Freshness, initial.Coverage, initial.neighbor(ipv4), initial.neighbor(ipv6),
+			unaffected.Availability, unaffected.Reason, unaffected.Source.Freshness, unaffected.Coverage, unaffected.neighbor(other))
+		allPresent := true
+		for _, row := range expected {
+			kernel, err := f.fixtureNeighborRows(row.family, row.address, row.device)
+			present := err == nil && fixturePermanentNeighbor(kernel, row.address, macA)
+			allPresent = allPresent && present
+			t.Logf("initial neighbor %s on %s permanent=%t rows=%+v error=%v", row.address, row.device, present, kernel, err)
+		}
+		t.Logf("all initial permanent fixture neighbors still present: %t", allPresent)
+		for _, link := range []*net.Interface{firstLink, secondLink} {
+			t.Logf("initial OVS Interface %s expected-ifindex=%d ifindex/ofport/error=%q", link.Name, link.Index,
+				f.vs("get", "Interface", link.Name, "ifindex", "ofport", "error"))
+		}
+	})
 	waitFor(t, func() bool {
 		f.inventory.SampleNeighbors(f.ctx)
 		initial = read(firstScope, f.login.Grant)
@@ -128,6 +212,7 @@ func TestNativeNeighborEventCache(t *testing.T) {
 			initial.neighbor(ipv4).MAC == macA && initial.neighbor(ipv6).MAC == macA &&
 			unaffected.neighbor(other).MAC == macA
 	})
+	initialized = true
 	initialIPv4, initialIPv6 := initial.neighbor(ipv4), initial.neighbor(ipv6)
 	if initialIPv4.Family != "ipv4" || initialIPv6.Family != "ipv6" || initialIPv4.ID == initialIPv6.ID ||
 		initialIPv4.IfIndex != firstLink.Index || initialIPv6.IfIndex != firstLink.Index ||

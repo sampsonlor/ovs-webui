@@ -6,6 +6,7 @@ import type {
   Accepted,
   Candidate,
   Port,
+  RequestReceipt,
   Session,
   Transaction,
   Validation,
@@ -217,6 +218,9 @@ test('native Port VLAN export and reviewed import stage through Candidate and Va
   expect(rejected.status()).toBe(422);
   expect(await rejected.json()).toMatchObject({
     code: 'CONFIG_MAPPING_REQUIRED',
+    command_effect: 'not-started',
+    request_domain: 'workspace',
+    request_id: request,
   });
   expect(
     (await apiRead<Workspace>(page, '/workspace')).candidate,
@@ -271,6 +275,19 @@ test('native Port VLAN export and reviewed import stage through Candidate and Va
     operation: 'port.vlan.set',
     object: { management_id: id, ovs_uuid: portUUID },
     value: { vlan_mode: 'access', tag: newTag, trunks: [] },
+  });
+  const epoch = session.request_epochs.workspace;
+  const stagedReceipt = await apiRead<RequestReceipt>(
+    page,
+    `/requests/${command.request_id}?domain=workspace&epoch=${epoch}`,
+  );
+  expect(stagedReceipt).toMatchObject({
+    request_id: command.request_id,
+    request_domain: 'workspace',
+    request_epoch: epoch,
+    state: 'completed',
+    command_effect: 'linked-resource',
+    resource_ref: { kind: 'candidate', id: staged.id },
   });
   await expect(page).toHaveURL(
     fixture.origin + `/changes/candidates/${staged.id}`,
