@@ -6,6 +6,7 @@ import type {
   InterfaceCounterDiagnosticResult,
   Job,
   Port,
+  Statistic,
 } from '../../clients/typescript/public-v1.generated';
 
 const fixturePath = process.env.OVS_FRONTEND_FIXTURE;
@@ -18,7 +19,7 @@ const fixture: {
 } = JSON.parse(readFileSync(fixturePath, 'utf8'));
 
 test('Active Interface counters follow the original Port and Job', async ({ page }) => {
-  test.setTimeout(45_000);
+  test.setTimeout(65_000);
   const endpoint = '/api/v1/diagnostics/interface-counters';
   const account = 'browser-qinq';
   const target = fixture.isolation;
@@ -37,8 +38,34 @@ test('Active Interface counters follow the original Port and Job', async ({ page
   const port = page.getByLabel('Port', { exact: true });
   await expect(port.getByRole('option', { name: target.name, exact: true })).toHaveAttribute('value', target.management_id);
   await port.selectOption(target.management_id);
-  await page.getByLabel('Sample budget', { exact: true }).selectOption('10');
+  await page.getByLabel('Sample budget', { exact: true }).selectOption('15');
   await expect(page.getByLabel('Maximum ports', { exact: true })).toHaveCount(0);
+
+  const portURL = fixture.origin + `/api/v1/ports/${target.management_id}`;
+  const before = await page.request.get(portURL);
+  expect(before.status()).toBe(200);
+  const originalPort: Port = await before.json();
+  expect(originalPort.interface_refs).toHaveLength(1);
+  const member = originalPort.interface_refs[0];
+  // Earlier recovery tests restart the manager. Wait for the exact shared
+  // statistics source to republish a continuous sample before dispatching.
+  await expect
+    .poll(
+      async () => {
+        const reply = await page.request.get(fixture.origin + `/api/v1/statistics/${member.id}`);
+        if (reply.status() !== 200) return false;
+        const observed: Statistic = await reply.json();
+        const current = observed.statistics;
+        return observed.interface_ref.id === member.id &&
+          observed.port_ref?.id === target.management_id &&
+          current?.state === 'observed' && current.source.freshness === 'fresh' &&
+          current.source.authority === 'ovsdb-statistics' &&
+          current.discontinuity === null && !current.coalesced && !current.reset &&
+          Object.values(current.counters).some((counter) => counter !== null);
+      },
+      { timeout: 25_000 },
+    )
+    .toBe(true);
 
   const posts: InterfaceCounterDiagnosticCommand[] = [];
   page.on('request', (request) => {
@@ -56,7 +83,7 @@ test('Active Interface counters follow the original Port and Job', async ({ page
   expect(posts).toEqual([{
     request_id: accepted.request_id,
     target_ref: accepted.resource_ref,
-    sample_seconds: 10,
+    sample_seconds: 15,
   }]);
   expect(await acceptedReply.request().headerValue('Idempotency-Key')).toBe(accepted.request_id);
   await expect(page).toHaveURL(fixture.origin + `/operations/jobs/${accepted.job_id}`);
@@ -69,7 +96,7 @@ test('Active Interface counters follow the original Port and Job', async ({ page
   const [reply, jobReply, portReply] = await Promise.all([
     page.request.get(resultURL),
     page.request.get(fixture.origin + `/api/v1/jobs/${accepted.job_id}`),
-    page.request.get(fixture.origin + `/api/v1/ports/${target.management_id}`),
+    page.request.get(portURL),
   ]);
   expect(reply.status()).toBe(200);
   expect(jobReply.status()).toBe(200);
@@ -91,7 +118,7 @@ test('Active Interface counters follow the original Port and Job', async ({ page
     freshness: 'fresh',
   });
   expect(['complete', 'partial']).toContain(result.state);
-  expect(currentPort.interface_refs).toHaveLength(1);
+  expect(currentPort.interface_refs).toEqual(originalPort.interface_refs);
   expect(result.members.map(({ interface_ref }) => interface_ref)).toEqual(currentPort.interface_refs);
   const firstSample = Date.parse(result.first_sampled_at ?? '');
   const secondSample = Date.parse(result.second_sampled_at ?? '');
