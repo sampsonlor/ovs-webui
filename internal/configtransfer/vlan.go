@@ -294,7 +294,7 @@ func exactPort(current candidate.Snapshot, id string) (candidate.Port, PortShape
 	port, ok := current.Ports[id]
 	if !ok || current.Topology.Retired[id] || !validBinding(port.Binding, current.Generation, "Port") || port.Binding.ManagementID != id ||
 		!port.Known || !port.SchemaSupported || port.Authority != "local-managed" || !digest(port.Dependency) ||
-		port.LocalPort || len(port.Members) != 1 || port.VLAN.Mode == nil ||
+		len(port.Members) != 1 || port.VLAN.Mode == nil ||
 		!supportedMode(*port.VLAN.Mode) || len(port.VLAN.CVLANs) != 0 {
 		return candidate.Port{}, "", apitypes.Fail(409, "CONFIG_PORT_UNPROVEN")
 	}
@@ -308,6 +308,10 @@ func exactPort(current candidate.Snapshot, id string) (candidate.Port, PortShape
 		!validBinding(link, current.Generation, "Interface") {
 		return candidate.Port{}, "", apitypes.Fail(409, "CONFIG_PORT_SHAPE_UNPROVEN")
 	}
+	if (member.Type != "internal" && port.LocalPort) ||
+		(member.Type == "internal" && !standaloneInternalPort(current, node)) {
+		return candidate.Port{}, "", apitypes.Fail(409, "CONFIG_PORT_UNPROVEN")
+	}
 	switch member.Type {
 	case "internal":
 		return port, StandaloneInternal, nil
@@ -317,6 +321,26 @@ func exactPort(current candidate.Snapshot, id string) (candidate.Port, PortShape
 		}
 	}
 	return candidate.Port{}, "", apitypes.Fail(409, "CONFIG_PORT_SHAPE_UNPROVEN")
+}
+
+// The Bond projection protects all internal Interfaces. For a VLAN transfer,
+// distinguish a separate internal Port from its Bridge's reserved local Port.
+func standaloneInternalPort(current candidate.Snapshot, port candidate.TopologyNode) bool {
+	if port.Name == "" {
+		return false
+	}
+	parents := 0
+	for id, bridge := range current.Topology.Nodes {
+		if bridge.Binding.Table != "Bridge" || !slices.Contains(bridge.Links, port.Binding) {
+			continue
+		}
+		if bridge.Name == "" || bridge.Name == port.Name || current.Topology.Retired[id] ||
+			bridge.Binding.ManagementID != id || !validBinding(bridge.Binding, current.Generation, "Bridge") {
+			return false
+		}
+		parents++
+	}
+	return parents == 1
 }
 
 func checkDraft(current candidate.Snapshot, intents []candidate.Intent) ([]candidate.StoredIntent, error) {

@@ -34,17 +34,45 @@ func fixturePort(s *candidate.Snapshot, value int, typ string, vlan candidate.VL
 	id, memberID := fixtureID(value), fixtureID(value+1000)
 	b := candidate.Binding{ManagementID: id, OVSUUID: fixtureID(value + 2000), Table: "Port", Generation: s.Generation}
 	child := candidate.Binding{ManagementID: memberID, OVSUUID: fixtureID(value + 3000), Table: "Interface", Generation: s.Generation}
+	bridge := candidate.Binding{ManagementID: fixtureID(value + 4000), OVSUUID: fixtureID(value + 5000), Table: "Bridge", Generation: s.Generation}
 	p := candidate.Port{
 		Binding: b, VLAN: vlan, Known: true, SchemaSupported: true, Authority: "local-managed",
 		Dependency: candidate.Digest("port dependency"), Members: []string{memberID},
 		MemberKindsSupported: typ == "system" || typ == "",
+		LocalPort:            typ == "internal",
 		Modes:                []string{"access", "trunk", "native-tagged", "native-untagged"},
 	}
 	s.Ports[id] = p
 	s.Topology.Nodes[id] = candidate.TopologyNode{Binding: b, Name: "synthetic-private-label", Links: []candidate.Binding{child}}
 	s.Topology.Nodes[memberID] = candidate.TopologyNode{Binding: child, Name: "synthetic-shared-name", Type: typ}
+	s.Topology.Nodes[bridge.ManagementID] = candidate.TopologyNode{Binding: bridge, Name: "synthetic-bridge", Links: []candidate.Binding{b}}
 	s.Topology.Configurations[id] = map[string]any{"private_key": "synthetic-credential-marker"}
 	return p
+}
+
+func TestInternalPortVLANTransferKeepsBridgeLocalPortProtected(t *testing.T) {
+	const selected = 20
+	s := fixtureSnapshot(1)
+	tag, change := 9, []int{12}
+	port := fixturePort(&s, selected, "internal", observedVLAN("access", &tag))
+	id, bridgeID := port.Binding.ManagementID, fixtureID(selected+4000)
+	document := marshalDocument(t, fixtureDocument(s, port, StandaloneInternal, VLANFields{Tag: &change}))
+	if _, err := Export(s, []string{id}); err != nil {
+		t.Fatalf("standalone internal Port export failed: %v", err)
+	}
+	if planned, err := PlanMerge(document, s.Generation, s, nil); err != nil || len(planned.Changes) != 1 {
+		t.Fatalf("standalone internal Port did not reach Candidate review: %v", err)
+	}
+	parent := s.Topology.Nodes[bridgeID]
+	parent.Name = s.Topology.Nodes[id].Name
+	s.Topology.Nodes[bridgeID] = parent
+	_, err := Export(s, []string{id})
+	expectProblem(t, err, "CONFIG_PORT_UNPROVEN")
+	_, err = PlanMerge(document, s.Generation, s, nil)
+	expectProblem(t, err, "CONFIG_PORT_UNPROVEN")
+	delete(s.Topology.Nodes, bridgeID)
+	_, err = Export(s, []string{id})
+	expectProblem(t, err, "CONFIG_PORT_UNPROVEN")
 }
 
 func fixtureDocument(s candidate.Snapshot, p candidate.Port, shape PortShape, patch VLANFields) Document {

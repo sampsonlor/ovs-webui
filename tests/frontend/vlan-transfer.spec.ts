@@ -112,13 +112,17 @@ test('native Port VLAN export and reviewed import stage through Candidate and Va
   });
   await exportPanel.getByRole('checkbox', { name: port, exact: true }).check();
   const [exportResponse, download] = await Promise.all([
-    page.waitForResponse(apiReply('GET', exportPath)),
+    page.waitForResponse(apiReply('GET', exportPath)).then(async (response) => {
+      const problem = response.ok() ? undefined : (await response.json().catch(() => null))?.code;
+      expect(response.status(), typeof problem === 'string' && /^[A-Z_]+$/.test(problem)
+        ? `VLAN export (${problem})` : 'VLAN export').toBe(200);
+      return response;
+    }),
     page.waitForEvent('download', { timeout: 15_000 }),
     exportPanel
       .getByRole('button', { name: 'Download VLAN JSON', exact: true })
       .click(),
   ]);
-  expect(exportResponse.status()).toBe(200);
   expect(new URL(exportResponse.url()).searchParams.get('ports')).toBe(id);
   expect(download.suggestedFilename()).toBe('ovs-webui-port-vlan.json');
   const data = readFileSync((await download.path())!);

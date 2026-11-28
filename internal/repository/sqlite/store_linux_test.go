@@ -328,6 +328,70 @@ func TestConsistentWALBackupAndTamperRejection(t *testing.T) {
 		t.Fatal("tampered backup accepted")
 	}
 }
+func TestWriteCancellationCommitBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		cancelBefore bool
+		callbackDone bool
+		loseResult   bool
+		want         error
+		commits      int
+		rows         int
+		writable     bool
+	}{
+		{name: "before-cutoff", cancelBefore: true, want: repository.ErrCanceled, writable: true},
+		{name: "callback-observes-rollback", cancelBefore: true, callbackDone: true, want: repository.ErrCanceled, writable: true},
+		{name: "after-cutoff", commits: 1, rows: 1, writable: true},
+		{name: "lost-commit-result", loseResult: true, want: repository.ErrCommitUnknown, commits: 1, rows: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := initialized(t, options(t))
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			commits := 0
+			s.commit = func(tx *sql.Tx) error {
+				commits++
+				cancel()
+				if err := tx.Commit(); err != nil {
+					return err
+				}
+				if tc.loseResult {
+					return errors.New("synthetic lost completion")
+				}
+				return nil
+			}
+			err := s.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, "INSERT INTO metadata VALUES('label','synthetic-owner','original',?)", []byte(`{}`))
+				if tc.cancelBefore {
+					cancel()
+				}
+				if err == nil && tc.callbackDone {
+					err = tx.Rollback()
+					if err != nil && !errors.Is(err, sql.ErrTxDone) {
+						return err
+					}
+					// Model a callback operation that has already passed its
+					// own context check when the transaction rolls back.
+					_, err = tx.ExecContext(context.WithoutCancel(ctx), "SELECT 1")
+				}
+				return err
+			})
+			if !errors.Is(err, tc.want) || commits != tc.commits || documentCount(t, s) != tc.rows ||
+				s.Status().Writable != tc.writable {
+				t.Fatalf("write returned %v, dispatched %d commits, storage status %+v", err, commits, s.Status())
+			}
+			s.commit = func(tx *sql.Tx) error { return tx.Commit() }
+			var next error
+			if !tc.writable {
+				next = repository.ErrUnavailable
+			}
+			if err := writeDocument(s, "following", []byte(`{}`)); !errors.Is(err, next) {
+				t.Fatalf("subsequent independent write returned %v, want %v", err, next)
+			}
+		})
+	}
+}
+
 func TestUnknownCommitRequiresReconciliation(t *testing.T) {
 	s := initialized(t, options(t))
 	s.commit = func(tx *sql.Tx) error {
