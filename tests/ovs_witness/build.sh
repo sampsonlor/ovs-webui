@@ -75,6 +75,14 @@ for mode in enabled sanitized default; do
 done
 python3 tests/ovs_witness/manifest.py "$out"
 if [ "$version" = 3.3.9 ]; then
+  sudo -- env OVS_EXECUTION_NATIVE_TEST=1 OVS_OPENFLOW_NATIVE_TEST=1 \
+    OVS_EXECUTION_SCHEMA="$repo/internal/provider/ovsdb/testdata/vswitch-3.3.9.ovsschema" \
+    OVS_OPENFLOW_WITNESS_BUILD="$out/enabled" \
+    OVS_OPENFLOW_BUILD_MANIFEST="$repo/test-results/ovs-witness/build-manifest.json" \
+    unshare --net -- "$out/multicast-execution.test" \
+    -test.run '^TestNativeQualifiedOpenFlow$' -test.v -test.timeout=120s \
+    | "$out/test2json" -p native-qualified-openflow \
+    | tee test-results/ovs-witness/go-native-openflow.json
   # Full production HTTPS/IPC admission and Svelte execution, with a separate
   # explicitly configured optional source-access profile in the disposable VM.
   # All default and source-denial gates remain unchanged.

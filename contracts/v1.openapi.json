@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
   "info": {
     "title": "OVS WebUI public API",
-    "version": "1.38.0",
+    "version": "1.39.0",
     "description": "Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates. Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness. Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable. Native static VXLAN/Geneve/GRE Port lifecycle uses independent root object/name policy and capability, whole-graph CAS, explicit runtime type support and shared Safe Apply. Dynamic/controller-owned/advanced tunnels remain observable and read-only. No underlay or host network provisioning is performed. Native Mirror sessions retain source/destination direction, independent VLAN selection, a reserved output Port or RSPAN VLAN and optional snap length. Shared Safe Apply requires independent Mirror policy, exact native graph/reference checks and fresh deletion recovery identities. Statistics remain observations and private advanced filter expressions are not exposed or adopted. Endpoints combines the view of FDB, ARP/NDP and LLDP while preserving independent scope, provenance and coverage. Native FDB observation is opt-in with a qualified bounded OVS witness. Filters, paging and bounded export operate on cached observations."
   },
   "servers": [
@@ -24214,6 +24214,621 @@
         }
       }
     },
+    "/runtime/acceleration": {
+      "get": {
+        "operationId": "readRuntimeAcceleration",
+        "summary": "readRuntimeAcceleration",
+        "x-capability": "state.read",
+        "x-service-issue": 47,
+        "x-service-state": "implemented",
+        "x-resource-kind": "",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeAccelerationEvidence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Composes manager-owned OVSDB configuration and reported runtime fields with independent Linux global HugeTLB and NUMA evidence. Inventory and runtime permissions are required; OVSDB configuration also requires configuration.read."
+      }
+    },
+    "/openflow/bridges/{bridge_id}/snapshots": {
+      "get": {
+        "operationId": "observeOpenFlowSnapshot",
+        "summary": "observeOpenFlowSnapshot",
+        "x-capability": "state.read",
+        "x-service-issue": 47,
+        "x-service-state": "implemented",
+        "x-resource-kind": "bridge",
+        "parameters": [
+          {
+            "name": "bridge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "table",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 254
+            }
+          },
+          {
+            "name": "cookie",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^(0|[1-9][0-9]{0,19})$"
+            }
+          },
+          {
+            "name": "row_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 128
+            }
+          },
+          {
+            "name": "groups_meters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "raw_fields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenFlowReadPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Captures one bounded local, qualified and read-only OpenFlow 1.3 observation. Requires inventory.read and an explicit table. Raw flow fields require an explicit selection and current configuration.read on collection, pagination and export. Snapshot responses preserve the original typed query and do not infer controller ownership."
+      }
+    },
+    "/openflow/snapshots/{snapshot_id}": {
+      "get": {
+        "operationId": "readOpenFlowSnapshot",
+        "summary": "readOpenFlowSnapshot",
+        "x-capability": "state.read",
+        "x-service-issue": 47,
+        "x-service-state": "implemented",
+        "x-resource-kind": "openflow_snapshot",
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 128
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25
+            }
+          },
+          {
+            "name": "export",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative representation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenFlowReadPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured error; command_effect does not prove Not Applied.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reads the original authorized snapshot within 30 seconds. Select one or more rows by offset or request the bounded original evidence for export."
+      }
+    },
     "/health/debug": {
       "post": {
         "operationId": "setManagementDebug",
@@ -41668,6 +42283,1141 @@
         "required": [
           "policy_state",
           "targets"
+        ],
+        "additionalProperties": false
+      },
+      "AccelerationOVSObservation": {
+        "type": "object",
+        "properties": {
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "configuration_source": {
+            "type": "string",
+            "const": "ovsdb-root-configuration"
+          },
+          "reported_runtime_source": {
+            "type": "string",
+            "const": "ovsdb-reported-runtime"
+          },
+          "dpdk": {
+            "type": "object",
+            "properties": {
+              "init_mode": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "socket_memory_mib": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "minItems": 0,
+                    "maxItems": 32
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "configured_pmd_cpus": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "reported_initialized": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "boolean"
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "reported_version": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "pmd_threads": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "rx_queues": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "numa_affinity": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "init_mode",
+              "socket_memory_mib",
+              "configured_pmd_cpus",
+              "reported_initialized",
+              "reported_version",
+              "pmd_threads",
+              "rx_queues",
+              "numa_affinity"
+            ],
+            "additionalProperties": false
+          },
+          "offload": {
+            "type": "object",
+            "properties": {
+              "configured": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "boolean"
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "tc_policy": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "hardware_support": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "boolean"
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "hardware_flows": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              "software_fallback": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "observed",
+                      "configured",
+                      "unknown",
+                      "unset",
+                      "withheld"
+                    ]
+                  },
+                  "value": {
+                    "type": "boolean"
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "configured",
+              "tc_policy",
+              "hardware_support",
+              "hardware_flows",
+              "software_fallback"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "instance_generation",
+          "observed_at",
+          "configuration_source",
+          "reported_runtime_source",
+          "dpdk",
+          "offload"
+        ],
+        "additionalProperties": false
+      },
+      "AccelerationOVSEvidence": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "stale",
+              "unknown",
+              "unavailable"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "observation": {
+            "$ref": "#/components/schemas/AccelerationOVSObservation"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "AccelerationHostEvidence": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "partial",
+              "stale",
+              "unavailable"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "type": "string",
+            "const": "linux-global-sysfs"
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "online_numa_nodes": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "observed",
+                  "configured",
+                  "unknown",
+                  "unset",
+                  "withheld"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "additionalProperties": false
+          },
+          "huge_pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "size_kib": {
+                  "type": "integer",
+                  "minimum": 2048,
+                  "maximum": 1048576
+                },
+                "persistent_pages": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "observed",
+                        "configured",
+                        "unknown",
+                        "unset",
+                        "withheld"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]{0,19})$"
+                    },
+                    "reason_code": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ],
+                  "additionalProperties": false
+                },
+                "free_pages": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "observed",
+                        "configured",
+                        "unknown",
+                        "unset",
+                        "withheld"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]{0,19})$"
+                    },
+                    "reason_code": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ],
+                  "additionalProperties": false
+                },
+                "reserved_pages": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "observed",
+                        "configured",
+                        "unknown",
+                        "unset",
+                        "withheld"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]{0,19})$"
+                    },
+                    "reason_code": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ],
+                  "additionalProperties": false
+                },
+                "surplus_pages": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "observed",
+                        "configured",
+                        "unknown",
+                        "unset",
+                        "withheld"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20,
+                      "pattern": "^(0|[1-9][0-9]{0,19})$"
+                    },
+                    "reason_code": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "size_kib",
+                "persistent_pages",
+                "free_pages",
+                "reserved_pages",
+                "surplus_pages"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "state",
+          "source",
+          "online_numa_nodes",
+          "huge_pages"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeAccelerationEvidence": {
+        "type": "object",
+        "properties": {
+          "ovs": {
+            "$ref": "#/components/schemas/AccelerationOVSEvidence"
+          },
+          "host": {
+            "$ref": "#/components/schemas/AccelerationHostEvidence"
+          }
+        },
+        "required": [
+          "ovs"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowReadQuery": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "cookie": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^0x[0-9a-f]{16}$"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 128
+          },
+          "include_groups_meters": {
+            "type": "boolean"
+          },
+          "raw_fields": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "limit"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowReadRow": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "cookie": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "pattern": "^0x[0-9a-f]{16}$"
+          },
+          "duration_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "duration_nanoseconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999999999
+          },
+          "packets": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "match_fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "class": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "field": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "masked": {
+                  "type": "boolean"
+                },
+                "payload_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "raw_payload_hex": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 512,
+                  "pattern": "^(?:[a-f0-9]{2}){1,256}$"
+                }
+              },
+              "required": [
+                "class",
+                "field",
+                "masked",
+                "payload_bytes"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "instructions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "action_types": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "minItems": 0,
+                  "maxItems": 128
+                },
+                "raw_payload_hex": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 512,
+                  "pattern": "^(?:[a-f0-9]{2}){1,256}$"
+                }
+              },
+              "required": [
+                "type",
+                "bytes"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "metadata_truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table",
+          "priority",
+          "cookie",
+          "duration_seconds",
+          "duration_nanoseconds",
+          "packets",
+          "bytes",
+          "match_fields",
+          "instructions",
+          "metadata_truncated"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowReadGroup": {
+        "type": "object",
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "type_code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "weight": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "action_types": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535
+                  },
+                  "minItems": 0,
+                  "maxItems": 128
+                }
+              },
+              "required": [
+                "weight",
+                "action_types"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 32
+          },
+          "metadata_truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "group_id",
+          "type_code",
+          "buckets",
+          "metadata_truncated"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowReadMeter": {
+        "type": "object",
+        "properties": {
+          "meter_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "flags": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type_code": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 65535
+                },
+                "rate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                "burst": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "type_code",
+                "rate",
+                "burst"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 32
+          },
+          "metadata_truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "meter_id",
+          "flags",
+          "bands",
+          "metadata_truncated"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowReadEvidence": {
+        "type": "object",
+        "properties": {
+          "bridge_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "query": {
+            "$ref": "#/components/schemas/OpenFlowReadQuery"
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "source": {
+            "type": "string",
+            "const": "openflow-1.3-unix"
+          },
+          "ownership": {
+            "type": "string",
+            "const": "unknown"
+          },
+          "field_coverage": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "groups": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "group_reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "group_rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenFlowReadGroup"
+            },
+            "minItems": 0,
+            "maxItems": 32
+          },
+          "meters": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "meter_reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "meter_rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenFlowReadMeter"
+            },
+            "minItems": 0,
+            "maxItems": 32
+          },
+          "group_meter_statistics": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenFlowReadRow"
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bridge_id",
+          "instance_generation",
+          "query",
+          "observed_at",
+          "source",
+          "ownership",
+          "field_coverage",
+          "groups",
+          "meters",
+          "rows",
+          "truncated"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowSnapshotReference": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "bridge_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "instance_generation": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "observed_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "expires_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "retained_rows": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "bridge_id",
+          "instance_generation",
+          "observed_at",
+          "expires_at",
+          "retained_rows",
+          "truncated"
+        ],
+        "additionalProperties": false
+      },
+      "OpenFlowReadPage": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/OpenFlowSnapshotReference"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/OpenFlowReadEvidence"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          },
+          "next_offset": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 128
+          }
+        },
+        "required": [
+          "snapshot",
+          "evidence",
+          "offset"
         ],
         "additionalProperties": false
       },

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -109,6 +110,11 @@ func run() int {
 	localTelemetry := flag.String("local-telemetry-bindings", "", "Reviewed comma-separated Bridge management ID:protocol pairs for Telemetry configuration")
 	lldpInterfaces := flag.String("lldp-observe-interfaces", "", "Opt-in passive LLDP on up to 16 exact Interface management IDs, separated by commas")
 	captureInterfaces := flag.String("capture-interface-ids", "", "Opt in to fixed Ethernet-header capture on up to eight exact Interface management IDs")
+	openFlowSockets := flag.String("openflow-observe-sockets", "", "Reviewed active Bridge management ID=/absolute/canonical.mgmt bindings")
+	openFlowControl := flag.String("openflow-witness-socket", "", "Reviewed local control socket of the qualified installed Bridge witness")
+	openFlowExecutable := flag.String("openflow-witness-executable", "", "Root-owned executable of the qualified installed Bridge witness")
+	openFlowManifest := flag.String("openflow-witness-manifest", "", "Root-owned manifest of the qualified installed Bridge witness")
+	openFlowDigest := flag.String("openflow-witness-manifest-sha256", "", "Reviewed SHA256 of the installed Bridge witness manifest")
 	fdbBridges := flag.String("fdb-observe-bridges", "", "Opt-in native FDB observation for up to eight exact Bridge management IDs, separated by commas")
 	fdbControl := flag.String("fdb-witness-socket", "", "Explicit local ovs-vswitchd control socket for the bounded FDB witness")
 	fdbExecutable := flag.String("fdb-witness-executable", "", "Root-owned executable of the qualified optional FDB witness build")
@@ -130,6 +136,14 @@ func run() int {
 	captureAllowed, captureErr := parseCaptureInterfaces(*captureInterfaces)
 	if captureErr != nil {
 		logger.Error("invalid_process_configuration", "code", auth.ErrorCode(captureErr))
+		return 2
+	}
+	openFlowBindings, openFlowErr := parseOpenFlowSockets(*openFlowSockets)
+	openFlowConfigured := len(openFlowBindings) != 0 || *openFlowControl != "" ||
+		*openFlowExecutable != "" || *openFlowManifest != "" || *openFlowDigest != ""
+	if openFlowErr != nil || openFlowConfigured && (len(openFlowBindings) == 0 || *openFlowControl == "" ||
+		*openFlowExecutable == "" || *openFlowManifest == "" || *openFlowDigest == "") {
+		logger.Error("invalid_process_configuration", "code", "INCOMPLETE_OPENFLOW_WITNESS_CONFIGURATION")
 		return 2
 	}
 	fdbConfigured := *fdbBridges != "" || *fdbControl != "" || *fdbExecutable != "" || *fdbManifest != "" || *fdbManifestDigest != ""
@@ -748,6 +762,19 @@ func run() int {
 			authentication.WithCapture(func(ctx context.Context, id string) (capture.Binding, error) {
 				return inventoryService.ResolveCaptureBinding(ctx, id, captureAllowed)
 			}, captureAllowed)
+			if openFlowConfigured {
+				observer, err := provider.QualifiedOpenFlowObserver(inventoryService, ovsprovider.QualifiedOpenFlowOptions{
+					BridgeSockets: openFlowBindings, ControlSocket: *openFlowControl, PeerUID: uint32(*ovsUID),
+					Build: ovsprovider.SpanningTreeWitnessBuild{
+						Executable: *openFlowExecutable, Manifest: *openFlowManifest, ManifestDigest: *openFlowDigest,
+					},
+				})
+				if err != nil {
+					logger.Error("service_start_failed", "code", "INVALID_OPENFLOW_WITNESS_CONFIGURATION")
+					return 2
+				}
+				authentication.WithOpenFlow(observer)
+			}
 			if multicastGroupsConfigured {
 				observer, observeErr := provider.MulticastGroupObserver(ovsprovider.MulticastGroupOptions{ControlSocket: *multicastControl, Executable: *multicastExecutable, Manifest: *multicastManifest, ManifestDigest: *multicastManifestDigest, PeerUID: uint32(*ovsUID)})
 				if observeErr != nil {
@@ -824,6 +851,9 @@ func run() int {
 	}
 	if authentication != nil {
 		authentication.WithManagementDebug(managementDebug)
+		var hostAcceleration atomic.Pointer[inventory.HostAccelerationObservation]
+		authentication.WithAccelerationHost(hostAcceleration.Load)
+		go observeHostAcceleration(ctx, &hostAcceleration)
 		authentication.WithRuntimeRestart(runtimecontrol.NewSystemd(), *allowServiceRestart, restartBoot)
 		authentication.WithSupportHealth(func() ipc.Health { return runtimeHealth.snapshot(time.Now()) })
 		if err := authentication.InitializeEvidence(ctx); err != nil {

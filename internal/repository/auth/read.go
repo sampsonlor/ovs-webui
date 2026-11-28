@@ -46,6 +46,9 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 	if err = op.ValidateParameters(path, query, func(string) []string { return nil }); err != nil {
 		return out, err
 	}
+	if op.ID == "observeOpenFlowSnapshot" || op.ID == "readOpenFlowSnapshot" {
+		return r.readScopedOpenFlow(ctx, credential, op, path, query)
+	}
 	if op.ID == "listCertificates" || op.ID == "readCertificate" {
 		if _, err = r.TLSState(ctx); err != nil {
 			return out, err
@@ -65,6 +68,8 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 		switch op.ID {
 		case "readSession":
 			value = c // Private claims; webd adds its CSRF and workspace epoch.
+		case "readRuntimeAcceleration":
+			value, err = r.readAcceleration(ctx, c)
 		case "listUsers", "listRoles", "listTokens", "listCertificates":
 			value, err = r.list(ctx, tx, c, op, query)
 		case "readUser":

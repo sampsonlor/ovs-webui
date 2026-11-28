@@ -23,9 +23,9 @@ var selected = map[string][]string{
 	"QoS":          {"type", "queues", "other_config", "external_ids"},
 	"Queue":        {"dscp", "other_config", "external_ids"},
 	"Mirror":       {"name", "select_all", "select_src_port", "select_dst_port", "select_vlan", "output_port", "output_vlan", "snaplen", "statistics", "external_ids"},
-	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths", "iface_types"},
+	"Open_vSwitch": {"bridges", "cur_cfg", "next_cfg", "ovs_version", "external_ids", "other_config", "datapaths", "iface_types", "dpdk_initialized", "dpdk_version"},
 	"Datapath":     {"capabilities"},
-	"Bridge":       {"name", "ports", "datapath_type", "controller", "fail_mode", "mcast_snooping_enable", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
+	"Bridge":       {"name", "ports", "datapath_type", "datapath_id", "controller", "fail_mode", "mcast_snooping_enable", "stp_enable", "rstp_enable", "other_config", "status", "rstp_status", "mirrors", "flood_vlans", "external_ids"},
 	"Port":         {"name", "interfaces", "protected", "vlan_mode", "tag", "trunks", "cvlans", "lacp", "bond_mode", "other_config", "status", "rstp_status", "external_ids"},
 	"Interface":    {"name", "type", "options", "link_state", "lacp_current", "admin_state", "ofport", "ofport_request", "ingress_policing_rate", "ingress_policing_burst", "ingress_policing_kpkts_rate", "ingress_policing_kpkts_burst", "ifindex", "mtu", "mtu_request", "link_speed", "duplex", "status", "error", "external_ids"},
 }
@@ -108,6 +108,20 @@ func discover(data []byte) (discovered, error) {
 			if t == "Interface" && name == "lacp_current" {
 				c.Monitored = c.Monitored && col.TypeObj.Key.Type == native.TypeBoolean && col.TypeObj.Value == nil &&
 					col.TypeObj.Min() == 0 && col.TypeObj.Max() == 1
+			}
+			if t == "Bridge" && name == "datapath_id" {
+				c.Monitored = c.Monitored && col.Ephemeral() && col.TypeObj.Key.Type == native.TypeString &&
+					col.TypeObj.Value == nil && col.TypeObj.Min() == 0 && col.TypeObj.Max() == 1
+			}
+			if t == "Open_vSwitch" {
+				switch name {
+				case "dpdk_initialized":
+					c.Monitored = c.Monitored && col.TypeObj.Key.Type == native.TypeBoolean && col.TypeObj.Value == nil &&
+						col.TypeObj.Min() >= 0 && col.TypeObj.Min() <= 1 && col.TypeObj.Max() == 1
+				case "dpdk_version":
+					c.Monitored = c.Monitored && col.TypeObj.Key.Type == native.TypeString && col.TypeObj.Value == nil &&
+						col.TypeObj.Min() == 0 && col.TypeObj.Max() == 1
+				}
 			}
 			if t == "Interface" && name == "mtu_request" {
 				c.MTUCompatible = mtuConstraint(col)

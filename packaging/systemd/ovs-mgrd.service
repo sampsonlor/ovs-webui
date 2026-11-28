@@ -13,8 +13,13 @@ User=root
 Group=ovs-webui-web
 Environment=MANAGEMENT_SERVICE_RESTART=false
 Environment=CAPTURE_INTERFACE_IDS=
+Environment=OPENFLOW_OBSERVE_SOCKETS=
+Environment=OPENFLOW_WITNESS_SOCKET=
+Environment=OPENFLOW_WITNESS_EXECUTABLE=
+Environment=OPENFLOW_WITNESS_MANIFEST=
+Environment=OPENFLOW_WITNESS_MANIFEST_SHA256=
 EnvironmentFile=/etc/ovs-webui/runtime.env
-ExecStart=/usr/libexec/ovs-mgrd --socket=${MANAGER_SOCKET} --webd-uid=${WEBD_UID} --webd-gid=${WEBD_GID} --database=${MANAGER_DATABASE} --allow-management-service-restart=${MANAGEMENT_SERVICE_RESTART} --capture-interface-ids=${CAPTURE_INTERFACE_IDS}
+ExecStart=/usr/libexec/ovs-mgrd --socket=${MANAGER_SOCKET} --webd-uid=${WEBD_UID} --webd-gid=${WEBD_GID} --database=${MANAGER_DATABASE} --allow-management-service-restart=${MANAGEMENT_SERVICE_RESTART} --capture-interface-ids=${CAPTURE_INTERFACE_IDS} --openflow-observe-sockets=${OPENFLOW_OBSERVE_SOCKETS} --openflow-witness-socket=${OPENFLOW_WITNESS_SOCKET} --openflow-witness-executable=${OPENFLOW_WITNESS_EXECUTABLE} --openflow-witness-manifest=${OPENFLOW_WITNESS_MANIFEST} --openflow-witness-manifest-sha256=${OPENFLOW_WITNESS_MANIFEST_SHA256}
 StateDirectory=ovs-webui/manager
 StateDirectoryMode=0700
 RuntimeDirectory=ovs-webui

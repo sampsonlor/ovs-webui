@@ -25,6 +25,8 @@ import (
 )
 
 type Repository struct {
+	openFlow           *openFlowViewer
+	accelerationHost   func() *inventory.HostAccelerationObservation
 	diagnosticsContext context.Context
 	supportHealth      func() ipc.Health
 	capture            *captureAuthority

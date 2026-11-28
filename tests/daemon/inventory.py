@@ -81,7 +81,10 @@ def main():
         native_build = Path(args.witness_bin_dir or args.mirror_bin_dir).resolve()
         binary_dir = ovs / 'bin'
         binary_dir.mkdir(mode=0o700)
-        for binary in ['ovs-vswitchd', 'ovsdb-server', 'ovsdb-tool', 'ovs-vsctl', 'ovsdb-client', 'ovs-appctl']:
+        binaries = ['ovs-vswitchd', 'ovsdb-server', 'ovsdb-tool', 'ovs-vsctl', 'ovsdb-client', 'ovs-appctl']
+        if args.fdb_browser:
+            binaries.append('ovs-ofctl')
+        for binary in binaries:
             folder = 'ovsdb' if binary.startswith('ovsdb-') else 'vswitchd' if binary == 'ovs-vswitchd' else 'utilities'
             shutil.copyfile(native_build / folder / binary, binary_dir / binary)
             (binary_dir / binary).chmod(0o755)
@@ -449,6 +452,10 @@ def main():
                                 repo, fixture, args.browser_node, origin, accounts, call, get,
                                 vsctl, units, ovs, eventually)
                             result['endpoints'] = verify_endpoints_frontend(
+                                repo, fixture, args.browser_node, origin, accounts, call, get,
+                                vsctl, units, ovs, eventually)
+                            from openflow_frontend import verify_openflow_frontend
+                            result['openflow'] = verify_openflow_frontend(
                                 repo, fixture, args.browser_node, origin, accounts, call, get,
                                 vsctl, units, ovs, eventually)
                         return result

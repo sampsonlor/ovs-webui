@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 const proposal = JSON.parse(readFileSync(new URL('./proposals/phase1-v1.openapi.json', import.meta.url)));
 export const api = structuredClone(proposal);
-api.info = { title: 'OVS WebUI public API', version: '1.38.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
+api.info = { title: 'OVS WebUI public API', version: '1.39.0', description: 'Phase 1 typed VLAN, Bond/LACP and managed isolated Bridge creation/deletion through Candidate and durable Safe Apply. Deletion compensation uses fresh identities and shared evidence. Independent internal access Port creation and deletion on an explicitly authorized existing Bridge are also supported; deletion recovery preserves the parent and uses fresh child identities. QinQ and customer VLAN lists are supported on eligible existing single-interface system Ports with the native TPID preserved. Interface inventory exposes native field provenance, requested versus observed MTU and reported device status through list/detail pages. Explicit and proven automatic MTU transitions on authorized standalone non-local internal Interfaces use Candidate and Safe Apply with actual device MTU proof and sealed default dependencies. Interface detail adds bounded, independently sourced Linux device observations and exact sysfs hardware associations after matching the native name and ifindex. Interface configuration observes requested port allocation and four ingress policing parameters with explicit native units, unsupported schemas and configuration permissions; configuration does not prove runtime allocation or enforcement. Interface patch configuration resolves reciprocal peers within a fresh snapshot without inferring operational connectivity. Interface MTU lifecycle evidence carries bounded, server-derived immutable target references for shared object-scoped Events/Audit navigation; retained history is not complete history. Interface detail independently observes bounded Linux ingress tc police actions, with explicit kernel units, partial coverage and identity/configuration permission gates. Installed rules are not measured traffic effectiveness or installer ownership. Core system/internal graph creation, deletion, attachment, explicit Bond membership, ofport allocation and paired internal/patch transitions use independent topology authority and High-risk Safe Apply. Tunnel configuration, DPDK/offload activation and host network provisioning retain separate domain gates.' };
 api.info.description += ' Controlled ingress policing supports one bandwidth or packet rate, or disable, on independently authorized standalone internal Interfaces with native default bursts preserved. A root policy declares exclusive software ingress management. Dispatch, Applied and compensation require qualified kernel and guarded native configuration evidence; neither proves measured traffic effectiveness.';
 api['x-review-status'] = 'implementation-review';
 api.info.description += ' Spanning-tree observation uses a coherent Bridge/Port snapshot, separates configured protocol and unset parameters from daemon-reported state/role, preserves withheld/unknown/stale/unsupported states, and exposes mutual-enable conflicts without resolving them. Native Bond/internal exclusions and unresolved mirror output/type participation remain explicit. Observation never grants write authority. A separate opt-in bridge.spanning-tree.configure intent requires explicit capability/root grants, a qualified native witness, whole-graph CAS and durable Safe Apply. Applied requires actual exclusive protocol/local installation, and compensation preserves raw/unset originals; network convergence is not inferred. Preparation stays non-executable.';
@@ -603,6 +603,68 @@ s.CapturePart = closed({
 s.CaptureTargets = closed({policy_state:choices('enabled','disabled','unavailable'),
  targets:array(closed({id,name:string(15)}),8),
 });
+const accelerationField = value => ({
+ ...closed({state:choices('observed','configured','unknown','unset','withheld'),value,reason_code:string(128)}),
+ required:['state'],
+});
+const accelerationInteger = accelerationField(integer(0,4294967295));
+const accelerationText = accelerationField(string(64));
+const accelerationBool = accelerationField(bool);
+const hugePageCount = accelerationField({...string(20),pattern:'^(0|[1-9][0-9]{0,19})$'});
+s.AccelerationOVSObservation = closed({
+ instance_generation:id,observed_at:ref('DateTime'),
+ configuration_source:{type:'string',const:'ovsdb-root-configuration'},
+ reported_runtime_source:{type:'string',const:'ovsdb-reported-runtime'},
+ dpdk:closed({
+  init_mode:accelerationText,socket_memory_mib:accelerationField(array(integer(0,4294967295),32)),
+  configured_pmd_cpus:accelerationInteger,reported_initialized:accelerationBool,reported_version:accelerationText,
+  pmd_threads:accelerationInteger,rx_queues:accelerationInteger,numa_affinity:accelerationText,
+ }),
+ offload:closed({configured:accelerationBool,tc_policy:accelerationText,hardware_support:accelerationBool,
+  hardware_flows:accelerationInteger,software_fallback:accelerationBool}),
+});
+s.AccelerationOVSEvidence = closed({state:choices('ready','stale','unknown','unavailable'),reason_code:string(128),
+ observation:ref('AccelerationOVSObservation')});
+s.AccelerationOVSEvidence.required = ['state'];
+s.AccelerationHostEvidence = closed({
+ state:choices('observed','partial','stale','unavailable'),reason_code:string(128),
+ source:{type:'string',const:'linux-global-sysfs'},observed_at:ref('DateTime'),online_numa_nodes:accelerationInteger,
+ huge_pages:array(closed({size_kib:integer(2048,1048576),persistent_pages:hugePageCount,free_pages:hugePageCount,
+  reserved_pages:hugePageCount,surplus_pages:hugePageCount}),2),
+});
+s.AccelerationHostEvidence.required = ['state','source','online_numa_nodes','huge_pages'];
+s.RuntimeAccelerationEvidence = closed({ovs:ref('AccelerationOVSEvidence'),host:ref('AccelerationHostEvidence')});
+s.RuntimeAccelerationEvidence.required = ['ovs'];
+const ofU8 = integer(0,255);
+const ofU16 = integer(0,65535);
+const ofU32 = integer(0,4294967295);
+const ofU64 = {...string(20),pattern:'^(0|[1-9][0-9]{0,19})$'};
+const ofCookie = {...string(18),pattern:'^0x[0-9a-f]{16}$'};
+const optionalFields = (schema, fields) => ({...schema,required:schema.required.filter(key => !fields.includes(key))});
+const openFlowRawHex = {...string(512),minLength:2,pattern:'^(?:[a-f0-9]{2}){1,256}$'};
+s.OpenFlowReadQuery = optionalFields(closed({table:ofU8,cookie:ofCookie,limit:integer(1,128),include_groups_meters:bool,raw_fields:bool}),
+ ['table','cookie','include_groups_meters','raw_fields']);
+s.OpenFlowReadRow = closed({table:ofU8,priority:ofU16,cookie:ofCookie,
+ duration_seconds:ofU32,duration_nanoseconds:integer(0,999999999),packets:nullable(ofU64),bytes:nullable(ofU64),
+ match_fields:array(optionalFields(closed({class:ofU16,field:ofU8,masked:bool,payload_bytes:ofU8,raw_payload_hex:openFlowRawHex}),['raw_payload_hex']),128),
+ instructions:array(optionalFields(closed({type:ofU16,bytes:ofU16,action_types:array(ofU16,128),raw_payload_hex:openFlowRawHex}),['action_types','raw_payload_hex']),128),
+ metadata_truncated:bool,
+});
+s.OpenFlowReadGroup = closed({group_id:ofU32,type_code:ofU8,
+ buckets:array(closed({weight:ofU16,action_types:array(ofU16,128)}),32),metadata_truncated:bool});
+s.OpenFlowReadMeter = closed({meter_id:ofU32,flags:ofU16,
+ bands:array(closed({type_code:ofU16,rate:ofU32,burst:ofU32}),32),metadata_truncated:bool});
+s.OpenFlowReadEvidence = optionalFields(closed({
+ bridge_id:id,instance_generation:id,query:ref('OpenFlowReadQuery'),observed_at:ref('DateTime'),
+ source:{type:'string',const:'openflow-1.3-unix'},ownership:{type:'string',const:'unknown'},field_coverage:string(64),
+ groups:string(64),group_reason:string(128),group_rows:array(ref('OpenFlowReadGroup'),32),
+ meters:string(64),meter_reason:string(128),meter_rows:array(ref('OpenFlowReadMeter'),32),
+ group_meter_statistics:string(64),rows:array(ref('OpenFlowReadRow'),128),truncated:bool,
+}),['group_reason','group_rows','meter_reason','meter_rows','group_meter_statistics']);
+s.OpenFlowSnapshotReference = closed({id,bridge_id:id,instance_generation:id,observed_at:ref('DateTime'),expires_at:ref('DateTime'),
+ retained_rows:integer(0,128),truncated:bool});
+s.OpenFlowReadPage = optionalFields(closed({snapshot:ref('OpenFlowSnapshotReference'),evidence:ref('OpenFlowReadEvidence'),
+ offset:integer(0,128),next_offset:integer(1,128)}),['next_offset']);
 
 const resources = [
  ['bridges','bridge','Bridge',36], ['interfaces','interface','Interface',36], ['vlans','vlan','Resource',42], ['bonds','bond','Bond',42],
@@ -703,6 +765,20 @@ api.paths['/jobs'].get.parameters.push(...structuredClone(evidenceFilters));
 for (const [path, op, issue, cap] of [['health','readHealth',45,'state.read'],['management-network','readManagementNetwork',49,'state.read'],['ovs-lifecycle','readOVSLifecycle',49,'state.read'],['aaa','readAAA',34,'access.read'],['settings','readSettings',54,'workspace.read'],['about','readAbout',55,'state.read'],['topology','readTopology',52,'state.read']]) add(`/${path}`, 'get', op, 'Resource', cap, issue);
 api.paths['/health'].get['x-service-state'] = 'implemented';
 api.paths['/health'].get.description = 'Current authenticated management-plane evidence from both services, their storage and the manager-owned provider caches. Each component carries its own authority and time. Cache ages and watchdog cycle state remain independent from dataplane forwarding or recovery authority.';
+add('/runtime/acceleration','get','readRuntimeAcceleration','RuntimeAccelerationEvidence','state.read',47);
+api.paths['/runtime/acceleration'].get['x-service-state'] = 'implemented';
+api.paths['/runtime/acceleration'].get.description = 'Composes manager-owned OVSDB configuration and reported runtime fields with independent Linux global HugeTLB and NUMA evidence. Inventory and runtime permissions are required; OVSDB configuration also requires configuration.read.';
+add('/openflow/bridges/{bridge_id}/snapshots','get','observeOpenFlowSnapshot','OpenFlowReadPage','state.read',47,{
+ kind:'bridge',query:[param('table','query',integer(0,254),true),param('cookie','query',ofU64),
+ param('row_limit','query',integer(1,128)),param('groups_meters','query',bool),param('raw_fields','query',bool)],
+});
+add('/openflow/snapshots/{snapshot_id}','get','readOpenFlowSnapshot','OpenFlowReadPage','state.read',47,{
+ kind:'openflow_snapshot',query:[param('offset','query',integer(0,128)),param('page_size','query',integer(1,25)),param('export','query',bool)],
+});
+api.paths['/openflow/bridges/{bridge_id}/snapshots'].get['x-service-state'] = 'implemented';
+api.paths['/openflow/bridges/{bridge_id}/snapshots'].get.description = 'Captures one bounded local, qualified and read-only OpenFlow 1.3 observation. Requires inventory.read and an explicit table. Raw flow fields require an explicit selection and current configuration.read on collection, pagination and export. Snapshot responses preserve the original typed query and do not infer controller ownership.';
+api.paths['/openflow/snapshots/{snapshot_id}'].get['x-service-state'] = 'implemented';
+api.paths['/openflow/snapshots/{snapshot_id}'].get.description = 'Reads the original authorized snapshot within 30 seconds. Select one or more rows by offset or request the bounded original evidence for export.';
 add('/health/debug', 'post', 'setManagementDebug', 'Accepted', 'management.debug.write', 45, {domain:'management',body:'ManagementDebugCommand'});
 add('/health/service-restarts', 'post', 'restartManagementService', 'Accepted', 'management.services.control', 45, {domain:'management',body:'ManagementServiceRestartCommand'});
 api.paths['/health/debug'].post['x-service-state'] = 'implemented';
@@ -796,9 +872,9 @@ export const pagePaths = {
  'OV-01':['/health','/ports','/workspace'], 'OV-02':['/search','/topology'], 'SW-01':['/bridges','/ports','/interfaces'], 'SW-02':['/bridges','/candidate'], 'SW-03':['/bridges/{bridge_id}','/ports'],
  'SW-04':['/ports','/candidate'], 'SW-05':['/ports/{port_id}','/candidate'], 'SW-06':['/interfaces'], 'SW-07':['/interfaces/{interface_id}'], 'SW-08':['/vlans','/candidate'],
  'SW-09':['/bonds','/candidate'], 'SW-10':['/spanning-tree','/candidate'], 'SW-11':['/multicast','/candidate'], 'SW-12':['/tunnels','/candidate'], 'SW-13':['/mirrors','/candidate'],
- 'SW-14':['/qos','/candidate'], 'SW-15':['/isolation','/candidate'], 'SW-16':['/openflow/flows','/capabilities'], 'SW-17':['/openflow/flows','/openflow/preflights','/openflow/commands'],
- 'SW-18':['/openflow/groups','/openflow/meters'], 'SW-19':['/openflow/controllers','/candidate'], 'VI-01':['/endpoints'], 'VI-02':['/fdb'], 'VI-03':['/neighbors'], 'VI-04':['/lldp'],
- 'VI-05':['/statistics','/stream'], 'VI-06':['/dpdk'], 'VI-07':['/offload'], 'VI-08':['/telemetry','/candidate'], 'OP-01':['/health'], 'OP-02':['/events'], 'OP-03':['/diagnostics/templates','/diagnostics','/diagnostics/link-lacp','/diagnostics/link-lacp/{job_id}','/diagnostics/interface-counters','/diagnostics/interface-counters/{job_id}','/captures','/captures/targets','/captures/{job_id}','/captures/{job_id}/parts'],
+ 'SW-14':['/qos','/candidate'], 'SW-15':['/isolation','/candidate'], 'SW-16':['/openflow/flows','/openflow/bridges/{bridge_id}/snapshots','/openflow/snapshots/{snapshot_id}','/capabilities'], 'SW-17':['/openflow/flows','/openflow/preflights','/openflow/commands'],
+ 'SW-18':['/openflow/groups','/openflow/meters','/openflow/snapshots/{snapshot_id}'], 'SW-19':['/openflow/controllers','/candidate'], 'VI-01':['/endpoints'], 'VI-02':['/fdb'], 'VI-03':['/neighbors'], 'VI-04':['/lldp'],
+ 'VI-05':['/statistics','/stream'], 'VI-06':['/dpdk','/runtime/acceleration'], 'VI-07':['/offload','/runtime/acceleration'], 'VI-08':['/telemetry','/candidate'], 'OP-01':['/health'], 'OP-02':['/events'], 'OP-03':['/diagnostics/templates','/diagnostics','/diagnostics/link-lacp','/diagnostics/link-lacp/{job_id}','/diagnostics/interface-counters','/diagnostics/interface-counters/{job_id}','/captures','/captures/targets','/captures/{job_id}','/captures/{job_id}/parts'],
  'OP-04':['/jobs'], 'OP-05':['/jobs/{job_id}','/jobs/{job_id}/cancellations'], 'OP-06':['/audit'], 'OP-07':['/support-bundles','/support-bundles/{job_id}','/support-bundles/{job_id}/parts','/artifacts/{artifact_id}'],
  'CH-01':['/workspace','/candidate'], 'CH-02':['/validations','/validations/{validation_id}'], 'CH-03':['/transactions','/transactions/{transaction_id}','/transactions/{transaction_id}/decisions'],
  'CH-04':['/drift','/candidate'], 'CH-05':['/checkpoints'], 'AD-01':['/capabilities'], 'AD-02':['/management-network','/candidate'], 'AD-03':['/ovs-lifecycle','/ovs-lifecycle/commands'],
@@ -811,7 +887,7 @@ export const scopePaths = {
  'P1-PLAT-10':['/transactions/{transaction_id}/reconciliations'], 'P1-PLAT-11':['/ports','/requests/{request_id}'], 'P1-PLAT-12':['/stream','/jobs'],
  'P1-SW-01':['/bridges','/ports','/interfaces','/candidate'], 'P1-SW-02':['/vlans','/candidate'], 'P1-SW-03':['/bonds','/candidate'], 'P1-SW-04':['/spanning-tree','/candidate'], 'P1-SW-05':['/multicast','/candidate'],
  'P1-SW-06':['/profiles','/drift','/candidate'], 'P1-SW-07':['/mirrors','/candidate'], 'P1-SW-08':['/qos','/candidate'], 'P1-SW-09':['/tunnels','/candidate'], 'P1-SW-10':['/isolation','/candidate'],
- 'P1-SW-11':['/openflow/flows','/openflow/groups','/openflow/meters','/openflow/commands'], 'P1-SW-12':['/dpdk'], 'P1-SW-13':['/offload'], 'P1-SW-14':['/telemetry','/candidate'], 'P1-SW-15':['/endpoints','/fdb','/neighbors','/lldp'], 'P1-SW-16':['/management-network','/candidate'],
+ 'P1-SW-11':['/openflow/flows','/openflow/groups','/openflow/meters','/openflow/commands','/openflow/bridges/{bridge_id}/snapshots','/openflow/snapshots/{snapshot_id}'], 'P1-SW-12':['/dpdk'], 'P1-SW-13':['/offload'], 'P1-SW-14':['/telemetry','/candidate'], 'P1-SW-15':['/endpoints','/fdb','/neighbors','/lldp'], 'P1-SW-16':['/management-network','/candidate'],
  'P1-OPS-01':['/statistics','/health'], 'P1-OPS-02':['/events'], 'P1-OPS-03':['/health'], 'P1-OPS-04':['/diagnostics','/diagnostics/link-lacp','/diagnostics/link-lacp/{job_id}','/diagnostics/interface-counters','/diagnostics/interface-counters/{job_id}'], 'P1-OPS-05':['/captures','/captures/targets','/captures/{job_id}','/captures/{job_id}/parts'], 'P1-OPS-06':['/support-bundles','/support-bundles/{job_id}','/support-bundles/{job_id}/parts'], 'P1-OPS-07':['/runtime','/health'], 'P1-OPS-08':['/stream','/ports'],
  'P1-SEC-01':['/sessions','/users'], 'P1-SEC-02':['/aaa'], 'P1-SEC-03':['/roles','/capabilities'], 'P1-SEC-04':['/sessions','/session'], 'P1-SEC-05':['/tokens'], 'P1-SEC-06':['/certificates'], 'P1-SEC-07':['/certificates','/tokens'], 'P1-SEC-08':['/audit'],
  'P1-API-01':['/contract'], 'P1-API-02':['/openapi.json'], 'P1-API-03':['/stream'], 'P1-API-04':['/contract'], 'P1-API-05':['/requests/{request_id}'], 'P1-API-06':['/jobs','/jobs/{job_id}'], 'P1-API-07':['/contract','/openapi.json'],
