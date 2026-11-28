@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -24,6 +25,7 @@ const resource = "00000000-0000-4000-8000-000000000003"
 type testAuthority struct {
 	revoked atomic.Bool
 	cookie  bool
+	check   func(string, []apitypes.Ref) error
 }
 
 func (a *testAuthority) Authenticate(context.Context, *http.Request) (Subject, error) {
@@ -39,9 +41,12 @@ func (a *testAuthority) Revalidate(ctx context.Context, s Subject) (Subject, err
 	}
 	return s, nil
 }
-func (a *testAuthority) Allow(context.Context, Subject, string, []apitypes.Ref) error {
+func (a *testAuthority) Allow(_ context.Context, _ Subject, capability string, refs []apitypes.Ref) error {
 	if a.revoked.Load() {
 		return apitypes.Fail(403, "REVOKED")
+	}
+	if a.check != nil {
+		return a.check(capability, refs)
 	}
 	return nil
 }
@@ -117,6 +122,36 @@ func TestProductionDefaultsAndContract(t *testing.T) {
 	assertProblem(t, h, call(h, "GET", "/api/v1/ports", "", map[string]string{"Authorization": "Bearer synthetic"}), 503, "AUTH_UNAVAILABLE")
 	assertProblem(t, h, call(h, "GET", "/api/v2/ports", "", nil), 404, "NOT_FOUND")
 	assertProblem(t, h, call(h, "PATCH", "/api/v1/bridges", "{}", nil), 405, "METHOD_NOT_ALLOWED")
+}
+
+func TestOpenFlowSnapshotReadsResolveScopeInManager(t *testing.T) {
+	for _, tc := range []struct {
+		path, operation, pathKey string
+		refs                     []apitypes.Ref
+	}{
+		{"/api/v1/openflow/snapshots/" + resource + "?offset=0&page_size=25", "readOpenFlowSnapshot", "snapshot_id", nil},
+		{"/api/v1/openflow/snapshots/" + resource + "?export=true", "readOpenFlowSnapshot", "snapshot_id", nil},
+		{"/api/v1/openflow/bridges/" + resource + "/snapshots?table=7", "observeOpenFlowSnapshot", "bridge_id", []apitypes.Ref{{Kind: "bridge", ID: resource}}},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			authority := &testAuthority{check: func(capability string, refs []apitypes.Ref) error {
+				if capability != "state.read" || !slices.Equal(refs, tc.refs) {
+					t.Fatalf("unexpected preliminary authorization for %q: %+v", capability, refs)
+				}
+				return nil
+			}}
+			gateway := testGateway{read: func(_ context.Context, s Subject, q Query) (Response, error) {
+				if s.ID != principal || q.Operation.ID != tc.operation || q.Path[tc.pathKey] != resource {
+					t.Fatalf("manager received the wrong subject or scope: %+v, %+v", s, q.Path)
+				}
+				return Response{}, apitypes.Fail(404, "OPENFLOW_SNAPSHOT_UNAVAILABLE")
+			}}
+			h := newTestHandler(t, Options{Authorizer: authority, Gateway: gateway})
+			assertProblem(t, h, call(h, "GET", tc.path, "", nil), 404, "OPENFLOW_SNAPSHOT_UNAVAILABLE")
+			authority.revoked.Store(true)
+			assertProblem(t, h, call(h, "GET", tc.path, "", nil), 403, "REVOKED")
+		})
+	}
 }
 func TestStrictAdmissionAndStrongPreconditions(t *testing.T) {
 	h := newTestHandler(t, Options{Authorizer: &testAuthority{}, Gateway: testGateway{}, PublicOrigin: "https://console.example"})
