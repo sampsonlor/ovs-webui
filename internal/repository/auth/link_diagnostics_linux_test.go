@@ -60,6 +60,9 @@ func TestLinkLACPDiagnosticUsesDurableOwnedJobAndCurrentCancellation(t *testing.
 			target := apitypes.Ref{Kind: "port", ID: repository.NewID()}
 			if err := r.store.Write(t.Context(), func(ctx context.Context, tx *sql.Tx) error {
 				gen := repository.NewID()
+				if _, err := tx.ExecContext(ctx, "INSERT INTO generations(id,evidence,created_at) VALUES(?,?,?)", gen, []byte("{}"), r.now().Unix()); err != nil {
+					return err
+				}
 				if _, err := tx.ExecContext(ctx, "INSERT INTO inventory_state(singleton,generation,state,reason,evidence) VALUES(1,?,'confirmed','synthetic-diagnostic',?)", gen, []byte("{}")); err != nil {
 					return err
 				}
@@ -115,7 +118,7 @@ func TestLinkLACPDiagnosticUsesDurableOwnedJobAndCurrentCancellation(t *testing.
 			if job.State != want {
 				t.Fatalf("expected %s and got %+v", want, job)
 			}
-			out, err := r.ReadAuth(t.Context(), admin.Grant, authn.Query{Method: "GET", URI: "/diagnostics/link-lacp/" + id})
+			out, err := r.ReadAuth(t.Context(), admin.Grant, authn.Query{Method: "GET", URI: "/api/v1/diagnostics/link-lacp/" + id})
 			if cancel {
 				wantCode(t, err, "DIAGNOSTIC_RESULT_UNAVAILABLE")
 			} else if err != nil || out.Status != 200 {

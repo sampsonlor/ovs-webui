@@ -46,7 +46,7 @@ func TestAuthSupportBundleReturnsOwnedExpiringVerifiedArchive(t *testing.T) {
 	if err != nil || same.Receipt.Resource == nil || same.Receipt.Resource.ID != id {
 		t.Fatalf("support archive replay changed identity: %+v, %v", same, err)
 	}
-	base := "/support-bundles/" + id
+	base := "/api/v1/support-bundles/" + id
 	metadata, err := r.ReadAuth(t.Context(), admin.Grant, authn.Query{Method: "GET", URI: base})
 	if err != nil || metadata.Status != 200 {
 		t.Fatalf("owned artifact metadata unavailable: %v, %s", err, metadata.Body)
