@@ -168,7 +168,18 @@ func configureWriter(ctx context.Context, db *sql.DB) error {
 func Open(ctx context.Context, o Options) (*Store, error) {
 	return openWithMigrations(ctx, o, migrations.For(o.Kind))
 }
-func openWithMigrations(ctx context.Context, o Options, plan []migrations.Migration) (s *Store, err error) {
+
+// OpenCurrentSchema takes the normal exclusive repository guard and requires
+// the installed daemon's current schema without applying migrations.
+func OpenCurrentSchema(ctx context.Context, o Options) (*Store, error) {
+	return openDatabase(ctx, o, migrations.For(o.Kind), true)
+}
+
+func openWithMigrations(ctx context.Context, o Options, plan []migrations.Migration) (*Store, error) {
+	return openDatabase(ctx, o, plan, false)
+}
+
+func openDatabase(ctx context.Context, o Options, plan []migrations.Migration, requireCurrent bool) (s *Store, err error) {
 	s = newStore(o)
 	fail := func(code string) (*Store, error) { s.degrade(code, false); return s, errors.New(code) }
 	if !validOptions(o) {
@@ -194,6 +205,9 @@ func openWithMigrations(ctx context.Context, o Options, plan []migrations.Migrat
 	current, err := verifySchema(ctx, probe, o.Kind, plan)
 	if err != nil {
 		return fail("STORAGE_SCHEMA_MISMATCH")
+	}
+	if requireCurrent && current != len(plan) {
+		return fail("STORAGE_SCHEMA_NOT_CURRENT")
 	}
 	s.writer, err = connect(o.Path, false, 1)
 	if err != nil {
@@ -365,12 +379,24 @@ func (s *Store) Write(ctx context.Context, fn func(context.Context, *sql.Tx) err
 	if !s.checked(true) {
 		return repository.ErrUnavailable
 	}
-	tx, err := s.writer.BeginTx(ctx, nil)
+	// Keep BeginTx cancellable until admission to commit. Leaving its
+	// lifetime tied to the caller after the cutoff lets database/sql
+	// roll back before asking SQLite to commit.
+	transactionCtx, cancelTransaction := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelTransaction()
+	stopCancellation := context.AfterFunc(ctx, cancelTransaction)
+	defer stopCancellation()
+	tx, err := s.writer.BeginTx(transactionCtx, nil)
 	if err != nil {
 		return s.failure(err)
 	}
 	defer tx.Rollback()
 	if err = fn(ctx, tx); err != nil {
+		// database/sql can report a completed transaction when its
+		// automatic rollback races a canceled callback operation.
+		if ctx.Err() != nil && errors.Is(err, sql.ErrTxDone) {
+			return repository.ErrCanceled
+		}
 		return s.failure(err)
 	}
 	if err = ctx.Err(); err != nil {
@@ -378,6 +404,11 @@ func (s *Store) Write(ctx context.Context, fn func(context.Context, *sql.Tx) err
 	}
 	if !s.checked(true) {
 		return repository.ErrUnavailable
+	}
+	// If the relay started, the transaction may already be rolling back.
+	// If we stopped it, sample the request once more before dispatching.
+	if !stopCancellation() || ctx.Err() != nil {
+		return repository.ErrCanceled
 	}
 	if err = s.commit(tx); err != nil {
 		s.degrade("STORAGE_COMMIT_UNKNOWN", true)

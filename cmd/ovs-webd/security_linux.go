@@ -96,16 +96,34 @@ func (o securityOptions) offline(ctx context.Context, db *sqlite.Store, bootstra
 		if err != nil {
 			return err
 		}
+		session, err := secrets.New(ctx, db, secret.Session, ring)
+		if err != nil {
+			return err
+		}
+		tlsRequired, err := secrets.HasRetainedTLSState(ctx, db)
+		if err != nil {
+			return err
+		}
+		var certs *certificates.Store
 		if _, err = os.Lstat(o.tlsDir); err == nil {
-			certs, err := o.certificates(ctx, db, false)
+			certs, err = o.certificates(ctx, db, false)
 			if err != nil {
 				return err
 			}
+		} else if !errors.Is(err, os.ErrNotExist) || tlsRequired {
+			return secret.ErrUnavailable
+		}
+		var tlsRecords *secrets.Store
+		if certs != nil {
+			tlsRecords = certs.Secrets
+		}
+		if err = secrets.VerifyRetained(ctx, db, session, tlsRecords); err != nil {
+			return err
+		}
+		if certs != nil {
 			if err = certs.PrepareRestore(ctx); err != nil {
 				return err
 			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
 		}
 		return repo.PrepareRestore(ctx)
 	}

@@ -15,6 +15,7 @@ import {
 } from './diagnostics.ts';
 import { supportBundlePath } from './support-bundles.ts';
 import { captureCancellationID, capturePath } from './packet-capture.ts';
+import { vlanImportPath } from './vlan-transfer.ts';
 
 export class APIError extends Error {
   status: number;
@@ -291,7 +292,7 @@ export class API {
         (value as { id: string }).id === cancelled
       );
     const kind =
-      path === '/candidate'
+      path === '/candidate' || path === vlanImportPath
         ? 'candidate'
         : path === '/validations'
           ? 'validation'

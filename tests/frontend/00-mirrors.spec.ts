@@ -1,6 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { readFileSync, mkdirSync } from 'node:fs';
+import type { Resource } from '../../clients/typescript/public-v1.generated';
 
 if (!process.env.OVS_FRONTEND_FIXTURE)
   throw new Error('Requires actual isolated Go/OVS services.');
@@ -35,6 +37,55 @@ async function screen(page: Page, name: string) {
     path: 'test-results/frontend-evidence/mirror-' + name + '.png',
     fullPage: true,
   });
+}
+async function observeMirrorWhileDatabasePaused(page: Page) {
+  const pause = spawn('python3', ['tests/daemon/mirror_stale_fixture.py'], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const finished = once(pause, 'close');
+  try {
+    const ready = await Promise.race([
+      once(pause.stdout, 'data').then(([chunk]) => String(chunk).trim()),
+      finished.then(() => ''),
+    ]);
+    expect(ready).toBe('paused');
+    await expect.poll(async () => {
+      const reply = await page.request.get(fixture.origin + '/api/v1/mirrors/' + fixture.mirror.management_id, { timeout: 2000 });
+      try {
+        if (!reply.ok()) {
+          const problem = await reply.json();
+          return { status: reply.status(), problem: problem.code };
+        }
+        const mirror: Resource = await reply.json();
+        return {
+          status: reply.status(),
+          identity: mirror.management_id,
+          generation: mirror.instance_generation,
+          state: mirror.state,
+          freshness: mirror.source?.freshness,
+          operationAvailable: mirror.native_mirror?.execution.available,
+          operationReason: mirror.native_mirror?.execution.reason,
+          observationNotice: await page.getByText('Values are last observed. Configuration changes require a fresh observation.', { exact: true }).isVisible(),
+          operationNotice: await page.getByText('Wait for a fresh native observation before preparing a Mirror change.', { exact: true }).isVisible(),
+        };
+      } finally {
+        await reply.dispose();
+      }
+    }, { timeout: 15000 }).toEqual({
+      status: 200,
+      identity: fixture.mirror.management_id,
+      generation: fixture.mirror.instance_generation,
+      state: 'stale',
+      freshness: 'stale',
+      operationAvailable: false,
+      operationReason: 'MIRROR_OBSERVATION_STALE',
+      observationNotice: true,
+      operationNotice: true,
+    });
+    await expect(page.getByRole('button', { name: 'Stage Mirror change', exact: true })).toHaveCount(0);
+    await screen(page, 'stale');
+  } finally {
+    pause.stdin.end();
+    expect((await finished)[0]).toBe(0);
+  }
 }
 async function decision(page: Page, name: string, state: string) {
   for (let review = 0; review < 4; review++) {
@@ -117,14 +168,7 @@ test('native Mirror review separates direction, permission, native counters and 
     await screen(page,label);
   }
   await page.setViewportSize({width:1440,height:1000});
-  execFileSync('ovs-appctl',['-t',`${fixture.ovsDirectory}/db.ctl`,'exit']);
-  try {
-    await expect(page.getByText('Values are last observed. Configuration changes require a fresh observation.',{exact:true})).toBeVisible();
-    await expect(page.getByText('Wait for a fresh native observation before preparing a Mirror change.',{exact:true})).toBeVisible();
-    await screen(page,'stale');
-  } finally {
-    execFileSync('ovsdb-server',[fixture.database,`--remote=punix:${fixture.dbSocket}`,`--pidfile=${fixture.ovsDirectory}/db.pid`,`--unixctl=${fixture.ovsDirectory}/db.ctl`,'--detach','--no-chdir','--overwrite-pidfile'],{env:{...process.env,OVS_RUNDIR:fixture.ovsDirectory,OVS_LOGDIR:fixture.ovsDirectory,OVS_DBDIR:fixture.ovsDirectory},stdio:'pipe'});
-  }
+  await observeMirrorWhileDatabasePaused(page);
   await expect(page.getByText('Observation: fresh',{exact:false})).toBeVisible();
   await page.getByRole('button',{name:'Sign out',exact:true}).click();
   await login(page,'browser-mirror-observer');

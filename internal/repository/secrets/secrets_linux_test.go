@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"github.com/sampsonlor/ovs-webui/internal/repository"
 	"github.com/sampsonlor/ovs-webui/internal/repository/sqlite"
 	"github.com/sampsonlor/ovs-webui/internal/secret"
@@ -96,5 +97,65 @@ func TestPartitionOwnershipEncryptedBackupAndVersionedRewrap(t *testing.T) {
 	rs.Ring = ring
 	if v, err := rs.Get(ctx, "test-identity", "tls-identity"); err != nil || string(v.Bytes()) != raw {
 		t.Fatal("valid restore failed", err)
+	}
+}
+
+func TestRestoreVerifiesRetainedCiphertextAndAdvertisedVersion(t *testing.T) {
+	ctx := t.Context()
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	options := sqlite.Options{
+		Path: filepath.Join(root, "web.db"), Kind: repository.Web, SoftwareVersion: "restore-test",
+	}
+	if err := sqlite.Initialize(ctx, options); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sqlite.Open(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := VerifyRetained(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if required, err := HasRetainedTLSState(ctx, db); err != nil || required {
+		t.Fatalf("empty TLS state: required=%t error=%v", required, err)
+	}
+	oldKey, nextKey := bytes.Repeat([]byte{7}, 32), bytes.Repeat([]byte{8}, 32)
+	old, _ := secret.NewRing(1, map[int][]byte{1: oldKey})
+	both, _ := secret.NewRing(2, map[int][]byte{1: oldKey, 2: nextKey})
+	tls, err := New(ctx, db, secret.TLS, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		if err := tls.Put(ctx, tx, "synthetic-tls-id", "tls-identity", secret.NewValue([]byte("discardable-fixture"))); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO tls_local_state VALUES(1,X'00')")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if required, err := HasRetainedTLSState(ctx, db); err != nil || !required {
+		t.Fatalf("stored TLS state: required=%t error=%v", required, err)
+	}
+	if err := VerifyRetained(ctx, db); !errors.Is(err, secret.ErrUnavailable) {
+		t.Fatalf("accepted missing TLS owner: %v", err)
+	}
+	tls.Ring = both
+	if err := VerifyRetained(ctx, db, tls); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Write(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE secret_records SET key_version=2")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyRetained(ctx, db, tls); !errors.Is(err, secret.ErrUnavailable) {
+		t.Fatalf("accepted envelope with a different advertised version: %v", err)
 	}
 }

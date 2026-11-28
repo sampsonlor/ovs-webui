@@ -70,6 +70,8 @@ func (r *Repository) ReadAuth(ctx context.Context, credential string, input auth
 			value = c // Private claims; webd adds its CSRF and workspace epoch.
 		case "readRuntimeAcceleration":
 			value, err = r.readAcceleration(ctx, c)
+		case "readVLANConfigurationExport":
+			value, err = r.readVLANExport(ctx, tx, c, query.Get("ports"))
 		case "listUsers", "listRoles", "listTokens", "listCertificates":
 			value, err = r.list(ctx, tx, c, op, query)
 		case "readUser":

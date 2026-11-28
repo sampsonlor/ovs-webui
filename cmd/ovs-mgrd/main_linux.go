@@ -70,6 +70,12 @@ func run() int {
 	initSecret := flag.Bool("init-secret-store", false, "Explicitly initialize privileged SecretStore keys and exit")
 	rotateSecret := flag.Bool("rotate-secret-key", false, "Offline privileged key rotation, retaining old versions")
 	restore := flag.Bool("prepare-restore-security", false, "Offline: rotate restored auth/request epochs and revoke all grants/tokens; run with webd reconciliation")
+	createBackupPair := flag.Bool("create-offline-backup-pair", false, "Seal the stopped management services' two databases as their dedicated owners")
+	verifyBackupPair := flag.String("verify-offline-backup-pair", "", "Verify an exact sealed backup pair and inspect its key-version requirements")
+	backupRoot := flag.String("backup-pair-root", "", "Existing private root-owned destination for verified management backup pairs")
+	backupWebDatabase := flag.String("backup-web-database", "/var/lib/ovs-webui/web/web.db", "Private web database for offline paired backup")
+	restoreStage := registerOfflineRestoreFlags(flag.CommandLine)
+	checkpoint := registerOfflineCheckpointFlags(flag.CommandLine)
 	ovsSocket := flag.String("ovsdb-socket", "/run/openvswitch/db.sock", "Local OVSDB Unix socket for typed inventory and guarded execution")
 	ovsFile := flag.String("ovsdb-file", "/var/lib/openvswitch/conf.db", "Canonical database file for lifecycle evidence (no symlinks)")
 	ovsUID := flag.Uint("ovsdb-peer-uid", 0, "Required OVSDB Unix peer UID")
@@ -127,12 +133,22 @@ func run() int {
 	probeAddress := flag.String("safe-apply-probe-address", "", "Reviewed numeric management endpoint IP:TCP-port; empty disables Safe Apply")
 	probeInterface := flag.String("safe-apply-probe-interface", "", "Reviewed management interface; probe sockets bind to this device")
 	flag.Parse()
-	if *version {
+	restoreCommand, restoreRequested, restoreErr := restoreStage.command(*backupRoot)
+	checkpointCommand, checkpointRequested, checkpointErr := checkpoint.command()
+	if *version && !restoreRequested && !checkpointRequested {
 		fmt.Println(buildinfo.SoftwareVersion())
 		return 0
 	}
 	managementDebug := runtimehealth.NewDebug(runtimehealth.DebugBootTime)
 	logger := slog.New(redact.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: managementDebug}))).With("service", "ovs-mgrd")
+	if checkpointErr != nil || checkpointRequested && *version {
+		logger.Error("invalid_process_configuration", "code", "CHECKPOINT_CONFIGURATION_INVALID")
+		return 2
+	}
+	if restoreErr != nil {
+		logger.Error("invalid_process_configuration", "code", "RESTORE_STAGE_CONFIGURATION_INVALID")
+		return 2
+	}
 	captureAllowed, captureErr := parseCaptureInterfaces(*captureInterfaces)
 	if captureErr != nil {
 		logger.Error("invalid_process_configuration", "code", auth.ErrorCode(captureErr))
@@ -197,7 +213,7 @@ func run() int {
 	if *revokeTelemetryRole != "" {
 		actions++
 	}
-	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *grantQoSRole != "", *revokeQoSRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != ""} {
+	for _, enabled := range []bool{*initialize, *initAuthKey, *bootstrap != "", *grantTreeRole != "", *revokeTreeRole != "", *grantQoSRole != "", *revokeQoSRole != "", *initSecret, *rotateSecret, *restore, *acceptEvidence != "", *createBackupPair, *verifyBackupPair != "", restoreRequested, checkpointRequested} {
 		if enabled {
 			actions++
 		}
@@ -207,6 +223,19 @@ func run() int {
 		return 2
 	}
 	syscall.Umask(0077)
+	if checkpointRequested {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+		return runOfflineCheckpoint(ctx, logger, os.Stdout, checkpointCommand, *database, checkpoint.publish != "")
+	}
+	if *createBackupPair || *verifyBackupPair != "" || restoreRequested {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+		if restoreRequested {
+			return runOfflineRestore(ctx, logger, os.Stdout, restoreCommand)
+		}
+		return runOfflineBackup(ctx, logger, *createBackupPair, *verifyBackupPair, *backupRoot, *database, *backupWebDatabase, *uid, *gid)
+	}
 	if *authKeyPath == "" {
 		*authKeyPath = filepath.Join(filepath.Dir(*database), "auth.key")
 	}
@@ -232,7 +261,11 @@ func run() int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	store, storageErr := sqlite.Open(ctx, options)
+	openStore := sqlite.Open
+	if *restore {
+		openStore = sqlite.OpenCurrentSchema
+	}
+	store, storageErr := openStore(ctx, options)
 	defer store.Close()
 	if storageErr != nil {
 		logger.Error("storage_degraded", "code", store.Status().Code)
@@ -419,6 +452,10 @@ func run() int {
 	if *restore {
 		if authentication == nil {
 			logger.Error("security_action_failed", "code", "AUTH_UNAVAILABLE")
+			return 1
+		}
+		if err := secrets.VerifyRetained(ctx, store, privileged); err != nil {
+			logger.Error("security_action_failed", "code", "RESTORE_KEY_MATERIAL_UNAVAILABLE")
 			return 1
 		}
 		if privileged != nil {

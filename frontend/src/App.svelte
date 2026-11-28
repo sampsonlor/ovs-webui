@@ -26,6 +26,7 @@
   import Acceleration from './Acceleration.svelte';
   import { accelerationKind, canReadAcceleration, dpdkRoute, offloadRoute } from './acceleration';
   import { canReadOpenFlow, openFlowRoute } from './openflow';
+  import { canUseVlanTransfer, vlanTransferRoute } from './vlan-transfer';
   import {
     statisticDetailID,
     watchStatisticNotifications,
@@ -294,6 +295,12 @@
           {#if has($model.session, 'capabilities.read')}
             <Link href={capabilitiesRoute} current={path === capabilitiesRoute || path.startsWith(capabilitiesRoute + '/')}>Capabilities</Link>
           {/if}
+        </nav>
+      {/if}
+      {#if $model.sessionReady && canUseVlanTransfer($model.session)}
+        <nav class="nav-section" aria-label="Administration views">
+          <p class="eyebrow">Administration</p>
+          <Link href={vlanTransferRoute} current={path === vlanTransferRoute}>Configuration Transfer</Link>
         </nav>
       {/if}
       <nav aria-label="Change Control" class="nav-section">
@@ -806,6 +813,14 @@
               <Link href="/changes/candidate">Open Candidate →</Link>
             </section>
           </div>
+        {:else if path === vlanTransferRoute}
+          {#await import('./VlanTransfer.svelte')}
+            <p class="notice" role="status">Loading configuration transfer…</p>
+          {:then { default: VlanTransfer }}
+            <VlanTransfer model={$model} {expert} />
+          {:catch}
+            <p class="notice warning" role="alert">The transfer page could not load. Reload the page to try again.</p>
+          {/await}
         {:else if path === '/administration'}
           <header class="page-heading">
             <div>
@@ -813,6 +828,7 @@
               <h1>Account & access</h1>
               <p>Current session claims come from the management service.</p>
             </div>
+            {#if $model.sessionReady && canUseVlanTransfer($model.session)}<Link href={vlanTransferRoute}>Configuration Transfer</Link>{/if}
           </header>
           <section class="panel">
             <h2>{$model.session.display_name}</h2>

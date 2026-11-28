@@ -71,8 +71,8 @@ func (w *Workspace) envelope(ctx context.Context, owner string) (candidate.Envel
 	})
 	return e, err
 }
-func (w *Workspace) authorize(ctx context.Context, s publicapi.Subject, cap string) error {
-	for _, capability := range []string{cap, "configuration.read", "inventory.read"} {
+func (w *Workspace) authorize(ctx context.Context, s publicapi.Subject, capabilities ...string) error {
+	for _, capability := range append(capabilities, "configuration.read", "inventory.read") {
 		c, err := w.auth.CheckAuth(ctx, s.Credential, authn.Check{Capability: capability})
 		if err != nil {
 			return err
@@ -83,6 +83,18 @@ func (w *Workspace) authorize(ctx context.Context, s publicapi.Subject, cap stri
 	}
 	return nil
 }
+
+func workspaceDraftCapabilities(operation string) []string {
+	switch operation {
+	case "changeCandidate":
+		return []string{"config.stage"}
+	case "importVLANConfiguration":
+		return []string{"configuration.import", "workspace.write", "ovs.port.vlan.write"}
+	default:
+		return nil
+	}
+}
+
 func (w *Workspace) Read(ctx context.Context, s publicapi.Subject, q publicapi.Query) (publicapi.Response, error) {
 	var out publicapi.Response
 	cap := "workspace.read"
@@ -102,10 +114,11 @@ func (w *Workspace) Read(ctx context.Context, s publicapi.Subject, q publicapi.Q
 			}
 		}
 		receipt, err := w.receipts.Find(ctx, s.ID, epoch, q.Path["request_id"], func(ctx context.Context, op string, ref *apitypes.Ref) error {
-			if op != "changeCandidate" || ref == nil || ref.Kind != "candidate" {
+			capabilities := workspaceDraftCapabilities(op)
+			if capabilities == nil || ref == nil || ref.Kind != "candidate" {
 				return apitypes.Fail(403, "RESOURCE_DENIED")
 			}
-			return w.authorize(ctx, s, "config.stage")
+			return w.authorize(ctx, s, capabilities...)
 		})
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, repository.ErrNotFound) {
 			err = apitypes.Fail(404, "NOT_FOUND")
@@ -218,18 +231,18 @@ func (w *Workspace) Execute(ctx context.Context, s publicapi.Subject, q publicap
 	if q.Operation.ID == "createTransaction" {
 		return w.applySafely(ctx, s, c)
 	}
-	cap := "config.stage"
+	capabilities := workspaceDraftCapabilities(q.Operation.ID)
 	if q.Operation.ID == "createValidation" {
-		cap = "config.validate"
+		capabilities = []string{"config.validate"}
 	}
-	authorize := func(ctx context.Context) error { return w.authorize(ctx, s, cap) }
+	authorize := func(ctx context.Context) error { return w.authorize(ctx, s, capabilities...) }
 	if err := authorize(ctx); err != nil {
 		return out, err
 	}
 	if q.Operation.ID == "createValidation" {
 		return w.validate(ctx, s, c)
 	}
-	if q.Operation.ID != "changeCandidate" || c.Domain != "workspace" || c.Principal != s.ID {
+	if capabilities == nil || c.Domain != "workspace" || c.Principal != s.ID {
 		return out, apitypes.Fail(403, "OPERATION_DENIED")
 	}
 	if prior, found, err := w.receipts.Replay(ctx, c, authorize); err != nil || found {

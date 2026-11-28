@@ -5,10 +5,11 @@ native Interface. Bridge, Port and Interface management identities scope the
 selection. A Port selection shows its member Interfaces. Each counter retains
 its native decimal integer. Missing counters remain unknown.
 
-One manager-owned collector reads OVSDB every five seconds through a separate,
-read-only connection. Each read checks the schema, root identity and requested
-Interface UUIDs. HTTP requests share the resulting samples. Statistics never
-enter the configuration monitor, identity reconciliation or durable evidence.
+One manager-owned collector reads OVSDB through a separate read-only connection.
+It waits five seconds after a collection finishes before starting the next one.
+Each read checks the schema, root identity and requested Interface UUIDs.
+HTTP requests share the resulting samples. Statistics never enter the
+configuration monitor, identity reconciliation or durable evidence.
 
 The collection timestamp describes the manager's OVSDB observation. OVS updates
 the database periodically and reports no underlying datapath capture timestamp.
@@ -37,7 +38,7 @@ selected Interface's statistic identity. A single worker in `ovs-webd` batches
 the distinct subscribed identities and checks for changed versions once per
 second. The negotiated Unix operation has one background slot and returns only
 the opaque REST resource versions of matching active Interfaces. It reads the
-published cache, sharing the five-second collection round across all clients.
+published cache, sharing the same collection results across all clients.
 
 Each public push passes the existing resource and authorization checks. Counter
 hints retain the one-second coalescing and bounded subscriber queue. The detail

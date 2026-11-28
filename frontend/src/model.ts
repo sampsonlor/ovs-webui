@@ -22,10 +22,15 @@ import type {
   SupportBundleMetadata,
   Transaction,
   Validation,
+  VLANConfigurationImportCommand,
   VlanInput,
   Workspace,
 } from '../../clients/typescript/public-v1.generated';
 import { ResponseFence } from '../../clients/typescript/recovery.ts';
+import {
+  canStageVlans, canUseVlanTransfer, currentVlanTransferInventory, vlanImportPath,
+  vlanTransferQuery, vlanTransferRoute, vlanTransferURL,
+} from './vlan-transfer.ts';
 import { accelerationKind } from './acceleration.ts';
 import { openFlowBridgePage, openFlowLocation, openFlowRoute, openFlowSnapshotPath, validOpenFlowPage } from './openflow.ts';
 import { API, APIError } from './api.ts';
@@ -130,6 +135,7 @@ export type Model = {
   captureArtifact: Load<CaptureArtifact>;
   acceleration: Load<RuntimeAccelerationEvidence>;
   openFlowSnapshot: Load<OpenFlowReadPage>;
+  vlanTransferPorts: Load<PortsPage>;
 };
 function route(value: string) {
   const [path, query = ''] = value.split('?', 2);
@@ -160,6 +166,7 @@ function initial(path: string): Model {
     captureArtifact: empty(),
     acceleration: empty(),
     openFlowSnapshot: empty(),
+    vlanTransferPorts: empty(),
   };
 }
 export function refPath(ref: ResourceRef | null): string | null {
@@ -303,6 +310,7 @@ export class Controller {
       captureArtifact: empty(),
       acceleration: empty(),
       openFlowSnapshot: empty(),
+      vlanTransferPorts: empty(),
       message: '',
     });
     void this.refresh();
@@ -451,7 +459,14 @@ export class Controller {
       else changes.transaction = empty();
       let resourceURL = '';
       let capability = '';
-      if (path === openFlowRoute) {
+      if (path === vlanTransferRoute) {
+        if (canUseVlanTransfer(session)) {
+          const { filter, cursor } = vlanTransferQuery(query);
+          tasks.push(read<PortsPage>(vlanTransferURL(filter, cursor, true), 'inventory.read').then((ports) => {
+            changes.vlanTransferPorts = ports;
+          }));
+        }
+      } else if (path === openFlowRoute) {
         const location = openFlowLocation(query);
         capability = has(session, 'state.read') ? 'inventory.read' : 'state.read';
         if (location.kind === 'inventory') {
@@ -803,6 +818,7 @@ export class Controller {
           captureArtifact: empty(),
           acceleration: empty(),
           openFlowSnapshot: empty(),
+          vlanTransferPorts: empty(),
         });
       }
     } finally {
@@ -877,6 +893,17 @@ export class Controller {
       this.api.command<Accepted>('/health/debug', 'POST', 'management', {
         duration_seconds: duration,
       }),
+    );
+  }
+  stageVlanTransfer(command: Omit<VLANConfigurationImportCommand, 'request_id'>, reviewedRevision: string) {
+    const { path, session, workspace, vlanTransferPorts } = this.state;
+    const candidate = workspace.status === 'ready' ? workspace.value?.candidate : null;
+    const inventory = vlanTransferPorts.status === 'ready' ? currentVlanTransferInventory(vlanTransferPorts.value) : null;
+    if (path !== vlanTransferRoute || !canStageVlans(session) || !candidate || candidate.revision !== reviewedRevision ||
+        inventory?.instance_generation !== command.expected_generation) return;
+    return this.mutate(
+      () => this.api.command<Candidate>(vlanImportPath, 'POST', 'workspace', command, candidate.revision),
+      (response) => this.state.path === vlanTransferRoute ? refPath({ kind: 'candidate', id: (response as Candidate).id }) : null,
     );
   }
   restartManagementService(
